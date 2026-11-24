@@ -26,22 +26,12 @@ import { codexStreamError } from './codex-stream-error.ts';
 
 import { collabParentItemId, mapHookCompleted, threadIdOf } from './codex-hook-mapper.ts';
 import type { CodexCollabTask, CodexUiMapperState, ReasoningAccumulator } from './codex-ui-mapper-state.ts';
-import type {
-  FileDiff,
-  PlanEntry,
-  PlanStatus,
-  TokenUsage,
-  ToolLocation,
-  ToolStatus,
-  UiEvent,
-  UiItem,
-  UiMessageItem,
-  UiReasoningItem,
-  UiToolItem,
-} from '../../core/ui-events.ts';
+import {
+  type FileDiff, type PlanEntry, type PlanStatus, type TokenUsage, type ToolLocation, type ToolStatus,
+  type UiEvent, type UiItem, type UiMessageItem, type UiReasoningItem, type UiToolItem, ownLookup,
+} from '@hearsay-tools/squawk/plugin';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
 import { codexTurnOutcome } from './codex-turn-outcome.ts';
-import { ownLookup } from '../../core/own-lookup.ts';
 
 export type { CodexUiMapperState, ReasoningAccumulator } from './codex-ui-mapper-state.ts';
 export { HOOK_STATUS } from './codex-hook-mapper.ts';

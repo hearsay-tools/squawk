@@ -1,10 +1,7 @@
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { z } from 'zod';
-import { trackChildExit } from '../../core/agent-runner-values.ts';
-import { buildChildEnv } from '../../core/agent-env.ts';
-import { readNdjson } from '../../core/ndjson.ts';
+import { trackChildExit, buildChildEnv, readNdjson, type ModelOption } from '@hearsay-tools/squawk/plugin';
 import { resolveClaudeExecutable } from './claude-executable.ts';
-import type { ModelOption } from '../../core/runner-model-catalog.ts';
 
 export interface ClaudeModelDiscoveryOptions {
   cwd: string;

@@ -1,4 +1,4 @@
-import type { RunnerAccountsData } from '../../core/runner-definition.ts';
+import type { RunnerAccountsData } from '@hearsay-tools/squawk/plugin';
 
 /** Pi's account data (the `accounts` part's data half). Data only: the definition and the account
  *  readers consume it, so importing it loads no code. */

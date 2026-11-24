@@ -1,4 +1,4 @@
-import type { RunnerFacts } from '../../core/runner-facts.ts';
+import type { RunnerFacts } from '@hearsay-tools/squawk/plugin';
 
 /** What the Codex runner's wire can do (`RunnerFacts`). Data only: the adapter class and the
  *  definition read this value, so importing it loads no adapter. */

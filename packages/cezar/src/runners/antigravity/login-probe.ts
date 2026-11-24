@@ -1,6 +1,5 @@
-import type { RunnerLoginStatus } from '../../core/runner-definition.ts';
-import { productEnv } from '../../core/product-env.ts';
-import { AcpRpcError } from '../acp/transport.ts';
+import { type RunnerLoginStatus, productEnv } from '@hearsay-tools/squawk/plugin';
+import { AcpRpcError } from './acp/transport.ts';
 import { AntigravityProbe } from './probe-process.ts';
 import { antigravityInstalled, antigravityStatusFromPath } from './executable.ts';
 

@@ -45,7 +45,7 @@ async function closures(files: readonly string[]): Promise<Map<string, Set<strin
   return byEntry;
 }
 
-/** Shared runner support (such as runners/acp/) is allowed. Adapters, definitions, per-runner
+/** Support modules in another runner's folder (such as runners/antigravity/acp/) are allowed. Adapters, definitions, per-runner
  * data modules (`facts.ts`, `extra-tools.ts`, `mock.ts`) and the built-in roster remain private
  * to each allowed runner, including transitive imports (hearsay-tools/squawk#4175). */
 function foreignRunnerModules(closure: Set<string>, allowed: ReadonlySet<string>): string[] {
@@ -63,13 +63,13 @@ function foreignRunnerModules(closure: Set<string>, allowed: ReadonlySet<string>
 describe('per-runner test closures', () => {
   it.each([false, true])('allows a runner-shaped ACP consumer and refuses a foreign adapter: %s', async foreign => {
     const result = await build({
-      stdin: { contents: `import { AcpSession } from './runners/acp/session.ts';
+      stdin: { contents: `import { AcpSession } from './runners/antigravity/acp/session.ts';
         ${foreign ? "import { PiRunner } from './runners/pi/pi-runner.ts';" : ''}
         export class FixtureRunner { session = AcpSession; ${foreign ? 'foreign = PiRunner;' : ''} }`, resolveDir: src },
       absWorkingDir: src, bundle: true, write: false, metafile: true, platform: 'node', format: 'esm', packages: 'external', logLevel: 'silent',
     });
     const closure = new Set(Object.keys(result.metafile.inputs));
-    expect(closure.has('runners/acp/session.ts')).toBe(true);
+    expect(closure.has('runners/antigravity/acp/session.ts')).toBe(true);
     expect(foreignRunnerModules(closure, new Set(['fixture']))).toEqual(foreign ? ['pi', 'pi facts'] : []);
   });
 

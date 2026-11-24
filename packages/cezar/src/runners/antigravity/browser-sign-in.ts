@@ -1,11 +1,10 @@
 import { createInterface } from 'node:readline';
 import { rm } from 'node:fs/promises';
 import { inspect } from 'node:util';
-import type { RunnerBrowserSignIn } from '../../core/runner-definition.ts';
-import { profileEnv } from '../../core/agent-profiles.ts';
-import { productEnv } from '../../core/product-env.ts';
-import { spawnSessionLeader, signalSession } from '../../core/session-process.ts';
-import { BrowserSignInStartError, redactBrowserSignInDetails } from '../../core/browser-sign-in-error.ts';
+import {
+  type RunnerBrowserSignIn, profileEnv, productEnv, spawnSessionLeader, signalSession, BrowserSignInStartError,
+  redactBrowserSignInDetails,
+} from '@hearsay-tools/squawk/plugin';
 import { antigravityEnv } from './runtime-env.ts';
 import { antigravityLaunchArgs } from './launch-args.ts';
 import { ANTIGRAVITY_MISSING, launchAntigravity, missingAntigravity } from './executable.ts';

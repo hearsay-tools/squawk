@@ -1,8 +1,8 @@
 import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { z } from 'zod';
-import type { ToolGrant } from '../../core/agent-runner.ts';
-import { AcpRpcError } from '../acp/transport.ts';
+import type { ToolGrant } from '@hearsay-tools/squawk/plugin';
+import { AcpRpcError } from './acp/transport.ts';
 const requestSchema = z.object({ path: z.string(), line: z.number().int().positive().optional(), limit: z.number().int().positive().optional() });
 /** Advertising reads moves view_file onto the client, where Read admission can be enforced. */
 export async function antigravityReadFile(value: unknown, cwd: string, grant: ToolGrant): Promise<{ content: string }> {

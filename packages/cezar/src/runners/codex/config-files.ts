@@ -1,8 +1,8 @@
 import { join } from 'node:path';
-import { agentHome, type AgentHomePaths, type RunnerConfigFile } from '../../core/runner-config-files.ts';
+import {
+  agentHome, type AgentHomePaths, type RunnerConfigFile, EDITOR_PLUS_COMMIT_NOTE, PROJECT_AGENTS_FILE,
+} from '@hearsay-tools/squawk/plugin';
 import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
-import { EDITOR_PLUS_COMMIT_NOTE } from '../../core/agent-config-notes.ts';
-import { PROJECT_AGENTS_FILE } from '../../core/project-agents-file.ts';
 import { CODEX_ACCOUNTS } from './accounts.ts';
 
 const codexHome = (home: AgentHomePaths): string => agentHome(home, CODEX_ACCOUNTS.homeSlot);

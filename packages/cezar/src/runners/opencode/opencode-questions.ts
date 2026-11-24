@@ -1,4 +1,4 @@
-import { parseAskRequest, type AskQuestion } from '../../core/ask.ts';
+import { parseAskRequest, type AskQuestion } from '@hearsay-tools/squawk/plugin';
 
 export function toSquawkQuestions(value: unknown): AskQuestion[] | null {
   if (!isRecord(value) || !Array.isArray(value.questions)) return null;

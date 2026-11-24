@@ -1,5 +1,6 @@
-import type { RunnerMock } from '../../core/runner-definition.ts';
-import { COMMON_MOCK_SCENARIOS, STDIO_ASK_MOCK_SCENARIOS, PROVIDER_ERROR_MOCK_SCENARIOS } from '../../core/mock-prompts.ts';
+import {
+  type RunnerMock, COMMON_MOCK_SCENARIOS, STDIO_ASK_MOCK_SCENARIOS, PROVIDER_ERROR_MOCK_SCENARIOS,
+} from '@hearsay-tools/squawk/plugin';
 const { 'no-progress-ack-only': _ackWithoutTurn, 'silent-tail-no-reply': _noReply, 'silent-tail-late-reply': _lateReply, ...commonScenarios } = COMMON_MOCK_SCENARIOS;
 export const ANTIGRAVITY_MOCK = {
   nativeAskScenario: 'ask-resume',

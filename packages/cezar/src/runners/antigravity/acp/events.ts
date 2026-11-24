@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import type { AgentEvent } from '../../core/agent-runner.ts';
-import type { UiEvent, UiMessageItem, UiReasoningItem, UiToolItem, StopReason, TokenUsage } from '../../core/ui-events.ts';
+import type {
+  AgentEvent, UiEvent, UiMessageItem, UiReasoningItem, UiToolItem, StopReason, TokenUsage,
+} from '@hearsay-tools/squawk/plugin';
 import type { AcpHooks } from './protocol.ts';
 
 const toolSchema = z.object({

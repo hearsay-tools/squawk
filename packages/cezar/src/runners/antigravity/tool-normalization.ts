@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { UiToolItem } from '../../core/ui-events.ts';
+import type { UiToolItem } from '@hearsay-tools/squawk/plugin';
 import { ANTIGRAVITY_MCP_NAME } from './mcp-name.ts';
 const fields = z.record(z.string(), z.unknown());
 const toolNames: Record<string, string> = {

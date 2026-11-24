@@ -1,7 +1,6 @@
 import { z } from 'zod';
-import type { ToolGrant } from '../../core/agent-runner.ts';
-import { unknownToolGrant } from '../../core/agent-runner-values.ts';
-import type { AcpPermissionOutcome, AcpPermissionRequest } from '../acp/protocol.ts';
+import { type ToolGrant, unknownToolGrant } from '@hearsay-tools/squawk/plugin';
+import type { AcpPermissionOutcome, AcpPermissionRequest } from './acp/protocol.ts';
 import { antigravityTool, antigravityNativeToolName, antigravityMcpTool } from './tool-normalization.ts';
 
 function allowedTools(grant: ToolGrant): readonly string[] | undefined {

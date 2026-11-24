@@ -19,8 +19,11 @@ export class V1TextCoalescer {
   private readonly pending = new Map<string, string>();
   /** Items already emitted — a late snapshot/delta must not double-emit. */
   private readonly done = new Set<string>();
+  private readonly emitText: (text: string) => void;
 
-  constructor(private readonly emitText: (text: string) => void) {}
+  constructor(emitText: (text: string) => void) {
+    this.emitText = emitText;
+  }
 
   /** Buffer one streamed delta of an item. */
   append(itemId: string | undefined, delta: string): void {

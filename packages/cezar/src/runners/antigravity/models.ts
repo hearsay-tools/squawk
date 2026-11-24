@@ -1,4 +1,4 @@
-import type { RunnerModelData } from '../../core/runner-definition.ts';
+import type { RunnerModelData } from '@hearsay-tools/squawk/plugin';
 export const ANTIGRAVITY_MODELS: RunnerModelData = {
   catalogAtAdmission: false,
   suggested: [{ id: '', label: 'auto', desc: 'Use your Antigravity default model' }],

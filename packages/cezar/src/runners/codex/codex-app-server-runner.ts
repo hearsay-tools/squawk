@@ -1,23 +1,19 @@
 import { codexTurnStartExtras } from './codex-turn-config.ts';
 export { reasoningSummary, codexTurnStartExtras } from './codex-turn-config.ts';
-import { openingInput, skillOf, validSkillMessage } from '../../core/skill-trigger.ts';
-import { productEnv } from '../../core/product-env.ts';
-import { uiAskQuestions, parseAskRequest, type AskQuestion } from '../../core/ask.ts';
-import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
+import {
+  openingInput, skillOf, validSkillMessage, productEnv, uiAskQuestions, parseAskRequest, type AskQuestion,
+  summarizeRunnerStderr, type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner,
+  type AgentSession, type AgentToolCallRecord, type ContentBlock, type SessionOptions, type InputDelivery,
+  prependSystemPrompt, SessionEndedBeforeAcknowledgement, trackChildExit, codexToolGrantFields, signalSession,
+  afterExitDrain, AUTO_END_DELAY_MS, exitDrainBudget, DEFAULT_RUNNER_TIMINGS, readNdjson, V1TextCoalescer,
+  InputSubmissions,
+} from '@hearsay-tools/squawk/plugin';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import type { AgentEvent, AgentRunResult, AgentRunSpec, AgentRunner, AgentSession, AgentToolCallRecord, ContentBlock, SessionOptions, InputDelivery } from '../../core/agent-runner.ts';
-import { prependSystemPrompt, SessionEndedBeforeAcknowledgement, trackChildExit } from '../../core/agent-runner-values.ts';
 import { CODEX_FACTS } from './facts.ts';
 import { CODEX_SPEC_SUPPORT } from './spec-support.ts';
-import { codexToolGrantFields } from '../../core/runner-tool-grants.ts';
-import { signalSession } from '../../core/session-process.ts';
-import { afterExitDrain, AUTO_END_DELAY_MS, exitDrainBudget, DEFAULT_RUNNER_TIMINGS } from '../../core/runner-runtime.ts';
 
-import { readNdjson } from '../../core/ndjson.ts';
 import { drainsAfterClose, isServerRequest, isStaleTurnOutcome, parseNativeLine, sessionExitEvent, sessionStderrIsUnexpected, startupCrashOwnsFailure, stringField, turnIdOf } from './codex-native-frames.ts';
-import { V1TextCoalescer } from '../../core/v1-text-coalescer.ts';
-import { InputSubmissions } from '../../core/input-submissions.ts';
 import { codexStreamError } from './codex-stream-error.ts';
 import { codexTurnOutcome } from './codex-turn-outcome.ts';
 import { codexNetworkIsRestricted, codexMinimalSandbox, codexPermissionOverrides } from './codex-permissions.ts';

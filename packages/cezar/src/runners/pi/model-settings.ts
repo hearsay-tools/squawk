@@ -2,10 +2,10 @@ import {
   configuredString,
   firstConfiguredModel,
   firstConfiguredProvider,
-  type NativeSettingsFile,
   readNativeSettingsFiles,
-} from './shared.ts';
-import type { AgentModelSettingsStrategy } from '../../core/runner-model-settings.ts';
+  type AgentModelSettingsStrategy,
+  type NativeSettingsFile,
+} from '@hearsay-tools/squawk/plugin';
 
 /**
  * pi's native-settings policy, expressed the same way every other runner's is.

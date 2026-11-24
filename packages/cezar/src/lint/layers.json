@@ -37,8 +37,7 @@
       "worktree-setup.ts"
     ],
     "runner": [
-      "runners/",
-      "runners/acp/"
+      "runners/"
     ],
     "shell": [
       "server/",

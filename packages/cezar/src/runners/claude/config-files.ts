@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { agentHome, type AgentHomePaths, type RunnerConfigFile } from '../../core/runner-config-files.ts';
+import { agentHome, type AgentHomePaths, type RunnerConfigFile } from '@hearsay-tools/squawk/plugin';
 import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
 import { CLAUDE_ACCOUNTS } from './accounts.ts';
 

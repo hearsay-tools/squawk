@@ -1,6 +1,6 @@
 import { lstatSync, mkdirSync, symlinkSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { agentHomeDir } from '../../paths.ts';
+import { agentHomeDir } from '@hearsay-tools/squawk/plugin';
 
 export const ANTIGRAVITY_SHARED_SKILL_ENTRIES = [
   'config/skills',

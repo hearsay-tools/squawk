@@ -1,9 +1,6 @@
 import {
-  firstConfiguredModel,
-  firstConfiguredProvider,
-  readNativeSettingsFiles,
-} from './shared.ts';
-import type { AgentModelSettingsStrategy } from '../../core/runner-model-settings.ts';
+  firstConfiguredModel, firstConfiguredProvider, readNativeSettingsFiles, type AgentModelSettingsStrategy,
+} from '@hearsay-tools/squawk/plugin';
 
 export const codexModelSettingsStrategy: AgentModelSettingsStrategy = {
   runner: 'codex',

@@ -1,4 +1,4 @@
-import type { RunnerFacts } from '../../core/runner-facts.ts';
+import type { RunnerFacts } from '@hearsay-tools/squawk/plugin';
 // Live Google Antigravity CLI 1.5.14 probes (hearsay-tools/squawk#4058, hearsay-tools/squawk#4060);
 // docs/runners/antigravity-wire.md names the fixture behind each value.
 // systemPromptOnResume: the CLI saves the session/new system prompt with the session and appends

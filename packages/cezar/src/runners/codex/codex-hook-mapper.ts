@@ -5,10 +5,10 @@
  */
 
 import type { CodexUiMapperState } from './codex-ui-mapper-state.ts';
-import { hookEventName, isVisibleHookItem } from '../../core/hook-items.ts';
-import { ownLookup } from '../../core/own-lookup.ts';
-import { isRecord, number as num } from '../../core/pi-rpc-wire.ts';
-import type { HookEntryKind, HookStatus, UiEvent, UiHookItem } from '../../core/ui-events.ts';
+import {
+  hookEventName, isVisibleHookItem, ownLookup, isRecord, number as num, type HookEntryKind, type HookStatus,
+  type UiEvent, type UiHookItem,
+} from '@hearsay-tools/squawk/plugin';
 
 export const HOOK_STATUS: Readonly<Record<string, HookStatus>> = {
   completed: 'completed',

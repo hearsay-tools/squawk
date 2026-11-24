@@ -4,12 +4,10 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { profileEnv } from '../../core/agent-profiles.ts';
-import { productEnv } from '../../core/product-env.ts';
-import type { SkillCatalog } from '../../core/runner-skill-catalog.ts';
-import { skillPathScope } from '../../core/skill-path-scope.ts';
-import { skillLines, skillProbe, type SkillDiscoveryOptions } from '../../core/skill-probe.ts';
-import { agentHomeDir, agentUserHome } from '../../paths.ts';
+import {
+  profileEnv, productEnv, type SkillCatalog, skillPathScope, skillLines, skillProbe, type SkillDiscoveryOptions,
+  agentHomeDir, agentUserHome,
+} from '@hearsay-tools/squawk/plugin';
 import { ANTIGRAVITY_SHARED_SKILL_ENTRIES } from './account-home.ts';
 import { launchAntigravity, missingAntigravity, type AntigravityLaunch } from './executable.ts';
 import { ANTIGRAVITY_APP_DATA_DIR } from './launch-args.ts';

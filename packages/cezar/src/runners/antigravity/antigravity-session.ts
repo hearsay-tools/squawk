@@ -1,22 +1,19 @@
 import { rm } from 'node:fs/promises';
 import { z } from 'zod';
-import type { AgentEvent, AgentRunResult, AgentRunSpec, AgentSession, ContentBlock, SessionOptions } from '../../core/agent-runner.ts';
-import { prependSystemPrompt, SessionEndedBeforeAcknowledgement } from '../../core/agent-runner-values.ts';
-import { openingContent, validSkillMessage } from '../../core/skill-trigger.ts';
-import { spawnSessionLeader, signalSession } from '../../core/session-process.ts';
-import { SessionDescendants } from '../../core/session-descendants.ts';
-import { AUTO_END_DELAY_MS, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from '../../core/runner-runtime.ts';
-import { AcpSession } from '../acp/session.ts';
-import { AcpRpcError } from '../acp/transport.ts';
+import {
+  type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentSession, type ContentBlock, type SessionOptions,
+  prependSystemPrompt, SessionEndedBeforeAcknowledgement, openingContent, validSkillMessage, spawnSessionLeader,
+  signalSession, SessionDescendants, AUTO_END_DELAY_MS, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS,
+  squawkToolNames, productEnv, summarizeRunnerStderr, type UiAskQuestion, type UiEvent,
+} from '@hearsay-tools/squawk/plugin';
+import { AcpSession } from './acp/session.ts';
+import { AcpRpcError } from './acp/transport.ts';
 import { antigravityEnv } from './runtime-env.ts';
 import { antigravityMcp } from './http-mcp.ts';
 import { ANTIGRAVITY_MCP_NAME } from './mcp-name.ts';
 import { permissionPolicy } from './permissions.ts';
-import { squawkToolNames } from '../../ci-wait/tool-names.ts';
-import { productEnv } from '../../core/product-env.ts';
 import { antigravityReadFile } from './client-files.ts';
 import { antigravityUsage } from './usage.ts';
-import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import { antigravityLaunchArgs } from './launch-args.ts';
 import { logAntigravityFailure, redactAntigravityDiagnostics } from './native-diagnostics.ts';
 import { ANTIGRAVITY_WIRE_HOOKS } from './wire-updates.ts';
@@ -24,7 +21,6 @@ import { writeAntigravitySubagentGuard } from './subagent-guard.ts';
 import { AntigravityToolOutputs, antigravityTranscriptPath } from './tool-transcript.ts';
 import { ANTIGRAVITY_MISSING, launchAntigravity, missingAntigravity, type AntigravityLaunch } from './executable.ts';
 import { antigravityQuestion, antigravityAnswer } from './ask-question.ts';
-import type { UiAskQuestion, UiEvent } from '../../core/ui-events.ts';
 
 const configSchema = z.array(z.object({ id: z.string(), category: z.string().optional() }).passthrough());
 function contentBlocks(content: readonly ContentBlock[]): Record<string, unknown>[] {

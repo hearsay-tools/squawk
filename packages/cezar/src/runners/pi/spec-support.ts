@@ -1,5 +1,4 @@
-import type { AgentRunSpecSupport } from '../../core/agent-runner.ts';
-import { SQUAWK_SIDE_SPEC_SUPPORT } from '../../core/agent-runner-values.ts';
+import { SQUAWK_SIDE_SPEC_SUPPORT, type AgentRunSpecSupport } from '@hearsay-tools/squawk/plugin';
 
 // Data only: the adapter class and the definition read this value, so importing it loads no adapter.
 

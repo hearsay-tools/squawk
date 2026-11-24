@@ -1,8 +1,12 @@
 import { join } from 'node:path';
-import { agentHome, type AgentHomePaths, type RunnerConfigFile } from '../../core/runner-config-files.ts';
+import {
+  agentHome,
+  EDITOR_PLUS_COMMIT_NOTE,
+  PROJECT_AGENTS_FILE,
+  type AgentHomePaths,
+  type RunnerConfigFile,
+} from '@hearsay-tools/squawk/plugin';
 import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
-import { EDITOR_PLUS_COMMIT_NOTE } from '../../core/agent-config-notes.ts';
-import { PROJECT_AGENTS_FILE } from '../../core/project-agents-file.ts';
 import { PI_ACCOUNTS } from './accounts.ts';
 
 const piHome = (home: AgentHomePaths): string => agentHome(home, PI_ACCOUNTS.homeSlot);

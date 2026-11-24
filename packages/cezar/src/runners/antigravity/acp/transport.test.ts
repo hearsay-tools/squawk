@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { AcpSession } from './session.ts';
 import { AcpRpcError, AcpTransport } from './transport.ts';
 import { AcpEvents } from './events.ts';
-import type { AgentEvent } from '../../core/agent-runner.ts';
-import type { UiEvent } from '../../core/ui-events.ts';
+import type { AgentEvent } from '../../../core/agent-runner.ts';
+import type { UiEvent } from '../../../core/ui-events.ts';
 
 function wire(request: ConstructorParameters<typeof AcpTransport>[1]['request'] = () => ({})) {
   const input = new PassThrough();

@@ -4,12 +4,12 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { waitFor } from '../../core/harness-parity-core.testkit.ts';
-import type { AgentEvent } from '../../core/agent-runner.ts';
-import type { UiEvent } from '../../core/ui-events.ts';
+import { waitFor } from '../../../core/harness-parity-core.testkit.ts';
+import type { AgentEvent } from '../../../core/agent-runner.ts';
+import type { UiEvent } from '../../../core/ui-events.ts';
 import { AcpSession, type AcpSessionOptions } from './session.ts';
-import { createDeliveryControl } from '../../../scripts/mock-delivery-control.mjs';
-import { createFailureControl } from '../../../scripts/mock-failure-control.mjs';
+import { createDeliveryControl } from '../../../../scripts/mock-delivery-control.mjs';
+import { createFailureControl } from '../../../../scripts/mock-failure-control.mjs';
 
 const providerFailure = (update: Record<string, unknown>) => {
   const text = (update.content as { text?: unknown } | undefined)?.text;
@@ -28,7 +28,7 @@ afterEach(async () => {
   await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })));
 });
 function start(options: Partial<AcpSessionOptions> = {}, env: Record<string, string> = {}) {
-  const child = spawn(process.execPath, [join(import.meta.dirname, '../../../scripts/mock-acp.mjs')], { stdio: 'pipe', env: { ...process.env, ...env } });
+  const child = spawn(process.execPath, [join(import.meta.dirname, '../../../../scripts/mock-acp.mjs')], { stdio: 'pipe', env: { ...process.env, ...env } });
   children.push(child);
   const events: AgentEvent[] = [];
   const ui: UiEvent[] = [];

@@ -8,10 +8,10 @@ import type {
   OmpUiMapperState,
   ItemScope,
 } from './omp-ui-mapper.ts';
-import type { PlanEntry, UiEvent, UiToolItem } from '../../core/ui-events.js';
+import {
+  type PlanEntry, type UiEvent, type UiToolItem, ownLookup, isRecord, number, string,
+} from '@hearsay-tools/squawk/plugin';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
-import { ownLookup } from '../../core/own-lookup.ts';
-import { isRecord, number, string } from '../../core/pi-rpc-wire.ts';
 
 const TODO_STATUS: Readonly<Record<string, PlanEntry['status']>> = {
   pending: 'pending',

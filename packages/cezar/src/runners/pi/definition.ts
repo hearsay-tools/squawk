@@ -1,6 +1,5 @@
 import { join } from 'node:path';
-import { defineRunner } from '../../core/runner-definition.ts';
-import { productEnv } from '../../core/product-env.ts';
+import { defineRunner, productEnv } from '@hearsay-tools/squawk/plugin';
 import { PI_FACTS } from './facts.ts';
 import { PI_MODELS } from './models.ts';
 import { PI_AGENT_CONFIG, PI_CONFIG_FILES } from './config-files.ts';
@@ -24,7 +23,7 @@ export const piRunner = defineRunner({
   loadAdapter: async () => new (await import('./pi-runner.ts')).PiRunner(),
   models: {
     ...PI_MODELS,
-    loadSettings: async () => (await import('../../agent-config/model-settings/pi.ts')).piModelSettingsStrategy,
+    loadSettings: async () => (await import('./model-settings.ts')).piModelSettingsStrategy,
   },
   loadModelCatalog: async () => (await import('./pi-model-catalog.ts')).discoverPiModels,
   loadSkillCatalog: async () => (await import('./pi-skill-catalog.ts')).discoverPiSkills,

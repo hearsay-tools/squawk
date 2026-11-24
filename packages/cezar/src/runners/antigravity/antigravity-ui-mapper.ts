@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import type { TokenUsage, UiEvent } from '../../core/ui-events.ts';
-import { AcpEvents } from '../acp/events.ts';
-import { addUsage } from '../acp/usage.ts';
+import type { TokenUsage, UiEvent } from '@hearsay-tools/squawk/plugin';
+import { AcpEvents } from './acp/events.ts';
+import { addUsage } from './acp/usage.ts';
 import { antigravityUsage } from './usage.ts';
 import { ANTIGRAVITY_WIRE_HOOKS } from './wire-updates.ts';
 

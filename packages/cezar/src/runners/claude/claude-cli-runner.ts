@@ -1,36 +1,22 @@
-import { openingContent, claudeSkillContent } from '../../core/skill-trigger.ts';
-import { productEnv } from '../../core/product-env.ts';
-import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
+import {
+  openingContent, claudeSkillContent, productEnv, summarizeRunnerStderr, AUTO_END_DELAY_MS,
+  boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS, type RunnerTimings, type AgentEvent, type AgentRunResult,
+  type AgentRunSpec, type AgentRunner, type AgentSession, type AgentToolCallRecord, type ContentBlock,
+  type SessionOptions, type InputDelivery, type ToolGrant, isSignalTerminationExit,
+  SessionEndedBeforeAcknowledgement, trackChildExit, unknownToolGrant, signalSession, spawnSessionLeader,
+  waitForEofExit, buildChildEnv, squawkToolEnvNames, squawkToolNames, costWeightedTokens, readNdjson,
+  InputSubmissions,
+} from '@hearsay-tools/squawk/plugin';
 import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { parseEffort } from '@open-mercato/cezar-contract/effort';
 import { resolveClaudeExecutable } from './claude-executable.ts';
 import { claudeSettingSourceArgs } from './claude-setting-sources.ts';
-import { AUTO_END_DELAY_MS, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS, type RunnerTimings } from '../../core/runner-runtime.ts';
-import type {
-  AgentEvent,
-  AgentRunResult,
-  AgentRunSpec,
-  AgentRunner,
-  AgentSession,
-  AgentToolCallRecord,
-  ContentBlock,
-  SessionOptions,
-  InputDelivery,
-  ToolGrant,
-} from '../../core/agent-runner.ts';
 import { CLAUDE_FACTS } from './facts.ts';
 import { CLAUDE_SPEC_SUPPORT } from './spec-support.ts';
 
 // Re-exported for backends and the run manager that still import them from here.
-export type { AgentSession, SessionOptions } from '../../core/agent-runner.ts';
-import { isSignalTerminationExit, SessionEndedBeforeAcknowledgement, trackChildExit, unknownToolGrant } from '../../core/agent-runner-values.ts';
-import { signalSession, spawnSessionLeader, waitForEofExit } from '../../core/session-process.ts';
-import { buildChildEnv } from '../../core/agent-env.ts';
-import { squawkToolEnvNames, squawkToolNames } from '../../ci-wait/tool-names.ts';
-import { costWeightedTokens } from '../../core/usage.ts';
-import { readNdjson } from '../../core/ndjson.ts';
-import { InputSubmissions } from '../../core/input-submissions.ts';
+export type { AgentSession, SessionOptions } from '@hearsay-tools/squawk/plugin';
 import {
   claudeFrameDidWork,
   isParentAssistantFrame,

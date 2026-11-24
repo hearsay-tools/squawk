@@ -33,8 +33,10 @@ function processRows(): ProcessRow[] {
 export class SessionDescendants {
   private readonly members = new Map<number, string>();
   private readonly rootToken: string | undefined;
+  private readonly child: ChildProcess;
   private terminating = false;
-  constructor(private readonly child: ChildProcess) {
+  constructor(child: ChildProcess) {
+    this.child = child;
     this.rootToken = child instanceof ChildProcess && child.pid ? this.token(child.pid) : undefined;
   }
   private token(pid: number): string | undefined {

@@ -1,5 +1,6 @@
-import type { ProviderCommandResult, ProviderConnectionState } from '../../core/provider-auth.ts';
-import { normalizedLines } from '../../core/login-output.ts';
+import {
+  type ProviderCommandResult, type ProviderConnectionState, normalizedLines,
+} from '@hearsay-tools/squawk/plugin';
 
 /** Codex's auth-status parser, moved verbatim from `core/provider-auth.ts`. Loads only through
  *  the definition's `loadLogin()`. */

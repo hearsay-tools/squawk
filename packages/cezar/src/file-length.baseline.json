@@ -2,8 +2,8 @@
   "$comment": "Non-test source files over 1,000 lines, pinned at their length when the ratchet landed (hearsay-tools/cezarion#1800). A pin only shrinks: npm run lint lowers it when a file got smaller; commit this file then. A new file over the limit is a failure, not an entry. Rules: docs/sdlc/ci.md.",
   "limit": 1000,
   "files": {
-    "packages/cezar/src/runners/codex/codex-app-server-runner.ts": 1208,
-    "packages/cezar/src/runners/opencode/opencode-server-runner.ts": 1650,
+    "packages/cezar/src/runners/codex/codex-app-server-runner.ts": 1204,
+    "packages/cezar/src/runners/opencode/opencode-server-runner.ts": 1647,
     "packages/cezar/src/server-install/platforms/ubuntu-vps.ts": 1004,
     "packages/cezar/src/server/forge/github.ts": 3177,
     "packages/cezar/src/server/server.ts": 4548,

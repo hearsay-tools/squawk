@@ -1,6 +1,5 @@
 import { parseEffort } from '@open-mercato/cezar-contract/effort';
-import type { AgentRunSpec } from '../../core/agent-runner.ts';
-import { productEnv } from '../../core/product-env.ts';
+import { type AgentRunSpec, productEnv } from '@hearsay-tools/squawk/plugin';
 
 const REASONING_SUMMARIES = new Set(['auto', 'concise', 'detailed', 'none']);
 

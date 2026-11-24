@@ -4,10 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { effortLevelSchema } from '@open-mercato/cezar-contract/effort';
-import type { ModelDiscoveryContext, ModelOption } from '../../core/runner-model-catalog.ts';
-import { profileEnv } from '../../core/agent-profiles.ts';
-import { agentHomeDir } from '../../paths.ts';
-import { productEnv } from '../../core/product-env.ts';
+import {
+  type ModelDiscoveryContext, type ModelOption, profileEnv, agentHomeDir, productEnv,
+} from '@hearsay-tools/squawk/plugin';
 import { AntigravityProbe } from './probe-process.ts';
 import { antigravityPersonalSignIn } from './login-probe.ts';
 import { antigravityExecutable, resolveAntigravityCommand } from './executable.ts';
