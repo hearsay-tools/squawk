@@ -94,6 +94,24 @@ describe('agent profiles API', () => {
   };
 
   describe('GET', () => {
+    it('lists registered providers when an unregistered account row is on disk, and does not probe that row', async () => {
+      Home.seedBytes(testHome(), agentAccountsPath(testHome()), Buffer.from(JSON.stringify({
+        accounts: [{
+          id: 'ghost-work',
+          provider: 'ghost',
+          configDir: '~/.ghost-work',
+          label: 'Ghost',
+        }],
+      })));
+      const body = await list();
+      expect(body.profiles.map((profile) => profile.provider)).toEqual([...PROVIDER_IDS]);
+      expect(body.profiles.some((profile) => profile.id === 'ghost-work')).toBe(false);
+      const status = await send('GET', '/api/v1/workspace/agent-profiles/ghost-work/status');
+      expect(status.status).toBe(404);
+      const raw = JSON.parse(readFileSync(agentAccountsPath(testHome()), 'utf8')) as { accounts: { id: string }[] };
+      expect(raw.accounts.map((row) => row.id)).toEqual(['ghost-work']);
+    });
+
     it('lists only the discovered defaults out of the box — the zero-config state', async () => {
       const body = await list();
       expect(body.editable).toBe(true);

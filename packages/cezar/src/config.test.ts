@@ -113,12 +113,17 @@ describe('loadConfig systemPrompt', () => {
       expect(config.maxParallel).toBe(6);
     });
 
-    it('drops a key for a runner no registered definition took, keeping the rest', async () => {
+    it('keeps a key for a runner no registered definition took, and drops a bad value for a registered one', async () => {
       // A config written before the runner-definitions slice, including a key no registered
       // definition took, loads with the same values: the known keys parse, the unknown key is
-      // dropped, as the closed per-runner object dropped it.
+      // kept and ignored until that runner loads.
       write({ defaultModels: { claude: 'opus', ghost: 'gpt-x' } });
-      expect((await loadConfig(repoRoot, testHome())).defaultModels).toEqual({ claude: 'opus' });
+      expect((await loadConfig(repoRoot, testHome())).defaultModels).toEqual({ claude: 'opus', ghost: 'gpt-x' });
+
+      write({ defaultModels: { claude: '', ghost: 'kept' }, maxParallel: 4 });
+      const config = await loadConfig(repoRoot, testHome());
+      expect(config.defaultModels).toBeUndefined();
+      expect(config.maxParallel).toBe(4);
     });
   });
 
@@ -324,12 +329,27 @@ describe('loadConfig machine-wide agent defaults', () => {
     expect((await loadConfig(repoRoot, testHome())).defaultRunner).toBe('claude');
   });
 
-  it('ignores a machine runner the schema refuses, rather than failing the load', async () => {
+  it('keeps a machine runner no definition registered, and drops one the stored bound refuses', async () => {
     writeMachine({ runner: 'not-an-agent' });
     writeRepo({ systemPrompt: 'be brief' });
+    const kept = await loadConfig(repoRoot, testHome());
+    expect(kept.defaultRunner).toBe('not-an-agent');
+    expect(kept.systemPrompt).toBe('be brief');
+
+    writeMachine({ runner: `bad${String.fromCharCode(10)}id` });
+    const dropped = await loadConfig(repoRoot, testHome());
+    expect(dropped.defaultRunner).toBe('claude');
+    expect(dropped.systemPrompt).toBe('be brief');
+  });
+
+  it('keeps an unregistered repo runner and drops an illegal one without losing the file', async () => {
+    writeRepo({ defaultRunner: 'ghost', systemPrompt: 'be brief' });
+    expect((await loadConfig(repoRoot, testHome())).defaultRunner).toBe('ghost');
+
+    writeRepo({ defaultRunner: `gho${String.fromCharCode(10)}st`, maxParallel: 3 });
     const config = await loadConfig(repoRoot, testHome());
     expect(config.defaultRunner).toBe('claude');
-    expect(config.systemPrompt).toBe('be brief');
+    expect(config.maxParallel).toBe(3);
   });
 });
 

@@ -200,6 +200,21 @@ describe('agent accounts store', () => {
       expect((await loadAgentAccounts(testHome())).accounts.map((a) => a.id)).toEqual(['work']);
     });
 
+    it('keeps an account whose runner is not registered, and drops an illegal provider id', async () => {
+      write({
+        accounts: [
+          account('ghost-work', { provider: 'ghost', configDir: '~/.ghost-work' }),
+          account('blank', { provider: '   ' }),
+          account('long', { provider: 'p'.repeat(65) }),
+          account('control', { provider: `ba${String.fromCharCode(10)}d` }),
+          account('work'),
+        ],
+      });
+      const store = await loadAgentAccounts(testHome());
+      expect(store.accounts.map((row) => row.id)).toEqual(['ghost-work', 'work']);
+      expect(store.accounts[0]?.provider).toBe('ghost');
+    });
+
     it('keeps a pi account and drops an omp one — omp carries no named accounts', async () => {
       write({ accounts: [
         account('pi-work', { provider: 'pi', configDir: '~/.pi-work/agent' }),

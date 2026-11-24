@@ -17,6 +17,7 @@ import {
   loadWorkspaceConfig,
   loadWorkspaceConfigSync,
   mergeWriteWorkspaceConfig,
+  preservedDisabledProviders,
   workspaceConfigBackupPath,
   type WorkspaceConfig,
 } from './config.ts';
@@ -98,7 +99,14 @@ describe('workspace config', () => {
       disabledProviders: ['codex', 'future', 'codex', 4, 'opencode'],
       futureTopLevelKey: { keep: true },
     });
-    expect((await loadWorkspaceConfig(testHome().workspaceConfig)).disabledProviders).toEqual(['codex', 'opencode']);
+    expect((await loadWorkspaceConfig(testHome().workspaceConfig)).disabledProviders).toEqual(['codex', 'opencode', 'future']);
+    expect(preservedDisabledProviders(['claude', 'codex', 'opencode'], new Set(['codex', 'opencode']), ['codex', 'future', 'opencode'])).toEqual(['codex', 'opencode', 'future']);
+
+    const preserved = await mergeWriteWorkspaceConfig((config) => {
+      config.projectsDir = '/tmp/other-projects';
+    }, testHome());
+    expect(preserved.disabledProviders).toEqual(['codex', 'opencode', 'future']);
+    expect(preserved.projectsDir).toBe('/tmp/other-projects');
 
     const written = await mergeWriteWorkspaceConfig((config) => {
       config.disabledProviders = ['claude'];

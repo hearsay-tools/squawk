@@ -117,7 +117,7 @@ import { setWorkspaceUiStateInputSchema } from '@open-mercato/cezar-contract/wor
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
 import { openProjectInSchema } from '@open-mercato/cezar-contract/workspace';
-import { knownRunnerIds, registeredRunnerId, registeredRunners, resolveRunnerId, runnerDefinition } from '../core/runner-registry.ts';
+import { isRegisteredRunner, knownRunnerIds, registeredRunnerId, registeredRunners, resolveRunnerId, runnerDefinition } from '../core/runner-registry.ts';
 import { REMOVED_RUNNER_IDS } from '../runs/legacy-run-rows.ts';
 import {
   attachmentFileParamSchema,
@@ -211,7 +211,7 @@ import { findConfigFile } from '../agent-config/catalog.ts';
 import {
   defaultWorkspaceConfig,
   loadWorkspaceConfig,
-  mergeWriteWorkspaceConfig,
+  mergeWriteWorkspaceConfig, preservedDisabledProviders,
   effectiveComposerDefault,
   type WorkspaceConfig,
   type StoredProjectWebhook,
@@ -1230,7 +1230,7 @@ export function createApp(deps: ServerDeps) {
             const disabled = new Set(config.disabledProviders);
             if (body.data.enabled) disabled.delete(provider.data);
             else disabled.add(provider.data);
-            config.disabledProviders = registeredRunners().map(({ id }) => id).filter((id) => disabled.has(id));
+            config.disabledProviders = preservedDisabledProviders(registeredRunners().map(({ id }) => id), disabled, config.disabledProviders);
           });
         } catch {
           return c.json({ error: 'Provider preference could not be saved.' }, 500);
@@ -1388,7 +1388,7 @@ export function createApp(deps: ServerDeps) {
     }
     try {
       const stored = (await loadAgentAccounts(deps.home)).accounts.find((a) => a.id === id);
-      return stored ? resolveStoredProfile(stored) : null;
+      return stored && isRegisteredRunner(stored.provider) ? resolveStoredProfile(stored) : null;
     } catch {
       return null;
     }
@@ -1538,7 +1538,7 @@ export function createApp(deps: ServerDeps) {
           // unreadable store — treated as unknown, like DELETE and PATCH /projects
         }
         const current = existing.find((a) => a.id === id);
-        if (!current) return c.json({ error: `unknown account: ${id}` }, 404);
+        if (!current || !isRegisteredRunner(current.provider)) return c.json({ error: `unknown account: ${id}` }, 404);
         if (configDir !== undefined) {
           const conflict = await conflictingProfile(existing, current.provider, expandTilde(configDir), id);
           if (conflict !== null) return c.json({ error: conflict }, 409);

@@ -20,7 +20,7 @@ import { WEBHOOK_TRIGGERS, type WebhookTrigger } from '@open-mercato/cezar-contr
 import { projectWebhookUrlSchema } from '@open-mercato/cezar-contract/projects';
 import type { ProviderId } from '../core/provider-auth.ts';
 import { knownRunnerIds, registeredRunners } from '../core/runner-registry.ts';
-import { registeredRunnerIdSchema } from '../core/runner-id-schema.ts';
+import { storedRunnerIdSchema } from '../core/runner-id-schema.ts';
 
 /**
  * `~/.cezar/config.json` — the per-user workspace config + project registry
@@ -232,7 +232,7 @@ export function registeredRunnerRecord(field: z.ZodType<string | undefined>) {
  */
 const agentDefaultsSchema = z
   .object({
-    runner: registeredRunnerIdSchema().optional().catch(undefined),
+    runner: storedRunnerIdSchema.optional().catch(undefined),
     models: registeredRunnerRecord(z.string().trim().min(1).max(200).optional().catch(undefined))
       .optional()
       .catch(undefined),
@@ -249,10 +249,30 @@ const disabledProvidersSchema = z
   .default(() => [])
   .catch(() => [])
   .transform((values): ProviderId[] => {
+    // Registered ids stay in registry order; an id no runner registered is kept in stored order so
+    // a plugin that failed to load is not erased (spec 2026-11-24, A3). An empty, over-long or
+    // control-character value is dropped, as is a non-string.
     const ids = knownRunnerIds();
-    const seen = new Set(values.filter((value): value is ProviderId => typeof value === 'string' && ids.includes(value)));
-    return ids.filter((provider) => seen.has(provider));
+    const valid = [...new Set(values.flatMap((value) => {
+      const parsed = storedRunnerIdSchema.safeParse(value);
+      return parsed.success ? [parsed.data] : [];
+    }))];
+    return [...ids.filter((provider) => valid.includes(provider)), ...valid.filter((provider) => !ids.includes(provider))];
   });
+
+/**
+ * The disabled-provider list after an enable toggle. Registered ids stay in registry order.
+ * An id no runner registered is kept in its stored order, so the toggle does not erase a plugin
+ * that failed to load (spec 2026-11-24, A3).
+ */
+export function preservedDisabledProviders(
+  registered: readonly string[],
+  disabled: ReadonlySet<string>,
+  stored: readonly string[],
+): string[] {
+  const preserved = stored.filter((id) => !registered.includes(id));
+  return [...registered.filter((id) => disabled.has(id)), ...preserved];
+}
 
 export const workspaceConfigSchema = z
   .object({

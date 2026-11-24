@@ -6,7 +6,7 @@ import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
 import { loadWorkspaceConfig, type WorkspaceConfig } from './workspace/config.ts';
 import { registeredRunners } from './core/runner-registry.ts';
-import { registeredRunnerIdSchema } from './core/runner-id-schema.ts';
+import { storedRunnerIdSchema } from './core/runner-id-schema.ts';
 import { DEFAULT_RUNNER_ID } from './core/runner-ids.ts';
 
 /**
@@ -46,7 +46,9 @@ const configSchema = z.object({
    * step (workflow). The GUI only offers runners actually installed; this is
    * the preselected default. Also the runner the chain planner uses.
    */
-  defaultRunner: registeredRunnerIdSchema().default(DEFAULT_RUNNER_ID),
+  // A valid id is kept even when no runner registered it. An empty, over-long or control-character
+  // id is dropped back to the built-in default, without failing the rest of the file.
+  defaultRunner: storedRunnerIdSchema.default(DEFAULT_RUNNER_ID).catch(DEFAULT_RUNNER_ID),
   /** Model for the chain planner (spec 008) — cheap but reliable at JSON. */
   plannerModel: z.string().min(1).default('sonnet'),
   /** Model for the task namer (spec 2026-07-17-task-auto-naming) — the cheapest
@@ -80,18 +82,25 @@ const configSchema = z.object({
    * Per-runner default model preset (Settings → Agent defaults, redesign R6 1.5): the
    * model id the composer preselects for that runner. Missing = auto (the
    * runner decides). A capability (`model`), never a vendor config format.
-   * A record keyed by registered id, checked against the registry when config
-   * loads: a key no registered runner took is dropped, as the closed
-   * per-runner object (no passthrough) dropped it, and a bad value for a
-   * registered runner refuses the whole key, as the object's `.catch(undefined)`
-   * did. `.catch(undefined)` keeps it additive-safe like `systemPrompt`: a
+   * A record keyed by runner id, checked against the registry when config loads. A key no
+   * registered runner took is kept, as `registeredRunnerRecord` keeps one, and ignored until that
+   * runner loads. A bad value for a registered runner refuses the whole key, as the object's
+   * `.catch(undefined)` did. `.catch(undefined)` keeps it additive-safe like `systemPrompt`: a
    * bad value degrades to unset without discarding the rest of the config.
    */
   defaultModels: z
     .record(z.string(), z.unknown())
-    .transform((entries) => Object.fromEntries(
-      registeredRunners().filter(({ id }) => id in entries).map(({ id }) => [id, entries[id]]),
-    ))
+    .transform((entries) => {
+      const known = new Set(registeredRunners().map(({ id }) => id));
+      const out: Record<string, unknown> = {};
+      for (const [id, value] of Object.entries(entries)) {
+        if (!known.has(id)) out[id] = value;
+      }
+      for (const { id } of registeredRunners()) {
+        if (id in entries) out[id] = entries[id];
+      }
+      return out;
+    })
     .pipe(z.record(z.string(), z.string().trim().min(1).max(200).optional()))
     .optional()
     .catch(undefined),
