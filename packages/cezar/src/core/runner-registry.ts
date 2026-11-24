@@ -1,6 +1,7 @@
 import { createKeyedRegistry } from './registry.ts';
 import type { AgentRunner } from './agent-runner.ts';
 import type { RunnerDefinition } from './runner-definition.ts';
+import { storedRunnerIdSchema } from './runner-id-schema.ts';
 import { DEFAULT_RUNNER_ID, LEGACY_RUNNER_IDS } from './runner-ids.ts';
 
 /** Register definitions first; the process entry seals before normal reads. */
@@ -41,6 +42,12 @@ export function savedRunnerId(id: string | undefined): string | undefined {
  * map resolves it for saved runs, so no runner may take it.
  */
 export function registerRunner(definition: RunnerDefinition): void {
+  // The same bound the stored-config decoders accept, so a registered id always survives the next
+  // stored read (spec 2026-11-24-plugin-loader-and-runner-kit, A3).
+  const id = storedRunnerIdSchema.safeParse(definition.id);
+  // The key has to be the definition's own id. The schema trims, so a padded id would register
+  // under a different key than the definition carries; that is the same refusal as an invalid id.
+  if (!id.success || id.data !== definition.id) throw new Error(`Runner registry: runner id ${JSON.stringify(definition.id)} is not a stored runner id (trimmed, 1–64 characters, no control characters).`);
   runners.register(definition.id, definition);
 }
 

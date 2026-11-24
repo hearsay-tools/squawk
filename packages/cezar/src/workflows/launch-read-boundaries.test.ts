@@ -156,6 +156,16 @@ it('P6-17 P6-21 task head reads current default runner and system prompt', async
   expect(launched.systemPrompt).not.toContain('old default');
 });
 
+it('a runnerless start records the registered default when the stored default runner is not registered', async () => {
+  config({ defaultRunner: 'ghost' });
+  const target = manager.startRun(acceptedWorkflow, { task: 'target', worktree: false });
+  // bound: the fixture session publishes its open event, or the run fails, before this read.
+  await waitForProduct(manager, store, () => opened.length === 1 || store.getRun(target.id)?.status === 'failed');
+  // bound: the fixture session publishes its open event, or the run fails, before this read.
+  expect(store.getRun(target.id)?.error).toBeUndefined();
+  expect(store.getRun(target.id)?.runner).toBe('claude');
+});
+
 it('P6-04 P6-12 P6-20 P6-24 P6-28 P6-32 P6-36 live input keeps the open session without new launch selection', async () => {
   const reads = { workflow: 0, policy: 0, provider: 0, profile: 0, runner: 0, config: 0 };
   const inFlight: Promise<unknown>[] = [];
@@ -194,6 +204,7 @@ it('P6-04 P6-12 P6-20 P6-24 P6-28 P6-32 P6-36 live input keeps the open session 
   const target = manager.startRun(acceptedWorkflow, { task: 'accepted task', worktree: false, systemPrompt: 'accepted prompt' });
   // bound: the source baseline is taken only after the actual session opens.
   await waitForProduct(manager, store, () => opened.length === 1 || store.getRun(target.id)?.status === 'failed');
+  // bound: the fixture session publishes its open event, or the run fails, before this read.
   expect(store.getRun(target.id)?.error).toBeUndefined();
   expect(opened).toHaveLength(1);
   await Promise.all(inFlight);
@@ -239,6 +250,7 @@ it('P6-02 P6-06 P6-10 P6-18 P6-22 later step keeps accepted recipe after the fir
   const target = manager.startRun(workflow, { task: 'accepted task', systemPrompt: 'accepted prompt', worktree: false });
   // bound: the first real runner session gates amendments before the later step selects its input.
   await waitForProduct(manager, store, () => opened.length === 1 || store.getRun(target.id)?.status === 'failed');
+  // bound: the fixture session publishes its open event, or the run fails, before this read.
   expect(store.getRun(target.id)?.error).toBeUndefined();
   expect(opened).toHaveLength(1);
   store.updateRun(target.id, { task: 'later amendment' });
@@ -249,6 +261,7 @@ it('P6-02 P6-06 P6-10 P6-18 P6-22 later step keeps accepted recipe after the fir
   await completeStep(0);
   // bound: step-end and session-open events drive the real workflow transition.
   await waitForProduct(manager, store, () => opened.length === 2 || store.getRun(target.id)?.status === 'failed');
+  // bound: the fixture session publishes its open event, or the run fails, before this read.
   expect(store.getRun(target.id)?.error).toBeUndefined();
   expect(opened).toHaveLength(2);
   expect(opened[1]?.userPrompt).toContain('SECOND accepted task');
@@ -265,12 +278,14 @@ it('P6-29 P6-30 later step reads amended effort after the first session', async 
   const target = manager.startRun(workflow, { task: 'target', effort: 'low', worktree: false });
   // bound: effort changes only after the first step has selected and launched its own effort.
   await waitForProduct(manager, store, () => opened.length === 1 || store.getRun(target.id)?.status === 'failed');
+  // bound: the fixture session publishes its open event, or the run fails, before this read.
   expect(store.getRun(target.id)?.error).toBeUndefined();
   expect(opened[0]?.effort).toBe('low');
   store.updateRun(target.id, { effort: 'high' });
   await completeStep(0);
   // bound: the later runner open is the signal that the later effort selection completed.
   await waitForProduct(manager, store, () => opened.length === 2 || store.getRun(target.id)?.status === 'failed');
+  // bound: the fixture session publishes its open event, or the run fails, before this read.
   expect(store.getRun(target.id)?.error).toBeUndefined();
   expect(opened).toHaveLength(2);
   expect(opened[1]?.effort).toBe('high');
@@ -283,12 +298,14 @@ it('P6-26 later step reads a model lock changed after the first session', async 
   const target = manager.startRun(workflow, { task: 'target', model: 'anthropic/claude-sonnet-4-6', effort: 'low', worktree: false });
   // bound: the first runner open proves model selection finished before the project lock changes.
   await waitForProduct(manager, store, () => opened.length === 1 || store.getRun(target.id)?.status === 'failed');
+  // bound: the fixture session publishes its open event, or the run fails, before this read.
   expect(store.getRun(target.id)?.error).toBeUndefined();
   expect(opened[0]?.model).toBe('claude-sonnet-4-6');
   config({ modelsLocked: true });
   await completeStep(0);
   // bound: the later runner open proves model and effort selection ran under the new policy.
   await waitForProduct(manager, store, () => opened.length === 2 || store.getRun(target.id)?.status === 'failed');
+  // bound: the fixture session publishes its open event, or the run fails, before this read.
   expect(store.getRun(target.id)?.error).toBeUndefined();
   expect(opened).toHaveLength(2);
   expect(opened[1]?.model).toBeUndefined();

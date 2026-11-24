@@ -9,7 +9,8 @@ import type { WorkflowDef } from '@open-mercato/cezar-contract/workflows';
 
 /** The registered runners an original workflow executes, in registration order. */
 export function providersRequiredByWorkflow(workflow: WorkflowDef, fallback: ProviderId): ProviderId[] {
-  return requiredByWorkflow(workflow, fallback, registeredRunners().map(({ id }) => id)) as ProviderId[];
+  // A preserved unknown default executes as the registered runner, so the gate checks that runner.
+  return requiredByWorkflow(workflow, resolveRunnerId(fallback), registeredRunners().map(({ id }) => id)) as ProviderId[];
 }
 
 export function providerForExistingRun(
@@ -27,7 +28,7 @@ export async function providerForUntouchedRun(
 ): Promise<ProviderId> {
   const stepRunner = workerContinuationStep(run, true)?.runner;
   if (stepRunner !== undefined) return resolveRunnerId(stepRunner);
-  return run.runner === undefined ? defaultRunner() : resolveRunnerId(run.runner);
+  return resolveRunnerId(run.runner === undefined ? await defaultRunner() : run.runner);
 }
 
 /** Resolve the original, target, and required providers for `POST /runs/:id/continue`. */

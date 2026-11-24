@@ -1,6 +1,6 @@
 import '../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,6 +31,7 @@ describe('the start gate checks the account the task runs on', () => {
   let workDir: string;
   let store: RunStore;
   let startRun: ReturnType<typeof vi.fn>;
+  let plannedRunners: string[];
   const savedDryRun = process.env.CEZ_DRY_RUN;
 
   beforeEach(async () => {
@@ -39,6 +40,7 @@ describe('the start gate checks the account the task runs on', () => {
     repoRoot = realpathSync(mkdtempSync(join(tmpdir(), 'cez-gate-accounts-')));
     workDir = join(repoRoot, 'claude-work');
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
+    plannedRunners = [];
     startRun = vi.fn((_workflow: WorkflowDef, input: StartRunInput) => store.createRun({
       title: 'Task',
       workflow: 'quick-task',
@@ -89,7 +91,10 @@ describe('the start gate checks the account the task runs on', () => {
         sendMessage: vi.fn(() => true),
         continueRun: vi.fn(() => ({ ok: true })),
         // The planner's runner fails, so a plan that passes the gate answers its one-step fallback.
-        createRunner: vi.fn(async () => ({ run: async () => { throw new Error('no model in tests'); } })),
+        createRunner: vi.fn(async (runner: string) => {
+          plannedRunners.push(runner);
+          return { run: async () => { throw new Error('no model in tests'); } };
+        }),
       } as unknown as RunManager,
       version: 'test',
       providerAuth,
@@ -173,5 +178,59 @@ describe('the start gate checks the account the task runs on', () => {
     expect(await response.json()).toEqual({
       error: 'Claude Code account "Work" is not signed in. Sign in in Settings → Agent defaults → Providers.',
     });
+  });
+
+  it('plans through the registered default when the stored default runner is not registered', async () => {
+    // Dry-run reports every registered account connected, so the gate tests the resolved id, not sign-in.
+    process.env.CEZ_DRY_RUN = '1';
+    const app = setup(true);
+    mkdirSync(join(repoRoot, '.ai/cezar'), { recursive: true });
+    writeFileSync(join(repoRoot, '.ai/cezar/config.json'), JSON.stringify({ defaultRunner: 'ghost' }));
+    const response = await plan(app);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ fallback: true });
+    // The planner reached the resolved runner. A thrown profile lookup never calls createRunner.
+    expect(plannedRunners).toEqual(['claude']);
+  });
+
+  it('refuses a runnerless start when the resolved default is disabled', async () => {
+    process.env.CEZ_DRY_RUN = '1';
+    const app = createApp({
+      home: testHome(),
+      repoRoot,
+      store,
+      manager: { startRun, createRunner: vi.fn() } as unknown as RunManager,
+      version: 'test',
+      providerAuth: new ProviderAuthService({ platform: 'linux', runCommand: async () => ({ stdout: '', stderr: '', exitCode: 0 }) }),
+      workspaceConfig: memoryWorkspaceConfig(['claude']),
+    });
+    mkdirSync(join(repoRoot, '.ai/cezar'), { recursive: true });
+    writeFileSync(join(repoRoot, '.ai/cezar/config.json'), JSON.stringify({ defaultRunner: 'ghost' }));
+    const response = await apiRequest(app, '/api/v1/runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ task: 'Task', steps: [{ id: 'task', prompt: '{{task}}' }] }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: 'Claude Code is disabled. Enable it in Settings → Agent defaults → Providers.',
+    });
+    expect(startRun).not.toHaveBeenCalled();
+  });
+
+  it('checks a named account on the resolved runner when the stored default is not registered', async () => {
+    const app = setup(false);
+    mkdirSync(join(repoRoot, '.ai/cezar'), { recursive: true });
+    writeFileSync(join(repoRoot, '.ai/cezar/config.json'), JSON.stringify({ defaultRunner: 'ghost' }));
+    const response = await apiRequest(app, '/api/v1/runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ task: 'Task', agentProfile: 'work', steps: [{ id: 'task', prompt: '{{task}}' }] }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: 'Claude Code account "Work" is not signed in. Sign in in Settings → Agent defaults → Providers.',
+    });
+    expect(startRun).not.toHaveBeenCalled();
   });
 });

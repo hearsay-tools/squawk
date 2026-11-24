@@ -2,7 +2,7 @@ import './register-all-runners.testkit.ts';
 import { z } from 'zod';
 import { describe, expect, it, vi } from 'vitest';
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
-import { registeredRunnerIdSchema } from './runner-id-schema.ts';
+import { registeredRunnerIdSchema, storedRunnerIdSchema } from './runner-id-schema.ts';
 import { defineRunner } from './runner-definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 
@@ -31,5 +31,17 @@ describe('registeredRunnerIdSchema', () => {
     registerRunner(defineRunner({ ...codexRunner, id: 'late-runner' }));
     sealRunners();
     expect(schema.safeParse('late-runner').data).toBe('late-runner');
+  });
+});
+
+describe('storedRunnerIdSchema', () => {
+  it.each(['ghost', 'p'.repeat(64), '  ghost  '])('keeps a trimmed non-empty id within 64 characters: %j', (value) => {
+    const parsed = storedRunnerIdSchema.safeParse(value);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data).toBe(value.trim());
+  });
+
+  it.each(['', '   ', 'p'.repeat(65), `gho${String.fromCharCode(10)}st`, `bad${String.fromCharCode(127)}id`, 5, null])('drops %j', (value) => {
+    expect(storedRunnerIdSchema.safeParse(value).success).toBe(false);
   });
 });

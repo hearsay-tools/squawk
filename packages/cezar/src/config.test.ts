@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { projectPaths } from './project-paths.ts';
+import { writeMergedConfig } from './server/config-merge.ts';
 import { loadConfig, readRawConfig, resolveWorktreeRetention, updateConfigFile } from './config.ts';
 import { claudeRunner } from './runners/claude/definition.ts';
 import { codexRunner } from './runners/codex/definition.ts';
@@ -113,13 +114,37 @@ describe('loadConfig systemPrompt', () => {
       expect(config.maxParallel).toBe(6);
     });
 
-    it('drops a key for a runner no registered definition took, keeping the rest', async () => {
+    it('keeps a key for a runner no registered definition took, and drops a bad value for a registered one', async () => {
       // A config written before the runner-definitions slice, including a key no registered
       // definition took, loads with the same values: the known keys parse, the unknown key is
-      // dropped, as the closed per-runner object dropped it.
+      // kept and ignored until that runner loads.
       write({ defaultModels: { claude: 'opus', ghost: 'gpt-x' } });
+      expect((await loadConfig(repoRoot, testHome())).defaultModels).toEqual({ claude: 'opus', ghost: 'gpt-x' });
+
+      write({ defaultModels: { claude: '', ghost: 'kept' }, maxParallel: 4 });
+      const config = await loadConfig(repoRoot, testHome());
+      expect(config.defaultModels).toEqual({ ghost: 'kept' });
+      expect(config.maxParallel).toBe(4);
+
+      write({ defaultModels: { claude: 'opus', ghost: null } });
       expect((await loadConfig(repoRoot, testHome())).defaultModels).toEqual({ claude: 'opus' });
+
+      write({ defaultModels: { '': 'model', ['p'.repeat(65)]: 'model', [`gh${String.fromCharCode(10)}ost`]: 'model', ' padded ': 'model', ghost: 'gpt-x' } });
+      expect((await loadConfig(repoRoot, testHome())).defaultModels).toEqual({ ghost: 'gpt-x' });
     });
+  });
+
+  it('keeps an unregistered defaultRunner and model key on disk across an unrelated settings write', async () => {
+    write({ defaultRunner: 'ghost', defaultModels: { claude: 'opus', ghost: 'gpt-x' } });
+    const dataDir = join(repoRoot, '.ai/cezar');
+    expect(await writeMergedConfig(dataDir, { maxParallel: 4 })).toBeUndefined();
+    expect(await writeMergedConfig(dataDir, { defaultModels: { codex: 'o3' } })).toBeUndefined();
+    const raw = JSON.parse(readFileSync(join(dataDir, 'config.json'), 'utf8')) as Record<string, unknown>;
+    expect(raw).toMatchObject({ defaultRunner: 'ghost', maxParallel: 4 });
+    expect(raw.defaultModels).toEqual({ claude: 'opus', ghost: 'gpt-x', codex: 'o3' });
+    const config = await loadConfig(repoRoot, testHome());
+    expect(config.defaultRunner).toBe('ghost');
+    expect(config.defaultModels).toEqual({ claude: 'opus', ghost: 'gpt-x', codex: 'o3' });
   });
 
   describe('modelsLocked', () => {
@@ -324,12 +349,27 @@ describe('loadConfig machine-wide agent defaults', () => {
     expect((await loadConfig(repoRoot, testHome())).defaultRunner).toBe('claude');
   });
 
-  it('ignores a machine runner the schema refuses, rather than failing the load', async () => {
+  it('keeps a machine runner no definition registered, and drops one the stored bound refuses', async () => {
     writeMachine({ runner: 'not-an-agent' });
     writeRepo({ systemPrompt: 'be brief' });
+    const kept = await loadConfig(repoRoot, testHome());
+    expect(kept.defaultRunner).toBe('not-an-agent');
+    expect(kept.systemPrompt).toBe('be brief');
+
+    writeMachine({ runner: `bad${String.fromCharCode(10)}id` });
+    const dropped = await loadConfig(repoRoot, testHome());
+    expect(dropped.defaultRunner).toBe('claude');
+    expect(dropped.systemPrompt).toBe('be brief');
+  });
+
+  it('keeps an unregistered repo runner and drops an illegal one without losing the file', async () => {
+    writeRepo({ defaultRunner: 'ghost', systemPrompt: 'be brief' });
+    expect((await loadConfig(repoRoot, testHome())).defaultRunner).toBe('ghost');
+
+    writeRepo({ defaultRunner: `gho${String.fromCharCode(10)}st`, maxParallel: 3 });
     const config = await loadConfig(repoRoot, testHome());
     expect(config.defaultRunner).toBe('claude');
-    expect(config.systemPrompt).toBe('be brief');
+    expect(config.maxParallel).toBe(3);
   });
 });
 

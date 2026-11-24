@@ -117,7 +117,7 @@ import { setWorkspaceUiStateInputSchema } from '@open-mercato/cezar-contract/wor
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
 import { openProjectInSchema } from '@open-mercato/cezar-contract/workspace';
-import { knownRunnerIds, registeredRunnerId, registeredRunners, resolveRunnerId, runnerDefinition } from '../core/runner-registry.ts';
+import { isRegisteredRunner, knownRunnerIds, registeredRunnerId, registeredRunners, resolveRunnerId, runnerDefinition } from '../core/runner-registry.ts';
 import { REMOVED_RUNNER_IDS } from '../runs/legacy-run-rows.ts';
 import {
   attachmentFileParamSchema,
@@ -211,7 +211,7 @@ import { findConfigFile } from '../agent-config/catalog.ts';
 import {
   defaultWorkspaceConfig,
   loadWorkspaceConfig,
-  mergeWriteWorkspaceConfig,
+  mergeWriteWorkspaceConfig, preservedDisabledProviders,
   effectiveComposerDefault,
   type WorkspaceConfig,
   type StoredProjectWebhook,
@@ -223,7 +223,7 @@ import {
   defaultAgentAccountStore,
   isAbsoluteConfigDir,
   loadAgentAccounts,
-  mergeWriteAgentAccounts,
+  mergeWriteAgentAccounts, removeAgentAccount,
   type AgentAccount,
   type AgentAccountStore,
 } from '../workspace/agent-accounts.ts';
@@ -1230,7 +1230,7 @@ export function createApp(deps: ServerDeps) {
             const disabled = new Set(config.disabledProviders);
             if (body.data.enabled) disabled.delete(provider.data);
             else disabled.add(provider.data);
-            config.disabledProviders = registeredRunners().map(({ id }) => id).filter((id) => disabled.has(id));
+            config.disabledProviders = preservedDisabledProviders(registeredRunners().map(({ id }) => id), disabled, config.disabledProviders);
           });
         } catch {
           return c.json({ error: 'Provider preference could not be saved.' }, 500);
@@ -1388,7 +1388,7 @@ export function createApp(deps: ServerDeps) {
     }
     try {
       const stored = (await loadAgentAccounts(deps.home)).accounts.find((a) => a.id === id);
-      return stored ? resolveStoredProfile(stored) : null;
+      return stored && isRegisteredRunner(stored.provider) ? resolveStoredProfile(stored) : null;
     } catch {
       return null;
     }
@@ -1538,7 +1538,7 @@ export function createApp(deps: ServerDeps) {
           // unreadable store — treated as unknown, like DELETE and PATCH /projects
         }
         const current = existing.find((a) => a.id === id);
-        if (!current) return c.json({ error: `unknown account: ${id}` }, 404);
+        if (!current || !isRegisteredRunner(current.provider)) return c.json({ error: `unknown account: ${id}` }, 404);
         if (configDir !== undefined) {
           const conflict = await conflictingProfile(existing, current.provider, expandTilde(configDir), id);
           if (conflict !== null) return c.json({ error: conflict }, 409);
@@ -1662,21 +1662,8 @@ export function createApp(deps: ServerDeps) {
         let removedProvider: ProviderId | undefined;
         try {
           await mergeWriteAgentAccounts((store) => {
-            const before = store.accounts.length;
-            removedProvider = store.accounts.find((a) => a.id === id)?.provider;
-            store.accounts = store.accounts.filter((a) => a.id !== id);
-            removed = store.accounts.length < before;
-            if (!removed) return;
-            // Scrub every reference IN THE SAME MUTATOR — the reason selections share this file.
-            // A two-call delete-then-scrub can be observed mid-way by another Squawk process on
-            // this machine, which would then resolve a dangling id; harmless today (it degrades
-            // to the default) but only by luck.
-            for (const [root, selection] of Object.entries(store.selections)) {
-              for (const key of Object.keys(selection) as Array<keyof typeof selection>) {
-                if (selection[key] === id) delete selection[key];
-              }
-              if (Object.keys(selection).length === 0) delete store.selections[root];
-            }
+            removedProvider = removeAgentAccount(store, id);
+            removed = removedProvider !== undefined;
           }, deps.home);
         } catch (err) {
           return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
@@ -2488,7 +2475,7 @@ export function createApp(deps: ServerDeps) {
     .post('/plan', jsonZodValidator(planSchema), async (c) => {
       const { root: repoRoot, manager } = c.get('project');
       const parsed = { data: c.req.valid('json') };
-      const planner = (await loadConfig(repoRoot, deps.home)).defaultRunner;
+      const planner = resolveRunnerId((await loadConfig(repoRoot, deps.home)).defaultRunner);
       const blocked = await providerActionError([planner], { repoRoot, picks: { [planner]: parsed.data.agentProfile } });
       if (blocked) return c.json({ error: blocked }, 409);
       const badProfile = await agentProfileRefusal(resolveWorkspaceProfile, planner, parsed.data.agentProfile);

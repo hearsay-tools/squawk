@@ -298,12 +298,6 @@
     {
       "file": "workflows/launch-read-boundaries.test.ts",
       "rule": "one-shot-read",
-      "site": "expect(store.getRun(target.id)?.error).toBeUndefined();",
-      "count": 7
-    },
-    {
-      "file": "workflows/launch-read-boundaries.test.ts",
-      "rule": "one-shot-read",
       "site": "expect(store.getRun(target.id)?.runner).toBe('codex');",
       "count": 1
     },

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { getRunnerSkills } from '@/api/client'
-import { runnerDisplayName, useRunners } from '@/api/runners'
+import { runnerDisplayName, useResolvedRunner, useRunners } from '@/api/runners'
 import { useAgentAccounts } from '@/api/agent-accounts'
 import { queryKeys, useConfig, useRunnerSkills } from '@/api/queries'
 import { RefreshCwIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
@@ -19,11 +19,16 @@ import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner
 export function SkillsRoute() {
   const config = useConfig()
   const [pickedRunner, setRunner] = useState<Runner | null>(null)
-  const [account, setAccount] = useState<string | null>(null)
+  const [pickedAccount, setPickedAccount] = useState<{ runner: Runner; id: string } | null>(null)
   const [search, setSearch] = useState('')
   const [params] = useSearchParams()
-  const runner = pickedRunner ?? config.data?.defaultRunner ?? 'claude'
-  const query = useRunnerSkills(pickedRunner ?? config.data?.defaultRunner, account)
+  const storedRunner = pickedRunner ?? config.data?.defaultRunner
+  // The runner the skills come from: a stored default whose plugin did not load resolves to the
+  // runner the server runs instead. An account picked for another runner is not sent with it.
+  const { runner } = useResolvedRunner(storedRunner ?? 'claude')
+  const account = pickedAccount?.runner === runner ? pickedAccount.id : null
+  const setAccount = (id: string | null) => setPickedAccount(id === null ? null : { runner, id })
+  const query = useRunnerSkills(storedRunner, account)
   const refresh = useRereadSkills(runner, query.account)
   const skills = query.data ?? []
   return (

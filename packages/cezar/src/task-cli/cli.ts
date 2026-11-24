@@ -23,11 +23,12 @@ import { asksQuestion } from '@open-mercato/cezar-contract/waiting-on';
 import { runHistoryContextSchema } from '@open-mercato/cezar-contract/events';
 import { runnerSkillListSchema } from '@open-mercato/cezar-contract/runner-skills';
 import { runnerSchema } from '@open-mercato/cezar-contract/runner';
+import { runnersResponseSchema } from '@open-mercato/cezar-contract/runners';
 import { openUrl } from '../open-url.ts';
 import { knownRunnerIds } from '../core/runner-registry.ts';
 import { runnerFlag, skillFlagIssue, skillTaskSteps } from '../workflows/types.ts';
 import { discoverCockpit, type DiscoverOptions } from './discovery.ts';
-import { handoffUrl, invalidResponse, refuse, request, TaskCliError, threadUrl, type Cockpit } from './http.ts';
+import { fetchJson, handoffUrl, invalidResponse, refuse, request, TaskCliError, threadUrl, type Cockpit } from './http.ts';
 import { projectListRow, projectStatus } from './projections.ts';
 import { DEFAULT_WAIT_UNTIL, readLog, requestRunSummaries, waitForRuns, type WaitMode, type WaitUntil } from './watch.ts';
 
@@ -491,15 +492,29 @@ function startToggles(values: Values) {
 }
 type Printer = (value: unknown) => void;
 
+/**
+ * The project's default runner as the server runs it. A stored id no runner registered names the
+ * first registered runner, as the server's `resolveRunnerId` does (hearsay-tools/squawk#4200). When
+ * the runners list cannot be read, the stored id is used as it is.
+ */
+async function defaultRunnerFor(cockpit: Cockpit): Promise<string | undefined> {
+  const config = await request(cockpit, '/config');
+  const stored = config.status === 200 && config.data && typeof config.data === 'object' ? runnerSchema.safeParse(Reflect.get(config.data, 'defaultRunner')) : undefined;
+  if (!stored?.success) return undefined;
+  const runners = await fetchJson(`${cockpit.origin}/api/v1/runners`);
+  const registered = runners.status === 200 ? runnersResponseSchema.safeParse(runners.data) : undefined;
+  if (!registered?.success) return stored.data;
+  const ids = registered.data.runners.map((entry) => entry.id);
+  return ids.includes(stored.data) ? stored.data : ids[0] ?? stored.data;
+}
+
 async function skillWarning(cockpit: Cockpit, skill: string, runner: string | undefined): Promise<string | undefined> {
   let warning: string | undefined;
     // Discovery is advisory: the catalog can change before a queued run executes. The server
     // fails a step with a missing skill, and idempotent retries still go to POST /runs.
     const unverified = `could not check whether skill "${skill}" is available; a missing id fails the step`;
     try {
-      const config = runner ? undefined : await request(cockpit, '/config');
-      const defaultRunner = config?.status === 200 && config.data && typeof config.data === 'object' ? runnerSchema.safeParse(Reflect.get(config.data, 'defaultRunner')) : undefined;
-      const selectedRunner = runner ?? (defaultRunner?.success ? defaultRunner.data : undefined);
+      const selectedRunner = runner ?? await defaultRunnerFor(cockpit);
       const catalog = selectedRunner ? await request(cockpit, `/runner-skills?runner=${encodeURIComponent(selectedRunner)}`) : undefined;
       if (catalog?.status === 200) {
         const skills = runnerSkillListSchema.safeParse(catalog.data);

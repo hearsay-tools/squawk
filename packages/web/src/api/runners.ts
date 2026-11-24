@@ -43,6 +43,31 @@ export function runnerIds(runners: RunnersResponse | undefined): string[] {
   return runnerEntries(runners).map((entry) => entry.id)
 }
 
+/** The runner a stored id names for a registered-only request. A registered id stays. An unknown
+ *  id maps to the first registered runner, as the server's `resolveRunnerId` maps it to the
+ *  default. The stored id itself is not changed. Undefined stays undefined. */
+export function planRunner<T extends string>(
+  stored: T | undefined,
+  registered: readonly T[],
+): T | undefined {
+  if (stored === undefined) return undefined
+  if (registered.includes(stored)) return stored
+  return registered[0]
+}
+
+/** A stored runner id resolved for a registered-only request (`/models`, `/runner-skills`).
+ *  `ready` is false while the runners list is pending, so an unknown id is not sent. Once the list
+ *  answers, `runner` is `planRunner`'s answer. When the list fails, the stored id is sent as it is:
+ *  the cockpit cannot tell a registered id from an unknown one, and holding every request would
+ *  leave the pickers empty. */
+export function useResolvedRunner<T extends string>(stored: T): { runner: T; ready: boolean } {
+  const registered = useRunners()
+  const runner = registered.isSuccess
+    ? planRunner(stored, runnerIds(registered.data) as T[]) ?? stored
+    : stored
+  return { runner, ready: !registered.isPending }
+}
+
 /** The registered runner `id`, or undefined when no registered runner has that id. */
 export function runnerEntry(runners: RunnersResponse | undefined, id: string): RunnerEntry | undefined {
   return runners?.runners.find((entry) => entry.id === id)

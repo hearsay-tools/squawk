@@ -17,6 +17,7 @@ import {
   loadWorkspaceConfig,
   loadWorkspaceConfigSync,
   mergeWriteWorkspaceConfig,
+  preservedDisabledProviders,
   workspaceConfigBackupPath,
   type WorkspaceConfig,
 } from './config.ts';
@@ -91,6 +92,19 @@ describe('workspace config', () => {
     expect(config.agentDefaults.models).toEqual({ claude: 'opus', ghost: 'gpt-x' });
   });
 
+  it('keeps an unregistered agentDefaults runner and model key on disk across an unrelated write', async () => {
+    write({ agentDefaults: { runner: 'ghost', models: { claude: 'opus', ghost: 'gpt-x' } } });
+    await mergeWriteWorkspaceConfig((config) => {
+      config.projectsDir = '/tmp/other-projects';
+    }, testHome());
+    const raw = JSON.parse(readFileSync(workspaceConfigPath(undefined, testHome()), 'utf8')) as {
+      agentDefaults: unknown;
+      projectsDir: string;
+    };
+    expect(raw.agentDefaults).toEqual({ runner: 'ghost', models: { claude: 'opus', ghost: 'gpt-x' } });
+    expect(raw.projectsDir).toBe('/tmp/other-projects');
+  });
+
   it('salvages disabled provider preferences and preserves unknown top-level keys on merge', async () => {
     expect(defaultWorkspaceConfig().disabledProviders).toEqual([]);
 
@@ -98,7 +112,14 @@ describe('workspace config', () => {
       disabledProviders: ['codex', 'future', 'codex', 4, 'opencode'],
       futureTopLevelKey: { keep: true },
     });
-    expect((await loadWorkspaceConfig(testHome().workspaceConfig)).disabledProviders).toEqual(['codex', 'opencode']);
+    expect((await loadWorkspaceConfig(testHome().workspaceConfig)).disabledProviders).toEqual(['codex', 'opencode', 'future']);
+    expect(preservedDisabledProviders(['claude', 'codex', 'opencode'], new Set(['codex', 'opencode']), ['codex', 'future', 'opencode'])).toEqual(['codex', 'opencode', 'future']);
+
+    const preserved = await mergeWriteWorkspaceConfig((config) => {
+      config.projectsDir = '/tmp/other-projects';
+    }, testHome());
+    expect(preserved.disabledProviders).toEqual(['codex', 'opencode', 'future']);
+    expect(preserved.projectsDir).toBe('/tmp/other-projects');
 
     const written = await mergeWriteWorkspaceConfig((config) => {
       config.disabledProviders = ['claude'];

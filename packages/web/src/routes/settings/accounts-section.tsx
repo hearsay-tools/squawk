@@ -25,7 +25,7 @@ import {
   type AgentProfilesResponse,
 } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import type { RunnerEntry, RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
-import { runnerDisplayName, runnerEntry, runnerIds, useRunners } from '@/api/runners'
+import { planRunner, runnerDisplayName, runnerEntry, runnerIds, useRunners } from '@/api/runners'
 import { agentCardId } from '@/lib/agents-settings-path'
 import type {
   BackendCheck,
@@ -355,6 +355,7 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
   // Absent means "no opinion", and the built-in fallback is claude — the same answer a project with
   // no config gets today. Showing it checked is honest: it IS what an unconfigured project runs.
   const runner = config.data.agentDefaults.runner ?? 'claude'
+  const modelChoice = planRunner(modelRunner ?? runner, runnerIds(runners)) ?? (modelRunner ?? runner)
   const models = config.data.agentDefaults.models ?? {}
 
   return (
@@ -381,11 +382,11 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
       <div className="settings-account-models flex flex-col gap-2">
         <label className="settings-model-agent-choice">
           <span>Default model for</span>
-          <select aria-label="Model agent" value={modelRunner ?? runner} onChange={(event) => setModelRunner(event.target.value as Runner)}>
+          <select aria-label="Model agent" value={modelChoice} onChange={(event) => setModelRunner(event.target.value as Runner)}>
             {runners.runners.map((entry) => <option key={entry.id} value={entry.id}>{entry.displayName}</option>)}
           </select>
         </label>
-        {runners.runners.filter((entry) => entry.id === (modelRunner ?? runner)).map((entry) => (
+        {runners.runners.filter((entry) => entry.id === modelChoice).map((entry) => (
           <label key={entry.id} className="settings-account-model flex items-center gap-3">
             <CpuIcon className="size-4 text-accent-icon shrink-0" />
             <span className="w-24 shrink-0 text-xs text-muted-foreground">{entry.displayName}</span>

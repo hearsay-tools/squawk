@@ -56,6 +56,18 @@ it.each([false, true])('keeps passive reads neutral until seal (registered: %s)'
   expect(registry.registeredRunners()).toEqual(registered ? [codexRunner] : []);
 });
 
+it('rejects an id the stored bound would drop, and accepts one at the bound', () => {
+  const runner = (id: string) => ({ ...claudeRunner, id });
+  for (const id of ['', '   ', 'x'.repeat(65), '  padded  ', `bad${String.fromCharCode(10)}`, `bad${String.fromCharCode(127)}`]) {
+    expect(() => registry.registerRunner(runner(id))).toThrow(/stored runner id/);
+  }
+  expect(registry.runnersSealed()).toBe(false);
+  const id = 'p'.repeat(64);
+  registry.registerRunner(runner(id));
+  registry.sealRunners();
+  expect(registry.knownRunnerIds()).toEqual([id]);
+});
+
 it('registers built-ins without sealing, so boot can add another definition', async () => {
   const builtIn = await import('../runners/built-in.ts');
   builtIn.registerBuiltInRunners();

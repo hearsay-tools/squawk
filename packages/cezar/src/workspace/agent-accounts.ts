@@ -6,8 +6,8 @@ import { z } from 'zod';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-contract/agent-profiles';
 import type { ProviderId } from '../core/provider-auth.ts';
 import { supportsProfiles } from '../core/agent-profiles.ts';
-import { registeredRunners } from '../core/runner-registry.ts';
-import { registeredRunnerIdSchema } from '../core/runner-id-schema.ts';
+import { isRegisteredRunner, registeredRunners, savedRunnerRegistration } from '../core/runner-registry.ts';
+import { storedRunnerIdSchema } from '../core/runner-id-schema.ts';
 import { loadWorkspaceConfigSync, registeredRunnerRecord } from './config.ts';
 
 /**
@@ -71,7 +71,12 @@ const agentAccountSchema = z
     // returns `{}` for it, so the step records the account, the UI names it, and the CLI runs on
     // the default login anyway. Dropped by the per-entry salvage instead, which is the one
     // degradation that cannot mislead.
-    provider: registeredRunnerIdSchema().refine(supportsProfiles, {
+    // A provider the registry does not hold is kept verbatim: its plugin may be absent.
+    // `savedRunnerRegistration` is false for that id once the registry is sealed, and undefined
+    // while it is unsealed — both keep the row. `isRegisteredRunner` and `supportsProfiles` throw
+    // before the seal, and this decode runs at startup. A registered runner whose credentials
+    // do not follow its config dir is still dropped (spec 2026-11-24, A3).
+    provider: storedRunnerIdSchema.refine((provider) => savedRunnerRegistration(provider) !== true || supportsProfiles(provider), {
       message: 'this agent cannot carry more than one account (its credentials do not follow its config dir)',
     }),
     configDir: z
@@ -247,6 +252,29 @@ export async function mergeWriteAgentAccounts(
     store.writeJson(home.agentAccounts, next);
     return next;
   }, [home.agentAccounts]);
+}
+
+/**
+ * `DELETE /workspace/agent-profiles/:id`'s mutation: remove account `id` and scrub every selection
+ * that names it. Returns the removed row's provider, or undefined when nothing was removed.
+ */
+export function removeAgentAccount(store: AgentAccountStore, id: string): ProviderId | undefined {
+  const removedProvider = store.accounts.find((a) => a.id === id)?.provider;
+  // A row whose runner is not registered is kept on disk until its plugin returns, and
+  // answers 404 here as it does on status and PATCH (hearsay-tools/squawk#4200).
+  if (removedProvider === undefined || !isRegisteredRunner(removedProvider)) return undefined;
+  store.accounts = store.accounts.filter((a) => a.id !== id);
+  // Scrub every reference IN THE SAME MUTATOR — the reason selections share this file.
+  // A two-call delete-then-scrub can be observed mid-way by another Squawk process on
+  // this machine, which would then resolve a dangling id; harmless today (it degrades
+  // to the default) but only by luck.
+  for (const [root, selection] of Object.entries(store.selections)) {
+    for (const key of Object.keys(selection) as Array<keyof typeof selection>) {
+      if (selection[key] === id) delete selection[key];
+    }
+    if (Object.keys(selection).length === 0) delete store.selections[root];
+  }
+  return removedProvider;
 }
 
 /**

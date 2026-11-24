@@ -182,8 +182,10 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   const { sessionStep, workerStep, account } = resolveContinueAccount(run, runner, runner !== currentRunner, useAgentAccounts().repoAccount)
   const health = useHealth()
   const localHandoff = health.data?.capabilities?.localHandoff !== false
-  const catalog = useRunnerModels(runner, available && !health.isPending, localHandoff ? account : null)
+  // The runner can come from a stored default that resolves only once the runners list answers,
+  // so the catalog waits for the list and never sends an unregistered id.
   const registered = useRunners()
+  const catalog = useRunnerModels(runner, available && !health.isPending && !registered.isPending, localHandoff ? account : null)
   const modelsLocked = config.data?.modelsLocked === true
   const runnerChanged = runner !== currentRunner
   const modelSelection = resolveContinueModel(

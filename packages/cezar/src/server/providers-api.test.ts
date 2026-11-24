@@ -231,6 +231,21 @@ describe('workspace provider API', () => {
     ]);
   });
 
+  it('PUT /api/v1/providers/:provider/enabled keeps a disabled id no runner registered', async () => {
+    const workspaceConfig = memoryWorkspaceConfig(['codex', 'ghost' as ProviderId]);
+    const server = app({ workspaceConfig });
+    const put = (enabled: boolean) => apiRequest(server, '/api/v1/providers/claude/enabled', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+
+    expect((await put(false)).status).toBe(200);
+    expect((await workspaceConfig.load()).disabledProviders).toEqual(['claude', 'codex', 'ghost']);
+    expect((await put(true)).status).toBe(200);
+    expect((await workspaceConfig.load()).disabledProviders).toEqual(['codex', 'ghost']);
+  });
+
   it.each([
     ['/api/v1/providers/future/enabled', { enabled: false }],
     ['/api/v1/providers/claude/enabled', { enabled: 'no' }],

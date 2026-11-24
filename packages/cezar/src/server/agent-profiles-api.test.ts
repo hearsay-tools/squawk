@@ -94,6 +94,24 @@ describe('agent profiles API', () => {
   };
 
   describe('GET', () => {
+    it('lists registered providers when an unregistered account row is on disk, and does not probe that row', async () => {
+      Home.seedBytes(testHome(), agentAccountsPath(testHome()), Buffer.from(JSON.stringify({
+        accounts: [{
+          id: 'ghost-work',
+          provider: 'ghost',
+          configDir: '~/.ghost-work',
+          label: 'Ghost',
+        }],
+      })));
+      const body = await list();
+      expect(body.profiles.map((profile) => profile.provider)).toEqual([...PROVIDER_IDS]);
+      expect(body.profiles.some((profile) => profile.id === 'ghost-work')).toBe(false);
+      const status = await send('GET', '/api/v1/workspace/agent-profiles/ghost-work/status');
+      expect(status.status).toBe(404);
+      const raw = JSON.parse(readFileSync(agentAccountsPath(testHome()), 'utf8')) as { accounts: { id: string }[] };
+      expect(raw.accounts.map((row) => row.id)).toEqual(['ghost-work']);
+    });
+
     it('lists only the discovered defaults out of the box — the zero-config state', async () => {
       const body = await list();
       expect(body.editable).toBe(true);
@@ -319,6 +337,17 @@ describe('agent profiles API', () => {
       expect(readFileSync(agentAccountsPath(testHome()), 'utf8')).toBe(before);
     });
 
+    it('404s an account whose provider is not registered, and leaves its row on disk', async () => {
+      Home.seedBytes(testHome(), agentAccountsPath(testHome()), Buffer.from(JSON.stringify({
+        accounts: [{ id: 'ghost-work', provider: 'ghost', configDir: '~/.ghost-work', label: 'Ghost' }],
+      })));
+      const before = readFileSync(agentAccountsPath(testHome()), 'utf8');
+      const { status, body } = await send('PATCH', '/api/v1/workspace/agent-profiles/ghost-work', { label: 'Renamed' });
+      expect(status).toBe(404);
+      expect(body.error).toContain('unknown account');
+      expect(readFileSync(agentAccountsPath(testHome()), 'utf8')).toBe(before);
+    });
+
     it('400s an empty body', async () => {
       const profile = await create('Work', claudeDir('claude-klaudiusz'));
       expect((await send('PATCH', `/api/v1/workspace/agent-profiles/${profile.id}`, {})).status).toBe(400);
@@ -352,6 +381,22 @@ describe('agent profiles API', () => {
       await send('DELETE', `/api/v1/workspace/agent-profiles/${created.profile.id}`);
 
       expect((await loadAgentAccounts(testHome())).selections[first.root]).toEqual({ codex: 'kept' });
+    });
+
+    it('404s an account whose provider is not registered, and keeps its row and selection', async () => {
+      Home.seedBytes(testHome(), agentAccountsPath(testHome()), Buffer.from(JSON.stringify({
+        accounts: [{ id: 'ghost-work', provider: 'ghost', configDir: '~/.ghost-work', label: 'Ghost' }],
+        selections: { '/repo': { ghost: 'ghost-work' } },
+      })));
+      const { status, body } = await send('DELETE', '/api/v1/workspace/agent-profiles/ghost-work');
+      expect(status).toBe(404);
+      expect(body.error).toContain('unknown account');
+      const raw = JSON.parse(readFileSync(agentAccountsPath(testHome()), 'utf8')) as {
+        accounts: { id: string }[];
+        selections: Record<string, Record<string, string>>;
+      };
+      expect(raw.accounts.map((row) => row.id)).toEqual(['ghost-work']);
+      expect(raw.selections).toEqual({ '/repo': { ghost: 'ghost-work' } });
     });
 
     it('drops the whole selection object when the deleted account was its only key', async () => {

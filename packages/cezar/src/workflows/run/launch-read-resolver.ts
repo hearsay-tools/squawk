@@ -520,7 +520,10 @@ function configValue(handle: LaunchConfig): CezConfig {
   return handle as unknown as CezConfig;
 }
 function taskRunner(source: LaunchSource, config: LaunchConfig): string {
-  return inputValue(source).runner ?? configValue(config).defaultRunner;
+  // A preserved unknown default executes as the default runner (spec A3). The stored value stays.
+  // savedRunnerId keeps the raw id while the registry is unsealed, so a command start that never
+  // loads a runner does not throw before the run is marked running.
+  return savedRunnerId(inputValue(source).runner ?? configValue(config).defaultRunner) ?? DEFAULT_RUNNER_ID;
 }
 function taskSystemPrompt(store: RunStore, runId: string, source: LaunchSource, config: LaunchConfig): string | undefined {
   return store.getRun(runId)?.delegation?.role === 'worker'
@@ -839,7 +842,7 @@ type SourceInput = StartRunInput | LaunchSource;
 function sourceInput(source: SourceInput): StartRunInput { return source instanceof InputToken ? inputValue(source) : source; }
 
 function recordedRunner(run: RunRecord): string | undefined { return savedRunnerId(run.runner); }
-function defaultRunner(config: LaunchConfig): string { return configValue(config).defaultRunner; }
+function defaultRunner(config: LaunchConfig): string { return savedRunnerId(configValue(config).defaultRunner) ?? DEFAULT_RUNNER_ID; }
 function runnerless(store: RunLookup, id: string): boolean { return store.getRun(id)?.runner === undefined; }
 function heldFor(...args: Parameters<typeof accountHeldFor>): boolean { return accountHeldFor(...args); }
 function accountFor(...args: Parameters<typeof executionAccount>): ReturnType<typeof executionAccount> { return executionAccount(...args); }
