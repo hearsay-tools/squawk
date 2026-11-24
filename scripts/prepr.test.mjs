@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { complexityRun, daemonAlive, FALLBACK_TEST_MS, fallbackLines, focusedTests, gitIo, judgeSqueal, lintFallbackLine, loweredNotes, lintUnfinished, patchLimitLines, pendingLine, prepr, run, SQUEAL_WAIT_MS, squealChecks, squealLines, testBudgetLines } from './prepr.mjs';
+import { complexityRun, daemonAlive, FALLBACK_TEST_MS, fallbackLines, focusedTests, gitIo, judgeSqueal, lintFallbackLine, loweredNotes, lintUnfinished, patchLimitLines, pendingLine, prepr, killTree, run, SQUEAL_WAIT_MS, squealChecks, squealLines, testBudgetLines } from './prepr.mjs';
 
 const { GITHUB_PATCH_LIMITS, numstatRows } = createRequire(import.meta.url)('../.github/scripts/missing-patches.cjs');
 
@@ -251,14 +251,23 @@ test('a bounded run kills its whole process group at the bound', { skip: process
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prepr-bound-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const pidFile = path.join(dir, 'grandchild.pid');
-  // bound: the run must outlast 300 ms so the bound, not the command, ends it.
-  const r = await run('sh', ['-c', `sleep 30 & echo $! > ${pidFile}; wait`], { boundMs: 300 });
+  // bound: 3 s lets a loaded host start the shell and write the PID file; the 30 s sleep keeps the bound, not the command, ending it.
+  const r = await run('sh', ['-c', `sleep 30 & echo $! > ${pidFile}; wait`], { boundMs: 3000 });
   assert.equal(r.timedOut, true);
   const pid = Number(fs.readFileSync(pidFile, 'utf8'));
   const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
   // bound: init reaps the killed grandchild shortly after the kill; 5 s only guards a hang.
   for (const end = Date.now() + 5000; alive() && Date.now() < end;) await new Promise(r => setTimeout(r, 20));
   assert.equal(alive(), false, 'the grandchild died with the group');
+});
+
+test('killTree kills the whole tree: the process group on POSIX, taskkill /T on Windows', () => {
+  const calls = [];
+  killTree(4242, 'win32', (cmd, args) => calls.push([cmd, ...args]), () => assert.fail('no POSIX kill on Windows'));
+  assert.deepEqual(calls, [['taskkill', '/pid', '4242', '/T', '/F']]);
+  const kills = [];
+  killTree(4242, 'linux', () => assert.fail('no taskkill on POSIX'), (pid, signal) => kills.push([pid, signal]));
+  assert.deepEqual(kills, [[-4242, 'SIGKILL']]);
 });
 
 test('focusedTests skips a full or unreadable selection and runs a narrow one', async () => {

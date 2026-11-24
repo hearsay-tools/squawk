@@ -81,8 +81,19 @@ function unansweredCause(status) {
 }
 
 /**
- * Run a command and collect its output. `boundMs` stops it at that bound: on POSIX the command runs in
- * its own process group, and the bound kills the whole group, so test workers it started stop too.
+ * Kill a process and every process it started: on POSIX its process group (the command runs detached),
+ * on Windows the tree `taskkill /T` walks, since npm and Vitest there are not in a group.
+ */
+export function killTree(pid, platform = process.platform, runSync = spawnSync, kill = process.kill.bind(process)) {
+  try {
+    if (platform === 'win32') runSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' });
+    else kill(-pid, 'SIGKILL');
+  } catch { /* already gone */ }
+}
+
+/**
+ * Run a command and collect its output. `boundMs` stops it at that bound and kills its whole process
+ * tree (killTree), so test workers it started stop too and release the output pipes.
  */
 export function run(cmd, args, { boundMs, ...options } = {}) {
   return new Promise(resolve => {
@@ -90,9 +101,7 @@ export function run(cmd, args, { boundMs, ...options } = {}) {
     const npmOnWindows = process.platform === 'win32' && cmd === 'npm';
     const group = Boolean(boundMs) && process.platform !== 'win32';
     const child = spawn(npmOnWindows ? 'npm.cmd' : cmd, args, { shell: npmOnWindows, stdio: ['ignore', 'pipe', 'pipe'], detached: group, ...options });
-    const kill = () => {
-      try { if (group) process.kill(-child.pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch { /* already gone */ }
-    };
+    const kill = () => killTree(child.pid);
     // A detached group does not get the terminal's Ctrl-C: pass it on, then stop as the signal would.
     const onSignal = signal => { kill(); process.kill(process.pid, signal); };
     let timedOut = false;
