@@ -201,10 +201,11 @@ Cross-runner and shared `runners/` files:
     - `registerRemovalSlots(slots: Partial<RunSlots>): void`
     - `onRunLifecycle(handlers: RunLifecycleHandlers): void`
 - **Transactional staging (`runPluginSetup`):**
-  - Before invoking `setup(api)`, create a staged buffer covering all three registry shapes (the
-    five keyed registries: runners, agent tools, wait kinds, step kinds, CLI commands; plus the
-    two list registries: removal slots and run-lifecycle listeners). Nothing writes to any live
-    registry while `setup(api)` runs.
+  - Before invoking `setup(api)`, create a staged buffer covering both plugin-writable registry
+    shapes (the five keyed registries: runners, agent tools, wait kinds, step kinds, CLI commands;
+    plus the two list registries: removal slots and run-lifecycle listeners). The single-slot
+    `runs/worker-executions-registry.ts` stays built-in-only and is not exposed on
+    `SquawkPluginApi`. Nothing writes to any live registry while `setup(api)` runs.
   - Validate every staged entry before committing any registry:
     - For keyed registries, check existing entries and reserved legacy keys on the live unsealed
       registry (via `peekHas` / reserved-key inspection) as well as duplicates within the same
@@ -297,9 +298,10 @@ Cross-runner and shared `runners/` files:
 ### 6. Stored-config preservation (A3)
 
 - Define one shared runner-id bound (`storedRunnerIdSchema`: trimmed non-empty string, max 64
-  chars, no control chars) enforced consistently by both `registerRunner()` (and plugin staging)
-  and the stored-config decoders so every runner id accepted by registration or HTTP writes is
-  guaranteed to survive the next read.
+  chars, no control chars) enforced by `registerRunner()` (and plugin staging) and matched by the
+  stored-config decoders. Because HTTP write routes only admit ids present in `knownRunnerIds()`,
+  every id an HTTP write accepts has already passed that bound at registration and is guaranteed
+  to survive the next stored read.
 - `workspace/config.ts`:
   - `agentDefaults.runner`: decode with `storedRunnerIdSchema.optional().catch(undefined)`.
   - `disabledProviders`: keep every unique valid `storedRunnerIdSchema` string (ordering registered
