@@ -28,7 +28,8 @@ export function judgeSqueal(exitCode, status, ignorePath = () => false, lintExpe
   // Browser specs are CI's: Squeal runs them only on request.
   const files = (selection.testFiles ?? []).filter(f => !f.path.endsWith('.e2e.ts'));
   const unmatched = (selection.unmatched ?? []).map(u => u?.path ?? String(u)).filter(p => !ignorePath(p));
-  const failed = files.filter(f => f.state === 'current' && !['pass', 'skip'].includes(f.verdict)).map(f => f.path);
+  // A known failure names its file in any state: a stale file's stored failure still fails the selection.
+  const failed = files.filter(f => f.verdict === 'fail' || (f.state === 'current' && !['pass', 'skip'].includes(f.verdict))).map(f => f.path);
   const failures = selection.verdict?.failures ?? {};
   const notCurrent = files.filter(f => f.state !== 'current');
   const missing = [...discoveryMissing(selection), ...notCurrent.filter(f => isDirect(f.path)).map(f => f.path)];
@@ -65,23 +66,53 @@ export function daemonAlive(status) {
   return status?.available === true && status?.daemon?.state === 'alive';
 }
 
-function run(cmd, args, options = {}) {
+// Squeal's own answers for "no daemon validates this worktree"; any other answer comes from a daemon that may be busy.
+const NO_STORE = new Set(['no-store', 'not-registered']);
+const noDaemon = status => (status.available === false ? NO_STORE.has(status.reason)
+  : status.daemon?.state === 'down' || status.selection?.reason === 'no-daemon');
+
+/** Why a status that is not a live daemon's answer gives no result, for the report. */
+const unansweredCause = status => (status.available === false
+  ? `squeal status: ${[status.reason ?? 'unavailable', status.message].filter(Boolean).join(': ')}`
+  : `the daemon is ${status.daemon?.state ?? 'in an unknown state'}`);
+
+/**
+ * Run a command and collect its output. `boundMs` stops it at that bound: on POSIX the command runs in
+ * its own process group, and the bound kills the whole group, so test workers it started stop too.
+ */
+export function run(cmd, args, { boundMs, ...options } = {}) {
   return new Promise(resolve => {
     // Only npm, whose arguments are fixed here, goes through the Windows shell: never a file name.
     const npmOnWindows = process.platform === 'win32' && cmd === 'npm';
-    const child = spawn(npmOnWindows ? 'npm.cmd' : cmd, args, { shell: npmOnWindows, stdio: ['ignore', 'pipe', 'pipe'], ...options });
+    const group = Boolean(boundMs) && process.platform !== 'win32';
+    const child = spawn(npmOnWindows ? 'npm.cmd' : cmd, args, { shell: npmOnWindows, stdio: ['ignore', 'pipe', 'pipe'], detached: group, ...options });
+    const kill = () => {
+      try { if (group) process.kill(-child.pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch { /* already gone */ }
+    };
+    // A detached group does not get the terminal's Ctrl-C: pass it on, then stop as the signal would.
+    const onSignal = signal => { kill(); process.kill(process.pid, signal); };
+    let timedOut = false;
+    const timer = boundMs ? setTimeout(() => { timedOut = true; kill(); }, boundMs) : undefined;
+    if (group) for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, onSignal);
+    const settle = result => {
+      clearTimeout(timer);
+      if (group) for (const signal of ['SIGINT', 'SIGTERM']) process.removeListener(signal, onSignal);
+      resolve(boundMs ? { ...result, timedOut } : result);
+    };
     let out = '';
     let err = '';
     child.stdout.on('data', d => { out += d; });
     child.stderr.on('data', d => { err += d; });
-    child.on('error', e => resolve({ code: 127, out, err: err + String(e) }));
-    child.on('close', code => resolve({ code: code ?? 1, out, err }));
+    child.on('error', e => settle({ code: 127, out, err: err + String(e) }));
+    child.on('close', code => settle({ code: code ?? 1, out, err }));
   });
 }
 
 const tail = (text, n = 15) => text.trim().split('\n').slice(-n).join('\n');
 
 const KILL_GRACE_MS = 10_000;
+/** The bound on the no-daemon focused tests: past it, prepr stops them and CI runs them. */
+export const FALLBACK_TEST_MS = 600_000;
 const LINTED = /^packages\/.*\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 const NO_SQUEAL = { daemon: true, state: 'pass', count: 0, failed: [], missing: [], lint: { failing: 0, unfinished: 0 } };
 
@@ -112,14 +143,29 @@ async function squealStatus(paths, waitMs, io) {
   const r = await io.run('squeal', ['status', ...wait, '--json', ...paths], { timeout: waitMs + KILL_GRACE_MS });
   let status;
   try { status = JSON.parse(r.out); } catch { status = undefined; }
-  if (r.code === 127) return { stop: { daemon: false } };
+  if (r.code === 127 || (status && noDaemon(status))) return { stop: { daemon: false } };
   // Output that is not Squeal's JSON (a timeout kill, a crash) is an unknown result, not an absent daemon.
-  if (status === undefined) {
-    const lint = { failing: 0, unfinished: 0, unavailable: 'squeal status was unreadable' };
-    return { stop: { daemon: true, state: 'unreadable', exit: r.code, output: tail(r.out + r.err, 5), lint } };
-  }
-  if (!daemonAlive(status)) return { stop: { daemon: false } };
+  if (status === undefined) return { stop: unreadable(io, { exit: r.code, output: tail(r.out + r.err, 5) }) };
+  if (!daemonAlive(status)) return { code: r.code, status, unanswered: unansweredCause(status) };
   return { code: r.code, status };
+}
+
+function unreadable(io, fields) {
+  const lint = { failing: 0, unfinished: 0, unavailable: 'squeal status was unreadable' };
+  return { daemon: true, state: 'unreadable', lint, load: io.load(), ...fields };
+}
+
+/** For failing files outside the change and its direct readers: the ones whose newest stored failure is a timeout. */
+async function loadRetries(failed, changed, direct, io) {
+  const outside = failed.filter(f => !changed.includes(f) && !direct.has(f));
+  if (!outside.length) return [];
+  const r = await io.run('squeal', ['failures', '--json', ...outside, '--limit', '50']);
+  let rows;
+  try { rows = JSON.parse(r.out).failures ?? []; } catch { return []; }
+  const newest = new Map();
+  // Squeal lists failures newest first.
+  for (const row of rows) if (!newest.has(row.check?.testPath)) newest.set(row.check?.testPath, row.summary ?? '');
+  return outside.filter(f => /timed? ?out|timeout/i.test(newest.get(f) ?? ''));
 }
 
 /**
@@ -132,6 +178,7 @@ export async function squealChecks(paths, waitMs, io = realIo) {
   const deadline = io.now() + waitMs;
   const first = await squealStatus(paths, 0, io);
   if (first.stop) return first.stop;
+  // A daemon that is starting or handing over still gets the wait: Squeal's wait holds through a handoff.
   const directOf = status => {
     const selected = (status.selection?.testFiles ?? []).filter(f => !ignore(f.path));
     return { selected, direct: new Set(io.directImporters(selected.map(f => f.path), paths)) };
@@ -141,9 +188,12 @@ export async function squealChecks(paths, waitMs, io = realIo) {
   if (directWaiting.length) await squealStatus(directWaiting, Math.max(0, deadline - io.now()), io);
   const last = await squealStatus(paths, Math.max(0, deadline - io.now()), io);
   if (last.stop) return last.stop;
+  if (last.unanswered) return unreadable(io, { cause: last.unanswered });
   // The first snapshot may come before discovery lists every test file: the final selection decides what is direct.
   const { direct } = directOf(last.status);
-  return { daemon: true, load: io.load(), ...judgeSqueal(last.code, last.status, ignore, lintExpected, p => direct.has(p)) };
+  const verdict = judgeSqueal(last.code, last.status, ignore, lintExpected, p => direct.has(p));
+  const retry = verdict.state === 'fail' ? await loadRetries(verdict.failed, paths, direct, io) : [];
+  return { daemon: true, load: io.load(), ...verdict, retry };
 }
 
 /** True when Squeal's lint result does not cover every changed file: prepr then runs `npm run lint`. */
@@ -157,7 +207,7 @@ export async function focusedTests(base, io = realIo) {
   try { mode = JSON.parse(plan.out).mode; } catch { mode = 'unknown'; }
   if (mode === 'full') return { skipped: 'the selection is the full suite; CI runs it' };
   if (mode === 'skip') return { skipped: 'no tests selected' };
-  return io.run('node', ['scripts/test-changed.mjs', baseArg]);
+  return io.run('node', ['scripts/test-changed.mjs', baseArg], { boundMs: FALLBACK_TEST_MS });
 }
 
 const detail = r => (r.code ? `\n${r.whole ? (r.out + r.err).trim() : tail(r.out + r.err)}` : '');
@@ -172,17 +222,21 @@ export function squealLines(squeal, waitMs) {
     return [entry(true, `Squeal: ${squeal.count} affected test file(s) current and passing${lint}`), ...pendingLines(squeal)];
   }
   if (squeal.state === 'unreadable') {
-    return [entry(false, `Squeal: \`squeal status --wait\` exited ${squeal.exit} without a readable result, so the test and lint results are unknown. Run \`squeal status\`, then prepr again.${squeal.output ? `\n${squeal.output}` : ''}`)];
+    const why = squeal.cause ? `gave no result (${squeal.cause})` : `\`squeal status --wait\` exited ${squeal.exit} without a readable result`;
+    return [entry(false, `Squeal: ${why} at ${loadText(squeal.load)}, so the test and lint results are unknown. Run \`squeal status\`, then prepr again.${squeal.output ? `\n${squeal.output}` : ''}`)];
   }
   const lines = [];
   if (squeal.state === 'fail') {
     const what = squeal.failed.length ? `failing test files: ${squeal.failed.join(', ')}`
       : squeal.lint.failing ? `${squeal.lint.failing} lint finding(s)` : 'known test failures';
-    lines.push(entry(false, `Squeal: ${what} (\`squeal failures\`, \`squeal status\`)`));
+    lines.push(entry(false, `Squeal: ${what}; ${loadText(squeal.load)} (\`squeal failures\`, \`squeal status\`)`));
+    for (const f of squeal.retry ?? []) {
+      lines.push({ ok: false, text: `  - ${f} is outside the change and timed out: if load caused it, \`squeal retry ${f} --reason load\`` });
+    }
   }
   if (squeal.missing?.length) {
     lines.push(entry(false, `Squeal had no result within ${Math.round(waitMs / 1000)} s for these edited test files or direct readers of a changed file: ${names(squeal.missing)}. `
-      + 'Get the results with `squeal status --wait 60000 <paths>` (parity and worker tests: `squeal run run-loop <paths> --wait 60000`), then run prepr again.'));
+      + 'Get the results with `squeal status --wait 60000 <paths>`, then run prepr again.'));
   }
   if (squeal.unmatched?.length) {
     lines.push(entry(false, `these changed paths select no test file: ${names(squeal.unmatched)}. `
@@ -190,6 +244,8 @@ export function squealLines(squeal, waitMs) {
   }
   return [...lines, ...pendingLines(squeal)];
 }
+
+const loadText = ({ load, cpus } = {}) => `load ${Number.isFinite(load) ? load.toFixed(1) : 'unknown'} on ${cpus ?? 'unknown'} cores`;
 
 const pendingLines = squeal => (squeal.pending?.length ? [{ ok: true, text: pendingLine(squeal.pending, squeal.load) }] : []);
 
@@ -230,7 +286,8 @@ export async function fallbackLines(base, files, io = realIo) {
   return [
     { ok: true, text: '- No Squeal daemon for this worktree: ran the focused checks (`npm run test:changed`, node:test readers, `npm run lint`).' },
     tests.skipped ? { ok: true, text: `- skipped: focused tests: ${tests.skipped}` }
-      : entry(tests.code === 0, `focused tests (\`npm run test:changed\`)${detail(tests)}`),
+      : tests.timedOut ? entry(false, `focused tests (\`npm run test:changed\`): incomplete, CI runs these: stopped at the ${FALLBACK_TEST_MS / 60_000}-minute bound (${loadText(io.load())})`)
+        : entry(tests.code === 0, `focused tests (\`npm run test:changed\`)${detail(tests)}`),
     nodeReaders,
     entry(lint.code === 0, `lint (\`npm run lint\`)${detail(lint)}${loweredNotes(lint.out)}`),
   ];
