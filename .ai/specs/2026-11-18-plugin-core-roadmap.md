@@ -48,7 +48,7 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 | 1 | Runners become definitions that register themselves | Done: epic hearsay-tools/squawk#3824, [spec](2026-11-18-runner-definitions.md), [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md) |
 | 2 | A typed run lifecycle, and a narrower run store | Done: epic hearsay-tools/squawk#4007, [spec](2026-11-21-run-lifecycle-and-store-ports.md), [ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md) |
 | 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Done: epic hearsay-tools/squawk#4152, [spec](2026-11-23-open-registries-and-tables.md), [ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md) |
-| 4 | Loader and package format | Filed on 2026-11-24: epic hearsay-tools/squawk#4188 (first version) |
+| 4 | Loader and package format | Active (2026-11-24): epic hearsay-tools/squawk#4188, [spec](2026-11-24-plugin-loader-and-runner-kit.md), [plan](2026-11-24-plugin-loader-and-runner-kit-plan.md) |
 | 5 | Move features out of the core, smallest first | Not filed; the first slice is a launch slot for environment variables and prompt text |
 | 6 | Cockpit slots | Not filed |
 
@@ -148,12 +148,18 @@ project and in the user's home. A package holds extensions and workflows. A proj
 load only after a person trusts the project. From this step the API is a promise, so the API
 stays small.
 
-The first version (epic hearsay-tools/squawk#4188) is narrower. It loads plugins from one host
-folder, `<config>/plugins/`, and adds a runner kit: one public entry with what a runner needs
-from the core. Every built-in runner moves onto the kit, because a fixture alone does not show
-what a real runner needs (step 1 showed that). Plugins that belong to one project, a trust
-decision, install commands and workflows inside a package wait for a later epic. The epic's spec
-decides whether the API promise starts with this version.
+The first version (epic hearsay-tools/squawk#4188,
+[spec](2026-11-24-plugin-loader-and-runner-kit.md),
+[plan](2026-11-24-plugin-loader-and-runner-kit-plan.md)) is narrower. It loads plugins from one
+host folder, `<config>/plugins/`, and adds a runner kit: one public entry
+(`@hearsay-tools/squawk/plugin`) with what a runner needs from the core. Every built-in runner
+moves onto the kit, because a fixture alone does not show what a real runner needs (step 1 showed
+that). Plugins that belong to one project, a trust decision, install commands and workflows inside
+a package wait for a later epic. On 2026-11-24 the owner decided to defer the API stability promise
+of ADR 0065 rule 3 until Squawk installs packages from npm or git, to run host-folder plugins
+in-process with Squawk's permissions, to resolve `@hearsay-tools/squawk/plugin` via `registerHooks`,
+to allow plugin CLI commands while keeping cold commands and `hsq --help` cold, to roll back and
+skip failing or conflicting plugins, and to run the live acceptance check with `pi`.
 
 Preconditions from step 1 ([runner definitions](2026-11-18-runner-definitions.md)):
 
