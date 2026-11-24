@@ -34,6 +34,7 @@ import { testWaitDiscipline } from './test-wait-discipline.ts';
 import { undocumentedEnvName } from './undocumented-env-name.ts';
 import { unitWaitDiscipline } from './unit-wait-discipline.ts';
 import { stubbornTestChild } from './stubborn-test-child.ts';
+import { testUnpinnedClockDate } from './test-unpinned-clock-date.ts';
 
 /** The rules that visit oxlint's syntax tree (hearsay-tools/squawk#3774). */
 export const AST_RULES: AstRule[] = [
@@ -43,7 +44,7 @@ export const AST_RULES: AstRule[] = [
   runnerIdBranch, runnerRosterLiteral, undocumentedEnvName,
   childKilledRead, runStoreTestkitImport, runnerIdsImport, launchReadOutsideResolver,
   attentionBucketCompareOutsideOwner, automationsCapabilityReadOutsideOwner,
-  subagentChildrenOutsideDock, testEnumLiteral, stubbornTestChild,
+  subagentChildrenOutsideDock, testEnumLiteral, stubbornTestChild, testUnpinnedClockDate,
   activeRunLiteral, activeRunMapWrite, ...activeRunWriteRules, testWaitDiscipline, unitWaitDiscipline,
   ...PROCESS_OWNER_RULES, ...STATE_OWNER_RULES, ...READER_OWNER_RULES,
 ];
