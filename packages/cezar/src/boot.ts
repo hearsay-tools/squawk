@@ -1,4 +1,5 @@
 import { registerBuiltInCliCommands, sealBuiltInCliCommands } from './built-in-cli-commands.ts';
+import { cliCommandsSealed } from './core/cli-registry.ts';
 
 /**
  * Cold CLI (`--help`, `--version`, and commands whose `runtimeMode` is false) seals the CLI
@@ -30,7 +31,8 @@ export function bootRuntime(options?: BootRuntimeOptions): Promise<void> {
 }
 
 async function sealRuntime(beforeSeal: BootRuntimeOptions['beforeSeal']): Promise<void> {
-  registerBuiltInCliCommands();
+  // A test may seal a custom command table before dispatch asks for a full boot.
+  if (!cliCommandsSealed()) registerBuiltInCliCommands();
   const { registerBuiltInRunners, sealBuiltInRunners } = await import('./runners/built-in.ts');
   const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await import('./built-in-run-slots.ts');
   const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await import('./workflows/step-kind-registry.ts');

@@ -8,7 +8,6 @@ const srcRoot = fileURLToPath(new URL('.', import.meta.url));
 /** Registry definition modules may call seal. Production boot may not, except boot.ts. */
 const SEAL_ALLOWLIST = new Set([
   'boot.ts',
-  'built-in-cli-commands.ts',
   'built-in-run-slots.ts',
   'core/cli-registry.ts',
   'core/runner-registry.ts',
@@ -75,6 +74,31 @@ it('seals only the CLI command table on a cold boot', async () => {
   ]).toEqual([false, false, false, false, false, false]);
   boot.bootColdCli();
   expect(runners.runnersSealed()).toBe(false);
+});
+
+it('keeps every registry unsealed when the hook rejects, then boots on retry', async () => {
+  vi.resetModules();
+  const boot = await import('./boot.ts');
+  const runners = await import('./core/runner-registry.ts');
+  await expect(boot.bootRuntime({ beforeSeal: () => { throw new Error('hook failed'); } })).rejects.toThrow('hook failed');
+  expect(runners.runnersSealed()).toBe(false);
+  await boot.bootRuntime();
+  expect(runners.runnersSealed()).toBe(true);
+});
+
+it('boots the other registries after the CLI command table is already sealed', async () => {
+  vi.resetModules();
+  const { registerCliCommand, sealCliCommands } = await import('./core/cli-registry.ts');
+  const command = { name: 'fixture', usage: ['  hsq fixture'], parseMode: 'subcommand',
+    homeMode: 'none', runtimeMode: 'none', load: async () => async () => 0 } as const;
+  registerCliCommand(command);
+  sealCliCommands();
+  const boot = await import('./boot.ts');
+  await boot.bootRuntime();
+  const { cliCommand } = await import('./core/cli-registry.ts');
+  const { runnersSealed } = await import('./core/runner-registry.ts');
+  expect(cliCommand('fixture')).toBe(command);
+  expect(runnersSealed()).toBe(true);
 });
 
 it('seals registries from boot.ts and the registry definitions only', () => {
