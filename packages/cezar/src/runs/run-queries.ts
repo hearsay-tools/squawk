@@ -444,7 +444,8 @@ export class RunQueriesTopic implements RunQueries, RunFamilyReads {
     for (const id of this.deleted) ids.delete(id);
     for (const [id, run] of this.held) {
       if (run.delegation?.role === 'root' && run.delegation.conversation && (!naming || run.delegation.conversation.messages.some(message => [message.senderRunId, message.recipientRunId].includes(naming)))) ids.add(id);
-      else ids.delete(id);
+      // The index is the union of row and archive members; the archive's stand for a held root too.
+      else if (run.delegation?.role !== 'root' || !this.db?.archive?.names(id, naming ?? '')) ids.delete(id);
     }
     return [...ids];
   }

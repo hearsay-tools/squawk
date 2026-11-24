@@ -9,7 +9,7 @@ import { RunWriteRefusedError } from '../runs/run-claims-topic.ts';
 import type { ConversationLedger, RunAccess, RunEventLog, RunQueries, RunLookup, RunWrites } from '../runs/ports.ts';
 import { conversationOf, DEFAULT_GRANTS, familyRecordIdOf, familyRecordOf, finishing, historyDeleting, holdsOperation, messageRelation, receiptsOf, type Lookup } from '../runs/task-rights.ts';
 import { DelegationPolicyError } from './policy.ts';
-import { reservedReplies } from './questions.ts';
+import { activeLedgerHasRoom, openRequestsFull } from './questions.ts';
 
 /**
  * A request settles by its two participants, read from the message itself: its sender closed or
@@ -67,15 +67,26 @@ export function projectConversationEvents(store: import('../runs/store.ts').RunS
   if (!state || historyDeleting(root)) return;
   const outcomes = new Map(state.outcomes.map(outcome => [outcome.requestId, outcome]));
   for (const message of state.messages) {
-    for (const runId of [message.senderRunId, message.recipientRunId]) {
-      if (!store.getRun(runId)) continue;
-      try {
-        projectDelivery(store, runId, message);
-        projectOutcome(store, runId, outcomes.get(message.id));
-      } catch (error) {
-        // A peer read from `.ai/squawk/` stays unchanged; its own binary projects its transcript.
-        if (!(error instanceof RunWriteRefusedError && error.ownership === 'fallback')) throw error;
-      }
+    projectForParticipants(store, message, runId => {
+      projectDelivery(store, runId, message);
+      projectOutcome(store, runId, outcomes.get(message.id));
+    });
+  }
+  // A late reply to an archived request amends its outcome in the row (hearsay-tools/squawk#4192).
+  const held = new Set(state.messages.map(message => message.id));
+  for (const outcome of state.outcomes) {
+    const request = held.has(outcome.requestId) ? undefined : store.conversations.findMessage(root.id, outcome.requestId);
+    if (request) projectForParticipants(store, request, runId => projectOutcome(store, runId, outcome));
+  }
+}
+
+/** `project` for each participant of `message` this store still has. */
+function projectForParticipants(store: RunStore, message: ConversationMessage, project: (runId: string) => void): void {
+  for (const runId of [message.senderRunId, message.recipientRunId]) {
+    if (!store.getRun(runId)) continue;
+    try { project(runId); } catch (error) {
+      // A peer read from `.ai/squawk/` stays unchanged; its own binary projects its transcript.
+      if (!(error instanceof RunWriteRefusedError && error.ownership === 'fallback')) throw error;
     }
   }
 }
@@ -157,19 +168,18 @@ export function notDeliveredInstruction(pair: ResolvedPair): string {
     : `Not delivered: parent is ${recipient.status}. A worker cannot resume its parent; the parent must be continued by its owner.`;
 }
 
-/** The ledger's 1,024 messages, where every open request holds room for its reply and a new
- *  request needs room for its own; its 32 open requests; and 32 inbox slots per run, which hold its
+/** The ledger's 1,024 active messages (`activeLedgerHasRoom`), where every open request holds room
+ *  for its reply and a new request needs room for its own; its 32 open requests; and 32 inbox slots per run, which hold its
  *  undelivered inputs and one slot for each open peer request it sent (`inboxSlotsUsed`). A new
  *  peer request needs a free slot in its sender's inbox; its reply then spends that slot, so it is
  *  always admitted and no inbox passes 32. An answer to a worker question passes the inbox bound,
  *  as it always did (hearsay-tools/cezarion#505). */
 export function assertConversationCapacity(state: ConversationState, pair: { relationship: 'family' | 'peer'; sender: RunRecord; recipient: RunRecord }, kind: ConversationSendRequest['kind'],
   enqueue: boolean, replying: boolean, answering: boolean): void {
-  const reservedMessages = reservedReplies(state) - (replying ? 1 : 0) + (enqueue && kind === 'request' ? 1 : 0);
-  const openRequests = () => state.messages.filter(message => message.kind === 'request' && message.state === 'accepted' && !state.outcomes.some(outcome => outcome.requestId === message.id)).length;
+  const needed = 1 - (replying ? 1 : 0) + (enqueue && kind === 'request' ? 1 : 0);
   const peer = pair.relationship === 'peer';
   const inboxFull = enqueue && !answering && !(peer && replying) && inboxSlotsUsed(pair.recipient) >= 32;
-  if (state.messages.length + reservedMessages >= 1024 || (enqueue && kind === 'request' && openRequests() >= 32) || inboxFull ||
+  if (!activeLedgerHasRoom(state, needed) || (enqueue && kind === 'request' && openRequestsFull(state)) || inboxFull ||
     (enqueue && peer && kind === 'request' && inboxSlotsUsed(pair.sender) >= 32)) throw new DelegationPolicyError('capacity_limit', 'Conversation capacity limit reached');
 }
 

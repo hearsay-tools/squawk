@@ -12,7 +12,7 @@ import { openCompletionRequests } from './completion-policy.ts';
 import { settledParentRefusalError } from './continuation-admission.ts';
 import { SUPERVISOR_IS_WORKER, workerQuestionRouting } from './question-routing.ts';
 import { assertOwnedWorkerWaitScope, assertRequestWaitScope } from './wait-scope.ts';
-import { RowConversationLedger } from '../runs/conversation-ledger.ts';
+import { StoredConversationLedger } from '../runs/conversation-ledger.ts';
 
 // The pure rules of a family where a worker supervises a worker (hearsay-tools/squawk#3819):
 // R the root, W and S its workers, C the shared worker W started.
@@ -59,7 +59,7 @@ describe('a family where a worker supervises a worker', () => {
 
   it('lets a task that may message wait on replies to its own requests, whoever holds the ledger', () => {
     const { getRun } = family();
-    const waits = (actor: RunRecord, id: string) => refusal(() => assertRequestWaitScope(actor, [id], getRun, new RowConversationLedger(getRun)));
+    const waits = (actor: RunRecord, id: string) => refusal(() => assertRequestWaitScope(actor, [id], getRun, new StoredConversationLedger(getRun)));
     expect(waits(getRun(W)!, ASKED_BY_W)).toBeUndefined();
     expect(waits(getRun(R)!, ASKED_BY_R)).toBeUndefined();
     expect(waits(getRun(C)!, ASKED_BY_W)).toBe('denied_scope');

@@ -385,8 +385,11 @@ export class DelegationService {
     if (historyDeleting(root)) return conversationOf(root) ?? { messages: [], outcomes: [] };
     const state = reconcileConversationState(root, (id) => project.store.getRun(id), new Date().toISOString(), run => run.delegation?.role === 'worker'
       ? project.store.workerExecutions.readWorkerExecution(run.id)?.phase === 'complete' : !project.manager.isActive(run.id), id => project.store.isUnreadable(id));
+    // The commit moves settled history to the archive; a ledger with nothing to reconcile compacts on
+    // its own, so only active load counts toward capacity (hearsay-tools/squawk#4192).
     if (state && state !== conversationOf(root)) project.store.commitConversation(root.id, state);
-    return state ?? { messages: [], outcomes: [] };
+    else if (state) project.store.compactConversation(root.id);
+    return conversationOf(project.store.getRun(root.id)) ?? state ?? { messages: [], outcomes: [] };
   }
   private conversationReceipt(project: DelegationProject, ledgerId: string, message: ConversationSendResult['message']): ConversationSendResult {
     const recipient = project.store.getRun(message.recipientRunId);

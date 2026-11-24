@@ -76,6 +76,7 @@ export interface RunWrites {
   addStep: RunStore['addStep'];
   updateStep: RunStore['updateStep'];
   commitConversation: RunStore['commitConversation'];
+  compactConversation: RunStore['compactConversation'];
   commitAgentInputsUnconfirmed: RunStore['commitAgentInputsUnconfirmed'];
   commitAgentInputs: RunStore['commitAgentInputs'];
   commitWait: RunStore['commitWait'];

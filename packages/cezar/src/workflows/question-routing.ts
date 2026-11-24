@@ -1,6 +1,6 @@
 import type { ConversationState } from '@open-mercato/cezar-contract';
 import type { RunRecord } from '../runs/store.ts';
-import { reservedReplies } from '../delegation/questions.ts';
+import { activeLedgerHasRoom, openRequestsFull } from '../delegation/questions.ts';
 import { inboxSlotsUsed } from '../delegation/conversations.ts';
 import { supervisedByFamilyRecord } from '../runs/task-rights.ts';
 
@@ -36,8 +36,7 @@ export function workerQuestionRouting(worker: RunRecord, root: RunRecord | undef
   // Room in the ledger for the question AND its reply, beside the replies other open requests
   // reserve. The reply itself is always admitted to this worker's inbox (service.send).
   // The parent's inbox slots count those its open peer requests hold for their replies.
-  if (state.messages.length + reservedReplies(state) + 2 > 1024 || inboxSlotsUsed(root) >= 32 ||
-    state.messages.filter(m => m.kind === 'request' && m.state === 'accepted' && !state.outcomes.some(o => o.requestId === m.id)).length >= 32) {
+  if (!activeLedgerHasRoom(state, 2) || inboxSlotsUsed(root) >= 32 || openRequestsFull(state)) {
     return { undeliverable: 'the parent conversation is at capacity' };
   }
   return { state };

@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { assertProjectWritable, projectWriteRefused } from '../server/cockpit-ownership.ts';
 import { storedRow, type ColdReadCache, type StoredRow } from './cold-reads.ts';
+import type { ConversationArchiveWrite } from './conversation-archive.ts';
 import { publishRunWrite, snapshotRun, type RunLifecycle } from './lifecycle.ts';
 import type { LiveItemSnapshots } from './live-item-snapshots.ts';
 import { reconcileLoadedRun } from './loaded-run-exits.ts';
@@ -116,7 +117,7 @@ export class RunPersistenceTopic implements RunPersistence {
    * remains best-effort.
    */
   commitIndex(input: ReadonlyMap<string, RunRecord | null>, source?: CommitSource,
-    write: { before?: ReadonlyMap<string, Readonly<RunRecord>>; exits?: ReadonlyMap<string, RunExitId | undefined> } = {}): void {
+    write: { before?: ReadonlyMap<string, Readonly<RunRecord>>; exits?: ReadonlyMap<string, RunExitId | undefined>; archive?: ConversationArchiveWrite } = {}): void {
     const exits = new Map(write.exits);
     const staged = stageCommit(input, {
       peek: id => this.peek(id),
@@ -126,7 +127,7 @@ export class RunPersistenceTopic implements RunPersistence {
     const before = new Map([...staged].map(([id, next]) => [id, next ? write.before?.get(id) ?? snapshotRun(this.peek(id)) : undefined])), committed = new Map([...staged].map(([id, next]) => [id, snapshotRun(next ?? undefined)]));
     if (!this.db) throw this.openFailure ?? new Error('runs database unavailable: nothing can be saved');
     this.assertWritable(staged);
-    this.persist(staged);
+    this.persist(staged, write.archive);
     // Preserve existing record references, but expose the entire transaction before its first event, which
     // carries the record this commit wrote (`committed`). A finished run is held until the next sweep.
     for (const [id, next] of staged) {
@@ -251,7 +252,7 @@ export class RunPersistenceTopic implements RunPersistence {
    * carries this store's claim and every row is at the revision this store last saw. Otherwise
    * nothing is written and `handleConflicts` deals with the rows that changed under it.
    */
-  private persist(staged: ReadonlyMap<string, RunRecord | null>): void {
+  private persist(staged: ReadonlyMap<string, RunRecord | null>, archive?: ConversationArchiveWrite): void {
     const upserts: RunRowInput[] = [];
     const deletes: string[] = [];
     const families = new Map<string, string>();
@@ -292,7 +293,7 @@ export class RunPersistenceTopic implements RunPersistence {
     if (moved.length > 0) this.claims.claimFamilies(moved, { allowLive: true });
     let commit: RunDatabaseCommit;
     try {
-      commit = this.writeIndex({ upserts, deletes, ...(this.owner ? { fence: this.fence(families) } : {}) });
+      commit = this.writeIndex({ upserts, deletes, ...archiveChange(archive), ...(this.owner ? { fence: this.fence(families) } : {}) });
     } catch (error) {
       if (error instanceof RunConflictError) this.handleConflicts(error, staged);
       throw error;
@@ -428,4 +429,9 @@ export class RunPersistenceTopic implements RunPersistence {
     }
     if (evict) this.evictSettled();
   }
+}
+
+/** A ledger commit's archive write, joined to the transaction that writes its root's row. */
+function archiveChange(archive: ConversationArchiveWrite | undefined): Pick<RunDatabaseChanges, 'conversationArchive'> {
+  return archive ? { conversationArchive: [archive] } : {};
 }

@@ -54,6 +54,23 @@ export function reservedReplies(state: ConversationState): number {
   return state.messages.filter(message => message.kind === 'request' && message.state === 'accepted' && !state.outcomes.some(outcome => outcome.requestId === message.id)).length;
 }
 
+/** The active messages a family ledger may hold: the entries its root's row keeps. Archived history
+ *  (`conversation_archive`) does not count, so only active load refuses a send (hearsay-tools/squawk#4192). */
+export const ACTIVE_MESSAGE_LIMIT = 1024;
+/** Accepted requests without an outcome, per ledger. */
+export const OPEN_REQUEST_LIMIT = 32;
+
+/** The one active-capacity rule of a family ledger (send, a routed worker question, a park notice):
+ *  room for `needed` more messages beside the reply every open request reserves. */
+export function activeLedgerHasRoom(state: ConversationState, needed: number): boolean {
+  return state.messages.length + reservedReplies(state) + needed <= ACTIVE_MESSAGE_LIMIT;
+}
+
+/** The ledger holds its maximum of open requests: a new request cannot join it. */
+export function openRequestsFull(state: ConversationState): boolean {
+  return reservedReplies(state) >= OPEN_REQUEST_LIMIT;
+}
+
 /** A UUID-shaped (version 4 layout) identifier derived from a stable key. */
 export function uuidFrom(key: string): string {
   const hex = createHash('sha256').update(key).digest('hex');

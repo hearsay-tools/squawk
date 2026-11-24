@@ -75,6 +75,10 @@ export function validateChanges(changes: RunDatabaseChanges): void {
   for (const id of changes.deletes) {
     if (upserted.has(id)) throw new TypeError(`run ${id} is both upserted and deleted in one transaction`);
   }
+  // An archive write moves entries out of a root's row, so that row is written in the same commit.
+  for (const archive of changes.conversationArchive ?? []) {
+    if (!upserted.has(archive.rootId)) throw new TypeError(`conversation archive of ${archive.rootId} without its root row`);
+  }
 }
 
 /**

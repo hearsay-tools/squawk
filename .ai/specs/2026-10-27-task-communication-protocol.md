@@ -97,8 +97,9 @@ the issue asks for:
 - request deadlines, cancellation, request waits, late replies (`replied-late`);
 - one atomic write for the message, its obligation and the recipient's queued input
   (`RunStore.commitConversation`);
-- caps: 100,000 characters per message, 32 undelivered inputs per recipient, 1,024 ledger
-  messages, 32 open requests;
+- caps: 100,000 characters per message, 32 undelivered inputs per recipient, 1,024 active
+  ledger messages (settled history moves to `conversation_archive` and does not count,
+  hearsay-tools/squawk#4192), 32 open requests;
 - delivery through `sendAgentInput` at safe boundaries, batching, inbox reads, restart
   reconciliation and `conversation-message` / `request-outcome` projections;
 - the rule that agent input never answers a human question.
@@ -156,10 +157,12 @@ a peer pair, a request and its reply stay together in the requester's ledger. Th
 the requester waits on the outcome. A two-way peer exchange can therefore use two ledgers.
 `cez message conversation <peer>` reads both and merges them in `(createdAt, id)` order.
 
-Two full ledgers can hold 2,048 messages for one pair, while the history response keeps its
+One pair's history can span two ledgers and each ledger's archive (`conversation_archive`,
+hearsay-tools/squawk#4192), so it has no fixed size, while the history response keeps its
 bound of 1,024 messages and 1,024 outcomes (`conversationStateSchema`,
 `packages/contract/src/conversations.ts`). The merged response therefore returns the newest
-1,024 messages and the outcomes of the requests among them. Two messages can share a
+1,024 messages and the outcomes of the requests among them; `nextBefore` can appear for one
+family ledger too. Two messages can share a
 `createdAt` millisecond, so the order is `(createdAt, id)`, a total order, and the cursor
 carries both. When older messages exist, the response adds `nextBefore`, an opaque cursor for
 the oldest message returned. `cez message conversation <peer> --before <cursor>` returns the
@@ -476,12 +479,12 @@ deadlines, which the per-ledger timer fires.
 ## 8. Bounds
 
 All existing caps apply unchanged ([§ 2](#2-reuse-and-the-one-abstraction)). Peer messages
-count toward the ledger that holds them and toward the recipient's 32 undelivered inputs. A
-pair's merged history is paged at 1,024 messages
+count toward the active ledger that holds them and toward the recipient's 32 undelivered inputs.
+A pair's merged history, row and archive, is paged at 1,024 messages
 ([§ 2](#which-ledger-holds-a-message)).
 
 A family has a parent that can stop a loop. Two peers do not: two coordinators that reply to
-each other could run until their ledgers fill, up to 1,024 messages each, and every message
+each other could run without end once settled history leaves their ledgers, and every message
 can start a turn. So peer messages charge the existing automatic-wake budget:
 
 - A peer message, or a substantive `peer` wait resolution, that **starts a new turn** on
@@ -680,7 +683,7 @@ regression test fails without the fix).
 | R13 | A root calls `cezar_done` with an open peer request; then again; then the peer replies. Separately: it cancels the request first; it sent only progress; a human presses Finish | First done: a refusal nudge naming the request. Second: Cezar's completion request wait, and the reply wakes the run. Cancel first, progress only, or Finish: done passes; Finish settles the request `sender-closed` | F8 |
 | R14 | Peers B and C send a message with the same ID to A, in both orders and concurrently | The second is refused with `invalid_input` and writes nothing; A gets the first once; projections on A stay intact; an exact retry of the first returns its receipt | F2 |
 | R15 | A peer is deleted after A's request to it was accepted; a sender is deleted before A's first inbox reserve, and another between reserve and acknowledge | A can still read its history, wait on and cancel its request; the request settles `deleted`; the reserve returns a receipt; the acknowledge succeeds for the whole batch; a reply to the deleted sender's request is refused | F2 |
-| R16 | A pair whose two ledgers are both full, with several messages sharing the `createdAt` at the page boundary | The history returns the newest 1,024 messages with `nextBefore`; `--before` returns the rest; every message appears exactly once across the pages; no response passes the schema bound | F2, F3 |
+| R16 | A pair whose two ledgers and their archives hold more than 1,024 messages, with several sharing the `createdAt` at the page boundary | The history returns the newest 1,024 messages with `nextBefore`; `--before` returns the rest; every message appears exactly once across the pages, row and archive; no response passes the schema bound | F2, F3 |
 | R17 | B has an unanswered request from peer A and calls `cezar_done`; then again. Separately: B replies first; B ends at `review` with A's request open; B's human continues B and B replies | First done: a refusal nudge naming A's request. Second: done passes; A's request settles `completed-without-reply` and A's wait wakes. A reply first: done passes on the first call. At `review`: the request settles at once, not at its deadline. The late reply is recorded `late` and wakes nothing | F2, F8 |
 
 ## 14. Follow-ups

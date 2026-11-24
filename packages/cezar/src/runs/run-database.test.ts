@@ -653,13 +653,14 @@ describe('RunDatabase', () => {
     // Schema 12: a worker whose destroy is complete has no worktree_path, as a reclaimed run.
     // Schema 13: conversation_members indexes who each root's conversation names.
     // Schema 14: automation_runs indexes which automation launched or triggered each run.
-    it('creates a fresh database at schema 15, migrates a v3 one keeping its rows, and refuses version 16', () => {
-      expect(RUN_DATABASE_SCHEMA_VERSION).toBe(15);
+    // Schema 16: conversation_archive holds the ledger entries a root's row no longer holds.
+    it('creates a fresh database at schema 16, migrates a v3 one keeping its rows, and refuses version 17', () => {
+      expect(RUN_DATABASE_SCHEMA_VERSION).toBe(16);
       openDb().close();
       open.length = 0;
       const fresh = new DatabaseSync(path, { readOnly: true });
       try {
-        expect(fresh.prepare('PRAGMA user_version').get()).toEqual({ user_version: 15 });
+        expect(fresh.prepare('PRAGMA user_version').get()).toEqual({ user_version: 16 });
       } finally {
         fresh.close();
       }
@@ -674,8 +675,8 @@ describe('RunDatabase', () => {
       for (const db of open.splice(0)) db.close();
       const migrated = new DatabaseSync(path);
       try {
-        expect(migrated.prepare('PRAGMA user_version').get()).toEqual({ user_version: 15 });
-        migrated.exec('PRAGMA user_version = 16');
+        expect(migrated.prepare('PRAGMA user_version').get()).toEqual({ user_version: 16 });
+        migrated.exec('PRAGMA user_version = 17');
       } finally {
         migrated.close();
       }

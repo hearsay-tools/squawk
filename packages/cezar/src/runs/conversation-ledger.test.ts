@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
 import type { ConversationMessage, ConversationState, RequestOutcome, RunRecord } from '@open-mercato/cezar-contract';
-import { acceptedRequest, RowConversationLedger } from './conversation-ledger.ts';
+import { acceptedRequest, StoredConversationLedger, type ConversationArchiveReads } from './conversation-ledger.ts';
 
 const message = (id: string, senderRunId: string, recipientRunId: string, createdAt: string, extra: Partial<ConversationMessage> = {}): ConversationMessage =>
   ({ id, senderRunId, recipientRunId, kind: 'request', text: id, createdAt, requestHash: id, state: 'accepted', ...extra });
 const root = (id: string, conversation?: ConversationState): RunRecord =>
   ({ id, delegation: { role: 'root', receipts: [], ...(conversation ? { conversation } : {}) } }) as unknown as RunRecord;
-const ledgerOver = (...runs: RunRecord[]) => new RowConversationLedger(id => runs.find(run => run.id === id));
+const ledgerOver = (...runs: RunRecord[]) => new StoredConversationLedger(id => runs.find(run => run.id === id));
 
-describe('RowConversationLedger', () => {
+describe('StoredConversationLedger', () => {
   beforeEach(() => { vi.useFakeTimers({ now: Date.parse('2026-11-24T12:00:00.000Z') }); });
   afterEach(() => { vi.useRealTimers(); });
   const settled: RequestOutcome = { requestId: 'm1', status: 'timed-out', observedAt: '2026-11-24T10:05:00.000Z' };
@@ -80,5 +80,39 @@ describe('RowConversationLedger', () => {
     expect(ledger.peerExchanged('a', 'c')).toBe(false);
     expect(ledger.peerExchanged('c', 'w')).toBe(false);
     expect(ledger.peerExchanged('gone', 'a')).toBe(false);
+  });
+
+  it('answers from the archive after the row: by ID, in merged pages exactly once, and for peer exchanges', () => {
+    const archived = [
+      { message: message('x1', 'p', 'w', '2026-11-24T09:00:00.000Z'), outcome: { requestId: 'x1', status: 'timed-out', observedAt: '2026-11-24T09:10:00.000Z' } as RequestOutcome },
+      { message: message('x2', 'w', 'p', '2026-11-24T09:01:00.000Z', { kind: 'progress' }) },
+      { message: message('x3', 'p', 'q', '2026-11-24T09:02:00.000Z', { kind: 'progress', relationship: 'peer' }) },
+    ];
+    const between = (entry: (typeof archived)[number], pair: readonly [string, string]) => [entry.message.senderRunId, entry.message.recipientRunId].sort().join() === [...pair].sort().join();
+    const archive: ConversationArchiveReads = {
+      find: (rootId, id) => rootId === 'p' ? archived.find(entry => entry.message.id === id) : undefined,
+      page: (rootIds, pair, before, limit) => archived.filter(entry => rootIds.includes('p') && between(entry, pair) &&
+        (!before || entry.message.createdAt < before.createdAt)).slice(-limit),
+      peerExchanged: (a, b) => [a, b].sort().join() === 'p,q',
+    };
+    // A late reply amended the archived x1 in the row.
+    const late: RequestOutcome = { requestId: 'x1', status: 'replied-late', observedAt: '2026-11-24T10:30:00.000Z', replyId: 'm2' };
+    const ledger = new StoredConversationLedger(id => [root('p', { ...state, outcomes: [settled, late] })].find(run => run.id === id), () => archive);
+    expect(ledger.findMessage('p', 'm1')).toBe(state.messages[0]);
+    expect(ledger.findMessage('p', 'x2')).toBe(archived[1]!.message);
+    expect(ledger.findOutcome('p', 'x1')).toBe(late);
+    expect(ledger.findMessage('w', 'x2')).toBeUndefined();
+    const seen: string[] = [];
+    let before: { createdAt: string; id: string } | undefined;
+    for (;;) {
+      const page = ledger.page(['p'], ['p', 'w'], before, 2);
+      seen.unshift(...page.messages.map(entry => entry.id));
+      if (page.messages.some(entry => entry.id === 'x1')) expect(page.outcomes).toContainEqual(late);
+      if (!page.older) break;
+      before = page.messages[0];
+    }
+    expect(seen).toEqual(['x1', 'x2', 'm1', 'm2']);
+    expect(ledger.peerExchanged('q', 'p')).toBe(true);
+    expect(ledger.peerExchanged('w', 'p')).toBe(false);
   });
 });
