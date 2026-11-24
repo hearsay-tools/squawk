@@ -27,7 +27,7 @@ test('queue suites always execute, and PR suites select with the same eight-shar
       const ctx = context(event);
       assert.equal(evaluate(job.if, ctx), true);
       assert.equal(evaluate(step(selected).if, ctx), event === 'pull_request_target');
-      assert.equal(evaluate(step(full).if, ctx), id === 'vitest' ? event === 'merge_group' : event !== 'pull_request_target');
+      assert.equal(evaluate(step(full).if, ctx), event === 'merge_group');
     }
     assert.match(step(selected).run, /--ci .*--shard=\$\{\{ matrix.shard \}\}\/8/);
     assert.equal(step(selected)['continue-on-error'], undefined, 'selected failures block the job');

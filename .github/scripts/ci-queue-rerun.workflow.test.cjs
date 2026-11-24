@@ -82,13 +82,23 @@ test('the rerun runs the whole shard again, after the reset and the upload of th
   }
 });
 
-test('the Vitest rerun records into a new parts directory, and only its parts upload', () => {
+test('the Vitest and browser reruns record into a new parts directory, and only their parts upload', () => {
+  for (const [id, first, rerunId] of [['vitest', 'record', 'rerun'], ['cockpit-browser', 'e2e', 'e2e-rerun']]) {
+    const job = ci().jobs[id];
+    const record = step(job, first);
+    const rerun = step(job, rerunId);
+    assert.equal(record.env.PARTS_DIR, 'squeal-parts', id);
+    assert.equal(rerun.env.PARTS_DIR, 'squeal-parts-rerun', id);
+    assert.deepEqual({ ...rerun.env, PARTS_DIR: record.env.PARTS_DIR }, record.env, `${id}: the same environment apart from the parts directory`);
+    const upload = step(job, 'Upload Squeal parts');
+    const uploaded = (outcome) => upload.with.path.replace(/\$\{\{.*?\}\}/g, (raw) => expression(raw, context('merge_group', 'failure', outcome)));
+    assert.equal(uploaded('skipped'), '/runner/temp/squeal-parts/', id);
+    assert.equal(uploaded('success'), '/runner/temp/squeal-parts-rerun/', id);
+    assert.equal(uploaded('failure'), '/runner/temp/squeal-parts-rerun/', id);
+    assert.ok(index(job, rerunId) < job.steps.indexOf(upload), id);
+  }
   const vitest = ci().jobs.vitest;
-  const record = step(vitest, 'record');
   const rerun = step(vitest, 'rerun');
-  assert.equal(record.env.PARTS_DIR, 'squeal-parts');
-  assert.equal(rerun.env.PARTS_DIR, 'squeal-parts-rerun');
-  assert.deepEqual({ ...rerun.env, PARTS_DIR: record.env.PARTS_DIR }, record.env, 'the same environment apart from the parts directory');
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-queue-rerun-'));
   try {
     fs.writeFileSync(path.join(temp, 'squeal'), '#!/bin/sh\necho "squeal $*"\n', { mode: 0o755 });
@@ -100,12 +110,6 @@ test('the Vitest rerun records into a new parts directory, and only its parts up
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }
-  const upload = step(vitest, 'Upload Squeal parts');
-  const uploaded = (outcome) => upload.with.path.replace(/\$\{\{.*?\}\}/g, (raw) => expression(raw, context('merge_group', 'failure', outcome)));
-  assert.equal(uploaded('skipped'), '/runner/temp/squeal-parts/');
-  assert.equal(uploaded('success'), '/runner/temp/squeal-parts-rerun/');
-  assert.equal(uploaded('failure'), '/runner/temp/squeal-parts-rerun/');
-  assert.ok(index(vitest, 'rerun') < vitest.steps.indexOf(upload));
 });
 
 test('a merge group gives each shard room for two runs inside the queue\'s check timeout', () => {

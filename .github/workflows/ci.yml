@@ -1010,7 +1010,7 @@ jobs:
       # with its exit code (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
         if: github.event_name == 'merge_group'
-        uses: hearsay-tools/squeal/ci@47d7178e0dfe797d13b719527ca4b23b9fffd7be # v0.1.588
+        uses: hearsay-tools/squeal/ci@7d2ce9ab71a97b8e818dea393fe303abc1679fd5 # v0.1.611
 
       - name: Run server and cockpit unit suites with Squeal recording
         id: record
@@ -1141,7 +1141,7 @@ jobs:
       # Squeal's action also sets SQUEAL_NODE_TEST_REPORTER for the steps below, also when
       # Squeal cannot run; the reporter then writes nothing (hearsay-tools/squeal spec 018 D23).
       - name: Set up Squeal
-        uses: hearsay-tools/squeal/ci@47d7178e0dfe797d13b719527ca4b23b9fffd7be # v0.1.588
+        uses: hearsay-tools/squeal/ci@7d2ce9ab71a97b8e818dea393fe303abc1679fd5 # v0.1.611
 
       # The commands of test:unit:package and test:unit:scripts, whose flags squeal.config.json's
       # nodeTest entries repeat, with Squeal's reporter beside the default one. The output and
@@ -1183,7 +1183,7 @@ jobs:
   # docs/sdlc/ci.md § Squeal shared results.
   squeal-export:
     name: Export Squeal shared results
-    needs: [vitest, squeal-node-test]
+    needs: [vitest, squeal-node-test, cockpit-browser]
     if: >-
       !cancelled() && github.event_name == 'merge_group' && needs.vitest.result == 'success'
     runs-on: ubuntu-24.04
@@ -1226,7 +1226,7 @@ jobs:
       # Squeal's action, as in the shards; a refusal or crash of the Squeal command is a
       # warning (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
-        uses: hearsay-tools/squeal/ci@47d7178e0dfe797d13b719527ca4b23b9fffd7be # v0.1.588
+        uses: hearsay-tools/squeal/ci@7d2ce9ab71a97b8e818dea393fe303abc1679fd5 # v0.1.611
 
       - name: Download Squeal parts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -1243,12 +1243,34 @@ jobs:
           name: squeal-parts-node-test
           path: ${{ runner.temp }}/squeal-parts-node-test
 
+      # Browser shard parts join only when all eight shards passed and uploaded parts; a failed,
+      # skipped or partial browser run still exports the Vitest and node:test results.
+      - name: Download Squeal browser parts
+        if: needs['cockpit-browser'].result == 'success'
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: squeal-parts-browser-shard-*
+          path: ${{ runner.temp }}/squeal-parts-browser
+
       - name: Export Squeal results
         run: |
           set -- "$RUNNER_TEMP"/squeal-parts/squeal-parts-shard-*
           for suite in package scripts; do
             if [ -d "$RUNNER_TEMP/squeal-parts-node-test/$suite" ]; then set -- "$@" "$RUNNER_TEMP/squeal-parts-node-test/$suite"; fi
           done
+          browser_complete=1
+          for shard in 1 2 3 4 5 6 7 8; do
+            if [ ! -d "$RUNNER_TEMP/squeal-parts-browser/squeal-parts-browser-shard-$shard" ]; then
+              browser_complete=0
+              break
+            fi
+          done
+          if [ "$browser_complete" = 1 ]; then
+            for shard in 1 2 3 4 5 6 7 8; do
+              set -- "$@" "$RUNNER_TEMP/squeal-parts-browser/squeal-parts-browser-shard-$shard"
+            done
+          fi
           squeal ci export --parts "$@" --out "$RUNNER_TEMP/squeal-results.json.gz"
 
       # An export that writes nothing warns and exits 0. The job then passes with no upload and
@@ -1305,7 +1327,7 @@ jobs:
       # Squeal's action, as in the shards; a refusal or crash of the Squeal command is a
       # warning (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
-        uses: hearsay-tools/squeal/ci@47d7178e0dfe797d13b719527ca4b23b9fffd7be # v0.1.588
+        uses: hearsay-tools/squeal/ci@7d2ce9ab71a97b8e818dea393fe303abc1679fd5 # v0.1.611
 
       - name: Download Squeal results
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -1647,15 +1669,37 @@ jobs:
           grep -h '^\[e2e:affected\] PR CI runs no browser spec' "$RUNNER_TEMP/e2e.log" >> "$GITHUB_STEP_SUMMARY" || true
           node .github/scripts/require-e2e-passed.cjs < "$RUNNER_TEMP/e2e.log"
 
-      - name: Run cockpit browser E2E
-        id: e2e
-        if: github.event_name != 'pull_request_target'
-        # In a merge group a failed first run does not fail the job: the rerun below decides.
-        continue-on-error: ${{ github.event_name == 'merge_group' }}
-        run: &browser-shard |
+      - name: Run cockpit browser E2E (without Squeal)
+        id: e2e-plain
+        if: github.event_name != 'pull_request_target' && github.event_name != 'merge_group'
+        run: |
           set -o pipefail
           npm run test:e2e -- --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee e2e.log
           node .github/scripts/require-e2e-passed.cjs < e2e.log
+
+      # Merge groups (the run whose SHA becomes main) run the same command under
+      # `squeal ci record`, which returns the command's exit code and output and writes
+      # part files for the squeal-export job. See docs/sdlc/ci.md § Squeal shared results.
+      - name: Set up Squeal
+        if: github.event_name == 'merge_group'
+        uses: hearsay-tools/squeal/ci@7d2ce9ab71a97b8e818dea393fe303abc1679fd5 # v0.1.611
+
+      - name: Run cockpit browser E2E
+        id: e2e
+        if: github.event_name == 'merge_group'
+        # In a merge group a failed first run does not fail the job: the rerun below decides.
+        continue-on-error: ${{ github.event_name == 'merge_group' }}
+        env:
+          PARTS_DIR: squeal-parts
+        run: &browser-shard |
+          set -o pipefail
+          # Install dependencies, build the E2E mirror, and boot the server before
+          # `squeal ci record` starts: without node_modules/vitest on disk, Squeal does not
+          # detect Vitest and writes no part.
+          sh .ai/scripts/test-env-up.sh
+          set -- npm run test:e2e -- --allow-skip --shard=${{ matrix.shard }}/8
+          squeal ci record --out "$RUNNER_TEMP/$PARTS_DIR" -- "$@" 2>&1 | tee "$RUNNER_TEMP/e2e.log"
+          node .github/scripts/require-e2e-passed.cjs < "$RUNNER_TEMP/e2e.log"
 
       # The rerun clears each spec's old failure bundles, so the first run's ship first.
       - name: Upload the first run's failure bundles
@@ -1688,7 +1732,24 @@ jobs:
       - name: Rerun cockpit browser E2E
         id: e2e-rerun
         if: github.event_name == 'merge_group' && steps.e2e.outcome == 'failure'
+        env:
+          PARTS_DIR: squeal-parts-rerun
         run: *browser-shard
+
+      - name: Upload Squeal parts
+        # A status function: without one GitHub adds success(), and a shard whose tests failed
+        # would lose its parts. After a rerun only its parts upload: `squeal ci export` refuses
+        # two parts for one shard. When Squeal could not run there are no parts: the upload
+        # fails and continues on error.
+        if: "!cancelled() && github.event_name == 'merge_group'"
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: squeal-parts-browser-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/${{ steps['e2e-rerun'].outcome == 'skipped' && 'squeal-parts' || 'squeal-parts-rerun' }}/
+          if-no-files-found: error
+          retention-days: 3
+          overwrite: true
 
       # A red spec writes `.ai/qa/failures/<spec>/<test>-<n>/` (screenshot, snapshot, probe)
       # through the e2e seam (#408). Ship it so the flake can be read instead of guessed at;
