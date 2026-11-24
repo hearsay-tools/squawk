@@ -37,6 +37,7 @@ import {
   derivePrReferenceStatus,
   deriveIssueReferenceStatus,
   __clearRefStatusCacheForTests,
+  __clearChecksCacheForTests,
   forgetRefStatus,
   refNumberFromUrl,
   fetchGithub,
@@ -574,14 +575,25 @@ const listNode = (number: number, over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const ghByCwd = () =>
+type GhCallOptions = { cwd?: string; env?: NodeJS.ProcessEnv } | undefined;
+/** Answers each mocked `gh` call as project `a` or `b`, chosen by `whoOf` from the call options. */
+const ghAs = (whoOf: (opts: GhCallOptions) => 'a' | 'b') =>
   execFileMock.mockImplementation((...args: unknown[]) => {
     const argv = args[1] as string[];
-    const opts = args[2] as { cwd?: string } | undefined;
+    const opts = args[2] as GhCallOptions;
     const cb = args[args.length - 1] as (e: unknown, r: unknown) => void;
-    const who = opts?.cwd?.includes('proj-b') ? 'b' : 'a';
+    const who = whoOf(opts);
     let stdout = '';
     if (argv[0] === 'repo') stdout = `owner/${who}\n`;
+    else if (argv[1] === 'view') stdout = JSON.stringify({
+      number: 42, title: `${who}-item`, author: { login: who }, createdAt: '2026-07-01T00:00:00Z', labels: [],
+      body: '', url: `https://github.com/owner/${who}/pull/42`, isDraft: false, additions: 1, deletions: 0,
+    });
+    else if (argv[0] === 'api' && argv.includes('.comments')) stdout = '5';
+    else if (argv[1] === 'graphql' && (graphqlVar(argv, 'query') ?? '').includes('pullRequest(number:'))
+      stdout = JSON.stringify({ data: { repository: { p0: { commits: { nodes: [{ commit: {
+        statusCheckRollup: { state: who === 'a' ? 'SUCCESS' : 'FAILURE' },
+      } }] } } } } });
     else if (listSide(argv) === 'issues')
       stdout = listReply('issues', [
         listNode(1, { title: `${who}-issue`, author: { login: who }, body: `${who} body`, url: `https://github.com/owner/${who}/issues/1` }),
@@ -601,6 +613,9 @@ const ghByCwd = () =>
     else stdout = '{}'; // viewer and project lookups — malformed replies degrade to absent
     cb(null, { stdout, stderr: '' });
   });
+const ghByCwd = () => ghAs((opts) => (opts?.cwd?.includes('proj-b') ? 'b' : 'a'));
+/** `gh` reads `GH_CONFIG_DIR` from the environment it inherits, or from the context it is given. */
+const ghByAccount = () => ghAs((opts) => ((opts?.env ?? process.env).GH_CONFIG_DIR === 'account-b' ? 'b' : 'a'));
 
 describe('fetchGithub per-project list-cache isolation (step 2.6)', () => {
   beforeEach(() => {
@@ -674,6 +689,79 @@ describe('fetchGithubComments per-project cache isolation (step 2.6)', () => {
     expect(execFileMock.mock.calls.length).toBe(calls); // sibling still cached
     expect(await fetchGithubComments('/repo/thread-evict/a', 'pr', 42)).not.toBe(a);
     expect(execFileMock.mock.calls.length).toBeGreaterThan(calls); // evicted root refetched
+  });
+});
+
+// hearsay-tools/squawk#3860: one repository root read under two GitHub accounts (`GH_CONFIG_DIR`)
+// must not share an item, comment thread, checks glyph or availability answer.
+describe('forge caches are scoped by GitHub context, not only by repository root', () => {
+  beforeEach(() => {
+    vi.stubEnv('CEZ_DRY_RUN', '');
+    execFileMock.mockReset();
+    ghByAccount();
+    __clearCommentsCacheForTests();
+    __clearGithubItemCacheForTests();
+    __clearChecksCacheForTests();
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('serves each account its own item', async () => {
+    const root = '/repo/context/item';
+    vi.stubEnv('GH_CONFIG_DIR', 'account-a');
+    const a = await fetchGithubItem(root, 'pr', 42);
+    expect(a).toMatchObject({ item: { title: 'a-item' } });
+    vi.stubEnv('GH_CONFIG_DIR', 'account-b');
+    expect(await fetchGithubItem(root, 'pr', 42)).toMatchObject({ item: { title: 'b-item' } });
+    vi.stubEnv('GH_CONFIG_DIR', 'account-a');
+    const calls = execFileMock.mock.calls.length;
+    expect(await fetchGithubItem(root, 'pr', 42)).toBe(a);
+    expect(execFileMock.mock.calls.length).toBe(calls);
+  });
+
+  it('serves each account its own comment thread', async () => {
+    const root = '/repo/context/comments';
+    vi.stubEnv('GH_CONFIG_DIR', 'account-a');
+    const a = await fetchGithubComments(root, 'pr', 42);
+    expect(a.comments[0]?.author).toBe('a-commenter');
+    vi.stubEnv('GH_CONFIG_DIR', 'account-b');
+    expect((await fetchGithubComments(root, 'pr', 42)).comments[0]?.author).toBe('b-commenter');
+    vi.stubEnv('GH_CONFIG_DIR', 'account-a');
+    const calls = execFileMock.mock.calls.length;
+    expect(await fetchGithubComments(root, 'pr', 42)).toBe(a);
+    expect(execFileMock.mock.calls.length).toBe(calls);
+  });
+
+  it('serves each account its own checks glyph', async () => {
+    const root = '/repo/context/checks';
+    vi.stubEnv('GH_CONFIG_DIR', 'account-a');
+    expect(await fetchGithubChecks(root, [42])).toEqual({ available: true, checks: { 42: 'passing' } });
+    vi.stubEnv('GH_CONFIG_DIR', 'account-b');
+    expect(await fetchGithubChecks(root, [42])).toEqual({ available: true, checks: { 42: 'failing' } });
+    vi.stubEnv('GH_CONFIG_DIR', 'account-a');
+    const calls = execFileMock.mock.calls.length;
+    expect(await fetchGithubChecks(root, [42])).toEqual({ available: true, checks: { 42: 'passing' } });
+    expect(execFileMock.mock.calls.length).toBe(calls);
+  });
+
+  it('keeps one availability answer per account', async () => {
+    const root = '/repo/context/detect';
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      const opts = args[2] as GhCallOptions;
+      const cb = args[args.length - 1] as (e: unknown, r: unknown) => void;
+      if ((opts?.env ?? process.env).GH_CONFIG_DIR === 'account-b') cb(new Error('HTTP 401: Bad credentials'), null);
+      else cb(null, { stdout: '{"nameWithOwner":"owner/a"}', stderr: '' });
+    });
+    vi.stubEnv('GH_CONFIG_DIR', 'account-a');
+    detectGithubCached(root);
+    // bound: the background probe settles on the next turns of the event loop; this only ends a hang.
+    await vi.waitFor(() => expect(detectGithubCached(root)).toEqual({ available: true }), { timeout: HANG_GUARD_MS });
+    vi.stubEnv('GH_CONFIG_DIR', 'account-b');
+    expect(detectGithubCached(root)).toBeNull();
+    // bound: as above.
+    await vi.waitFor(() => expect(detectGithubCached(root)).toEqual({ available: false, reason: 'HTTP 401: Bad credentials' }), { timeout: HANG_GUARD_MS });
+    vi.stubEnv('GH_CONFIG_DIR', 'account-a');
+    expect(detectGithubCached(root)).toEqual({ available: true });
+    expect(execFileMock).toHaveBeenCalledTimes(2);
   });
 });
 
