@@ -1,4 +1,6 @@
-import { cliCommand, registeredCliCommands } from './core/cli-registry.ts';
+import { cliCommand, cliCommandsSealed, commandNeedsRuntime, registeredCliCommands } from './core/cli-registry.ts';
+import { bootColdCli, bootRuntime, hostPluginsDir } from './boot.ts';
+import { builtInCliCommand } from './built-in-cli-commands.ts';
 import { commandText, oldCommandNotice } from './home/command.ts';
 import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
@@ -64,7 +66,58 @@ Options:
 
 Zero config: uses your logged-in \`claude\` CLI (and \`gh\` for GitHub bits).
 Skills live in .ai/skills/, .ai/squawk/skills/ and your team skills repos
-workflows in .ai/squawk/workflows/. A project also reads .ai/cezar/, the old folder name.`;
+workflows in .ai/squawk/workflows/. A project also reads .ai/cezar/, the old folder name.
+Plugins in <config>/plugins/ can add commands: run \`cez plugins\` to list them.`;
+}
+
+const ROOT_OPTIONS = {
+  port: { type: 'string', short: 'p', default: '4321' },
+  repo: { type: 'string' },
+  workflow: { type: 'string' },
+  model: { type: 'string' },
+  'no-workers': { type: 'boolean', default: false },
+  'no-messaging': { type: 'boolean', default: false },
+  'no-open': { type: 'boolean', default: false },
+  platform: { type: 'string' },
+  domain: { type: 'string' },
+  'bind-host': { type: 'string' },
+  'external-proxy': { type: 'boolean', default: false },
+  yes: { type: 'boolean', default: false },
+  reconfigure: { type: 'string' },
+  reinstall: { type: 'boolean', default: false },
+  help: { type: 'boolean', short: 'h', default: false },
+  version: { type: 'boolean', short: 'v', default: false },
+} as const;
+
+/**
+ * Whether this command line needs the full boot (spec 2026-11-24-plugin-loader-and-runner-kit § 1).
+ * Help, version and a built-in whose `runtimeMode` is false stay cold. A built-in runtime command
+ * and an unknown command name boot fully, so plugins register their commands before the seal.
+ */
+export function cliNeedsRuntime(argv: readonly string[]): boolean {
+  const head = argv[0];
+  const builtIn = head === undefined ? undefined : builtInCliCommand(head);
+  if (builtIn?.parseMode === 'subcommand') return commandNeedsRuntime(builtIn, argv.slice(1));
+  if (head !== undefined && !head.startsWith('-') && !builtIn) return true;
+  let parsed;
+  try {
+    parsed = parseArgs({ args: [...argv], options: ROOT_OPTIONS, allowPositionals: true });
+  } catch {
+    // Dispatch reports the parse error; that needs no runtime.
+    return false;
+  }
+  if (parsed.values.help || parsed.values.version) return false;
+  const command = parsed.positionals[0] ?? 'serve';
+  const definition = builtInCliCommand(command);
+  return definition ? commandNeedsRuntime(definition, parsed.positionals.slice(1)) : true;
+}
+
+/** Seal the command table the way this command line needs, before dispatch reads it. */
+async function bootCli(deps: CliDeps, argv: readonly string[]): Promise<void> {
+  // An embedding caller (or a test) may seal its own table first.
+  if (cliCommandsSealed()) return;
+  if (cliNeedsRuntime(argv)) await bootRuntime({ pluginsDir: hostPluginsDir(deps.resolveCliHome, line => deps.console.error(line)) });
+  else bootColdCli();
 }
 
 /** Project commands finish an unfinished migration journal, then refuse a project under a
@@ -99,6 +152,7 @@ function printCliMetadata(deps: CliDeps, values: { version?: boolean; help?: boo
 }
 
 async function dispatch(deps: CliDeps): Promise<void> {
+  await bootCli(deps, deps.process.argv.slice(2));
   // Help reads resolved paths only. Task commands and version output never need a Home.
   const help = () => commandText(cliHelp(), deps.process.argv[1]);
   let resolvedHome: Home | undefined;
@@ -113,24 +167,7 @@ async function dispatch(deps: CliDeps): Promise<void> {
   }
   const { values, positionals } = deps.parseArgs({
     args: deps.process.argv.slice(2),
-    options: {
-      port: { type: 'string', short: 'p', default: '4321' },
-      repo: { type: 'string' },
-      workflow: { type: 'string' },
-      model: { type: 'string' },
-      'no-workers': { type: 'boolean', default: false },
-      'no-messaging': { type: 'boolean', default: false },
-      'no-open': { type: 'boolean', default: false },
-      platform: { type: 'string' },
-      domain: { type: 'string' },
-      'bind-host': { type: 'string' },
-      'external-proxy': { type: 'boolean', default: false },
-      yes: { type: 'boolean', default: false },
-      reconfigure: { type: 'string' },
-      reinstall: { type: 'boolean', default: false },
-      help: { type: 'boolean', short: 'h', default: false },
-      version: { type: 'boolean', short: 'v', default: false },
-    },
+    options: ROOT_OPTIONS,
     allowPositionals: true,
   });
 

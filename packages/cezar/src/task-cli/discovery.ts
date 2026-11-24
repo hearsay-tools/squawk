@@ -2,11 +2,12 @@ import { productIdentity } from '../home/identity.ts';
 import { productEnv } from '../core/product-env.ts';
 import { realpath } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
-import { capabilitiesSchema, healthResponseSchema } from '@open-mercato/cezar-contract/health';
+import { capabilitiesSchema, healthResponseSchema, pluginsHealthSchema } from '@open-mercato/cezar-contract/health';
 
-/** Health from any cockpit version: a running cockpit can predate capabilities added since its build,
- *  and discovery reads none of them. Same tolerance as the cockpit's `healthPayloadSchema`. */
-const cockpitHealthSchema = healthResponseSchema.extend({ capabilities: capabilitiesSchema.partial() });
+/** Health from any cockpit version: a running cockpit can predate capabilities and the plugin report
+ *  added since its build, and discovery reads none of them. Same tolerance as the cockpit's
+ *  `healthPayloadSchema`. */
+const cockpitHealthSchema = healthResponseSchema.extend({ capabilities: capabilitiesSchema.partial(), plugins: pluginsHealthSchema.optional() });
 import { projectsResponseSchema } from '@open-mercato/cezar-contract/projects';
 import { fetchJson, TaskCliError, type Cockpit } from './http.ts';
 import { runGit } from '../git-command.ts';

@@ -77,6 +77,34 @@ export const capabilitiesSchema = z.object({
 });
 export type Capabilities = z.infer<typeof capabilitiesSchema>;
 
+/** One plugin the server loaded from a plugin folder. */
+export const pluginHealthEntrySchema = z.object({
+  /** The plugin's folder name. */
+  name: z.string(),
+  /** `bundled` ships inside Squawk; `host` comes from `<config>/plugins/`. */
+  source: z.enum(['bundled', 'host']),
+  /** The plugin's folder. Absent in hosted mode (`HSQ_REMOTE=1` or a non-loopback bind). */
+  path: z.string().optional(),
+});
+export type PluginHealthEntry = z.infer<typeof pluginHealthEntrySchema>;
+
+/**
+ * One plugin the server skipped. `error` is a fixed text for the reason, never the plugin's own
+ * message: that can name host paths or carry a secret. `hsq plugins` on the host prints it.
+ */
+export const failedPluginHealthEntrySchema = pluginHealthEntrySchema.extend({ error: z.string() });
+export type FailedPluginHealthEntry = z.infer<typeof failedPluginHealthEntrySchema>;
+
+/**
+ * The plugins this server process loaded and skipped. Always sent; a server without plugins
+ * sends two empty lists.
+ */
+export const pluginsHealthSchema = z.object({
+  loaded: z.array(pluginHealthEntrySchema),
+  failed: z.array(failedPluginHealthEntrySchema),
+});
+export type PluginsHealth = z.infer<typeof pluginsHealthSchema>;
+
 /**
  * `GET /api/v1/health` — the CORS-open discovery endpoint. Callers outside the cockpit read
  * this JSON.
@@ -95,5 +123,6 @@ export const healthResponseSchema = z.object({
   // optional, which was wider than the server has ever been.
   projects: z.array(z.object({ id: z.string(), name: z.string() })),
   bootProject: z.string(),
+  plugins: pluginsHealthSchema,
 });
 export type HealthResponse = z.infer<typeof healthResponseSchema>;

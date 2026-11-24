@@ -42,17 +42,22 @@ export function savedRunnerId(id: string | undefined): string | undefined {
  * map resolves it for saved runs, so no runner may take it.
  */
 export function registerRunner(definition: RunnerDefinition): void {
+  checkStoredRunnerId(definition);
+  runners.register(definition.id, definition);
+}
+
+function checkStoredRunnerId(definition: RunnerDefinition): void {
   // The same bound the stored-config decoders accept, so a registered id always survives the next
   // stored read (spec 2026-11-24-plugin-loader-and-runner-kit, A3).
   const id = storedRunnerIdSchema.safeParse(definition.id);
   // The key has to be the definition's own id. The schema trims, so a padded id would register
   // under a different key than the definition carries; that is the same refusal as an invalid id.
   if (!id.success || id.data !== definition.id) throw new Error(`Runner registry: runner id ${JSON.stringify(definition.id)} is not a stored runner id (trimmed, 1–64 characters, no control characters).`);
-  runners.register(definition.id, definition);
 }
 
 /** Throws what `registerRunner` would throw for this definition, without registering it. */
 export function checkRunnerRegistration(definition: RunnerDefinition): void {
+  checkStoredRunnerId(definition);
   runners.check(definition.id, definition);
 }
 

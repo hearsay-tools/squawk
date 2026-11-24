@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { bootColdCli } from './boot.ts';
 import { commandText } from './home/command.ts';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -112,8 +111,7 @@ function readOwnVersion(): string {
   }
 }
 
-bootColdCli();
-
+// Dispatch seals the command table: cold for help and cold commands, a full boot otherwise.
 main({
   ...defaultCliDeps, resolveCliHome: () => resolveHome({ purpose: 'cli' }), readOwnVersion, runCommand,
   initCommand: async (...args) => {

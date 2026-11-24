@@ -41,3 +41,7 @@ export const registeredCliCommands = commands.values;
 export const hasCliCommand = commands.has;
 /** Cold home helpers do not boot or inspect an unsealed registry. */
 export const knownCliCommand = (name: string): CliCommandDefinition | undefined => commands.isSealed() ? commands.get(name) : undefined;
+/** Whether this command line needs the full runtime boot: runners, stores and plugins. */
+export function commandNeedsRuntime(command: CliCommandDefinition, argv: readonly string[]): boolean {
+  return typeof command.runtimeMode === 'function' ? command.runtimeMode(argv) : command.runtimeMode === 'always';
+}

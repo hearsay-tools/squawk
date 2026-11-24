@@ -80,6 +80,10 @@ const builtIns: readonly CliCommandDefinition[] = [
     parseMode: 'subcommand', homeMode: 'none', runtimeMode: 'none',
     load: async () => (await import('./artifacts/cli.ts')).runArtifactCommand,
   },
+  { name: 'plugins', usage: ["  cez plugins               list loaded and skipped plugins and what each adds"],
+    parseMode: 'subcommand', homeMode: 'none', runtimeMode: 'always',
+    load: async () => (await import('./plugin/cli.ts')).runPluginsCommand,
+  },
   { name: 'job', usage: ["  cez job start <name> -- <cmd> run a long command that outlives the agent session (see: job --help)"],
     parseMode: 'subcommand', homeMode: 'none', runtimeMode: 'none',
     load: async () => (await import('./jobs/cli.ts')).runJobCommand,
@@ -142,6 +146,11 @@ const builtIns: readonly CliCommandDefinition[] = [
     },
   },
 ];
+
+/** A built-in command by name, read without the registry, so dispatch can choose its boot first. */
+export function builtInCliCommand(name: string): CliCommandDefinition | undefined {
+  return builtIns.find(command => command.name === name);
+}
 
 /** Register only. The CLI boot boundary seals after extensions register. */
 export function registerBuiltInCliCommands(): void {

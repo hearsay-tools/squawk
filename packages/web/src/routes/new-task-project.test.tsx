@@ -77,6 +77,7 @@ const HEALTH: HealthResponse = {
     { id: OTHER, name: 'shop-frontend' },
   ],
   bootProject: BOOT,
+  plugins: { loaded: [], failed: [] },
 }
 
 const REGISTRY: ProjectsResponse = {

@@ -1,7 +1,8 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 
 const srcRoot = fileURLToPath(new URL('.', import.meta.url));
 
@@ -106,6 +107,74 @@ it('boots the other registries after the CLI command table is already sealed', a
   const { runnersSealed } = await import('./core/runner-registry.ts');
   expect(cliCommand('fixture')).toBe(command);
   expect(runnersSealed()).toBe(true);
+});
+
+afterEach(() => { vi.doUnmock('./plugin/resolve-hook.ts'); vi.doUnmock('./runners/built-in.ts'); });
+
+/** A host plugin folder with one plugin that registers a CLI command and a run lifecycle listener. */
+function pluginsDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'hsq-boot-plugins-'));
+  mkdirSync(join(dir, 'extra'));
+  writeFileSync(join(dir, 'extra', 'index.mjs'), `export default function setup(api) {
+  api.registerCliCommand({ name: 'extra', usage: [], parseMode: 'subcommand', homeMode: 'none', runtimeMode: 'none', load: async () => async () => 0 });
+  api.onRunLifecycle({});
+}
+`);
+  return dir;
+}
+
+it('installs the resolve hook before built-in runners load, loads host plugins, then seals', async () => {
+  vi.resetModules();
+  const order: string[] = [];
+  vi.doMock('./plugin/resolve-hook.ts', () => ({ installPluginResolveHook: () => { order.push('hook'); } }));
+  vi.doMock('./runners/built-in.ts', async original => {
+    order.push('runners');
+    return original();
+  });
+  const dir = pluginsDir();
+  try {
+    const boot = await import('./boot.ts');
+    const cli = await import('./core/cli-registry.ts');
+    const lifecycle = await import('./runs/lifecycle-registry.ts');
+    await boot.bootRuntime({ pluginsDir: dir, beforeSeal: () => {
+      order.push('beforeSeal');
+      // The plugin committed before the hook runs and before any seal.
+      expect(cli.cliCommandsSealed()).toBe(false);
+    } });
+    // The loader asks for the hook again before the first plugin; the real install is idempotent.
+    expect(order).toEqual(['hook', 'runners', 'hook', 'beforeSeal']);
+    expect(cli.cliCommand('extra')?.name).toBe('extra');
+    expect(lifecycle.registeredRunLifecycleListeners()).toHaveLength(1);
+    expect((await import('./plugin/loader.ts')).pluginLoadReport()).toMatchObject({ folders: [dir], loaded: [{ name: 'extra' }], failed: [] });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it('loads no host plugin without a plugin folder and never installs the hook on a cold boot', async () => {
+  vi.resetModules();
+  const install = vi.fn();
+  vi.doMock('./plugin/resolve-hook.ts', () => ({ installPluginResolveHook: install }));
+  const boot = await import('./boot.ts');
+  boot.bootColdCli();
+  expect(install).not.toHaveBeenCalled();
+  await boot.bootRuntime();
+  expect(install).toHaveBeenCalledOnce();
+  expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([]);
+});
+
+it('does not load host plugins twice when a failed hook is retried', async () => {
+  vi.resetModules();
+  const dir = pluginsDir();
+  try {
+    const boot = await import('./boot.ts');
+    await expect(boot.bootRuntime({ pluginsDir: dir, beforeSeal: () => { throw new Error('hook failed'); } })).rejects.toThrow('hook failed');
+    await boot.bootRuntime({ pluginsDir: dir });
+    expect((await import('./plugin/loader.ts')).pluginLoadReport()).toMatchObject({ folders: [dir], loaded: [{ name: 'extra' }], failed: [] });
+    expect((await import('./core/cli-registry.ts')).cliCommand('extra')?.name).toBe('extra');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 it('seals registries from boot.ts and the registry definitions only', () => {

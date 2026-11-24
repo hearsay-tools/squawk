@@ -189,6 +189,9 @@ import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { isReclaimable, reclaimWorktree, reclaimWorktrees, selectReclaimableWorktrees } from '../runs/retention.ts';
 import { getCommit, getDiff, getRepoInfo, getStatus } from './git.ts';
 import { createHealthCache, HEALTH_TTL_MS } from './health-cache.ts';
+import { COMMIT_FORMATS, FILE_FORMATS, negotiate } from './accept-negotiation.ts';
+import { authorityOfHost, authorityOfOrigin, hostnameOfHost, hostnameOfOrigin } from './host-authority.ts';
+import { pluginHealth, pluginLoadReport } from '../plugin/loader.ts';
 import { createBackendChecks } from './backend-checks.ts';
 import { createGithubBranchForge } from './repo-branch-forge.ts';
 import { classifyInputFor, deleteBranches, forgetRepoBranches, readRepoBranchCounts, readRepoBranches, type BranchForge, type ClassifyProject } from './repo-branches.ts';
@@ -256,7 +259,7 @@ import { ProjectContexts, type ProjectContext, type ProjectRunManager, type RunM
 
 import { mergeWriteProjectUiState, readUiState } from '../ui-state.ts';
 import { expandTilde } from '../paths.ts';
-import { isLoopbackHostHeader, normalizeHostname, resolveCapabilities } from './capabilities.ts';
+import { isLoopbackHostHeader, resolveCapabilities } from './capabilities.ts';
 import type { SocketHub, WsUpgradeVerdict } from './ws.ts';
 import type { PreviewHost } from '../preview/host.ts';
 import { browseDirectory, isInsideBrowseRoot, isLexicallyInsideBrowseRoot, resolveBrowseRoot } from './fs-browse.ts';
@@ -547,83 +550,6 @@ function foldedLength(task: string, stack: Array<{ text: string }>): number {
 // it only ever carries small GUI prefs.
 const GLOBAL_BODY_LIMIT = 32 * 1024 * 1024; // 32 MiB
 const UI_STATE_BODY_LIMIT = 128 * 1024; // 128 KiB
-
-/**
- * HTTP content negotiation for the two routes that serve more than one FORMAT on one path:
- * `GET /repo/commit/:sha` (a structured payload or the legacy text blob) and
- * `GET /runs/:id/files` (a JSON listing/metadata or an image file's BYTES).
- *
- * ## Precedence — flag, then Accept, then the route's own default
- *
- * 1. **The query flag wins whenever the request carries it.** `?structured=1` and `?raw=1` are the
- *    live wire; `Accept` is ADDITIVE and
- *    may never override a caller that said what it wanted in the URL. The flag counts as "carried"
- *    when the key is PRESENT, so `?raw=0` is an explicit opt-out of the raw representation and not
- *    an invitation to re-decide from a header.
- * 2. **Otherwise the best `Accept` match** among the representations that route offers.
- * 3. **Otherwise the route's established default** — the text blob for `/repo/commit/:sha`, the
- *    JSON listing for `/runs/:id/files` — i.e. exactly what a pre-Accept client received.
- *
- * `*<slash>*` matches NOTHING here, deliberately: it is what `fetch`, `curl` and XHR send when
- * they have no preference at all, and treating "anything" as a preference would silently change
- * the default representation of both routes for every existing caller. A browser that navigates to
- * a worktree image DOES get the bytes, because its `Accept` really does ask for `image/*` at q=1 —
- * the same protections ride along (image extensions only, size cap, `nosniff`, sandbox CSP).
- *
- * Both routes answer `Vary: Accept`, since a cache that ignored the header would serve one
- * representation for the other.
- */
-type MediaRange = { type: string; subtype: string; q: number };
-
-function parseAccept(header: string): MediaRange[] {
-  const ranges: MediaRange[] = [];
-  for (const part of header.split(',')) {
-    const [range = '', ...params] = part.split(';');
-    const [type = '', subtype = ''] = range.trim().toLowerCase().split('/');
-    if (type === '' || subtype === '') continue;
-    const weight = params.map((p) => p.trim().toLowerCase()).find((p) => p.startsWith('q='));
-    const parsed = weight === undefined ? 1 : Number.parseFloat(weight.slice(2));
-    const q = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 1) : 0;
-    if (q > 0) ranges.push({ type, subtype, q });
-  }
-  return ranges;
-}
-
-/**
- * The best of `offers` for this `Accept`, or `null` for "no preference expressed" — which is what
- * an absent header, a `*<slash>*`-only header and a header naming nothing on offer all mean, and
- * what leaves the caller on its route's default.
- *
- * `offers` is the server's own preference order: an offer may itself be a wildcard (`image/*`,
- * since the concrete image type is not known until the file is read), and equal q-values go to the
- * EARLIER offer, so each route lists its default representation first.
- */
-function negotiate<O extends string>(accept: string | undefined, offers: readonly O[]): O | null {
-  if (accept === undefined) return null;
-  const ranges = parseAccept(accept);
-  let best: { offer: O; q: number } | null = null;
-  for (const offer of offers) {
-    const [type = '', subtype = ''] = offer.split('/');
-    let q = 0;
-    for (const range of ranges) {
-      if (range.type === '*' && range.subtype === '*') continue; // "anything" is not a preference
-      const typeMatches = range.type === type || range.type === '*' || type === '*';
-      const subtypeMatches = range.subtype === subtype || range.subtype === '*' || subtype === '*';
-      if (typeMatches && subtypeMatches && range.q > q) q = range.q;
-    }
-    if (q > 0 && (best === null || q > best.q)) best = { offer, q };
-  }
-  return best?.offer ?? null;
-}
-
-/** What `GET /repo/commit/:sha` offers, DEFAULT FIRST: the legacy `text/plain` blob is what a
- *  request with no opinion has always received, so it also wins an Accept tie. */
-const COMMIT_FORMATS = ['text/plain', 'application/json'] as const;
-
-/** What `GET /runs/:id/files` offers, DEFAULT FIRST. `image/*` rather than a concrete type: which
- *  image type the bytes are is only known once the path resolves, and the raw branch refuses
- *  everything that is not an image anyway. */
-const FILE_FORMATS = ['application/json', 'image/*'] as const;
 
 function writeErrorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 // The return type is INFERRED on purpose: it is the chained app type built at the bottom of
@@ -1031,14 +957,24 @@ export function createApp(deps: ServerDeps) {
       // unreadable workspace degrades to `projects: []`.
       projects: workspace.projects,
       bootProject: workspace.bootProject,
+      // Same CORS-open rule as repoRoot: a hosted cockpit sends no host path.
+      plugins: pluginHealth(pluginLoadReport(), { hostPaths: caps.localHandoff }),
     };
   };
   // Stale-while-revalidate cache over the snapshot; see health-cache.ts.
   // Set while the topic has a subscriber (a noop when nobody is listening).
   let publishHealth: (data: unknown) => void = () => {};
+  // Capabilities follow each read and push, like the gates (ADR 0055). Host paths follow them: a
+  // snapshot cached in local mode must not send them once the cockpit is hosted.
+  const inCurrentMode = (payload: Awaited<ReturnType<typeof healthSnapshot>>) => {
+    const caps = capabilities();
+    const repoRoot = caps.localHandoff ? bootRoot : basename(bootRoot);
+    return { ...payload, capabilities: caps, repoRoot, plugins: pluginHealth(pluginLoadReport(), { hostPaths: caps.localHandoff }) };
+  };
   const healthCache = createHealthCache({
     snapshot: healthSnapshot,
-    publish: (payload) => {
+    publish: (cached) => {
+      const payload = inCurrentMode(cached);
       publishHealth(payload);
       workspaceEvents.emit('health', payload);
     },
@@ -1050,7 +986,7 @@ export function createApp(deps: ServerDeps) {
   // no refresher keeping a cache coherent, so it computes fresh, exactly as before.
   const readHealth = async () => {
     if (!deps.socketHub) return healthSnapshot();
-    return healthCache.read((payload) => ({ ...payload, capabilities: capabilities() })); // per request, like the gates (ADR 0055)
+    return healthCache.read(inCurrentMode);
   };
 
   // ---- chained family: health (workspace-level) ----------------------------
@@ -4603,50 +4539,6 @@ export function verifyWsUpgrade(req: IncomingMessage, bindHost?: string): WsUpgr
   // metadata (Safari/Firefox), where the dev proxy and a foreign local page are
   // indistinguishable: admit as UNTRUSTED so only `loopbackReadable` topics show.
   return { trusted: fetchSite === 'same-origin' };
-}
-
-/** The bare hostname of a `Host` header — see `normalizeHostname`. `''` when the
- *  header is absent, which no allowlist matches. */
-function hostnameOfHost(host: string | undefined): string {
-  return host ? normalizeHostname(host) : '';
-}
-
-/** The `hostname:port` authority of a `Host` header, e.g. `127.0.0.1:4321`.
- *
- *  The port is kept verbatim and is `''` when the header omits it — which is
- *  exactly when a browser also omits it from `Origin` (both drop the scheme's
- *  default port). That symmetry is what lets us compare the two without knowing
- *  our own scheme, which we cannot know behind a TLS-terminating proxy. */
-function authorityOfHost(host: string | undefined): string {
-  if (!host) return '';
-  const port = host.match(/^\[[^\]]*\]:(\d+)$/)?.[1] ?? host.match(/^[^:]*:(\d+)$/)?.[1] ?? '';
-  return `${normalizeHostname(host)}:${port}`;
-}
-
-/** The `hostname:port` authority of an `Origin` header, or `null` when it is not
- *  a parseable http(s) URL (the opaque `"null"` origin of a sandboxed iframe, a
- *  `file://` page). `URL.port` is `''` for a scheme's default port, matching
- *  `authorityOfHost`. */
-function authorityOfOrigin(origin: string): string | null {
-  try {
-    const u = new URL(origin);
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
-    return `${normalizeHostname(u.hostname)}:${u.port}`;
-  } catch {
-    return null;
-  }
-}
-
-/** The hostname of an `Origin` header, or `null` when it is not a parseable URL
- *  (e.g. the opaque `"null"` origin of a sandboxed iframe). Normalized through
- *  the same path as `hostnameOfHost` so the two compare equal for IPv6 and for
- *  trailing-dot FQDNs. */
-function hostnameOfOrigin(origin: string): string | null {
-  try {
-    return normalizeHostname(new URL(origin).hostname);
-  } catch {
-    return null;
-  }
 }
 
 function resolveWebDir(): string {

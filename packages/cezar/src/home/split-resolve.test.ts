@@ -81,6 +81,14 @@ describe('split Home resolution', () => {
       skillsCache: '/custom/cache/skills', skillFilesCache: '/custom/cache/skill-files' });
   });
 
+  it('puts host plugins under the config root without widening the enumerable path list', () => {
+    const home = resolveHome({ purpose: 'server', layout: 'split', platform: 'linux', env: { HSQ_HOME: '/custom' } }); // test-home-read: pure path assertions
+    expect(home.plugins).toBe('/custom/config/plugins');
+    expect(Object.keys(home)).not.toContain('plugins');
+    const legacy = resolveHome({ purpose: 'cli', layout: 'legacy', env: { CEZ_HOME: '/legacy' } }); // test-home-read: pure legacy assertions
+    expect(legacy.plugins.replaceAll('\\', '/')).toBe('/legacy/plugins');
+  });
+
   it('reads layout env separately from home locators', () => {
     const read: string[] = [];
     const env = new Proxy({}, { get: (_target, key) => { read.push(String(key)); return undefined; } });
