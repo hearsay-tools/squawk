@@ -31,8 +31,9 @@ function threadPages(...pages) {
 }
 const thread = (id, isResolved) => ({ id, isResolved });
 const coderabbit = (status) => ({ name: 'CodeRabbit', app: { slug: 'coderabbitai' }, status });
-const args = (github, readHead = async () => HEAD, runs = [coderabbit('completed')]) => ({
-  github, reviewedHead: HEAD, readHead, readCheckRuns: async (sha) => { assert.equal(sha, HEAD); return runs; }, owner: 'o', repo: 'r', pullNumber: 7,
+const args = (github, readHead = async () => HEAD, runs = [coderabbit('completed')], review = null) => ({
+  github, reviewedHead: HEAD, readHead, readCheckRuns: async (sha) => { assert.equal(sha, HEAD); return runs; },
+  readReviewStatus: async (sha) => { assert.equal(sha, HEAD); return review; }, owner: 'o', repo: 'r', pullNumber: 7,
 });
 
 test('arms the head when every review thread is resolved', async () => {
@@ -109,6 +110,18 @@ test('refuses when the head moves during the check', async () => {
   assert.match(result.reasons[0], /the head moved/);
 });
 
+test('refuses while the pre-PR review round is open or blocked, and arms once it is clean', async () => {
+  const { decideArm } = await load();
+  const open = await decideArm(args(threadPages([]), undefined, undefined, 'pending'));
+  assert.deepEqual(open, { outcome: 'refuse', head: HEAD, reasons: [`the pre-pr-review round on ${HEAD} is still open: arm only after it is clean`] });
+  for (const state of ['failure', 'error']) {
+    const blocked = await decideArm(args(threadPages([]), undefined, undefined, state));
+    assert.equal(blocked.outcome, 'refuse');
+    assert.match(blocked.reasons[0], /found a finding scored 5 or more/);
+  }
+  assert.equal((await decideArm(args(threadPages([]), undefined, undefined, 'success'))).outcome, 'arm');
+});
+
 test('a malformed thread page is an error, not a decision', async () => {
   const { decideArm } = await load();
   await assert.rejects(decideArm(args(threadPages([{ id: 't1' }]))), /Malformed review thread/);
@@ -126,6 +139,9 @@ const argv = process.argv.slice(2);
 if (fixture.fail) { process.stderr.write(fixture.fail + '\\n'); process.exit(1); }
 if (argv[0] === 'repo') process.stdout.write('o/r\\n');
 else if (argv[0] === 'pr') process.stdout.write(fixture.head + '\\n');
+else if (argv[1] === 'repos/o/r/commits/' + fixture.head + '/status?per_page=100') {
+  process.stdout.write(JSON.stringify({ statuses: fixture.statuses ?? [] }));
+}
 else if (argv[1] !== 'graphql') {
   if (argv[1] !== 'repos/o/r/commits/' + fixture.head + '/check-runs?check_name=CodeRabbit&per_page=100') process.exit(3);
   process.stdout.write(JSON.stringify({ check_runs: fixture.runs ?? [] }));
@@ -154,6 +170,13 @@ test('the command prints WAIT and exits 1 while CodeRabbit reviews the head', (t
   const run = runCli(t, { head: HEAD, threads: [], runs: [coderabbit('in_progress')] }, ['--pr', '7', '--head', HEAD]);
   assert.equal(run.status, 1, run.stderr);
   assert.equal(run.stdout, `WAIT\n- CodeRabbit is reviewing ${HEAD}: run the check again when its check run completes\n`);
+});
+
+test('the command prints DO NOT ARM and exits 1 while the review round is open', (t) => {
+  const run = runCli(t, { head: HEAD, threads: [], statuses: [{ context: 'CodeRabbit', state: 'pending' }, { context: 'pre-pr-review', state: 'pending' }] },
+    ['--pr', '7', '--head', HEAD]);
+  assert.equal(run.status, 1, run.stderr);
+  assert.equal(run.stdout, `DO NOT ARM\n- the pre-pr-review round on ${HEAD} is still open: arm only after it is clean\n`);
 });
 
 test('the command exits 2 when gh fails or the number is missing', (t) => {

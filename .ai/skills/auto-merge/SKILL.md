@@ -46,7 +46,8 @@ A qualifying PR does not merge on checks alone. Arm
 `gh pr merge --auto --squash` only when both hold for the PR's current head:
 
 - The reviewer round has no blocking finding: no finding scored 5 or more.
-  Findings scored 4 or lower do not block; list them in the PR body.
+  Findings scored 4 or lower do not block; list them in the PR body. Mark the
+  round as [Show an open review round on the PR](#show-an-open-review-round-on-the-pr) says.
 - `node .ai/skills/auto-merge/arm-check.mjs --pr <n> --head <sha>` prints
   `ARM <sha>` for the reviewed head `<sha>`: no review thread is unresolved, and
   CodeRabbit is not still reviewing the head. The review apps post threads after
@@ -66,6 +67,37 @@ Like the review round, this arming rule is an agent rule: queue admission
 checks native CI and review threads only, and removes a queued PR with an open
 thread. GitHub enqueues
 the PR when its required checks pass.
+
+## Show an open review round on the PR
+
+When a reviewer round runs on a pushed head, mark it on GitHub, auto-merge or
+not. The owner then sees that the PR is not ready to queue:
+
+```bash
+node .github/scripts/pre-pr-review.cjs open --head <sha> --pr <n>     # the round starts
+node .github/scripts/pre-pr-review.cjs blocked --head <sha> --pr <n>  # a finding scored 5 or more
+node .github/scripts/pre-pr-review.cjs clean --head <sha> --pr <n>    # no finding scored 5 or more
+```
+
+It sets the `pre-pr-review` commit status on `<sha>` (pending, failure, success)
+and writes or removes the banner at the top of the PR body. GitHub accepts a
+status only on a pushed commit: push, open the PR, then run `open`. Leave out
+`--pr` when no PR exists yet. While the status is pending or failure, PR Readiness
+keeps the card In progress and `arm-check.mjs` prints `DO NOT ARM`. A round that
+ends without a result still needs `clean` or `blocked`, or the card stays In
+progress. A new head carries no status: run `open` for its round.
+
+## The merge queue is not yours
+
+Never add a PR to the merge queue or remove one from it. The one exception is
+this skill: on a PR you opened with the `auto-merge` label, arm the request and
+dequeue the PR as [`references/follow.md`](references/follow.md) says. A PR
+without that label, or one the owner queued, stays as the owner left it.
+
+A push refused with `GH006` (`queued for merging cannot be updated`) means the
+owner queued the PR. Do not dequeue it and do not push again. A worker sends the
+fix to its parent as a request. A root task asks the owner through `cezar_ask`,
+or lands the fix as a follow-up PR.
 
 ## Labeled PRs
 

@@ -12,13 +12,16 @@
 // queue admission removes a PR armed with an open thread. This check reads the same
 // threads as queue admission: every page, outdated threads included, any author.
 // It also waits while CodeRabbit's check run on the head has not completed: until
-// then, CodeRabbit's threads for that head can still arrive.
+// then, CodeRabbit's threads for that head can still arrive. It refuses while the
+// head's `pre-pr-review` status (.github/scripts/pre-pr-review.cjs) is pending or
+// failure: a review round is open, or found a finding scored 5 or more.
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
 
 const require = createRequire(import.meta.url)
 const { listReviewThreads } = require('../../../.github/scripts/review-threads.cjs')
+const { REVIEW_CONTEXT } = require('../../../.github/scripts/pre-pr-review.cjs')
 
 // The review app whose check run on the head shows that its review is still running.
 export const REVIEWING_APP = { slug: 'coderabbitai', checkName: 'CodeRabbit' }
@@ -28,9 +31,10 @@ export const REVIEWING_APP = { slug: 'coderabbitai', checkName: 'CodeRabbit' }
  * is the head the reviewer round covered. `readHead`
  * returns the live head sha; `readCheckRuns(sha)` returns the head's check runs named
  * REVIEWING_APP.checkName; `github.graphql` answers like Octokit's: the `data` object
- * of a GraphQL reply.
+ * of a GraphQL reply. `readReviewStatus(sha)` returns the head's REVIEW_CONTEXT
+ * state, or null when the head has none.
  */
-export async function decideArm({ github, reviewedHead, readHead, readCheckRuns, owner, repo, pullNumber }) {
+export async function decideArm({ github, reviewedHead, readHead, readCheckRuns, readReviewStatus, owner, repo, pullNumber }) {
   const head = await readHead()
   if (head !== reviewedHead) {
     return { outcome: 'refuse', head, reasons: [`the head is ${head}, not the reviewed head ${reviewedHead}: decide again for the new head`] }
@@ -38,12 +42,17 @@ export async function decideArm({ github, reviewedHead, readHead, readCheckRuns,
   // Check runs first: a review that completes after this read posted its threads
   // before the thread read below, so a completed run never hides one of its threads.
   const runs = await readCheckRuns(head)
+  const review = await readReviewStatus(head)
   const threads = await listReviewThreads({ github, owner, repo, pullNumber })
   const after = await readHead()
   if (after !== head) return { outcome: 'refuse', head: after, reasons: [`the head moved from ${head} to ${after} during the check`] }
   const unresolved = threads.filter((thread) => !thread.isResolved).length
   if (unresolved > 0) {
     return { outcome: 'refuse', head, reasons: [`${unresolved} unresolved review thread${unresolved === 1 ? '' : 's'}: answer each one first`] }
+  }
+  if (review === 'pending') return { outcome: 'refuse', head, reasons: [`the ${REVIEW_CONTEXT} round on ${head} is still open: arm only after it is clean`] }
+  if (review === 'failure' || review === 'error') {
+    return { outcome: 'refuse', head, reasons: [`the ${REVIEW_CONTEXT} round on ${head} found a finding scored 5 or more: fix it and review the fix`] }
   }
   const reviewing = runs.some((run) => run?.app?.slug === REVIEWING_APP.slug && run.status !== 'completed')
   if (reviewing) return { outcome: 'wait', head, reasons: [`${REVIEWING_APP.checkName} is reviewing ${head}: run the check again when its check run completes`] }
@@ -80,6 +89,11 @@ if (import.meta.main) {
         const runs = JSON.parse(gh('api', `repos/${fullName}/commits/${sha}/check-runs?check_name=${REVIEWING_APP.checkName}&per_page=100`)).check_runs
         if (!Array.isArray(runs)) throw new Error('Malformed check runs')
         return runs
+      },
+      readReviewStatus: async (sha) => {
+        const statuses = JSON.parse(gh('api', `repos/${fullName}/commits/${sha}/status?per_page=100`)).statuses
+        if (!Array.isArray(statuses)) throw new Error('Malformed commit statuses')
+        return statuses.find((status) => status?.context === REVIEW_CONTEXT)?.state ?? null
       },
       owner, repo, pullNumber,
     })
