@@ -90,9 +90,10 @@ progress. A new head carries no status: run `open` for its round.
 ## The merge queue is not yours
 
 Never add a PR to the merge queue or remove one from it. The one exception is
-this skill: on a PR you opened with the `auto-merge` label, arm the request and
-dequeue the PR as [`references/follow.md`](references/follow.md) says. A PR
-without that label, or one the owner queued, stays as the owner left it.
+this skill: on a PR you opened with the `auto-merge` label, arm the request,
+and dequeue only an entry you armed for its current head, as
+[`references/follow.md`](references/follow.md) says. A PR without that label,
+and any entry you did not arm, the owner's included, stays as the owner left it.
 
 A push refused with `GH006` (`queued for merging cannot be updated`) means the
 owner queued the PR. Do not dequeue it and do not push again. A worker sends the
