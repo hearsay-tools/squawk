@@ -8,8 +8,8 @@ import type { Home } from '../home/home.ts';
 import type { ManagedCliSource } from '../core/managed-cli-source.ts';
 import { privateDirectory } from '../home/private-files.ts';
 import { downloadCli, extractCliArchive } from './cli-archive.ts';
-import { cliReleaseId, fetchCliManifest, managedCliTarget, type CliManifest } from './cli-manifest.ts';
-import { activateCliRelease, clearCliStaging, cliRoot, cliTransaction, pruneCliReleases, readActiveRelease, removeRelease, withCliInstallLock } from './cli-storage.ts';
+import { fetchCliManifest, managedCliTarget, type CliManifest } from './cli-manifest.ts';
+import { activateCliRelease, clearCliStaging, cliRoot, cliTransaction, pruneCliReleases, readActiveRelease, releaseMatchesManifest, removeRelease, withCliInstallLock } from './cli-storage.ts';
 
 const UPDATE_INTERVAL_MS = 60 * 60 * 1000;
 const runFile = promisify(execFile);
@@ -32,7 +32,7 @@ export class ManagedCliInstallation {
       supported: target !== null,
       installedVersion: active?.version ?? null,
       latestVersion: this.latest?.version ?? null,
-      updateAvailable: !!active && !!this.latest && active.releaseId !== cliReleaseId(this.latest.digest),
+      updateAvailable: !!active && !!this.latest && !releaseMatchesManifest(active, this.latest),
       phase: this.phase, error: this.error,
     };
   }
@@ -77,7 +77,7 @@ export class ManagedCliInstallation {
       }
       const manifest = await this.manifest(target);
       const active = readActiveRelease(root, this.source);
-      if (active?.releaseId === cliReleaseId(manifest.digest)) return;
+      if (active && releaseMatchesManifest(active, manifest)) return;
       await this.install(root, manifest);
     });
   }

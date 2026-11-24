@@ -9,7 +9,7 @@ import { ANTIGRAVITY_CLI, parseAntigravityManifest } from '../runners/antigravit
 import { buildTestCliArchive, cleanupManagedCliHome } from './cli-archive.testkit.ts';
 import { ManagedCliInstallation, leaseManagedCli, managedCliExecutable } from './cli-installation.ts';
 import { cliReleaseId, fetchCliManifest, managedCliTarget, validateDownloadUrl } from './cli-manifest.ts';
-import { cliRoot } from './cli-storage.ts';
+import { activateCliRelease, cliRoot, releaseMatchesManifest } from './cli-storage.ts';
 
 const source: ManagedCliSource = {
   manifestUrl: 'https://manifest.example/{target}.json',
@@ -183,15 +183,30 @@ it('supports sha384 digests and derives a 64-hex release directory id', async ()
   expect(basename(dirname(managedCliExecutable(home, 'vendor-384', customSource)!))).toBe(`sha384-${sha384.slice(0, 64)}`);
 });
 
-it('keeps release ids disjoint across algorithms even when 64-hex prefixes match', () => {
+it('keeps release ids disjoint across algorithms even when 64-hex prefixes match and checks full digests on reuse', async () => {
   const prefix = 'a'.repeat(64);
-  const sha512Id = cliReleaseId({ algorithm: 'sha512', value: `${prefix}${'b'.repeat(64)}` });
+  const sha512First = { algorithm: 'sha512' as const, value: `${prefix}${'b'.repeat(64)}` };
+  const sha512Second = { algorithm: 'sha512' as const, value: `${prefix}${'c'.repeat(64)}` };
+  const sha512Id = cliReleaseId(sha512First);
   const sha256Id = cliReleaseId({ algorithm: 'sha256', value: prefix });
   const sha384Id = cliReleaseId({ algorithm: 'sha384', value: `${prefix}${'c'.repeat(32)}` });
   expect(sha512Id).toBe(prefix);
   expect(sha256Id).toBe(`sha256-${prefix}`);
   expect(sha384Id).toBe(`sha384-${prefix}`);
   expect(new Set([sha512Id, sha256Id, sha384Id]).size).toBe(3);
+
+  // Full digest comparison distinguishes two sha512 manifests sharing a 64-hex prefix.
+  expect(releaseMatchesManifest({ releaseId: sha512Id, version: '1.0.0', digest: sha512First }, { version: '1.0.0', digest: sha512First })).toBe(true);
+  expect(releaseMatchesManifest({ releaseId: sha512Id, version: '1.0.0', digest: sha512First }, { version: '1.0.0', digest: sha512Second })).toBe(false);
+
+  // Activating a different full sha512 digest into an existing 64-hex directory refuses reuse.
+  const f = fixture(); const installation = f.install();
+  installation.start('install'); await installation.settled();
+  const digest = f.digest();
+  const conflicting = `${digest.slice(0, 64)}${digest[64] === '0' ? '1' : '0'}${digest.slice(65)}`;
+  const root = cliRoot(f.home, 'antigravity');
+  expect(() => activateCliRelease(root, join(root, 'versions', '.stage-unused'), { version: '1.0.0', digest: { algorithm: 'sha512', value: conflicting } }, 'antigravity'))
+    .toThrow('conflicts with an existing release');
 });
 
 it.each([

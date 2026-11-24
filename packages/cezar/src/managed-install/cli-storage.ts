@@ -8,13 +8,14 @@ import { recordedProcessLive, processStartToken } from '../core/process-stat.ts'
 import { assertHomePath } from '../home/boundary.ts';
 import { privateDirectory, replacePrivate } from '../home/private-files.ts';
 import { withHomeLock } from '../home/write-lock.ts';
-import { cliReleaseId, managedCliTarget, type CliManifest } from './cli-manifest.ts';
+import { cliDigestSchema, cliReleaseId, managedCliTarget, type CliManifest } from './cli-manifest.ts';
 
 const releaseIdSchema = z.string().regex(/^(?:[a-f0-9]{64}|(?:sha256|sha384)-[a-f0-9]{64})$/);
 const activeSchema = z.object({ releaseId: releaseIdSchema });
 const releaseSchema = z.object({
   releaseId: releaseIdSchema, version: z.string().regex(/^\d+\.\d+\.\d+$/),
   executable: z.string().regex(/^[a-zA-Z0-9._-]+$/), size: z.number().int().positive(),
+  digest: cliDigestSchema.optional(),
 });
 const ownerSchema = z.object({ pid: z.number().int().positive(), startToken: z.string().optional() });
 const leaseSchema = ownerSchema.extend({ releaseId: releaseIdSchema });
@@ -157,18 +158,30 @@ export async function withCliInstallLock<T>(home: Home, root: string, operation:
   finally { cliTransaction(home, () => rmSync(path, { force: true })); }
 }
 
+export function releaseMatchesManifest(release: Pick<ManagedRelease, 'releaseId' | 'version' | 'digest'>, manifest: Pick<CliManifest, 'digest' | 'version'>): boolean {
+  const digest = cliDigestSchema.parse(manifest.digest);
+  if (release.releaseId !== cliReleaseId(digest) || release.version !== manifest.version) return false;
+  return !release.digest || (release.digest.algorithm === digest.algorithm && release.digest.value === digest.value);
+}
+
 export function activateCliRelease(root: string, stage: string, manifest: Pick<CliManifest, 'digest' | 'version'>, executable: string): void {
-  const releaseId = cliReleaseId(manifest.digest);
+  const digest = cliDigestSchema.parse(manifest.digest);
+  const releaseId = cliReleaseId(digest);
   const destination = assertHomePath(root, join(root, 'versions', releaseId));
   privateDirectory(join(root, 'versions'));
   if (!existsSync(destination)) {
     const path = join(stage, executable);
-    const release = releaseSchema.parse({ releaseId, version: manifest.version, executable, size: statSync(path).size });
+    const release = releaseSchema.parse({ releaseId, version: manifest.version, executable, size: statSync(path).size, digest });
     replacePrivate(join(stage, 'release.json'), JSON.stringify(release));
     chmodSync(path, 0o555);
     chmodSync(join(stage, 'release.json'), 0o444);
     chmodSync(stage, 0o555);
     renameSync(stage, destination);
+  } else {
+    const existing = releaseSchema.parse(readJson(join(destination, 'release.json')));
+    if (existing.executable !== executable || !releaseMatchesManifest(existing, manifest)) {
+      throw new Error('The managed CLI release directory conflicts with an existing release.');
+    }
   }
   replacePrivate(join(root, 'active.json'), JSON.stringify({ releaseId }));
   pruneCliReleases(root);
