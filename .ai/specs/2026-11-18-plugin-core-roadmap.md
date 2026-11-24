@@ -42,13 +42,13 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 
 ## Steps
 
-| Step | What | State on 2026-11-23 |
+| Step | What | State on 2026-11-24 |
 | --- | --- | --- |
 | 0 | Draw the line: define the core, add the layer map and `cez/layer-import` | Done: hearsay-tools/squawk#3706, ADR 0065 |
 | 1 | Runners become definitions that register themselves | Done: epic hearsay-tools/squawk#3824, [spec](2026-11-18-runner-definitions.md), [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md) |
 | 2 | A typed run lifecycle, and a narrower run store | Done: epic hearsay-tools/squawk#4007, [spec](2026-11-21-run-lifecycle-and-store-ports.md), [ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md) |
 | 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Done: epic hearsay-tools/squawk#4152, [spec](2026-11-23-open-registries-and-tables.md), [ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md) |
-| 4 | Loader and package format | Not filed |
+| 4 | Loader and package format | Filed on 2026-11-24: epic hearsay-tools/squawk#4188 (first version) |
 | 5 | Move features out of the core, smallest first | Not filed; hearsay-tools/squawk#3874 moved accounts to a feature layer |
 | 6 | Cockpit slots | Not filed |
 
@@ -141,6 +141,13 @@ A file exports one function that receives the API object. Squawk finds it by fol
 project and in the user's home. A package holds extensions and workflows. A project's plugins
 load only after a person trusts the project. From this step the API is a promise, so the API
 stays small.
+
+The first version (epic hearsay-tools/squawk#4188) is narrower. It loads plugins from one host
+folder, `<config>/plugins/`, and adds a runner kit: one public entry with what a runner needs
+from the core. Every built-in runner moves onto the kit, because a fixture alone does not show
+what a real runner needs (step 1 showed that). Plugins that belong to one project, a trust
+decision, install commands and workflows inside a package wait for a later epic. The epic's spec
+decides whether the API promise starts with this version.
 
 Preconditions from step 1 ([runner definitions](2026-11-18-runner-definitions.md)):
 
