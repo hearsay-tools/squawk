@@ -12,6 +12,7 @@
   "exports": {
     ".": "./dist/index.js",
     "./app-type": "./dist/server/app-type.js",
+    "./plugin": "./dist/plugin/index.js",
     "./package.json": "./package.json"
   },
   "files": [

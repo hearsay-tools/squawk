@@ -138,7 +138,8 @@ const registry = createKeyedRegistry<string, WaitKindRow>({
 });
 const requestOwners = new Map<string, WaitKindRow>();
 const builtInNames = new Set(['human', 'timer', 'process', 'pr', 'worker', 'request', 'peer', 'subagent', 'plugin']);
-export function registerWaitKind(row: WaitKindRegistration): void {
+/** Throws what `registerWaitKind` would throw for this row, without registering it. */
+export function checkWaitKindRegistration(row: WaitKindRegistration): void {
   if (!row.kind || row.kind.length > 64 || row.kind === 'plugin' || (row.isPlugin && builtInNames.has(row.kind))) {
     throw new Error(`wait-kind registry: reserved or invalid kind '${row.kind}'.`);
   }
@@ -146,6 +147,10 @@ export function registerWaitKind(row: WaitKindRegistration): void {
     const owner = requestOwners.get(kind);
     if (owner && owner !== row) throw new Error(`wait-kind registry: conflicting request kind '${kind}'.`);
   }
+  registry.check(row.kind, row);
+}
+export function registerWaitKind(row: WaitKindRegistration): void {
+  checkWaitKindRegistration(row);
   registry.register(row.kind, row);
   for (const kind of row.requestKinds) requestOwners.set(kind, row);
 }

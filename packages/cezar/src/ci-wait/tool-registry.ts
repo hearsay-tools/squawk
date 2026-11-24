@@ -33,6 +33,8 @@ const registry = createKeyedRegistry<string, AgentToolDefinition>({
   name: 'Agent tool registry', reservedKeys: ['ci-wait'], bootHint: 'Call registerBuiltInTools(), then sealAgentTools() at boot.',
 });
 export const registerAgentTool = (tool: AgentToolDefinition): void => registry.register(tool.name, tool);
+/** Throws what `registerAgentTool` would throw for this tool, without registering it. */
+export const checkAgentToolRegistration = (tool: AgentToolDefinition): void => registry.check(tool.name, tool);
 export const sealAgentTools = registry.seal;
 export const agentToolsSealed = registry.isSealed;
 export const registeredAgentTools = registry.values;

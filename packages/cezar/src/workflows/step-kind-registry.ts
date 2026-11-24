@@ -29,10 +29,15 @@ const registry = createKeyedRegistry<string, StepKindDefinition>({
   bootHint: 'Call registerBuiltInStepKinds(), register plugins, then sealStepKinds() at boot.',
 });
 
-export function registerStepKind(definition: StepKindDefinition): void {
+/** Throws what `registerStepKind` would throw for this definition, without registering it. */
+export function checkStepKindRegistration(definition: StepKindDefinition): void {
   if (!definition.kind || definition.kind.length > 64 || definition.kind === 'plugin') {
     throw new Error(`Invalid workflow step kind '${definition.kind}'`);
   }
+  registry.check(definition.kind, definition);
+}
+export function registerStepKind(definition: StepKindDefinition): void {
+  checkStepKindRegistration(definition);
   registry.register(definition.kind, definition);
 }
 export const sealStepKinds = registry.seal;

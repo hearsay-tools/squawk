@@ -23,17 +23,22 @@ export function createKeyedRegistry<K extends string, V>(options: RegistryOption
   const state = lifecycle(options);
   const entries = new Map<K, V>();
   const reserved = new Set(options.reservedKeys);
+  /** Throws what `register` would throw, without writing. True when the entry is new. */
+  function check(key: K, value: V): boolean {
+    if (reserved.has(key)) throw new Error(`${options.name}: reserved legacy key '${key}'.`);
+    if (entries.has(key)) {
+      if (entries.get(key) === value) return false;
+      throw new Error(`${options.name}: conflicting registration for '${key}'.`);
+    }
+    state.assertWritable();
+    return true;
+  }
   return {
     seal: state.seal,
     isSealed: state.isSealed,
+    check(key: K, value: V): void { check(key, value); },
     register(key: K, value: V) {
-      if (reserved.has(key)) throw new Error(`${options.name}: reserved legacy key '${key}'.`);
-      if (entries.has(key)) {
-        if (entries.get(key) === value) return;
-        throw new Error(`${options.name}: conflicting registration for '${key}'.`);
-      }
-      state.assertWritable();
-      entries.set(key, value);
+      if (check(key, value)) entries.set(key, value);
     },
     get(key: K) { state.assertReadable(); return entries.get(key); },
     has(key: K) { state.assertReadable(); return entries.has(key); },
@@ -52,6 +57,10 @@ export function createListRegistry<V>(options: RegistryOptions) {
   return {
     seal: state.seal,
     isSealed: state.isSealed,
+    /** Throws what `register` would throw, without writing. */
+    check(item: V): void {
+      if (!items.some(value => value === item)) state.assertWritable();
+    },
     register(item: V) {
       if (items.some(value => value === item)) return;
       state.assertWritable();

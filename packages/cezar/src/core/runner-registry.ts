@@ -44,6 +44,11 @@ export function registerRunner(definition: RunnerDefinition): void {
   runners.register(definition.id, definition);
 }
 
+/** Throws what `registerRunner` would throw for this definition, without registering it. */
+export function checkRunnerRegistration(definition: RunnerDefinition): void {
+  runners.check(definition.id, definition);
+}
+
 /** The registered runners, in registration order. */
 export function registeredRunners(): RunnerDefinition[] {
   return runners.values();

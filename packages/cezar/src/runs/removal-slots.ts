@@ -70,6 +70,13 @@ function registerSlot<T>(registry: { register(slot: T): void }, slot: T): void {
   }
 }
 
+/** Throws what `registerRunSlots` would throw for these slots, without registering them. */
+export function checkRunSlotsRegistration(slots: RunSlots): void {
+  for (const slot of slots.gates ?? []) gates.check(slot);
+  for (const slot of slots.preparations ?? []) preparations.check(slot);
+  for (const slot of slots.cleanups ?? []) cleanups.check(slot);
+}
+
 /** Add slots, in call order. Registering the same slot object again does nothing. */
 export function registerRunSlots(slots: RunSlots): void {
   for (const slot of slots.gates ?? []) registerSlot(gates, slot);

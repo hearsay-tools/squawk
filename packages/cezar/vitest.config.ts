@@ -1,4 +1,5 @@
 import { checkWorkspaceResolution } from '../../scripts/check-workspace-resolution.mjs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
 checkWorkspaceResolution()
@@ -7,6 +8,11 @@ checkWorkspaceResolution()
 // — those are the node:test suites (`npm run test:unit`, `npm run test:package`), which pack
 // and install the real tarball and must not run inside the fast unit gate.
 export default defineConfig({
+  // The public plugin entry: the built package resolves it through `exports`; source and tests map
+  // it here, as tsconfig.json `paths` does for the typechecker.
+  resolve: {
+    alias: { '@hearsay-tools/squawk/plugin': fileURLToPath(new URL('./src/plugin/index.ts', import.meta.url)) },
+  },
   test: {
     name: 'server',
     environment: 'node',

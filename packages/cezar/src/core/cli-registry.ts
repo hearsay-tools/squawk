@@ -32,6 +32,8 @@ const commands = createKeyedRegistry<string, CliCommandDefinition>({
   name: 'CLI commands', bootHint: 'Register CLI commands, then call sealCliCommands() before dispatch.',
 });
 export const registerCliCommand = (command: CliCommandDefinition): void => commands.register(command.name, command);
+/** Throws what `registerCliCommand` would throw for this command, without registering it. */
+export const checkCliCommandRegistration = (command: CliCommandDefinition): void => commands.check(command.name, command);
 export const sealCliCommands = commands.seal;
 export const cliCommandsSealed = commands.isSealed;
 export const cliCommand = commands.get;
