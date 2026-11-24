@@ -237,6 +237,8 @@ export const queryKeys = {
     ] as const,
   githubComments: (kind: 'issue' | 'pr', number: number) =>
     [queryScope(), 'github', 'comments', kind, number] as const,
+  /** Every cached comment thread of the current project: `githubComments`'s prefix. */
+  githubCommentsAll: () => [queryScope(), 'github', 'comments'] as const,
   /** One issue/PR by number (`GET /api/github/items/…`, #692). Scoped, so the same number in two
    *  projects is two entries — a task tab must never show another project's #5. */
   githubItem: (kind: 'issue' | 'pr', number: number) =>

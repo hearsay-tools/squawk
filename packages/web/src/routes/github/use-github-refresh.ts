@@ -72,7 +72,7 @@ export function useGithubRefresh(view: GithubView, checkPrNumbers: number[], deb
       const open = openThreadRef.current
       if (!open) {
         // No thread on screen (the unavailable branch) — nothing mounted, so clearing is free.
-        void queryClient.removeQueries({ queryKey: ['github', 'comments'] })
+        void queryClient.removeQueries({ queryKey: queryKeys.githubCommentsAll() })
         return
       }
       const openKey = queryKeys.githubComments(open.kind, open.number)
@@ -87,7 +87,7 @@ export function useGithubRefresh(view: GithubView, checkPrNumbers: number[], deb
       // next opened. The open one MUST be excluded: removing a mounted query resets it to pending
       // and flashes the loading skeleton under the user.
       void queryClient.removeQueries({
-        queryKey: ['github', 'comments'],
+        queryKey: queryKeys.githubCommentsAll(),
         predicate: (q) => q.queryHash !== hashKey(openKey),
       })
     },

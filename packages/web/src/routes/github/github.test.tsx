@@ -1032,6 +1032,29 @@ describe('the comment thread', () => {
     expect(sent.length).toBeGreaterThan(0)
   })
 
+  it('a refresh drops every other cached thread of this project and keeps the open one (#3854)', async () => {
+    stubFetch({ 'GET /api/v1/github?refresh=1': () => jsonResponse(GITHUB) })
+    const client = renderAt('/github/issues/142')
+    const openKey = queryKeys.githubComments('issue', 142)
+    await waitFor(() => expect(client.getQueryData(openKey)).toBeDefined())
+    const openQuery = client.getQueryCache().find({ queryKey: openKey, exact: true })
+    // Seeded with the scoped builder, so a removal key without the project scope leaves them.
+    const otherIssue = queryKeys.githubComments('issue', 139)
+    const otherPr = queryKeys.githubComments('pr', 137)
+    const otherProject = ['another-project', 'github', 'comments', 'issue', 139] as const
+    act(() => {
+      for (const key of [otherIssue, otherPr, otherProject]) client.setQueryData(key, THREAD)
+    })
+
+    fireEvent.click(document.querySelector<HTMLElement>('[data-slot="gh-refresh"]')!)
+
+    await waitFor(() => expect(client.getQueryData(otherIssue)).toBeUndefined())
+    expect(client.getQueryData(otherPr)).toBeUndefined()
+    expect(client.getQueryData(otherProject)).toBeDefined()
+    // The same query object, never removed and re-created: removal would flash the skeleton.
+    expect(client.getQueryCache().find({ queryKey: openKey, exact: true })).toBe(openQuery)
+  })
+
   it('shows a truncation row linking to GitHub when the thread was trimmed', async () => {
     stubFetch(thread('issue', 142, { available: true, comments: [COMMENT_TEXT], truncated: true }))
     renderAt('/github/issues/142')
@@ -1063,6 +1086,28 @@ describe('the unavailable forge state', () => {
     await waitFor(() =>
       expect(sent.some((request) => request.path === '/api/v1/github?limit=50&refresh=1')).toBe(true),
     )
+  })
+
+  it('a refresh with no thread open drops every cached thread of this project (#3854)', async () => {
+    const unavailable: GithubData = { available: false, reason: 'gh not installed', issues: [], prs: [] }
+    stubFetch({
+      'GET /api/v1/github?limit=50': () => jsonResponse(unavailable),
+      'GET /api/v1/github?limit=50&refresh=1': () => jsonResponse(unavailable),
+    })
+    const client = renderAt('/github')
+    await screen.findByRole('heading', { level: 1, name: 'GitHub is unavailable here' })
+    const issueThread = queryKeys.githubComments('issue', 142)
+    const prThread = queryKeys.githubComments('pr', 137)
+    const otherProject = ['another-project', 'github', 'comments', 'issue', 142] as const
+    act(() => {
+      for (const key of [issueThread, prThread, otherProject]) client.setQueryData(key, THREAD)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+    await waitFor(() => expect(client.getQueryData(issueThread)).toBeUndefined())
+    expect(client.getQueryData(prThread)).toBeUndefined()
+    expect(client.getQueryData(otherProject)).toBeDefined()
   })
 })
 
