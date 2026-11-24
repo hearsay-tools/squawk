@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject }
 
 import { createRun, postPlan, putUiState } from '@/api/client'
 import { useRunnerAvailability } from '@/api/agent-accounts'
-import { useRunners } from '@/api/runners'
+import { runnerIds, useRunners } from '@/api/runners'
 import {
   queryKeys,
   useConfig,
@@ -44,6 +44,7 @@ import {
   modelsForRunner,
   pushRecentSource,
   resolveEffort,
+  planRunner,
   resolveModel,
   resolveRunner,
   resolveSource,
@@ -210,11 +211,12 @@ export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
   }
   const pickedAccount = availability.accountFor(displayRunner, draft.agentProfile)
     ?? availability.repoAccount?.[displayRunner]
-  // Plan first runs on the project's default runner: it carries the composer's account when that
-  // runner is the picked one, else the default runner's own connected account (hearsay-tools/squawk#4116).
-  const planAccount = defaultRunner === undefined
+  // Plan first runs on the runner the stored default resolves to. A stored unknown id is not a
+  // registered account key, so the lookup uses the resolved runner and the stored id stays as it is.
+  const planner = planRunner(defaultRunner, runnerIds(registered.data))
+  const planAccount = planner === undefined
     ? null
-    : availability.accountFor(defaultRunner, runner === defaultRunner ? draft.agentProfile : null)
+    : availability.accountFor(planner, runner === planner ? draft.agentProfile : null)
   const catalog = useRunnerModels(displayRunner, true, pickedAccount)
   const modelsLocked = config.data?.modelsLocked === true
   const defaultModels = config.data?.defaultModels

@@ -664,6 +664,17 @@ describe('the plan flow', () => {
     await waitFor(() => expect(postedBody()).toMatchObject({ agentProfile: 'klaudiusz' }))
   })
 
+  it('Plan first sends the selected account when the stored default runner is not registered', async () => {
+    serve({ config: { defaultRunner: 'ghost' }, agentProfiles: ACCOUNTS })
+    writeDraft({ ...readDraft(), agentProfile: 'klaudiusz' })
+    renderNewTask()
+    await planTask('Plan on the resolved runner')
+    expect(requests.find((request) => request.url === '/api/v1/plan')?.body).toMatchObject({
+      task: 'Plan on the resolved runner',
+      agentProfile: 'klaudiusz',
+    })
+  })
+
   it('▶ Start omits a locked native default from the planned run request', async () => {
     serve({
       config: { defaultModels: { claude: 'native-sonnet' }, modelsLocked: true },

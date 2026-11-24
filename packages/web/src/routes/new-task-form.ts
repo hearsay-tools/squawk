@@ -182,6 +182,18 @@ export function availableRunners(checks: readonly BackendCheck[], runners: Runne
   return available.length > 0 ? available : ['claude']
 }
 
+/** The runner a stored default names for execution. A registered id stays. An unknown stored id
+ *  maps to the first registered runner, as the server's `resolveRunnerId` maps it to the default
+ *  (`claude`, registered first). The stored id itself is not changed. */
+export function planRunner(
+  stored: Runner | undefined,
+  registered: readonly Runner[],
+): Runner | undefined {
+  if (stored === undefined) return undefined
+  if (registered.includes(stored)) return stored
+  return registered[0]
+}
+
 /** The effective runner: the user's pick when still installed, else the configured default
  *  when installed, else the first available (legacy preselection order). */
 export function resolveRunner(
