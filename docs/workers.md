@@ -159,6 +159,8 @@ A worker reviews its own committed change before it pushes: it starts one worker
    hsq worker destroy <worker-id>
    ```
 
+When a pull request is already open for the head under review, show the round on it: `node .github/scripts/pre-pr-review.cjs open --head <sha> --pr <n>` at the spawn, then `blocked` or `clean` with the result ([auto-merge § Show an open review round on the PR](../.ai/skills/auto-merge/SKILL.md#show-an-open-review-round-on-the-pr)). The pending status and the PR banner tell the owner not to queue the PR yet. A worker never adds a pull request to the merge queue or removes one from it; a push refused with `GH006` goes to its parent as a request.
+
 After a fix, commit and run the next round on the fix only. When the spawn is refused (**Allow Squawk workers** is off for the task, the limit is reached, the runner is not available) or after two failed rounds, run the same prompt in a native subagent and say in the pull request body that the round ran that way.
 
 ### What destroy stops

@@ -8,13 +8,15 @@
 //   - The PR's and its closing issues' cards move to In review once the PR is
 //     ready, every required check on the live head passes and no thread is open.
 //   - Any other state moves them to In progress: a new head, a pending or red
-//     check, an open thread, or a draft.
+//     check, an open thread, a draft, or an open pre-PR review round (the
+//     `pre-pr-review` commit status is pending or failure; pre-pr-review.cjs).
 // Human draft/ready flips arrive as their own events and resync the board.
 
 const { reader, pages, positive, validSha, VERIFY } = require('./queue-ci-proof.cjs');
 const { listReviewThreads } = require('./review-threads.cjs');
 const { signalTarget } = require('./review-signal.cjs');
 const { DEFAULT_FLOOR, countApiCalls, checkFloor } = require('./api-budget.cjs');
+const { REVIEW_CONTEXT } = require('./pre-pr-review.cjs');
 
 const PASSING = new Set(['success', 'skipped', 'neutral']);
 const BOARD = { progress: 'In progress', review: 'In review' };
@@ -64,6 +66,11 @@ function evaluateChecks({ required, checkRuns, statuses = [] }) {
     else if (state) result.failing.push(name);
     else result.missing.push(name);
   }
+  // The review round is not a required check: absent or success leaves readiness
+  // to the required checks, pending or failure holds it.
+  const review = required.includes(REVIEW_CONTEXT) ? undefined : states.get(REVIEW_CONTEXT);
+  if (review === 'pending') result.pending.push(REVIEW_CONTEXT);
+  else if (review === 'failure' || review === 'error') result.failing.push(REVIEW_CONTEXT);
   result.ready = !result.pending.length && !result.failing.length && !result.missing.length;
   return result;
 }
@@ -190,6 +197,14 @@ async function workflowTarget(read, payload, fullName) {
   if (!numbers.length) throw recovery('Missing native CI PR association');
   return numbers;
 }
+// A `pre-pr-review` status names a head; its open PRs are the targets. Any other
+// status context selects nothing and reads nothing.
+async function statusTarget(read, payload) {
+  if (payload.context !== REVIEW_CONTEXT || !validSha(payload.sha)) return [];
+  const pulls = await read('GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls', { commit_sha: payload.sha, per_page: 100 });
+  if (!Array.isArray(pulls)) throw recovery('Malformed commit PR association');
+  return associationNumbers(pulls.filter(pr => pr?.state === 'open' && pr.head?.sha === payload.sha));
+}
 // The PR numbers an event names. The event is only a wake hint: each job reads
 // the live PR itself.
 async function eventTarget(read, eventName, payload, fullName) {
@@ -203,6 +218,7 @@ async function eventTarget(read, eventName, payload, fullName) {
     const number = payload.pull_request?.number;
     return PULL_ACTIONS.has(payload.action) && positive(number) ? [number] : [];
   }
+  if (eventName === 'status') return statusTarget(read, payload);
   if (eventName !== 'workflow_run') return [];
   if (payload.workflow_run?.name !== 'Review signal') return workflowTarget(read, payload, fullName);
   const signal = await signalTarget(read, payload, fullName);
