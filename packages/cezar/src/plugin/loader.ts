@@ -22,11 +22,22 @@ export interface LoadedPlugin {
   readonly contributions: PluginContributions;
 }
 
+/** Why a plugin was skipped. Health sends only this; the message can carry any text. */
+export type PluginFailureReason = 'missing-entry' | 'no-setup' | 'import' | 'setup';
+
 export interface FailedPlugin {
   readonly name: string;
   readonly source: PluginSource;
   readonly path: string;
+  readonly reason: PluginFailureReason;
+  /** The full message, for the operator: stderr and `hsq plugins`. Never sent on health. */
   readonly error: string;
+}
+
+class PluginLoadFailure extends Error {
+  constructor(readonly reason: PluginFailureReason, message: string) {
+    super(message);
+  }
 }
 
 /** What this process loaded. `folders` lists every folder the loader read, in load order. */
@@ -78,8 +89,14 @@ function isFile(path: string): boolean {
   }
 }
 
+/** A thrown value as text. A value with no string conversion still gives a line. */
 function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof Error) return error.message;
+  try {
+    return String(error);
+  } catch {
+    return 'a thrown value with no string form';
+  }
 }
 
 /** Child folder names in load order; a missing folder is an empty list. */
@@ -97,10 +114,14 @@ function pluginFolders(dir: string, warn: (line: string) => void): string[] {
 /** Import one plugin folder's entry and run its setup. Throws the reason the plugin is skipped. */
 async function loadOne(path: string): Promise<PluginContributions> {
   const entry = PLUGIN_ENTRY_FILES.map(file => join(path, file)).find(isFile);
-  if (!entry) throw new Error(`missing ${PLUGIN_ENTRY_FILES.join(' or ')}`);
-  const entryModule = await import(pathToFileURL(entry).href) as { default?: unknown };
-  if (typeof entryModule.default !== 'function') throw new Error(`${entry.slice(path.length + 1)} has no default-exported setup function`);
-  return runPluginSetup(entryModule.default as SquawkPlugin);
+  if (!entry) throw new PluginLoadFailure('missing-entry', `missing ${PLUGIN_ENTRY_FILES.join(' or ')}`);
+  const entryModule = await import(pathToFileURL(entry).href).catch((error: unknown) => {
+    throw new PluginLoadFailure('import', errorText(error));
+  }) as { default?: unknown };
+  if (typeof entryModule.default !== 'function') throw new PluginLoadFailure('no-setup', `${entry.slice(path.length + 1)} has no default-exported setup function`);
+  return runPluginSetup(entryModule.default as SquawkPlugin).catch((error: unknown) => {
+    throw new PluginLoadFailure('setup', errorText(error));
+  });
 }
 
 /**
@@ -117,7 +138,8 @@ export async function loadPluginFolder({ dir, source, warn = line => { process.s
     try {
       loaded.push(Object.freeze({ name, source, path, contributions: await loadOne(path) }));
     } catch (error) {
-      const failure = Object.freeze({ name, source, path, error: errorText(error) });
+      const reason = error instanceof PluginLoadFailure ? error.reason : 'setup';
+      const failure = Object.freeze({ name, source, path, reason, error: errorText(error) });
       failed.push(failure);
       warn(`[hsq] plugin "${name}" skipped: ${failure.error}`);
     }
@@ -130,24 +152,27 @@ export async function loadPluginFolder({ dir, source, warn = line => { process.s
   return report;
 }
 
-// An absolute POSIX path, a file URL, a Windows drive path or a `./` or `../` relative path that
-// starts a word or a quoted value.
-const HOST_PATH = /(^|[\s'"`(=])(?:file:\/\/)?(?:\/|[A-Za-z]:[\\/]|\.\.?[\\/])[^\s'"`)]*/g;
-
-/** Replace every host path in a message, absolute or relative, with `<path>`. */
-export function withoutHostPaths(text: string): string {
-  return text.replace(HOST_PATH, '$1<path>');
-}
+/**
+ * The text health sends for each reason. A plugin's own message can name host paths or carry a
+ * secret, and health is CORS-open, so health never sends it; `hsq plugins` on the host does.
+ */
+export const PLUGIN_FAILURE_TEXT: Readonly<Record<PluginFailureReason, string>> = {
+  'missing-entry': 'missing index.mjs or index.js',
+  'no-setup': 'the entry has no default-exported setup function',
+  import: 'the entry failed to import; run `hsq plugins` on the host for the error',
+  setup: 'setup failed or a registration was refused; run `hsq plugins` on the host for the error',
+};
 
 /**
  * The health payload for a report. A local cockpit sends each plugin's folder; a hosted one
- * (`HSQ_REMOTE=1` or a non-loopback bind) sends no path and strips host paths from errors.
+ * (`HSQ_REMOTE=1` or a non-loopback bind) sends no path. A skipped plugin's error is always the
+ * fixed text for its reason.
  */
 export function pluginHealth(source: PluginLoadReport, { hostPaths }: { hostPaths: boolean }): PluginsHealth {
   const entry = (plugin: LoadedPlugin | FailedPlugin): PluginHealthEntry =>
     hostPaths ? { name: plugin.name, source: plugin.source, path: plugin.path } : { name: plugin.name, source: plugin.source };
   return {
     loaded: source.loaded.map(entry),
-    failed: source.failed.map(plugin => ({ ...entry(plugin), error: hostPaths ? plugin.error : withoutHostPaths(plugin.error) })),
+    failed: source.failed.map(plugin => ({ ...entry(plugin), error: PLUGIN_FAILURE_TEXT[plugin.reason] })),
   };
 }

@@ -5,7 +5,7 @@ const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCom
 const report: PluginLoadReport = {
   folders: ['/cfg/plugins'],
   loaded: [{ name: 'greeter', source: 'host', path: '/cfg/plugins/greeter', contributions: { ...none, cliCommands: ['greet'], runners: ['echo'], removalSlots: 1 } }],
-  failed: [{ name: 'broken', source: 'host', path: '/cfg/plugins/broken', error: 'missing index.mjs or index.js' }],
+  failed: [{ name: 'broken', source: 'host', path: '/cfg/plugins/broken', reason: 'missing-entry', error: 'missing index.mjs or index.js' }],
 };
 
 vi.mock('./loader.ts', () => ({ pluginLoadReport: () => report }));

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -10,8 +10,10 @@ afterEach(() => { vi.doUnmock('node:module'); vi.resetModules(); });
 
 it('names index.ts next to a source module and index.js next to a built one', async () => {
   const { runningPluginEntryUrl } = await import('./resolve-hook.ts');
-  expect(runningPluginEntryUrl('file:///repo/packages/cezar/src/plugin/resolve-hook.ts')).toBe('file:///repo/packages/cezar/src/plugin/index.ts');
-  expect(runningPluginEntryUrl('file:///usr/lib/node_modules/@hearsay-tools/squawk/dist/plugin/resolve-hook.js')).toBe('file:///usr/lib/node_modules/@hearsay-tools/squawk/dist/plugin/index.js');
+  // Built from a native path, so the URLs carry a drive letter on Windows.
+  const url = (...parts: string[]) => pathToFileURL(join(sep, ...parts)).href;
+  expect(runningPluginEntryUrl(url('repo', 'src', 'plugin', 'resolve-hook.ts'))).toBe(url('repo', 'src', 'plugin', 'index.ts'));
+  expect(runningPluginEntryUrl(url('lib', 'squawk', 'dist', 'plugin', 'resolve-hook.js'))).toBe(url('lib', 'squawk', 'dist', 'plugin', 'index.js'));
   expect(runningPluginEntryUrl()).toBe(new URL('./index.ts', import.meta.url).href);
 });
 

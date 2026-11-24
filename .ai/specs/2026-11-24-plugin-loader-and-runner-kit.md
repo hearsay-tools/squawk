@@ -276,8 +276,10 @@ Cross-runner and shared `runners/` files:
     adds a required `plugins: { loaded: PluginHealthEntry[], failed: FailedPluginHealthEntry[] }`
     field (always sent by the server, matching `contract-parity` rules; defaults to
     `{ loaded: [], failed: [] }` when no plugins loaded or failed). Each entry carries `name` and
-    `source` (`'bundled' | 'host'`); failed entries carry `error` (sanitized: host filesystem paths
-    omitted when `HSQ_REMOTE=1`).
+    `source` (`'bundled' | 'host'`), plus `path` on a local cockpit only; failed entries carry
+    `error`, the fixed text for the failure reason (missing entry, no setup function, import
+    failed, setup failed or refused), never the plugin's own message, which can name host paths
+    or carry a secret. `hsq plugins` on the host prints the full message.
   - Add `hsq plugins` (runtime CLI command) listing loaded and failed plugins so operators can
     inspect plugin status and plugin-registered CLI commands without slowing `hsq --help`.
 
@@ -349,7 +351,7 @@ Cross-runner and shared `runners/` files:
 | Plugin throws synchronously or rejects asynchronously after calling `api.register*()` | `bootRuntime()` | Staged entries rolled back; zero leaked registrations in any registry | Stderr warning naming folder + error; listed in `health.plugins.failed`; cockpit boots |
 | Plugin registers a key colliding with a built-in, legacy reserved key, or an earlier plugin | `bootRuntime()` | Entire plugin's staged batch rolled back (all-or-nothing); earlier registrations untouched | Stderr warning naming folder + conflicting key; listed in `health.plugins.failed`; cockpit boots |
 | Plugin imports `@hearsay-tools/squawk/plugin` from outside repo `node_modules` | `bootRuntime()` | `registerHooks` resolves specifier to running Squawk copy | Shares single process state (`session-process`, `tool-names`, `runtime-home`); zero duplicate module copies |
-| Hosted mode (`HSQ_REMOTE=1`) | `bootRuntime()` | Same host-folder loading; no cockpit install/remove routes | `GET /api/v1/health` omits host filesystem paths from plugin failure messages |
+| Hosted mode (`HSQ_REMOTE=1`) | `bootRuntime()` | Same host-folder loading; no cockpit install/remove routes | `GET /api/v1/health` sends no plugin `path`; a failure's `error` is a fixed reason text in every mode |
 
 ### Stored-config preservation cases
 

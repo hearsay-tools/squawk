@@ -16,6 +16,7 @@ import { apiRequest } from './loopback-request.testkit.ts';
 
 sealTestRunners(claudeRunner);
 
+const SETUP_TEXT = 'setup failed or a registration was refused; run `hsq plugins` on the host for the error';
 const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: 0, runLifecycleListeners: 0 };
 const report = vi.hoisted(() => ({ current: undefined as PluginLoadReport | undefined }));
 vi.mock('../plugin/loader.ts', async original => {
@@ -52,7 +53,7 @@ describe('GET /api/v1/health — plugins', () => {
   const loaded: PluginLoadReport = {
     folders: ['/home/me/.config/squawk/plugins'],
     loaded: [{ name: 'good', source: 'host', path: '/home/me/.config/squawk/plugins/good', contributions: none }],
-    failed: [{ name: 'bad', source: 'host', path: '/home/me/.config/squawk/plugins/bad', error: "setup broke in /home/me/.config/squawk/plugins/bad/index.mjs" }],
+    failed: [{ name: 'bad', source: 'host', path: '/home/me/.config/squawk/plugins/bad', reason: 'setup', error: 'setup broke in /home/me/.config/squawk/plugins/bad/index.mjs with token=sk-secret' }],
   };
 
   it('sends two empty lists when no plugin loaded', async () => {
@@ -63,7 +64,7 @@ describe('GET /api/v1/health — plugins', () => {
     report.current = loaded;
     expect((await health()).plugins).toEqual({
       loaded: [{ name: 'good', source: 'host', path: '/home/me/.config/squawk/plugins/good' }],
-      failed: [{ name: 'bad', source: 'host', path: '/home/me/.config/squawk/plugins/bad', error: 'setup broke in /home/me/.config/squawk/plugins/bad/index.mjs' }],
+      failed: [{ name: 'bad', source: 'host', path: '/home/me/.config/squawk/plugins/bad', error: SETUP_TEXT }],
     });
   });
 
@@ -74,9 +75,10 @@ describe('GET /api/v1/health — plugins', () => {
     expect(body.capabilities.localHandoff).toBe(false);
     expect(body.plugins).toEqual({
       loaded: [{ name: 'good', source: 'host' }],
-      failed: [{ name: 'bad', source: 'host', error: 'setup broke in <path>' }],
+      failed: [{ name: 'bad', source: 'host', error: SETUP_TEXT }],
     });
     expect(JSON.stringify(body.plugins)).not.toContain('/home/me');
+    expect(JSON.stringify(body.plugins)).not.toContain('sk-secret');
   });
 
   it('sends no host path from a snapshot cached before the cockpit became hosted', async () => {
@@ -99,16 +101,20 @@ describe('GET /api/v1/health — plugins', () => {
     const app = createApp({ home: testHome(), repoRoot, store, manager: {} as RunManager, version: '0.0.0-test', socketHub: hub, detectEnvironment });
     expect((await health(app)).plugins.loaded[0]!.path).toBe('/home/me/.config/squawk/plugins/good');
     const pushed: unknown[] = [];
-    publisher!.start(payload => pushed.push(payload));
-    vi.stubEnv('HSQ_REMOTE', '1');
-    // A settled detection patches the cached local snapshot and pushes it.
-    settleDetection([{ name: 'codex', available: true }]);
-    // bound: the push follows one microtask chain; the default wait budget is only a hang guard.
-    await vi.waitFor(() => expect(pushed).toHaveLength(1));
-    const body = healthResponseSchema.parse(pushed[0]);
-    expect(body.checks).toEqual([{ name: 'codex', available: true }]);
-    expect(body.capabilities.localHandoff).toBe(false);
-    expect(body.repoRoot).toBe(basename(repoRoot));
-    expect(JSON.stringify(body.plugins)).not.toContain('/home/me');
+    const stop = publisher!.start(payload => pushed.push(payload));
+    try {
+      vi.stubEnv('HSQ_REMOTE', '1');
+      // A settled detection patches the cached local snapshot and pushes it.
+      settleDetection([{ name: 'codex', available: true }]);
+      // bound: the push follows one microtask chain; the default wait budget is only a hang guard.
+      await vi.waitFor(() => expect(pushed).toHaveLength(1));
+      const body = healthResponseSchema.parse(pushed[0]);
+      expect(body.checks).toEqual([{ name: 'codex', available: true }]);
+      expect(body.capabilities.localHandoff).toBe(false);
+      expect(body.repoRoot).toBe(basename(repoRoot));
+      expect(JSON.stringify(body.plugins)).not.toContain('/home/me');
+    } finally {
+      stop();
+    }
   });
 });

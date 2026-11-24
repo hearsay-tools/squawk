@@ -88,19 +88,20 @@ describe('loadPluginFolder', () => {
   });
 
   it.each([
-    ['a folder without index.mjs or index.js', (name: string) => plugin(name, 'unused', 'readme.md'), 'missing index.mjs or index.js'],
-    ['an entry without a default export', (name: string) => plugin(name, 'export const setup = () => {};\n'), 'index.mjs has no default-exported setup function'],
-    ['an entry whose default export is not a function', (name: string) => plugin(name, 'export default { setup() {} };\n'), 'index.mjs has no default-exported setup function'],
-    ['a setup that throws after registering', (name: string) => commandPlugin(name, ['partial'], "throw new Error('setup broke');"), 'setup broke'],
-    ['a setup that rejects after registering', (name: string) => commandPlugin(name, ['partial'], "await Promise.resolve(); throw new Error('async setup broke');"), 'async setup broke'],
-    ['an entry that does not import', (name: string) => plugin(name, 'export default (;\n'), ''],
-  ])('skips %s with a warning, commits nothing and loads the next plugin', async (_case, write, reason) => {
+    ['a folder without index.mjs or index.js', (name: string) => plugin(name, 'unused', 'readme.md'), 'missing index.mjs or index.js', 'missing-entry'],
+    ['an entry without a default export', (name: string) => plugin(name, 'export const setup = () => {};\n'), 'index.mjs has no default-exported setup function', 'no-setup'],
+    ['an entry whose default export is not a function', (name: string) => plugin(name, 'export default { setup() {} };\n'), 'index.mjs has no default-exported setup function', 'no-setup'],
+    ['a setup that throws after registering', (name: string) => commandPlugin(name, ['partial'], "throw new Error('setup broke');"), 'setup broke', 'setup'],
+    ['a setup that rejects after registering', (name: string) => commandPlugin(name, ['partial'], "await Promise.resolve(); throw new Error('async setup broke');"), 'async setup broke', 'setup'],
+    ['a setup that throws a value with no string form', (name: string) => commandPlugin(name, ['partial'], 'throw Object.create(null);'), 'a thrown value with no string form', 'setup'],
+    ['an entry that does not import', (name: string) => plugin(name, 'export default (;\n'), '', 'import'],
+  ])('skips %s with a warning, commits nothing and loads the next plugin', async (_case, write, reason, expectedReason) => {
     write('broken');
     commandPlugin('next', ['next-command']);
     const { report, warnings, cli } = await load();
     expect(report.loaded.map(entry => entry.name)).toEqual(['next']);
     expect(report.failed).toHaveLength(1);
-    expect(report.failed[0]).toMatchObject({ name: 'broken', source: 'host', path: join(dir, 'broken') });
+    expect(report.failed[0]).toMatchObject({ name: 'broken', source: 'host', path: join(dir, 'broken'), reason: expectedReason });
     expect(report.failed[0]!.error).toContain(reason);
     expect(warnings).toEqual([`[hsq] plugin "broken" skipped: ${report.failed[0]!.error}`]);
     expect(cli.hasCliCommand('partial')).toBe(false);
@@ -113,6 +114,7 @@ describe('loadPluginFolder', () => {
     const { report, warnings, cli } = await load();
     expect(report.loaded.map(entry => entry.name)).toEqual(['a-first']);
     expect(report.failed.map(entry => entry.name)).toEqual(['b-second']);
+    expect(report.failed[0]!.reason).toBe('setup');
     expect(report.failed[0]!.error).toContain("'shared'");
     expect(warnings[0]).toMatch(/^\[hsq\] plugin "b-second" skipped: .*'shared'/);
     expect(cli.hasCliCommand('shared')).toBe(true);
@@ -142,41 +144,39 @@ describe('loadPluginFolder', () => {
 });
 
 describe('pluginHealth', () => {
+  const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: 0, runLifecycleListeners: 0 };
+  const failure = (name: string, reason: 'missing-entry' | 'no-setup' | 'import' | 'setup', error: string) =>
+    ({ name, source: 'host' as const, path: `/srv/My Plugins/${name}`, reason, error });
   const report = {
-    folders: ['/home/me/.config/squawk/plugins'],
-    loaded: [{ name: 'good', source: 'host' as const, path: '/home/me/.config/squawk/plugins/good',
-      contributions: { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: 0, runLifecycleListeners: 0 } }],
-    failed: [{ name: 'bad', source: 'host' as const, path: '/home/me/.config/squawk/plugins/bad',
-      error: "Cannot find module '/home/me/.config/squawk/plugins/bad/dep.mjs' imported from /home/me/.config/squawk/plugins/bad/index.mjs" }],
+    folders: ['/srv/My Plugins'],
+    loaded: [{ name: 'good', source: 'host' as const, path: '/srv/My Plugins/good', contributions: none }],
+    failed: [
+      failure('no-entry', 'missing-entry', 'missing index.mjs or index.js'),
+      failure('no-setup', 'no-setup', 'index.mjs has no default-exported setup function'),
+      failure('bad-import', 'import', "Cannot find module '/srv/My Plugins/bad-import/dep.mjs' imported from \\\\fileserver\\users\\alice\\index.mjs"),
+      failure('leaky', 'setup', 'request failed: token=sk-secret-123'),
+    ],
+  };
+  const texts = {
+    'no-entry': 'missing index.mjs or index.js',
+    'no-setup': 'the entry has no default-exported setup function',
+    'bad-import': 'the entry failed to import; run `hsq plugins` on the host for the error',
+    leaky: 'setup failed or a registration was refused; run `hsq plugins` on the host for the error',
   };
 
-  it('sends folders and full errors to a local cockpit', async () => {
+  it('sends folders and the fixed text for each reason to a local cockpit, never the plugin message', async () => {
     const { pluginHealth } = await import('./loader.ts');
-    expect(pluginHealth(report, { hostPaths: true })).toEqual({
-      loaded: [{ name: 'good', source: 'host', path: '/home/me/.config/squawk/plugins/good' }],
-      failed: [{ name: 'bad', source: 'host', path: '/home/me/.config/squawk/plugins/bad', error: report.failed[0]!.error }],
-    });
+    const health = pluginHealth(report, { hostPaths: true });
+    expect(health.loaded).toEqual([{ name: 'good', source: 'host', path: '/srv/My Plugins/good' }]);
+    expect(health.failed).toEqual(report.failed.map(({ name, path }) => ({ name, source: 'host', path, error: texts[name as keyof typeof texts] })));
+    expect(JSON.stringify(health)).not.toContain('sk-secret');
   });
 
-  it('sends no host path in hosted mode', async () => {
+  it('sends no path and no plugin message in hosted mode', async () => {
     const { pluginHealth } = await import('./loader.ts');
-    expect(pluginHealth(report, { hostPaths: false })).toEqual({
-      loaded: [{ name: 'good', source: 'host' }],
-      failed: [{ name: 'bad', source: 'host', error: "Cannot find module '<path>' imported from <path>" }],
-    });
-  });
-
-  it.each([
-    ['missing index.mjs or index.js', 'missing index.mjs or index.js'],
-    ["CLI commands: conflicting registration for 'a/b'.", "CLI commands: conflicting registration for 'a/b'."],
-    ['failed at file:///srv/x/index.mjs:3', 'failed at <path>'],
-    ['open C:\\Users\\me\\plugins\\x', 'open <path>'],
-    ['(/opt/plugins/x)', '(<path>)'],
-    ["Cannot find module './secret/auth.mjs' imported from /cfg/plugins/x/index.mjs", "Cannot find module '<path>' imported from <path>"],
-    ["Cannot find module '../shared/dep.mjs' imported from C:\\cfg\\plugins\\x\\index.mjs", "Cannot find module '<path>' imported from <path>"],
-    ['version 1.2 of x.y failed', 'version 1.2 of x.y failed'],
-  ])('strips host paths: %s', async (input, output) => {
-    const { withoutHostPaths } = await import('./loader.ts');
-    expect(withoutHostPaths(input)).toBe(output);
+    const health = pluginHealth(report, { hostPaths: false });
+    expect(health.loaded).toEqual([{ name: 'good', source: 'host' }]);
+    expect(health.failed).toEqual(report.failed.map(({ name }) => ({ name, source: 'host', error: texts[name as keyof typeof texts] })));
+    expect(JSON.stringify(health)).not.toMatch(/My Plugins|fileserver|sk-secret/);
   });
 });

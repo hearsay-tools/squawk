@@ -88,7 +88,10 @@ export const pluginHealthEntrySchema = z.object({
 });
 export type PluginHealthEntry = z.infer<typeof pluginHealthEntrySchema>;
 
-/** One plugin the server skipped. In hosted mode `error` carries `<path>` for every host path. */
+/**
+ * One plugin the server skipped. `error` is a fixed text for the reason, never the plugin's own
+ * message: that can name host paths or carry a secret. `hsq plugins` on the host prints it.
+ */
 export const failedPluginHealthEntrySchema = pluginHealthEntrySchema.extend({ error: z.string() });
 export type FailedPluginHealthEntry = z.infer<typeof failedPluginHealthEntrySchema>;
 
