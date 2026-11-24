@@ -128,8 +128,11 @@ export class RunRetentionTopic implements RunRetention {
             items: retained.artifacts.items.map(item => ({ state: 'deleted' as const, reason: 'missing' as const, id: item.id, path: item.path })),
           } : retained.artifacts,
         }, this.state.workerResults.readWorkerResultDiff(parent.id, id));
-        this.state.commitIndex(new Map<string, RunRecord | null>([[parent.id, { ...parent, delegation: { ...parent.delegation,
-          receipts: parent.delegation.receipts.map(entry => entry.workerId === id ? { ...entry, deletion: { ...deletion, phase: 'complete' as const } } : entry),
+        // Re-read after the result commits so a detached cold parent cannot restore stale `delegation.results`.
+        const latestParent = this.state.peek(parent.id);
+        if (latestParent?.delegation?.role !== 'root') return false;
+        this.state.commitIndex(new Map<string, RunRecord | null>([[latestParent.id, { ...latestParent, delegation: { ...latestParent.delegation,
+          receipts: latestParent.delegation.receipts.map(entry => entry.workerId === id ? { ...entry, deletion: { ...deletion, phase: 'complete' as const } } : entry),
         } }], [id, null]]));
       } else if (run.delegation?.role === 'root') {
         this.state.commitDelegation([{ id, delegation: { ...run.delegation, historyDeletion: 'pending' } }]);
