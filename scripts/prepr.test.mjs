@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { complexityRun, daemonAlive, fallbackLines, focusedTests, gitIo, judgeSqueal, lintFallbackLine, loweredNotes, lintUnfinished, patchLimitLines, pendingLine, prepr, SQUEAL_WAIT_MS, squealChecks, squealLines, testBudgetLines } from './prepr.mjs';
+import { complexityRun, daemonAlive, FALLBACK_TEST_MS, fallbackLines, focusedTests, gitIo, judgeSqueal, lintFallbackLine, loweredNotes, lintUnfinished, patchLimitLines, pendingLine, prepr, killTree, run, SQUEAL_WAIT_MS, squealChecks, squealLines, testBudgetLines } from './prepr.mjs';
 
 const { GITHUB_PATCH_LIMITS, numstatRows } = createRequire(import.meta.url)('../.github/scripts/missing-patches.cjs');
 
@@ -115,8 +115,46 @@ function fakeIo({ responses = {}, files = 'scripts/x.mjs\0', numstat = '1\t0\tsc
   };
 }
 
-test('squealChecks reports no daemon when squeal is missing or not alive', async () => {
+// hearsay-tools/squawk#4190: only an absent daemon runs the fallback; a busy one is a result prepr cannot read.
+test('squealChecks reports no daemon only when squeal is missing or no daemon runs', async () => {
+  const none = out => fakeIo({ responses: { squeal: { code: 3, out: JSON.stringify(out), err: '' } } });
   assert.deepEqual(await squealChecks(['a.ts'], 1000, fakeIo({ responses: { squeal: { code: 127, out: '', err: '' } } })), { daemon: false });
+  assert.deepEqual(await squealChecks(['a.ts'], 1000, none({ available: true, daemon: { state: 'down' }, selection: { result: 'none', reason: 'no-daemon' } })), { daemon: false });
+  for (const reason of ['no-store', 'not-registered']) {
+    assert.deepEqual(await squealChecks(['a.ts'], 1000, none({ available: false, reason })), { daemon: false }, reason);
+  }
+});
+
+test('a daemon that does not answer is unreadable with its cause and the load, and runs no fallback', async () => {
+  const io = fakeIo({ responses: { squeal: { code: 3, out: JSON.stringify({ available: false, reason: 'timeout', message: 'the daemon did not answer' }), err: '' } } });
+  const r = await squealChecks(['a.ts'], 1000, io);
+  assert.deepEqual([r.daemon, r.state], [true, 'unreadable']);
+  const [line] = squealLines(r, 1000);
+  assert.equal(line.ok, false);
+  assert.match(line.text, /squeal status: timeout: the daemon did not answer[^]*load 31\.5 on 24 cores/);
+  const report = await prepr({ io: fakeIo({ responses: { squeal: { code: 3, out: JSON.stringify({ available: false, reason: 'timeout' }), err: '' } } }), waitMs: 1000 });
+  assert.equal(report.failed, true);
+  assert.doesNotMatch(report.report, /No Squeal daemon/);
+});
+
+// Squeal 0.1.623 answers a busy daemon with a late heartbeat as `down` / `no-daemon`, adding `heartbeatLate`.
+test('a daemon down only by a late heartbeat is busy: it gets the wait and never the fallback', async () => {
+  const late = JSON.stringify({ available: true, daemon: { state: 'down', since: 1, heartbeatLate: { ageMs: 24_000 } }, selection: { testFiles: [], result: 'none', reason: 'no-daemon' }, lint: doneLint });
+  const io = fakeIo({ responses: { 'squeal status --json': ok(late), 'squeal status --wait': ok(live([file('a.test.ts', 'current', 'pass')], doneLint)) } });
+  assert.equal((await squealChecks(['a.ts'], 1000, io)).state, 'pass');
+  const r = await squealChecks(['a.ts'], 1000, fakeIo({ responses: { squeal: { code: 3, out: late, err: '' } } }));
+  assert.deepEqual([r.daemon, r.state], [true, 'unreadable']);
+  assert.match(squealLines(r, 1000)[0].text, /the daemon's heartbeat is late \(24 s\), so it may be busy or stopped[^]*load 31\.5 on 24 cores/);
+});
+
+test('a daemon that is starting or lapsed gets the wait, and stays unreadable if it never comes alive', async () => {
+  const lapsed = JSON.stringify({ available: true, daemon: { state: 'lapsed' }, selection: { testFiles: [] }, lint: doneLint });
+  const io = fakeIo({ responses: { 'squeal status --json': ok(lapsed), 'squeal status --wait': ok(live([file('a.test.ts', 'current', 'pass')], doneLint)) } });
+  assert.equal((await squealChecks(['a.ts'], 1000, io)).state, 'pass');
+  const stuck = fakeIo({ responses: { squeal: ok(lapsed) } });
+  const r = await squealChecks(['a.ts'], 1000, stuck);
+  assert.deepEqual([r.daemon, r.state], [true, 'unreadable']);
+  assert.match(squealLines(r, 1000)[0].text, /the daemon is lapsed[^]*load 31\.5 on 24 cores/);
 });
 
 test('an unreadable squeal status is an unknown result that fails, not an absent daemon', async () => {
@@ -125,7 +163,6 @@ test('an unreadable squeal status is an unknown result that fails, not an absent
   const [line] = squealLines(r, 1000);
   assert.equal(line.ok, false);
   assert.match(line.text, /exited 143 without a readable result[^]*killed/);
-  assert.deepEqual(await squealChecks(['a.ts'], 1000, fakeIo({ responses: { squeal: ok(JSON.stringify({ available: false })) } })), { daemon: false });
 });
 
 test('squealChecks returns a passing verdict from one wait', async () => {
@@ -198,6 +235,52 @@ test('the pending line counts unknown load as unknown', () => {
   assert.match(pendingLine([cpuQueued('a.test.ts')]), /1 queued waiting for CPU at load unknown on unknown CPUs/);
 });
 
+test('the no-daemon focused tests stop at a 10-minute bound and fail as incomplete', async () => {
+  assert.equal(FALLBACK_TEST_MS, 600_000);
+  const io = fakeIo({ responses: { node: args => (args.includes('--plan') ? ok('{"mode":"changed"}') : { code: 137, out: '', err: '', timedOut: true }) } });
+  let bound;
+  const r0 = io.run;
+  io.run = async (cmd, args, o) => { if (!args.includes('--plan') && args[0] === 'scripts/test-changed.mjs') bound = o?.boundMs; return r0(cmd, args, o); };
+  const lines = await fallbackLines('b', ['src/a.ts'], io);
+  assert.equal(bound, FALLBACK_TEST_MS);
+  assert.equal(lines[1].ok, false);
+  assert.match(lines[1].text, /^- FAIL: focused tests \(`npm run test:changed`\): incomplete, CI runs these: stopped at the 10-minute bound \(load 31\.5 on 24 cores\)/);
+});
+
+test('a bounded run kills its whole process group at the bound', { skip: process.platform === 'win32' }, async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prepr-bound-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const pidFile = path.join(dir, 'grandchild.pid');
+  // bound: the bound starts at spawn, so a slow shell can be killed before it writes the PID file: then the
+  // fixture never got ready, and the run repeats with a longer bound (1 s, 4 s, 16 s).
+  let r;
+  let elapsed;
+  for (const boundMs of [1000, 4000, 16_000]) {
+    fs.rmSync(pidFile, { force: true });
+    const start = Date.now();
+    r = await run('sh', ['-c', `sleep 30 & echo $! > ${pidFile}; wait`], { boundMs });
+    elapsed = Date.now() - start;
+    if (fs.existsSync(pidFile)) break;
+  }
+  assert.equal(r.timedOut, true);
+  // A kill of the shell alone leaves `sleep 30` holding the pipes, and `run` would return only at its natural exit.
+  assert.ok(elapsed < 25_000, `run returned after ${elapsed} ms, so the bound did not stop the grandchild`);
+  const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+  const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  // bound: init reaps the killed grandchild shortly after the kill; 5 s only guards a hang.
+  for (const end = Date.now() + 5000; alive() && Date.now() < end;) await new Promise(r => setTimeout(r, 20));
+  assert.equal(alive(), false, 'the grandchild died with the group');
+});
+
+test('killTree kills the whole tree: the process group on POSIX, taskkill /T on Windows', () => {
+  const calls = [];
+  killTree(4242, 'win32', (cmd, args) => calls.push([cmd, ...args]), () => assert.fail('no POSIX kill on Windows'));
+  assert.deepEqual(calls, [['taskkill', '/pid', '4242', '/T', '/F']]);
+  const kills = [];
+  killTree(4242, 'linux', () => assert.fail('no taskkill on POSIX'), (pid, signal) => kills.push([pid, signal]));
+  assert.deepEqual(kills, [[-4242, 'SIGKILL']]);
+});
+
 test('focusedTests skips a full or unreadable selection and runs a narrow one', async () => {
   const plan = out => fakeIo({ responses: { node: ok(out) } });
   assert.match((await focusedTests('b', plan('{"mode":"full"}'))).skipped, /full suite/);
@@ -208,6 +291,24 @@ test('focusedTests skips a full or unreadable selection and runs a narrow one', 
   assert.deepEqual(io.calls.at(-1), ['node', 'scripts/test-changed.mjs', '--base=b']);
 });
 
+// hearsay-tools/squawk#4190: a known failure names its files and the load; a load timeout outside the change gets the retry command.
+const failureRow = (testPath, summary) => ({ check: { kind: 'test', testPath }, summary });
+test('a failing selection names every failing file, the load and the retry for load timeouts outside the change', async () => {
+  const files = [file('src/a.test.ts', 'current', 'pass'), file('src/far.test.ts', 'stale', 'fail'), file('src/near.test.ts', 'current', 'fail'), file('src/own.test.ts', 'current', 'fail'), file('src/other.test.ts', 'stale', 'fail')];
+  const failures = JSON.stringify({ available: true, failures: [
+    failureRow('src/far.test.ts', 'Test timed out in 5000ms.'), failureRow('src/far.test.ts', 'expected 1 to be 2'),
+    failureRow('src/near.test.ts', 'Test timed out in 5000ms.'), failureRow('src/own.test.ts', 'waitFor timed out after 10001ms'),
+    failureRow('src/other.test.ts', 'expected 1 to be 2'),
+  ] });
+  const io = fakeIo({ files: 'src/a.ts\0src/own.test.ts\0', direct: () => ['src/near.test.ts'], responses: { 'squeal failures --json': ok(failures), squeal: { code: 1, out: live(files, doneLint), err: '' } } });
+  const r = await prepr({ io, waitMs: 1000 });
+  assert.equal(r.failed, true);
+  assert.match(r.report, /- FAIL: Squeal: failing test files: src\/far\.test\.ts, src\/near\.test\.ts, src\/own\.test\.ts, src\/other\.test\.ts; load 31\.5 on 24 cores/);
+  assert.match(r.report, /`squeal retry src\/far\.test\.ts --reason load`/);
+  for (const f of ['near', 'own', 'other']) assert.doesNotMatch(r.report, new RegExp(`retry src/${f}\\.test`), f);
+  assert.ok(io.calls.some(c => c.join(' ') === 'squeal failures --json src/far.test.ts src/other.test.ts --limit 50'));
+});
+
 test('squealLines words each state', () => {
   const lint = { failing: 0, unfinished: 0 };
   assert.match(squealLines({ state: 'fail', failed: ['a.test.ts'], lint }, 1000)[0].text, /failing test files: a.test.ts/);
@@ -216,7 +317,8 @@ test('squealLines words each state', () => {
   const missing = Array.from({ length: 12 }, (_, i) => `f${i}.test.ts`);
   const inc = squealLines({ state: 'incomplete', missing, lint: { unfinished: 3 } }, 120_000)[0];
   assert.equal(inc.ok, false);
-  assert.match(inc.text, /^- FAIL: Squeal had no result within 120 s for these edited test files or direct readers of a changed file: f0\.test\.ts.*f9\.test\.ts, and 2 more\. .*squeal run run-loop/);
+  assert.match(inc.text, /^- FAIL: Squeal had no result within 120 s for these edited test files or direct readers of a changed file: f0\.test\.ts.*f9\.test\.ts, and 2 more\. /);
+  assert.doesNotMatch(inc.text, /run-loop/);
   assert.match(squealLines({ state: 'pass', count: 4, failed: [], missing: [], lint }, 1000)[0].text, /4 affected test file\(s\) current and passing; lint clean$/);
   assert.doesNotMatch(squealLines({ state: 'pass', count: 4, failed: [], missing: [], lint: { unfinished: 2 } }, 1000)[0].text, /lint clean/);
 });

@@ -32,9 +32,8 @@
 // Exit check (the epic's criterion 7): in the clone, run `pnpm install --frozen-lockfile`, then
 // `npm run typecheck -w @wjarka/cezarion`, then the printed test files. The complete runner
 // passes them all; the four-places runner fails only by naming a missing piece. Run the files
-// through Squeal in the clone: `squeal start`, `squeal run tests <non-parity files> --wait 60000`
-// and `squeal run run-loop <*parity* files> --wait 60000`, then `squeal status --wait 60000
-// <files>` until it gives a verdict. That is how hearsay-tools/squawk#3900's D2a ran it. Without
+// through Squeal in the clone: `squeal start`, `squeal run tests <files> --wait 60000`, then
+// `squeal status --wait 60000 <files>` until it gives a verdict. That is how hearsay-tools/squawk#3900's D2a ran it. Without
 // Squeal, CI's command runs the same files: `npm test -- <files>`.
 // The lint rule `mock-scenario-boundary` flags the copied fixture mock: a built-in runner's mock
 // script must import `mock-scenario.mjs` (AGENT_PROTOCOL.md §10 item 8). The exit check leaves lint out.

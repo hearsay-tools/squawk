@@ -97,8 +97,8 @@ holds that area's rules.
 
 In a fresh task worktree, run `pnpm install --frozen-lockfile` unless `worktreeSetup` already did.
 
-- Squeal runs the unit tests after each edit and the parity and worker tests at turn end.
-  Read its verdicts. For a verdict now: `squeal run tests|run-loop <paths> --wait 60000`.
+- Squeal runs the unit tests after each edit.
+  Read its verdicts. For a verdict now: `squeal run tests <paths> --wait 60000`.
   A brief or parent that says "run the focused tests" means this. One test:
   `squeal status --wait 60000 <file> --check '<name>'` (exit 1: failed; else read the
   listed checks). A failure's diff, stack and console output:
@@ -114,7 +114,7 @@ In a fresh task worktree, run `pnpm install --frozen-lockfile` unless `worktreeS
   uses fake timers or states at the call site why it needs real time.
 - `npm run typecheck`: no build or `dist` writes; after a build: `npm run typecheck:package`.
 - Packaged CLI E2E (`npm run test:package`) runs only in CI. Parity and browser specs run in
-  CI; to debug one: `squeal run run-loop|browser <paths> --wait 60000` and the
+  CI; to debug one: `squeal run tests|browser <paths> --wait 60000` and the
   [e2e guide](packages/web/e2e/README.md).
 
 ### Before opening a PR
