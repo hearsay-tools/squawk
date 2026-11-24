@@ -92,6 +92,19 @@ describe('workspace config', () => {
     expect(config.agentDefaults.models).toEqual({ claude: 'opus', ghost: 'gpt-x' });
   });
 
+  it('keeps an unregistered agentDefaults runner and model key on disk across an unrelated write', async () => {
+    write({ agentDefaults: { runner: 'ghost', models: { claude: 'opus', ghost: 'gpt-x' } } });
+    await mergeWriteWorkspaceConfig((config) => {
+      config.projectsDir = '/tmp/other-projects';
+    }, testHome());
+    const raw = JSON.parse(readFileSync(workspaceConfigPath(undefined, testHome()), 'utf8')) as {
+      agentDefaults: unknown;
+      projectsDir: string;
+    };
+    expect(raw.agentDefaults).toEqual({ runner: 'ghost', models: { claude: 'opus', ghost: 'gpt-x' } });
+    expect(raw.projectsDir).toBe('/tmp/other-projects');
+  });
+
   it('salvages disabled provider preferences and preserves unknown top-level keys on merge', async () => {
     expect(defaultWorkspaceConfig().disabledProviders).toEqual([]);
 

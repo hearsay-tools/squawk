@@ -13,15 +13,16 @@ const skills = [
 ]
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
-function mount(source = 'live', client = createQueryClient()) {
+function mount(source = 'live', client = createQueryClient(), { defaultRunner = 'codex', runnersFail = false } = {}) {
   const requests: string[] = []
   vi.stubGlobal('fetch', vi.fn(async (input) => {
     const url = String(input)
     requests.push(url)
+    if (runnersFail && url === RUNNERS_PATH) return new Response(JSON.stringify({ error: 'down' }), { status: 404 })
     const body = url.includes('/runner-skills')
       ? { runner: new URL(url, 'http://localhost').searchParams.get('runner'), skills, problems: [{ message: 'Invalid manifest', path: '/broken' }], source }
       : url === RUNNERS_PATH ? RUNNERS_RESPONSE
-      : url.endsWith('/config') ? { defaultRunner: 'codex' }
+      : url.endsWith('/config') ? { defaultRunner }
       : url.endsWith('/agent-profiles') ? { profiles: [{ provider: 'codex', id: 'work', label: 'Work' }], selections: {} } : {}
     return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
   }))
@@ -43,6 +44,22 @@ it('shows duplicate ids with runner metadata and problems, without edit controls
   expect(screen.queryByRole('switch')).toBeNull()
   expect(document.querySelector('[data-slot="skill-body"]')).toBeNull()
   expect(requests.every((url) => !url.includes('/skills/') && !url.endsWith('/skills'))).toBe(true)
+})
+
+it('reads the runner the server runs instead when the stored default is not registered', async () => {
+  const requests = mount('live', createQueryClient(), { defaultRunner: 'ghost' })
+  await waitFor(() => expect(requests).toContain('/api/v1/runner-skills?runner=claude'))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Claude Code' }).getAttribute('aria-pressed')).toBe('true'))
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Re-read' }) as HTMLButtonElement).disabled).toBe(false))
+  fireEvent.click(screen.getByRole('button', { name: 'Re-read' }))
+  await waitFor(() => expect(requests).toContain('/api/v1/runner-skills?runner=claude&refresh=1'))
+  expect(requests.some((url) => url.includes('runner=ghost'))).toBe(false)
+})
+
+it('still reads the stored default runner when the runners list fails', async () => {
+  const requests = mount('live', createQueryClient(), { runnersFail: true })
+  await waitFor(() => expect(requests).toContain('/api/v1/runner-skills?runner=codex'))
+  await waitFor(() => expect(document.querySelectorAll('[data-slot="skill-row"]')).toHaveLength(2))
 })
 
 it('reads the selected runner and account and re-reads with refresh=1', async () => {

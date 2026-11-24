@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { projectPaths } from './project-paths.ts';
+import { writeMergedConfig } from './server/config-merge.ts';
 import { loadConfig, readRawConfig, resolveWorktreeRetention, updateConfigFile } from './config.ts';
 import { claudeRunner } from './runners/claude/definition.ts';
 import { codexRunner } from './runners/codex/definition.ts';
@@ -128,6 +129,19 @@ describe('loadConfig systemPrompt', () => {
       write({ defaultModels: { claude: 'opus', ghost: null } });
       expect((await loadConfig(repoRoot, testHome())).defaultModels).toEqual({ claude: 'opus' });
     });
+  });
+
+  it('keeps an unregistered defaultRunner and model key on disk across an unrelated settings write', async () => {
+    write({ defaultRunner: 'ghost', defaultModels: { claude: 'opus', ghost: 'gpt-x' } });
+    const dataDir = join(repoRoot, '.ai/cezar');
+    expect(await writeMergedConfig(dataDir, { maxParallel: 4 })).toBeUndefined();
+    expect(await writeMergedConfig(dataDir, { defaultModels: { codex: 'o3' } })).toBeUndefined();
+    const raw = JSON.parse(readFileSync(join(dataDir, 'config.json'), 'utf8')) as Record<string, unknown>;
+    expect(raw).toMatchObject({ defaultRunner: 'ghost', maxParallel: 4 });
+    expect(raw.defaultModels).toEqual({ claude: 'opus', ghost: 'gpt-x', codex: 'o3' });
+    const config = await loadConfig(repoRoot, testHome());
+    expect(config.defaultRunner).toBe('ghost');
+    expect(config.defaultModels).toEqual({ claude: 'opus', ghost: 'gpt-x', codex: 'o3' });
   });
 
   describe('modelsLocked', () => {

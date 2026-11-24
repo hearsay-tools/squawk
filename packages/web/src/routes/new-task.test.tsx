@@ -673,6 +673,8 @@ describe('the plan flow', () => {
       task: 'Plan on the resolved runner',
       agentProfile: 'klaudiusz',
     })
+    // No registered-only read names the unknown id: /models and /runner-skills wait for the list.
+    expect(requests.some((request) => request.url.includes('runner=ghost') || request.url.includes('/models/ghost'))).toBe(false)
   })
 
   it('▶ Start omits a locked native default from the planned run request', async () => {

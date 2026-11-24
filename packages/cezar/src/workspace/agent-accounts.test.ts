@@ -215,6 +215,25 @@ describe('agent accounts store', () => {
       expect(store.accounts[0]?.provider).toBe('ghost');
     });
 
+    it('keeps an unregistered account row and selection key on disk across an unrelated write', async () => {
+      write({
+        accounts: [account('ghost-work', { provider: 'ghost', configDir: '~/.ghost-work' }), account('work')],
+        selections: { '/repo': { ghost: 'ghost-work', claude: 'work' } },
+      });
+      await mergeWriteAgentAccounts((store) => {
+        store.selections['/other'] = { claude: 'work' };
+      }, testHome());
+      const raw = JSON.parse(readFileSync(agentAccountsPath(testHome()), 'utf8')) as {
+        accounts: { id: string; provider: string; configDir: string }[];
+        selections: Record<string, Record<string, string>>;
+      };
+      expect(raw.accounts.map(({ id, provider, configDir }) => ({ id, provider, configDir }))).toEqual([
+        { id: 'ghost-work', provider: 'ghost', configDir: '~/.ghost-work' },
+        { id: 'work', provider: 'claude', configDir: account('work').configDir },
+      ]);
+      expect(raw.selections).toEqual({ '/repo': { ghost: 'ghost-work', claude: 'work' }, '/other': { claude: 'work' } });
+    });
+
     it('keeps a pi account and drops an omp one — omp carries no named accounts', async () => {
       write({ accounts: [
         account('pi-work', { provider: 'pi', configDir: '~/.pi-work/agent' }),

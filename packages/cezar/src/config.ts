@@ -84,9 +84,10 @@ const configSchema = z.object({
    * runner decides). A capability (`model`), never a vendor config format.
    * A record keyed by runner id, checked against the registry when config loads. A key no
    * registered runner took is kept, as `registeredRunnerRecord` keeps one, and ignored until that
-   * runner loads. A bad value for a registered runner refuses the whole key, as the object's
-   * `.catch(undefined)` did. `.catch(undefined)` keeps it additive-safe like `systemPrompt`: a
-   * bad value degrades to unset without discarding the rest of the config.
+   * runner loads. Each value is checked on its own: a bad value, for a registered or an unknown
+   * runner, drops only its key, and the other keys stay. A map with no valid key left reads as
+   * unset. `.catch(undefined)` keeps it additive-safe like `systemPrompt`: a map that is not an
+   * object degrades to unset without discarding the rest of the config.
    */
   defaultModels: z
     .record(z.string(), z.unknown())

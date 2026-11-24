@@ -22,8 +22,10 @@ export function SkillsRoute() {
   const [account, setAccount] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [params] = useSearchParams()
-  const runner = pickedRunner ?? config.data?.defaultRunner ?? 'claude'
   const query = useRunnerSkills(pickedRunner ?? config.data?.defaultRunner, account)
+  // The runner the skills came from: a stored default whose plugin did not load resolves to the
+  // runner the server runs instead.
+  const runner = query.runner
   const refresh = useRereadSkills(runner, query.account)
   const skills = query.data ?? []
   return (

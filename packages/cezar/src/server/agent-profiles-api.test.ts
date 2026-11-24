@@ -337,6 +337,17 @@ describe('agent profiles API', () => {
       expect(readFileSync(agentAccountsPath(testHome()), 'utf8')).toBe(before);
     });
 
+    it('404s an account whose provider is not registered, and leaves its row on disk', async () => {
+      Home.seedBytes(testHome(), agentAccountsPath(testHome()), Buffer.from(JSON.stringify({
+        accounts: [{ id: 'ghost-work', provider: 'ghost', configDir: '~/.ghost-work', label: 'Ghost' }],
+      })));
+      const before = readFileSync(agentAccountsPath(testHome()), 'utf8');
+      const { status, body } = await send('PATCH', '/api/v1/workspace/agent-profiles/ghost-work', { label: 'Renamed' });
+      expect(status).toBe(404);
+      expect(body.error).toContain('unknown account');
+      expect(readFileSync(agentAccountsPath(testHome()), 'utf8')).toBe(before);
+    });
+
     it('400s an empty body', async () => {
       const profile = await create('Work', claudeDir('claude-klaudiusz'));
       expect((await send('PATCH', `/api/v1/workspace/agent-profiles/${profile.id}`, {})).status).toBe(400);

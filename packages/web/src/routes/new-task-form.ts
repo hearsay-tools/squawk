@@ -12,8 +12,6 @@ import type {
 } from '@open-mercato/cezar-api-client'
 import { runnerEntry, runnerIds, runnerModelListName } from '@/api/runners'
 
-export { planRunner } from '@/api/runners'
-
 /**
  * The new-task form's picker rules and its POST body, as pure functions — the exact semantics
  * of the legacy form (web/app.js: `renderChrome`,

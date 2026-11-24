@@ -6,6 +6,7 @@ import { createQueryClient } from '@/api/query-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { DEFAULT_PROMPT_TEMPLATES } from '@/lib/prompt-templates'
 import { PromptTemplatesSection } from './prompt-templates-section'
+import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 /**
  * Settings → Prompt templates (#413): the round-trip against a stubbed `/api/v1/ui-state` — an
@@ -48,6 +49,7 @@ function serve(uiState: Record<string, unknown> = {}, skills: unknown[] = SKILLS
       if (url === '/api/v1/ui-state' && method === 'GET') return json(uiState)
       if (url === '/api/v1/ui-state' && method === 'PUT')
         return json({ ...uiState, ...(body as Record<string, unknown>) })
+      if (url === RUNNERS_PATH) return json(RUNNERS_RESPONSE)
       if (url.startsWith('/api/v1/runner-skills?runner=claude')) return json({ runner: 'claude', skills, problems: [], source: 'live' })
       return new Promise<never>(() => {})
     }),
