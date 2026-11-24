@@ -9,7 +9,7 @@ import { RunWriteRefusedError } from '../runs/run-claims-topic.ts';
 import type { ConversationLedger, RunAccess, RunEventLog, RunQueries, RunLookup, RunWrites } from '../runs/ports.ts';
 import { conversationOf, DEFAULT_GRANTS, familyRecordIdOf, familyRecordOf, finishing, historyDeleting, holdsOperation, messageRelation, receiptsOf, type Lookup } from '../runs/task-rights.ts';
 import { DelegationPolicyError } from './policy.ts';
-import { activeLedgerHasRoom, openRequestsFull } from './questions.ts';
+import { activeLedgerHasRoom, INBOX_LIMIT, openRequestsFull } from './questions.ts';
 
 /**
  * A request settles by its two participants, read from the message itself: its sender closed or
@@ -178,9 +178,9 @@ export function assertConversationCapacity(state: ConversationState, pair: { rel
   enqueue: boolean, replying: boolean, answering: boolean): void {
   const needed = 1 - (replying ? 1 : 0) + (enqueue && kind === 'request' ? 1 : 0);
   const peer = pair.relationship === 'peer';
-  const inboxFull = enqueue && !answering && !(peer && replying) && inboxSlotsUsed(pair.recipient) >= 32;
+  const inboxFull = enqueue && !answering && !(peer && replying) && inboxSlotsUsed(pair.recipient) >= INBOX_LIMIT;
   if (!activeLedgerHasRoom(state, needed) || (enqueue && kind === 'request' && openRequestsFull(state)) || inboxFull ||
-    (enqueue && peer && kind === 'request' && inboxSlotsUsed(pair.sender) >= 32)) throw new DelegationPolicyError('capacity_limit', 'Conversation capacity limit reached');
+    (enqueue && peer && kind === 'request' && inboxSlotsUsed(pair.sender) >= INBOX_LIMIT)) throw new DelegationPolicyError('capacity_limit', 'Conversation capacity limit reached');
 }
 
 /** A run's inbox slots in use: its undelivered inputs, and one for each open peer request it sent,

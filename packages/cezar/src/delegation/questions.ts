@@ -1,6 +1,6 @@
 import { commandText } from '../home/command.ts';
 import { createHash } from 'node:crypto';
-import type { AgentInput, AskRequest, ConversationMessage, ConversationState } from '@open-mercato/cezar-contract';
+import type { AgentInput, AskRequest, ConversationCapacity, ConversationMessage, ConversationState } from '@open-mercato/cezar-contract';
 
 /** A worker's question travels to its owning parent as a conversation request (#505). Its ID
  * derives from the worker and the ask's event seq, so routing it again after a restart finds
@@ -69,6 +69,25 @@ export function activeLedgerHasRoom(state: ConversationState, needed: number): b
 /** The ledger holds its maximum of open requests: a new request cannot join it. */
 export function openRequestsFull(state: ConversationState): boolean {
   return reservedReplies(state) >= OPEN_REQUEST_LIMIT;
+}
+
+/** Inbox slots per run: its undelivered inputs and its open peer requests (`inboxSlotsUsed`). */
+export const INBOX_LIMIT = 32;
+
+/** The ledger's load against each bound, as the cap rule above counts it, and a warning naming every
+ *  bound at 75 % or more (hearsay-tools/squawk#4192). `recipientInbox` comes with a send only. */
+export function conversationCapacity(state: ConversationState, recipientInbox?: number): ConversationCapacity {
+  const openRequests = reservedReplies(state);
+  const activeMessages = state.messages.length + openRequests;
+  const bounds: Array<[number | undefined, number, string]> = [
+    [activeMessages, ACTIVE_MESSAGE_LIMIT, 'active messages'],
+    [openRequests, OPEN_REQUEST_LIMIT, 'open requests'],
+    [recipientInbox, INBOX_LIMIT, 'recipient inbox slots'],
+  ];
+  const near = bounds.flatMap(([used, limit, name]) => used !== undefined && used * 4 >= limit * 3 ? [`${used} of ${limit} ${name}`] : []);
+  return { activeMessages, activeMessageLimit: ACTIVE_MESSAGE_LIMIT, openRequests, openRequestLimit: OPEN_REQUEST_LIMIT,
+    ...(recipientInbox === undefined ? {} : { recipientInbox }), inboxLimit: INBOX_LIMIT,
+    ...(near.length ? { warning: `Conversation capacity at 75 % or more: ${near.join(', ')}. At a limit, new messages are refused with capacity_limit.` } : {}) };
 }
 
 /** A UUID-shaped (version 4 layout) identifier derived from a stable key. */

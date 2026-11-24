@@ -13,7 +13,7 @@ import type { AskRequest } from '../../core/ask.ts';
 import { askRequestOf } from '@open-mercato/cezar-contract/pending-ask';
 import { enqueueAgentInput, hasLiveInboxClaim } from '../../delegation/input.ts';
 import { commitNewMessage, inboxSlotsUsed, projectConversationEvents } from '../../delegation/conversations.ts';
-import { activeLedgerHasRoom, answersQuestion, questionMessage, uuidFrom } from '../../delegation/questions.ts';
+import { activeLedgerHasRoom, answersQuestion, INBOX_LIMIT, questionMessage, uuidFrom } from '../../delegation/questions.ts';
 import { usageLimitHoldOf } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { holdNoticeId, holdNoticeMessage, messagedParentSince, parkedByTurn, parkNoticeId, parkNoticeIdInUse, parkNoticeMessage, parkNoticeWait, parkingTurn } from '../../delegation/park-notice.ts';
 import { workerQuestionRouting } from '../question-routing.ts';
@@ -281,7 +281,7 @@ export class WorkerQuestions {
   /** The ledger and the parent's inbox keep room as `service.send` counts it, beside open
    *  questions' replies. When either is full, the worker's log says so once per wait. */
   parkNoticeAtCapacity(workerId: string, waitId: string, parent: RunRecord, state: ConversationState): boolean {
-    if (activeLedgerHasRoom(state, 1) && inboxSlotsUsed(parent) < 32) return false;
+    if (activeLedgerHasRoom(state, 1) && inboxSlotsUsed(parent) < INBOX_LIMIT) return false;
     const projectionId = `park-notice-skipped:${waitId}`;
     if (!this.context.store.eventLog.hasProjection(workerId, projectionId)) {
       this.context.store.eventLog.appendEvent(workerId, { type: 'note', tone: 'warning', projectionId, message: 'Parked, but the parent conversation is at capacity: no park notice was sent.' });

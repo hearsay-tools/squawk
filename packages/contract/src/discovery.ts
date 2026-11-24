@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { conversationCapacitySchema } from './conversations.ts';
 import { runStatusSchema } from './run-status.ts';
 import { runnerSchema } from './runner.ts';
 import { modelDiscoveryRunnerSchema } from './model-choices.ts';
@@ -28,6 +29,8 @@ export const discoveredTasksSchema = z.object({
     attentionLabel: z.string(), accepts: z.boolean(), reason: z.string().optional(),
   })).max(32),
   nextOffset: z.number().int().nonnegative().optional(),
+  /** The caller's own family ledger load; no recipient inbox. */
+  capacity: conversationCapacitySchema.optional(),
 });
 export type DiscoveredTasks = z.infer<typeof discoveredTasksSchema>;
 export const discoveryResponseSchema = z.union([discoveredRunnersSchema, runnerModelCatalogResponseSchema, discoveredTasksSchema]);

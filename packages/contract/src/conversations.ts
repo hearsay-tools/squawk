@@ -79,8 +79,19 @@ export type ConversationSendRequest = z.infer<typeof conversationSendRequestSche
 /** Effect of this call, independent of the stored delivery receipt and request outcome.
  * Missing on older servers; callers must treat absence as unknown. */
 export const conversationSendEffectSchema = z.enum(['applied', 'unchanged', 'refused', 'unknown']);
+/** A family ledger's active load against its bounds (hearsay-tools/squawk#4192). `activeMessages`
+ *  counts the room open requests reserve for their replies, as the cap does. `recipientInbox` is
+ *  the recipient's used inbox slots, on a send only. `warning` names each bound at 75 % or more. */
+export const conversationCapacitySchema = z.object({
+  activeMessages: z.number().int().nonnegative(), activeMessageLimit: z.number().int().positive(),
+  openRequests: z.number().int().nonnegative(), openRequestLimit: z.number().int().positive(),
+  recipientInbox: z.number().int().nonnegative().optional(), inboxLimit: z.number().int().positive(),
+  warning: z.string().min(1).optional(),
+}).strict();
+export type ConversationCapacity = z.infer<typeof conversationCapacitySchema>;
 /** `consumed`: the recipient's harness reported the model read it (#505). */
-export const conversationSendResultSchema = z.object({ message: conversationMessageSchema, delivery: z.enum(['queued', 'delivered', 'consumed', 'not-delivered']), outcome: requestOutcomeSchema.optional(), effect: conversationSendEffectSchema.optional() }).strict();
+export const conversationSendResultSchema = z.object({ message: conversationMessageSchema, delivery: z.enum(['queued', 'delivered', 'consumed', 'not-delivered']), outcome: requestOutcomeSchema.optional(), effect: conversationSendEffectSchema.optional(),
+  capacity: conversationCapacitySchema.optional() }).strict();
 export type ConversationSendResult = z.infer<typeof conversationSendResultSchema>;
 export const conversationInspectRequestSchema = z.object({ recipientRunId: z.uuid(), before: conversationCursorSchema.optional() }).strict();
 export type ConversationInspectRequest = z.infer<typeof conversationInspectRequestSchema>;

@@ -7,9 +7,10 @@ import type { Home } from '../home/home.ts';
 import { assertReplyDirection, sendRequestContext, sendAdmission, sendMessage, sendInput, type ConversationPair } from './conversation-send.ts';
 import { discoverTasks } from './task-discovery.ts';
 import { discoveredRunners, missingModelChoices, type HostDiscovery } from '../discovery/choices.ts';
-import { assertConversationCapacity, commitAccepted, inboxEntryIn,
+import { assertConversationCapacity, commitAccepted, inboxEntryIn, inboxSlotsUsed,
   orphanedPeerMessage, resolvePair, takesPart, projectConversationEvents, reconcileConversationState, withReplyOutcome, type InboxEntry } from './conversations.ts';
 export { rootDelegation } from './conversations.ts';
+import { conversationCapacity } from './questions.ts';
 import { collectWorkerEvidence, revalidateRetainedWorkerResult, workerRevision } from './results.ts';
 import { workerContextTask } from './context.ts';
 import { workerExecutionsOf } from './worker-executions.ts';
@@ -395,7 +396,9 @@ export class DelegationService {
     const recipient = project.store.getRun(message.recipientRunId);
     const input = recipient?.agentInputs?.find(input => input.id === message.id);
     const outcome = project.store.conversations.findOutcome(ledgerId, message.requestId ?? message.id);
-    return { message, delivery: input?.consumedAt ? 'consumed' : input?.deliveredAt ? 'delivered' : input ? 'queued' : 'not-delivered', ...(outcome ? { outcome } : {}) };
+    const ledger = conversationOf(project.store.getRun(ledgerId)) ?? { messages: [], outcomes: [] };
+    return { message, delivery: input?.consumedAt ? 'consumed' : input?.deliveredAt ? 'delivered' : input ? 'queued' : 'not-delivered', ...(outcome ? { outcome } : {}),
+      capacity: conversationCapacity(ledger, recipient ? inboxSlotsUsed(recipient) : undefined) };
   }
   /** The message `id` the ledger already holds, after reconciling it: an exact retry finds it. */
   private sentBefore(project: DelegationProject, root: RunRecord, id: string): ConversationMessage | undefined {
