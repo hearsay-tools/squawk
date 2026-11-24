@@ -21,9 +21,12 @@ and a caller reaches the store through named ports. Paths are under `packages/ce
 - Delivery is synchronous, in subscription order, at the moment the store writes. A listener that
   throws is logged with the event type and run id, and the next listener runs. A returned promise
   is not awaited; a rejection is logged. A publish from inside a listener is delivered at once.
-- `before` is a shallow frozen copy taken at the entry of the write path. On a commit, `run` is a
+- `before` is a shallow frozen copy taken at the entry of the write path. On a conflict
+  (`source: 'conflict'`), `before` is the held record when held, else the last committed row this
+  store read cold (`coldBase`, decoded as a cold row), or the winning row itself when a plain delete
+  or fallback drop left neither (hearsay-tools/squawk#4092). On a commit, `run` is a
   shallow frozen copy of what the write wrote. On a debounced write, a republish or a conflict,
-  `run` is the held record, which a later write changes in place. `run.status-changed` reads `to`
+  `run` is the held record (or the winning decoded row when unheld), which a later write changes in place. `run.status-changed` reads `to`
   before any listener runs. A listener that needs the current record re-reads it with
   `store.getRun(run.id) ?? run`. A listener that compares `before` with `run` compares them
   synchronously, before it yields; after an `await` it copies the fields it needs first or re-reads.
@@ -86,7 +89,7 @@ Each change below stays within owner decision 1; the planner or the plan accepte
 | Slice | Before | After |
 | --- | --- | --- |
 | A2, webhooks ([ADR 0050](0050-deliver-opted-in-webhooks-as-a-best-effort-lifecycle-subscriber.md)) | A `seen` map. (a) A run deleted here and restored by another writer's row sent `task.subscribed`. (b) A run first seen through another writer sent `task.subscribed`. (c) An exit applied at load caused a late `task.status` | The webhook subscribes to `run.created` and `run.updated`. (a) Sends nothing. (b) Sends `task.status` only if the derived state changed. (c) Sends nothing |
-| B1, reports index | A `live` set | Settlement reads `run.status-changed`. An exit applied at load or adoption, and a conflict on a fallback run with no staged copy, lose the immediate settlement scan; the reports-dirty mark still rescans |
+| B1, reports index | A `live` set | Settlement reads `run.status-changed`. An exit applied at load or adoption, and a conflict on a fallback run dropped from memory, lose the immediate settlement scan; the reports-dirty mark still rescans |
 | B3, family reconciler | A throw stopped the other listeners and reached the writer | Logged; the other listeners and the write go on |
 | C1, plain-run delete | Autosave cleared before the commit; a cleanup failure was silent | Autosave cleared in the cleanup after the commit; a cleanup failure is logged |
 | D3, scratch | The sweep and the reap asked no gate | Both assert the seal at entry and ask the `scratch` gate; unsealed, both throw before any side effect |
@@ -104,13 +107,15 @@ The ports did not narrow test selection. Squeal selected 895 test files for `run
 `8ff2e7b13` and 889 at `0d92ba360`, because most tests still build the store through testkits. A
 port lowers the count only when the fixtures build only the ports a test uses (roadmap rule 5).
 
-Two seams stay open:
+One seam stays open:
 
 - `delegation/removal-slot.ts` casts `ReclaimContext.store` to `RunStore` for
   `collectWorkerEvidence` (hearsay-tools/squawk#4091).
-- For a conflicting row the store does not hold, `handleConflicts` takes `before` from the staged
-  record, a write that never committed. Fixing it changes a published payload, so it waits for a
-  decision (hearsay-tools/squawk#4092).
+
+Closed seam: hearsay-tools/squawk#4092 decided to change unheld conflict `before` from the losing
+staged record to the last committed row this store read cold (`coldBase`), decoded as a cold row
+(while held rows keep their held record and plain-deleted or fallback-dropped rows use the winning
+row).
 
 [ADR 0053](0053-keep-runmanager-a-facade-over-run-modules.md) was the model for moving topics one
 at a time. Unlike `RunManager`, the store keeps no forwarding method: a forwarding facade over

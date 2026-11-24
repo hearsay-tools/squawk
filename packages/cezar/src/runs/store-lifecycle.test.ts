@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 
-import { RUNS_DB_FILE, RunDatabase } from './run-database.ts';
+import { RUNS_DB_FILE, RunConflictError, RunDatabase } from './run-database.ts';
 import { encodeRunRow } from './run-row.ts';
 import { blockRunWrites, crashStore, readPersistedRuns, seedRuns, setRunStatus } from './run-store.testkit.ts';
 import type { RunLifecycleEvents, RunLifecycleEventType } from './lifecycle.ts';
@@ -34,7 +34,7 @@ afterEach(() => {
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), 'cez-store-lifecycle-'));
   const stores: RunStore[] = [];
-  const open = () => { const store = RunStore.open(dir, { keepLive: true }); stores.push(store); return store; };
+  const open = (opts?: Parameters<typeof RunStore.open>[1]) => { const store = RunStore.open(dir, { keepLive: true, ...opts }); stores.push(store); return store; };
   const store = open();
   cleanups.push(() => { for (const each of stores) each.close(); rmSync(dir, { recursive: true, force: true }); });
   const created = (steps: CreateRunInput['steps'] = []) => store.createRun({ title: 'lifecycle', task: 'lifecycle', workflow: 'quick-task', steps }).id;
@@ -315,6 +315,121 @@ describe('before holds the record as it was at the entry of each write path', ()
     expect(before).not.toBe(run);
     expect(before).toEqual({ ...run });
     expect(Object.isFrozen(before)).toBe(true);
+  });
+
+  it('a conflict on an unheld cold row uses decoded coldBase as before, not the losing staged record', () => {
+    const { dir, open, persisted } = setup();
+    const foreign = 'https://github.com/other/repo/pull/5';
+    let race = true;
+    const store = open({
+      persist: (changes, transaction) => {
+        if (race) {
+          race = false;
+          const raw = RunDatabase.open(join(dir, RUNS_DB_FILE));
+          try { raw.transaction({ upserts: [encodeRunRow({ ...persisted('cold')!, title: 'elsewhere', status: RUN_STATUS.running })], deletes: [] }); } finally { raw.close(); }
+        }
+        return transaction(changes);
+      },
+    });
+    store.repoScope.setRepoHandle({ owner: 'me', name: 'repo' });
+    const seed: RunRecord = {
+      id: 'cold', title: 'committed', workflow: 'w', task: 'fix #3', status: RUN_STATUS.review,
+      issueNumber: 9, markerRefs: { issue: 9 }, referencedPullRequestUrl: foreign, referencedPrCandidates: [foreign],
+      createdAt: '2026-11-21T00:00:00.000Z', tokensUsed: 0, archived: false, steps: [],
+    };
+    const raw = RunDatabase.open(join(dir, RUNS_DB_FILE));
+    try { raw.transaction({ upserts: [encodeRunRow(seed)], deletes: [] }); } finally { raw.close(); }
+    store.claims.claimFamilies(['cold']);
+    expect(store.queries.heldIds()).not.toContain('cold');
+    const staged: RunRecord = { ...seed, title: 'staged', status: RUN_STATUS.done };
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const deliveries = record(store);
+    expect(() => store.persistence.commitIndex(new Map([['cold', staged]]))).toThrow(RunConflictError);
+    expect(types(deliveries)).toEqual(['run.updated', 'run.status-changed']);
+    const updated = only(deliveries, 'run.updated');
+    expect(updated).toMatchObject({ source: 'conflict', run: { title: 'elsewhere', status: RUN_STATUS.running } });
+    expect(updated.before).toMatchObject({ title: 'committed', status: RUN_STATUS.review, issueNumber: 3 });
+    expect(updated.before.referencedPullRequestUrl).toBeUndefined();
+    expect(Object.isFrozen(updated.before)).toBe(true);
+    expect(only(deliveries, 'run.status-changed')).toMatchObject({ exit: 'conflict', from: RUN_STATUS.review, to: RUN_STATUS.running });
+  });
+
+  it('a conflict on an unheld cold row still publishes status-changed when the other writer matched the staged status', () => {
+    const { dir, open, persisted } = setup();
+    seedRuns(dir, [{
+      id: 'cold-same', title: 'committed', workflow: 'w', task: 't', status: RUN_STATUS.review,
+      createdAt: '2026-11-21T00:00:00.000Z', tokensUsed: 0, archived: false, steps: [],
+    }]);
+    let race = true;
+    const store = open({
+      persist: (changes, transaction) => {
+        if (race) {
+          race = false;
+          const raw = RunDatabase.open(join(dir, RUNS_DB_FILE));
+          try { raw.transaction({ upserts: [encodeRunRow({ ...persisted('cold-same')!, title: 'elsewhere', status: RUN_STATUS.done })], deletes: [] }); } finally { raw.close(); }
+        }
+        return transaction(changes);
+      },
+    });
+    store.claims.claimFamilies(['cold-same']);
+    expect(store.queries.heldIds()).not.toContain('cold-same');
+    const staged: RunRecord = { ...persisted('cold-same')!, title: 'staged', status: RUN_STATUS.done };
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const deliveries = record(store);
+    expect(() => store.persistence.commitIndex(new Map([['cold-same', staged]]))).toThrow(RunConflictError);
+    expect(types(deliveries)).toEqual(['run.updated', 'run.status-changed']);
+    expect(only(deliveries, 'run.updated').before).toMatchObject({ title: 'committed', status: RUN_STATUS.review });
+    expect(only(deliveries, 'run.status-changed')).toMatchObject({ exit: 'conflict', from: RUN_STATUS.review, to: RUN_STATUS.done });
+  });
+
+  it('a conflict on a plain-deleted cold row flushed in the same turn keeps before equal to current', () => {
+    const { dir, open, persisted } = setup();
+    seedRuns(dir, [{
+      id: 'cold-del', title: 'committed', workflow: 'w', task: 't', status: RUN_STATUS.review,
+      createdAt: '2026-11-21T00:00:00.000Z', tokensUsed: 0, archived: false, steps: [],
+    }]);
+    const store = open();
+    expect(store.queries.heldIds()).not.toContain('cold-del');
+    expect(store.retention.deleteRun('cold-del')).toBe(true);
+    const raw = RunDatabase.open(join(dir, RUNS_DB_FILE));
+    try { raw.transaction({ upserts: [encodeRunRow({ ...persisted('cold-del')!, title: 'elsewhere', status: RUN_STATUS.running })], deletes: [] }); } finally { raw.close(); }
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const deliveries = record(store);
+    store.persistence.flush();
+    expect(types(deliveries)).toEqual(['run.updated']);
+    const { run, before, source } = only(deliveries, 'run.updated');
+    expect(source).toBe('conflict');
+    expect(run).toMatchObject({ title: 'elsewhere', status: RUN_STATUS.running });
+    expect(before).toEqual({ ...run });
+    expect(Object.isFrozen(before)).toBe(true);
+  });
+
+  it('a conflict on a held row during a committed write keeps the held record as before', () => {
+    const { dir, open, persisted } = setup();
+    let race = false;
+    const store = open({
+      persist: (changes, transaction) => {
+        if (race) {
+          race = false;
+          const raw = RunDatabase.open(join(dir, RUNS_DB_FILE));
+          try { raw.transaction({ upserts: [encodeRunRow({ ...persisted(id)!, title: 'elsewhere', status: RUN_STATUS.running })], deletes: [] }); } finally { raw.close(); }
+        }
+        return transaction(changes);
+      },
+    });
+    const id = store.createRun({ title: 'held', task: 'held', workflow: 'quick-task', steps: [] }).id;
+    store.persistence.flush();
+    expect(store.queries.heldIds()).toContain(id);
+    race = true;
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const deliveries = record(store);
+    expect(() => store.updateRun(id, { title: 'staged', autoMergePr: true })).toThrow(RunConflictError);
+    expect(types(deliveries)).toEqual(['run.updated', 'run.status-changed']);
+    const updated = only(deliveries, 'run.updated');
+    expect(updated).toMatchObject({ source: 'conflict', run: { title: 'elsewhere', status: RUN_STATUS.running } });
+    expect(updated.before).toMatchObject({ title: 'held', status: RUN_STATUS.queued });
+    expect(Object.isFrozen(updated.before)).toBe(true);
+    expect(only(deliveries, 'run.status-changed')).toMatchObject({ exit: 'conflict', from: RUN_STATUS.queued, to: RUN_STATUS.running });
   });
 });
 

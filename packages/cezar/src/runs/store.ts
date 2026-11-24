@@ -245,6 +245,7 @@ export class RunStore {
     });
     this.persistence = new RunPersistenceTopic(dataDir, persist, {
       db: () => this.db, owner: () => this.owner, openFailure: () => this.openFailure, repoHandle: () => this.repoScope.repoHandle,
+      keepLive: () => this.keepLive,
       held: this.held, committing: this.committing, dirty: this.dirty, deleted: this.deleted, historyOwed: this.historyOwed,
       quarantined: this.quarantined, claimed: this.claimed, pendingClaims: this.pendingClaims, base: this.base, coldBase: this.rows.coldBase,
       coldReads: this.rows.coldReads, liveItems: this.liveItems, published: this.published, archive: this.archive, claims: this.claims,

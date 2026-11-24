@@ -26,9 +26,12 @@ export type RunStatusCause = RunExitId | 'conflict' | 'patch';
 export interface RunLifecycleEvents {
   'run.created': { run: RunRecord };
   /** `run` is this write's record, a value: a shallow frozen copy on a commit; on a debounced write,
-   *  a republish or a conflict, the held record, which a later write changes in place. Never write
-   *  into it or keep it; re-read through the store for the current record. `before` is a shallow
-   *  frozen copy of the record taken at the entry of the write path. */
+   *  a republish or a conflict, the held record (or the winning decoded row when unheld), which a
+   *  later write changes in place. Never write into it or keep it; re-read through the store for the
+   *  current record. `before` is a shallow frozen copy of the record taken at the entry of the write
+   *  path; on a conflict (`source: 'conflict'`), it is the held record when held, else the last
+   *  committed row this store read cold (`coldBase`, decoded as a cold row), or `run` itself when a
+   *  plain delete or fallback drop left neither. */
   'run.updated': { run: RunRecord; before: Readonly<RunRecord>; source?: RunUpdateSource };
   /** Follows the `run.updated` of the same write, with the same `run`; `from` and `to` are this
    *  write's. */

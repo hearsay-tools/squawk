@@ -50,6 +50,8 @@ export interface PersistenceState {
   openFailure(): RunStoreOpenError | undefined;
   /** The repository this project is, once `setRepoHandle` armed it. */
   repoHandle(): RepoHandle | null | undefined;
+  /** `open()`'s `keepLive`, used when decoding a cold row (`coldBase`) on a conflict. */
+  keepLive(): boolean;
   readonly held: Map<string, RunRecord>;
   readonly committing: Set<string>;
   readonly dirty: Set<string>;
@@ -359,6 +361,7 @@ export class RunPersistenceTopic implements RunPersistence {
     }
     unexpected.forEach((conflict, index) => {
       const family = this.familyOf(conflict.id);
+      const wasDeleted = this.deleted.has(conflict.id);
       this.liveItems.forget(conflict.id);
       this.quarantined.add(conflict.id);
       this.coldReads.forget(conflict.id);
@@ -373,9 +376,10 @@ export class RunPersistenceTopic implements RunPersistence {
       }
       const decoded = conflict.current ? this.state.decodeRunRow(conflict.current.data) : undefined;
       const current = decoded?.run;
+      const wasHeld = this.held.has(conflict.id);
       if (this.claims.isFallbackRun(conflict.id)) this.held.delete(conflict.id);
       const held = this.held.get(conflict.id);
-      const before = snapshotRun(held ?? staged.get(conflict.id) ?? undefined);
+      const before = snapshotRun(held ?? (wasDeleted || wasHeld ? undefined : this.decodeColdBase(conflict.id)));
       if (current && conflict.current) {
         // The other writer's record as it stands, normalized only as a live owner's run would be.
         reconcileLoadedRun(current, { keepLive: true });
@@ -391,6 +395,16 @@ export class RunPersistenceTopic implements RunPersistence {
       console.error(`[hsq] run ${conflict.id} was changed by another writer (${conflict.reason}); this process will not write it again until Squawk restarts. Evidence: ${join(this.dataDir, RUNS_DB_FILE)}, table run_conflicts, seq ${seqs[index]}.`);
     });
     this.scheduleSave();
+  }
+
+  /** Decode the last committed row this store read cold for `id`, normalized like `decodeCold`. */
+  private decodeColdBase(id: string): RunRecord | undefined {
+    const read = this.coldBase.get(id);
+    const run = read ? this.state.decodeRunRow(read.data)?.run : undefined;
+    if (!run) return undefined;
+    reconcileLoadedRun(run, { keepLive: this.state.keepLive() });
+    rescopeRun(run, this.repoHandle);
+    return run;
   }
 
   /** Write what is pending, then (unless closing) let every run whose write settled leave memory. */
