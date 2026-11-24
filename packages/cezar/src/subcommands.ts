@@ -1,6 +1,7 @@
 import type { Home } from './home/home.ts';
 import { resolveHome } from './home/resolve.ts';
-import { cliCommand } from './core/cli-registry.ts';
+import { cliCommand, cliCommandsSealed, commandNeedsRuntime } from './core/cli-registry.ts';
+import { builtInCliCommand } from './built-in-cli-commands.ts';
 import { bootRuntime } from './boot.ts';
 export type { SubcommandRunner } from './core/cli-registry.ts';
 
@@ -17,9 +18,12 @@ export async function runSubcommand(argv: string[], env: NodeJS.ProcessEnv, home
   return run!(argv.slice(1), env);
 }
 
-/** Install process services before loading commands that read runner or removal registries. */
+/**
+ * Install process services before loading commands that read runner or removal registries. CLI
+ * dispatch boots first; a caller that enters a command wrapper directly reads the built-in table.
+ */
 export async function prepareCommandRuntime(command: string, argv: readonly string[] = []): Promise<void> {
-  const definition = cliCommand(command);
-  if (!definition || definition.runtimeMode === 'none' || (typeof definition.runtimeMode === 'function' && !definition.runtimeMode(argv))) return;
+  const definition = cliCommandsSealed() ? cliCommand(command) : builtInCliCommand(command);
+  if (!definition || !commandNeedsRuntime(definition, argv)) return;
   await bootRuntime();
 }

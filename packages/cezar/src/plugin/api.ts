@@ -158,13 +158,36 @@ function stagingApi(staged: StagedPlugin, open: () => boolean): SquawkPluginApi 
   };
 }
 
+/** The keys one plugin committed, per registry, in call order, and its list registration counts. */
+export interface PluginContributions {
+  runners: string[];
+  agentTools: string[];
+  waitKinds: string[];
+  stepKinds: string[];
+  cliCommands: string[];
+  removalSlots: number;
+  runLifecycleListeners: number;
+}
+
+function contributions(staged: StagedPlugin): PluginContributions {
+  return {
+    runners: staged.runners.map(value => value.id),
+    agentTools: staged.tools.map(value => value.name),
+    waitKinds: staged.waitKinds.map(value => value.kind),
+    stepKinds: staged.stepKinds.map(value => value.kind),
+    cliCommands: staged.cliCommands.map(value => value.name),
+    removalSlots: staged.removalSlots.length,
+    runLifecycleListeners: staged.lifecycle.length,
+  };
+}
+
 /**
  * Run one plugin's setup and commit what it registered, all or nothing. A setup that throws or
  * rejects, or a staged entry that a live registry would refuse (a taken or reserved key, a
  * duplicate within the plugin, an invalid shape, a sealed registry), commits no entry anywhere and
- * rethrows that error. The api refuses calls once setup has ended.
+ * rethrows that error. The api refuses calls once setup has ended. Returns what it committed.
  */
-export async function runPluginSetup(plugin: SquawkPlugin): Promise<void> {
+export async function runPluginSetup(plugin: SquawkPlugin): Promise<PluginContributions> {
   const staged: StagedPlugin = { runners: [], tools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: [], lifecycle: [] };
   let open = true;
   try {
@@ -174,4 +197,5 @@ export async function runPluginSetup(plugin: SquawkPlugin): Promise<void> {
   }
   checkStaged(staged);
   commitStaged(staged);
+  return contributions(staged);
 }

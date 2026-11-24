@@ -13,6 +13,8 @@ export interface Home {
   readonly data: string;
   readonly runtime: string;
   readonly layout: HomeLayout;
+  /** Host-folder plugins, `<config>/plugins/`. Each child folder is one plugin. */
+  readonly plugins: string;
   readonly workspaceConfig: string;
   readonly workspaceUiState: string;
   readonly agentAccounts: string;
@@ -62,7 +64,7 @@ export function kindHomePaths(roots: HomeRoots, layout: HomeLayout, platform: No
   // Preserve the enumerable legacy path contract (including P1's literal compatibility table).
   return Object.freeze(Object.defineProperties(paths, {
     config: { value: config }, state: { value: state }, data: { value: data },
-    runtime: { value: roots.runtime }, layout: { value: layout },
+    runtime: { value: roots.runtime }, layout: { value: layout }, plugins: { value: join(config, 'plugins') },
   })) as Home;
 }
 

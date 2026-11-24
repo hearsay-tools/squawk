@@ -16,7 +16,7 @@ describe('the contract reaches the cockpit as BOTH a schema and a type', () => {
     const health: HealthResponse = {
       version: '1', repoRoot: '/r', repo: null, checks: [], defaultRunner: 'claude',
       forge: null, capabilities: { localHandoff: true, settingsAdmin: true, remoteSettingsAdmin: false, tokenMetrics: true, tokenUsageMetrics: true, costMetrics: true, automations: false, preview: false },
-      projects: [], bootProject: 'default',
+      projects: [], bootProject: 'default', plugins: { loaded: [], failed: [] },
     }
     expect(healthResponseSchema.safeParse(health).success).toBe(true)
     expect(healthResponseSchema.safeParse({ version: 1 }).success).toBe(false)

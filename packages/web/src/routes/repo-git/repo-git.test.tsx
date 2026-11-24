@@ -36,6 +36,7 @@ const HEALTH: HealthResponse = {
   version: '0.0.0-test',
   projects: [],
   bootProject: 'default',
+  plugins: { loaded: [], failed: [] },
   repoRoot: '/repo',
   repo: { root: '/repo', branch: 'main', remote: 'git@github.com:acme/demo.git' },
   checks: [],
