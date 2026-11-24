@@ -25,9 +25,11 @@ export const cliManifestSchema = z.object({
 });
 export type CliManifest = z.infer<typeof cliManifestSchema>;
 
-/** Deterministic 64-hex release directory id derived from a validated digest. */
+/** Deterministic release directory id derived from a validated digest. Keeps bare 64-hex for sha512 (unchanged Antigravity layout) and prefixes other algorithms so distinct algorithms never collide. */
 export function cliReleaseId(digest: CliDigest): string {
-  return cliDigestSchema.parse(digest).value.slice(0, 64);
+  const parsed = cliDigestSchema.parse(digest);
+  const prefix = parsed.value.slice(0, 64);
+  return parsed.algorithm === 'sha512' ? prefix : `${parsed.algorithm}-${prefix}`;
 }
 
 export function managedCliTarget(platform = process.platform, arch = process.arch): string | null {

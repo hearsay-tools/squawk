@@ -10,7 +10,7 @@ import { privateDirectory, replacePrivate } from '../home/private-files.ts';
 import { withHomeLock } from '../home/write-lock.ts';
 import { cliReleaseId, managedCliTarget, type CliManifest } from './cli-manifest.ts';
 
-const releaseIdSchema = z.string().regex(/^[a-f0-9]{64}$/);
+const releaseIdSchema = z.string().regex(/^(?:[a-f0-9]{64}|(?:sha256|sha384)-[a-f0-9]{64})$/);
 const activeSchema = z.object({ releaseId: releaseIdSchema });
 const releaseSchema = z.object({
   releaseId: releaseIdSchema, version: z.string().regex(/^\d+\.\d+\.\d+$/),

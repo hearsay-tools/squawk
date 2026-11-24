@@ -166,7 +166,7 @@ it('installs, leases, and removes a second fixture runner with a different manif
 
   const executable = managedCliExecutable(home, 'fixture-managed', fixtureManagedSource)!;
   expect(executable).toBeTruthy();
-  expect(basename(dirname(executable))).toBe(sha256);
+  expect(basename(dirname(executable))).toBe(`sha256-${sha256}`);
   expect(readFileSync(executable, 'utf8')).toContain('2.3.4');
 
   // Lease survives removal until released.

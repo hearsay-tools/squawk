@@ -9,6 +9,9 @@ export function parseAntigravityManifest(raw: unknown): ManagedCliManifest {
   if (typeof record.version !== 'string' || typeof record.url !== 'string' || typeof record.sha512 !== 'string') {
     throw new Error('The Antigravity CLI manifest is missing version, url, or sha512.');
   }
+  if (!/^[a-fA-F0-9]{128}$/.test(record.sha512)) {
+    throw new Error('The Antigravity CLI manifest sha512 is invalid.');
+  }
   return {
     version: record.version,
     url: record.url,

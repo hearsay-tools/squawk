@@ -8,7 +8,7 @@ import { Home } from '../home/home.ts';
 import { ANTIGRAVITY_CLI, parseAntigravityManifest } from '../runners/antigravity/cli.ts';
 import { buildTestCliArchive, cleanupManagedCliHome } from './cli-archive.testkit.ts';
 import { ManagedCliInstallation, leaseManagedCli, managedCliExecutable } from './cli-installation.ts';
-import { fetchCliManifest, managedCliTarget, validateDownloadUrl } from './cli-manifest.ts';
+import { cliReleaseId, fetchCliManifest, managedCliTarget, validateDownloadUrl } from './cli-manifest.ts';
 import { cliRoot } from './cli-storage.ts';
 
 const source: ManagedCliSource = {
@@ -147,7 +147,7 @@ it('installs a runner with a custom manifest shape and sha256 digest and refuses
   installation.start('install'); await installation.settled();
   expect(installation.status()).toMatchObject({ phase: 'idle', installedVersion: '2.4.1', latestVersion: '2.4.1', updateAvailable: false, error: null });
   const executable = managedCliExecutable(home, 'vendor', customSource)!;
-  expect(basename(dirname(executable))).toBe(sha256);
+  expect(basename(dirname(executable))).toBe(`sha256-${sha256}`);
 
   // Tampered download with sha256 reports sha256 mismatch and refuses activation on a fresh home.
   tamper = true;
@@ -180,7 +180,18 @@ it('supports sha384 digests and derives a 64-hex release directory id', async ()
   const installation = new ManagedCliInstallation(home, 'vendor-384', customSource, fetcher);
   installation.start('install'); await installation.settled();
   expect(installation.status()).toMatchObject({ phase: 'idle', installedVersion: '3.0.0', error: null });
-  expect(basename(dirname(managedCliExecutable(home, 'vendor-384', customSource)!))).toBe(sha384.slice(0, 64));
+  expect(basename(dirname(managedCliExecutable(home, 'vendor-384', customSource)!))).toBe(`sha384-${sha384.slice(0, 64)}`);
+});
+
+it('keeps release ids disjoint across algorithms even when 64-hex prefixes match', () => {
+  const prefix = 'a'.repeat(64);
+  const sha512Id = cliReleaseId({ algorithm: 'sha512', value: `${prefix}${'b'.repeat(64)}` });
+  const sha256Id = cliReleaseId({ algorithm: 'sha256', value: prefix });
+  const sha384Id = cliReleaseId({ algorithm: 'sha384', value: `${prefix}${'c'.repeat(32)}` });
+  expect(sha512Id).toBe(prefix);
+  expect(sha256Id).toBe(`sha256-${prefix}`);
+  expect(sha384Id).toBe(`sha384-${prefix}`);
+  expect(new Set([sha512Id, sha256Id, sha384Id]).size).toBe(3);
 });
 
 it.each([
@@ -206,4 +217,5 @@ it('rejects oversized manifests and invalid Antigravity payloads before activati
   expect(() => parseAntigravityManifest(null)).toThrow('invalid');
   expect(() => parseAntigravityManifest([])).toThrow('invalid');
   expect(() => parseAntigravityManifest({ version: '1.0.0', url: 'https://example.com/a' })).toThrow('missing');
+  expect(() => parseAntigravityManifest({ version: '1.0.0', url: 'https://example.com/a', sha512: 'not-a-sha512' })).toThrow('sha512 is invalid');
 });
