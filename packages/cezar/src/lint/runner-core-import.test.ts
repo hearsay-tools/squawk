@@ -75,6 +75,7 @@ describe('runner-core-import (hearsay-tools/squawk#4201)', () => {
       "import { OmpRunner } from '../omp/omp-runner.ts';",
       "import { normalizedLines } from '../login-output.ts';",
       "import { parseEffort } from '@open-mercato/cezar-contract/effort';",
+      "const load = () => import('@open-mercato/cezar-contract/effort');",
     ],
   });
 
@@ -121,5 +122,6 @@ describe('runner-core-import (hearsay-tools/squawk#4201)', () => {
   it('keeps the checked-in baseline current: every entry matches its file', () => {
     expect(staleRunnerCoreImports()).toEqual([]);
     expect(runnerCoreImports(file, "import { x } from '../../core/x.ts';")).toEqual(['packages/cezar/src/core/x.ts']);
+    expect(runnerCoreImports(file, "// from '@open-mercato/cezar-contract/effort'\nconst load = () => import('@open-mercato/cezar-contract/effort');")).toEqual(['@open-mercato/cezar-contract/effort']);
   });
 });

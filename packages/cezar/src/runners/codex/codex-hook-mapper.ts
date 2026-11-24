@@ -5,7 +5,7 @@
  */
 
 import type { CodexUiMapperState } from './codex-ui-mapper-state.ts';
-import { hookEventName, isVisibleHookItem, ownLookup } from '@hearsay-tools/squawk/plugin/runtime';
+import { hookEventName, isRecord, isVisibleHookItem, number as num, ownLookup } from '@hearsay-tools/squawk/plugin/runtime';
 import type { HookEntryKind, HookStatus, UiEvent, UiHookItem } from '@hearsay-tools/squawk/plugin';
 
 export const HOOK_STATUS: Readonly<Record<string, HookStatus>> = {
@@ -75,14 +75,6 @@ function collabParentItemId(params: Record<string, unknown>, state: CodexUiMappe
 function threadIdOf(params: Record<string, unknown>): string | undefined {
   const thread = isRecord(params.thread) ? params.thread : undefined;
   return (thread && str(thread.id)) ?? str(params.threadId);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function num(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function str(value: unknown): string | undefined {

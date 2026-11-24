@@ -99,4 +99,14 @@ describe('inline-contract fails the build on a contract import the bundle lacks 
     expect(decl).not.toContain('@hearsay-tools/squawk/plugin');
     expect(readFileSync(join(dist, 'runners/demo/config.js'), 'utf8')).toContain("from '@hearsay-tools/squawk/plugin'");
   });
+
+  it('still repoints plugin declarations when dist has no contract referrers', () => {
+    const { dist, status, stderr } = inline({
+      'plugin/index.d.ts': 'export type RunnerFacts = {};\n',
+      'runners/demo/config.d.ts': "import type { RunnerFacts } from '@hearsay-tools/squawk/plugin';\nexport type Demo = RunnerFacts;\n",
+    });
+
+    expect(status, stderr).toBe(0);
+    expect(readFileSync(join(dist, 'runners/demo/config.d.ts'), 'utf8')).toContain("from '../../plugin/index.js'");
+  });
 });

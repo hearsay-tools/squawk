@@ -64,12 +64,14 @@ async function closures(files: readonly string[]): Promise<Map<string, Set<strin
   return byEntry;
 }
 
-/** Every module inside another runner's folder (`runners/<other>/*`) and the built-in roster remain
- *  private to each allowed runner, including transitive imports (hearsay-tools/squawk#4175). */
+/** Every non-testkit module inside another runner's folder (`runners/<other>/*`) and the built-in
+ *  roster remain private to each allowed runner, including transitive imports (hearsay-tools/squawk#4175). */
 function foreignRunnerModules(closure: Set<string>, allowed: ReadonlySet<string>): string[] {
   const others = BUILT_IN_RUNNER_IDS.filter(id => !allowed.has(id));
   const foreignFiles = others.flatMap(id =>
-    [...closure].filter(file => file.startsWith(`runners/${id}/`)).sort(),
+    [...closure]
+      .filter(file => file.startsWith(`runners/${id}/`) && !file.endsWith('.testkit.ts'))
+      .sort(),
   );
   return [
     ...foreignFiles,

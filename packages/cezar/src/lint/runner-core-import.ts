@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import type { AstRule, EsNode, Report, Visitors } from './ast-rule.ts';
-import { IMPORT_NODE_TYPES, importSpecifier, relativeSpecifiers } from './layer-import.ts';
+import { IMPORT_NODE_TYPES, importSpecifier, literalSpecifiers } from './layer-import.ts';
 import { repoRoot } from './source-rule.ts';
 
 /**
@@ -50,9 +50,8 @@ export function outsideTarget(file: string, specifier: string | undefined): stri
 /** The outside targets of `file`, one per import, in source order. */
 export function runnerCoreImports(file: string, source: string): string[] {
   if (!applies(file)) return [];
-  const relative = relativeSpecifiers(source).flatMap(({ specifier }) => outsideTarget(file, specifier) ?? []);
-  const contracts = [...source.matchAll(/from\s+['"](@open-mercato\/cezar-contract(?:\/[^'"]*)?)['"]/g)].map(m => m[1]!);
-  return [...relative, ...contracts];
+  if (!/['"](?:\.\.?\/|@open-mercato\/cezar-contract)/.test(source)) return [];
+  return literalSpecifiers(source).flatMap(({ specifier }) => outsideTarget(file, specifier) ?? []);
 }
 
 /** Outside imports the rule lets pass `count` times from `file` to `target`, both repository paths. */

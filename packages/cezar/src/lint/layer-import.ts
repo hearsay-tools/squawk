@@ -94,17 +94,22 @@ function specifierOf(node: Node): string | undefined {
 /** One relative specifier in a source, with the offset of the import that names it. */
 export interface RelativeSpecifier { specifier: string; offset: number }
 
-/** The relative specifiers of the import forms this rule reads, in source order. */
-export function relativeSpecifiers(source: string): RelativeSpecifier[] {
-  // An import the rule reads needs a quoted relative specifier; a file with none is not parsed.
-  if (!/['"]\.\.?\//.test(source)) return [];
+/** All literal import specifiers of the import forms this rule reads, in source order. */
+export function literalSpecifiers(source: string): RelativeSpecifier[] {
   const ast = parse(source, { sourceType: 'module', plugins: ['typescript'] });
   const found: RelativeSpecifier[] = [];
   visit(ast.program, (node) => {
     const specifier = specifierOf(node);
-    if (specifier?.startsWith('.')) found.push({ specifier, offset: node.start ?? 0 });
+    if (specifier !== undefined) found.push({ specifier, offset: node.start ?? 0 });
   });
   return found.sort((a, b) => a.offset - b.offset);
+}
+
+/** The relative specifiers of the import forms this rule reads, in source order. */
+export function relativeSpecifiers(source: string): RelativeSpecifier[] {
+  // An import the rule reads needs a quoted relative specifier; a file with none is not parsed.
+  if (!/['"]\.\.?\//.test(source)) return [];
+  return literalSpecifiers(source).filter(({ specifier }) => specifier.startsWith('.'));
 }
 
 /** The relative imports of `file` (a path relative to `packages/cezar/src/`) that stay inside it. */
