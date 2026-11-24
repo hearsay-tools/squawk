@@ -217,4 +217,20 @@ describe('the start gate checks the account the task runs on', () => {
     });
     expect(startRun).not.toHaveBeenCalled();
   });
+
+  it('checks a named account on the resolved runner when the stored default is not registered', async () => {
+    const app = setup(false);
+    mkdirSync(join(repoRoot, '.ai/cezar'), { recursive: true });
+    writeFileSync(join(repoRoot, '.ai/cezar/config.json'), JSON.stringify({ defaultRunner: 'ghost' }));
+    const response = await apiRequest(app, '/api/v1/runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ task: 'Task', agentProfile: 'work', steps: [{ id: 'task', prompt: '{{task}}' }] }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: 'Claude Code account "Work" is not signed in. Sign in in Settings → Agent defaults → Providers.',
+    });
+    expect(startRun).not.toHaveBeenCalled();
+  });
 });

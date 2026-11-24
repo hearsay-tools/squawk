@@ -24,7 +24,7 @@ import { plannedWorkflow, workflowStepSchema, stepsIssue, type WorkflowDef, type
 import type { WorkspaceProject } from '../workspace/config.ts';
 import { taskWebhooks } from '../workspace/webhooks.ts';
 import { providersRequiredByWorkflow } from './provider-action-gate.ts';
-import { registeredRunnerId } from '../core/runner-registry.ts';
+import { registeredRunnerId, resolveRunnerId, savedRunnerRegistration } from '../core/runner-registry.ts';
 
 /** A refusal `POST /runs` answers as `{ error }` with this status. */
 export interface StartRunRefusal {
@@ -112,7 +112,13 @@ export async function providerGateRefusal(
   runner: string,
   scope?: AccountScope,
 ): Promise<StartRunRefusal | undefined> {
-  const blocked = await providerActionError(providersRequiredByWorkflow(workflow, runner), scope);
+  // A preserved unknown id executes as the default runner. A registered id, and an unsealed read, stay as written.
+  const executing = savedRunnerRegistration(runner) === false ? resolveRunnerId(runner) : runner;
+  const picks = scope?.picks;
+  const resolvedScope = picks && picks[executing] === undefined && picks[runner] !== undefined
+    ? { ...scope, picks: { ...picks, [executing]: picks[runner] } }
+    : scope;
+  const blocked = await providerActionError(providersRequiredByWorkflow(workflow, executing), resolvedScope);
   return blocked ? { error: blocked, status: 409 } : undefined;
 }
 
@@ -128,7 +134,7 @@ export async function agentProfileRefusal(
   agentProfile: string | undefined,
 ): Promise<StartRunRefusal | undefined> {
   if (agentProfile === undefined) return undefined;
-  const account = await resolveProfile(runner, agentProfile);
+  const account = await resolveProfile(savedRunnerRegistration(runner) === false ? resolveRunnerId(runner) : runner, agentProfile);
   return 'error' in account ? { error: account.error, status: 400 } : undefined;
 }
 
