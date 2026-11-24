@@ -11,7 +11,7 @@ import { withHomeLock } from '../home/write-lock.ts';
 import { cliDigestSchema, cliReleaseId, managedCliTarget, type CliManifest } from './cli-manifest.ts';
 
 const releaseIdSchema = z.string().regex(/^(?:[a-f0-9]{64}|(?:sha256|sha384)-[a-f0-9]{64})$/);
-const activeSchema = z.object({ releaseId: releaseIdSchema });
+const activeSchema = z.object({ releaseId: releaseIdSchema, digest: cliDigestSchema.optional() });
 const releaseSchema = z.object({
   releaseId: releaseIdSchema, version: z.string().regex(/^\d+\.\d+\.\d+$/),
   executable: z.string().regex(/^[a-zA-Z0-9._-]+$/), size: z.number().int().positive(),
@@ -43,7 +43,7 @@ export function readActiveRelease(root: string, source: ManagedCliSource): Manag
   const path = assertHomePath(root, join(directory, name));
   const info = lstatSync(path);
   if (!info.isFile() || info.size !== release.size) throw new Error('The managed CLI executable is incomplete.');
-  return { ...release, path };
+  return { ...release, digest: release.digest ?? active.digest, path };
 }
 
 export function managedCliExecutable(home: Home, runner: string, source: ManagedCliSource): string | null {
@@ -160,8 +160,11 @@ export async function withCliInstallLock<T>(home: Home, root: string, operation:
 
 export function releaseMatchesManifest(release: Pick<ManagedRelease, 'releaseId' | 'version' | 'digest'>, manifest: Pick<CliManifest, 'digest' | 'version'>): boolean {
   const digest = cliDigestSchema.parse(manifest.digest);
-  if (release.releaseId !== cliReleaseId(digest) || release.version !== manifest.version) return false;
-  return !release.digest || (release.digest.algorithm === digest.algorithm && release.digest.value === digest.value);
+  return release.releaseId === cliReleaseId(digest)
+    && release.version === manifest.version
+    && !!release.digest
+    && release.digest.algorithm === digest.algorithm
+    && release.digest.value === digest.value;
 }
 
 export function activateCliRelease(root: string, stage: string, manifest: Pick<CliManifest, 'digest' | 'version'>, executable: string): void {
@@ -179,10 +182,17 @@ export function activateCliRelease(root: string, stage: string, manifest: Pick<C
     renameSync(stage, destination);
   } else {
     const existing = releaseSchema.parse(readJson(join(destination, 'release.json')));
-    if (existing.executable !== executable || !releaseMatchesManifest(existing, manifest)) {
+    const stagedPath = join(stage, executable);
+    const matchesExisting = existing.digest
+      ? releaseMatchesManifest(existing, manifest)
+      : existing.releaseId === releaseId
+        && existing.version === manifest.version
+        && existsSync(stagedPath)
+        && readFileSync(stagedPath).equals(readFileSync(join(destination, executable)));
+    if (existing.executable !== executable || !matchesExisting) {
       throw new Error('The managed CLI release directory conflicts with an existing release.');
     }
   }
-  replacePrivate(join(root, 'active.json'), JSON.stringify({ releaseId }));
+  replacePrivate(join(root, 'active.json'), JSON.stringify({ releaseId, digest }));
   pruneCliReleases(root);
 }

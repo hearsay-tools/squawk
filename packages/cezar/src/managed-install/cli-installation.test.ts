@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -195,9 +195,10 @@ it('keeps release ids disjoint across algorithms even when 64-hex prefixes match
   expect(sha384Id).toBe(`sha384-${prefix}`);
   expect(new Set([sha512Id, sha256Id, sha384Id]).size).toBe(3);
 
-  // Full digest comparison distinguishes two sha512 manifests sharing a 64-hex prefix.
+  // Full digest comparison distinguishes two sha512 manifests sharing a 64-hex prefix, and refuses unrecorded digests.
   expect(releaseMatchesManifest({ releaseId: sha512Id, version: '1.0.0', digest: sha512First }, { version: '1.0.0', digest: sha512First })).toBe(true);
   expect(releaseMatchesManifest({ releaseId: sha512Id, version: '1.0.0', digest: sha512First }, { version: '1.0.0', digest: sha512Second })).toBe(false);
+  expect(releaseMatchesManifest({ releaseId: sha512Id, version: '1.0.0', digest: undefined }, { version: '1.0.0', digest: sha512First })).toBe(false);
 
   // Activating a different full sha512 digest into an existing 64-hex directory refuses reuse.
   const f = fixture(); const installation = f.install();
@@ -207,6 +208,21 @@ it('keeps release ids disjoint across algorithms even when 64-hex prefixes match
   const root = cliRoot(f.home, 'antigravity');
   expect(() => activateCliRelease(root, join(root, 'versions', '.stage-unused'), { version: '1.0.0', digest: { algorithm: 'sha512', value: conflicting } }, 'antigravity'))
     .toThrow('conflicts with an existing release');
+
+  // A pre-upgrade release.json without digest still launches, re-verifies on update, and records full digest in active.json.
+  const versionDir = join(root, 'versions', digest.slice(0, 64));
+  const releasePath = join(versionDir, 'release.json');
+  const legacyRecord = JSON.parse(readFileSync(releasePath, 'utf8')) as Record<string, unknown>;
+  delete legacyRecord.digest;
+  chmodSync(versionDir, 0o700); chmodSync(releasePath, 0o600);
+  writeFileSync(releasePath, JSON.stringify(legacyRecord));
+  chmodSync(releasePath, 0o444); chmodSync(versionDir, 0o555);
+  writeFileSync(join(root, 'active.json'), JSON.stringify({ releaseId: digest.slice(0, 64) }));
+  const upgraded = f.install();
+  upgraded.start('check'); await upgraded.settled();
+  expect(upgraded.status()).toMatchObject({ installedVersion: '1.0.0', updateAvailable: true });
+  upgraded.start('update'); await upgraded.settled();
+  expect(upgraded.status()).toMatchObject({ phase: 'idle', installedVersion: '1.0.0', updateAvailable: false, error: null });
 });
 
 it.each([
