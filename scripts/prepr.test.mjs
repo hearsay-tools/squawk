@@ -251,9 +251,20 @@ test('a bounded run kills its whole process group at the bound', { skip: process
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prepr-bound-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const pidFile = path.join(dir, 'grandchild.pid');
-  // bound: 3 s lets a loaded host start the shell and write the PID file; the 30 s sleep keeps the bound, not the command, ending it.
-  const r = await run('sh', ['-c', `sleep 30 & echo $! > ${pidFile}; wait`], { boundMs: 3000 });
+  // bound: the bound starts at spawn, so a slow shell can be killed before it writes the PID file: then the
+  // fixture never got ready, and the run repeats with a longer bound (1 s, 4 s, 16 s).
+  let r;
+  let elapsed;
+  for (const boundMs of [1000, 4000, 16_000]) {
+    fs.rmSync(pidFile, { force: true });
+    const start = Date.now();
+    r = await run('sh', ['-c', `sleep 30 & echo $! > ${pidFile}; wait`], { boundMs });
+    elapsed = Date.now() - start;
+    if (fs.existsSync(pidFile)) break;
+  }
   assert.equal(r.timedOut, true);
+  // A kill of the shell alone leaves `sleep 30` holding the pipes, and `run` would return only at its natural exit.
+  assert.ok(elapsed < 25_000, `run returned after ${elapsed} ms, so the bound did not stop the grandchild`);
   const pid = Number(fs.readFileSync(pidFile, 'utf8'));
   const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
   // bound: init reaps the killed grandchild shortly after the kill; 5 s only guards a hang.
