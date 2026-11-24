@@ -26,13 +26,12 @@ function expression(raw, context) {
   return runInNewContext(code, context);
 }
 
-function context(event, { vitest = 'success', browser = 'success', exported = 'success', results = 'true', pr = '', steps = {} } = {}) {
+function context(event, { vitest = 'success', exported = 'success', results = 'true', pr = '', steps = {} } = {}) {
   return {
     github: { event_name: event },
     inputs: { pr_number: pr },
     needs: {
       vitest: { result: vitest },
-      'cockpit-browser': { result: browser },
       'squeal-export': { result: exported, outputs: { results } },
     },
     steps,
@@ -125,78 +124,14 @@ test('the merge-group step runs the test command under squeal ci record and retu
 
 const SQUEAL_JOBS = ['squeal-export', 'squeal-node-test', 'squeal-publish'];
 
-test('only merge groups run cockpit-browser shards under squeal ci record; every other run as before', () => {
-  const browser = ci().jobs['cockpit-browser'];
-  const plain = step(browser, 'e2e-plain');
-  const record = step(browser, 'e2e');
-  const recorded = ['Set up Squeal', 'e2e', 'Upload Squeal parts'].map((id) => step(browser, id));
-  for (const event of EVENTS) {
-    const ctx = context(event);
-    const recording = event === 'merge_group';
-    assert.equal(expression(plain.if, ctx), event !== 'pull_request_target' && !recording, `${event} plain`);
-    for (const s of recorded) assert.equal(expression(s.if, ctx), recording, `${event} ${s.name}`);
-    assert.equal(expression(record['continue-on-error'], ctx), recording, `${event} continue-on-error`);
-  }
-  assert.equal(step(browser, 'Set up Squeal').uses, SQUEAL_ACTION);
-  assert.equal(record.env.PARTS_DIR, 'squeal-parts');
-  assert.match(record.run, /sh \.ai\/scripts\/test-env-up\.sh\n[\s\S]*squeal ci record/);
-  assert.match(record.run, /set -- npm run test:e2e -- --allow-skip --shard=\$\{\{ matrix\.shard \}\}\/8/);
-  assert.match(record.run, /squeal ci record --out "\$RUNNER_TEMP\/\$PARTS_DIR" -- "\$@" 2>&1 \| tee "\$RUNNER_TEMP\/e2e\.log"/);
-  assert.match(record.run, /node \.github\/scripts\/require-e2e-passed\.cjs < "\$RUNNER_TEMP\/e2e\.log"/);
-  const upload = step(browser, 'Upload Squeal parts');
-  assert.equal(upload['continue-on-error'], true);
-  assert.equal(upload.with.name, 'squeal-parts-browser-shard-${{ matrix.shard }}');
-  assert.equal(upload.with.path, "${{ runner.temp }}/${{ steps['e2e-rerun'].outcome == 'skipped' && 'squeal-parts' || 'squeal-parts-rerun' }}/");
-  assert.equal(upload.with['retention-days'], 3);
-  assert.doesNotMatch(upload.if, /steps\./);
-  assert.match(String(upload.if), /^!cancelled\(\) && /);
-});
-
-test('the merge-group browser step records under squeal ci record and enforces TEST_E2E_STATUS', () => {
-  const record = step(ci().jobs['cockpit-browser'], 'e2e');
-  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-squeal-browser-'));
-  try {
-    const bin = path.join(temp, 'bin');
-    const runnerTemp = path.join(temp, 'runner-temp');
-    fs.mkdirSync(bin);
-    fs.mkdirSync(runnerTemp);
-    fs.writeFileSync(path.join(bin, 'sh'), '#!/bin/sh\necho "sh $*"\n', { mode: 0o755 });
-    fs.writeFileSync(path.join(bin, 'squeal'), '#!/bin/sh\necho "squeal $*"\nwhile [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n', { mode: 0o755 });
-    fs.writeFileSync(path.join(bin, 'npm'), '#!/bin/sh\necho "npm $*"\necho "TEST_E2E_STATUS=$FAKE_E2E_STATUS"\nexit "$FAKE_E2E_EXIT"\n', { mode: 0o755 });
-    const run = (fakeStatus, fakeExit) => spawnSync('bash', ['-e', '-c', script(record.run, 'merge_group', 2)], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      env: {
-        PATH: `${bin}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
-        RUNNER_TEMP: runnerTemp,
-        PARTS_DIR: record.env.PARTS_DIR,
-        FAKE_E2E_STATUS: fakeStatus,
-        FAKE_E2E_EXIT: String(fakeExit),
-      },
-    });
-    const passed = run('passed', 0);
-    assert.equal(passed.status, 0, passed.stderr);
-    assert.equal(passed.stdout, 'sh .ai/scripts/test-env-up.sh\n'
-      + 'squeal ci record --out ' + runnerTemp + '/squeal-parts -- npm run test:e2e -- --allow-skip --shard=2/8\n'
-      + 'npm run test:e2e -- --allow-skip --shard=2/8\nTEST_E2E_STATUS=passed\n');
-    assert.equal(run('failed', 3).status, 3, 'a failed browser run keeps its exit code');
-    assert.equal(run('skipped', 0).status, 1, 'a skipped browser run still fails require-e2e-passed');
-  } finally {
-    fs.rmSync(temp, { recursive: true, force: true });
-  }
-});
-
 test('squeal-export runs after passing merge-group shards and only reads', () => {
   const { jobs, permissions } = ci();
   const job = jobs['squeal-export'];
-  // It waits for node:test and browser recording, but runs without them: only the Vitest shards decide.
-  assert.deepEqual(job.needs, ['vitest', 'squeal-node-test', 'cockpit-browser']);
-  assert.doesNotMatch(job.if, /squeal-node-test|cockpit-browser/);
+  // It waits for the node:test recording, but runs without it: only the Vitest shards decide.
+  assert.deepEqual(job.needs, ['vitest', 'squeal-node-test']);
+  assert.doesNotMatch(job.if, /squeal-node-test/);
   for (const event of EVENTS) assert.equal(expression(job.if, context(event)), event === 'merge_group', event);
   for (const vitest of ['failure', 'skipped', 'cancelled']) assert.equal(expression(job.if, context('merge_group', { vitest })), false, vitest);
-  for (const browser of ['success', 'failure', 'skipped', 'cancelled']) {
-    assert.equal(expression(job.if, context('merge_group', { browser })), true, `browser ${browser}`);
-  }
   assert.equal(expression(job.if, context('merge_group')), true);
   assert.deepEqual(job.permissions, { contents: 'read' });
   assert.deepEqual(permissions, { contents: 'read' });
@@ -300,16 +235,6 @@ test('squeal-export keys the shard parts in a fresh checkout; squeal-publish pus
   assert.deepEqual(parts.filter((name) => !name.startsWith(pattern.slice(0, -1))), []);
   assert.equal(step(job, 'Download Squeal node:test parts').with.name, step(jobs['squeal-node-test'], 'Upload Squeal parts').with.name);
   assert.equal(step(job, 'Download Squeal node:test parts')['continue-on-error'], true, 'missing node:test parts never fail the export');
-  const browserDownload = step(job, 'Download Squeal browser parts');
-  assert.equal(browserDownload.with.pattern, 'squeal-parts-browser-shard-*');
-  assert.equal(browserDownload['continue-on-error'], true, 'missing browser parts never fail the export');
-  for (const browser of ['success', 'failure', 'skipped', 'cancelled']) {
-    assert.equal(expression(browserDownload.if, context('merge_group', { browser })), browser === 'success', `browser download ${browser}`);
-  }
-  const browserUploaded = step(jobs['cockpit-browser'], 'Upload Squeal parts').with.name;
-  const browserParts = jobs['cockpit-browser'].strategy.matrix.shard.map((n) => browserUploaded.replace('${{ matrix.shard }}', String(n)));
-  assert.equal(browserParts.length, 8);
-  assert.deepEqual(browserParts.filter((name) => !name.startsWith(browserDownload.with.pattern.slice(0, -1))), []);
   const upload = step(job, 'Upload Squeal results');
   assert.equal(upload.with.path, '${{ runner.temp }}/squeal-results.json.gz');
   assert.equal(upload.with['retention-days'], 3);
@@ -327,7 +252,7 @@ test('every job that runs squeal sets up Squeal\'s pinned action once, after its
   for (const pin of pins) assert.equal(pin.trim(), SQUEAL_PIN);
   const users = Object.entries(jobs).filter(([, job]) => (job.steps ?? []).some((s) => /(^|\s)squeal (ci|code)\b/m.test(s.run ?? '')))
     .map(([id]) => id);
-  assert.deepEqual(users.sort(), ['cockpit-browser', 'squeal-export', 'squeal-node-test', 'squeal-publish', 'vitest']);
+  assert.deepEqual(users.sort(), ['squeal-export', 'squeal-node-test', 'squeal-publish', 'vitest']);
   for (const [id, job] of Object.entries(jobs)) {
     const { steps = [] } = job;
     const action = steps.filter((s) => s.uses?.startsWith('hearsay-tools/squeal/'));
@@ -424,7 +349,7 @@ test('squeal-node-test records both unit suites with the nodeTest entries\' flag
   assert.equal(upload.with['retention-days'], 3);
 });
 
-test('the export adds downloaded node:test and complete browser parts, and exports Vitest alone without them', () => {
+test('the export adds the node:test parts it downloaded and exports the shards alone without them', () => {
   const run = step(ci().jobs['squeal-export'], 'Export Squeal results').run;
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-squeal-export-'));
   try {
@@ -439,16 +364,7 @@ test('the export adds downloaded node:test and complete browser parts, and expor
     fs.mkdirSync(path.join(temp, 'squeal-parts-node-test', 'scripts'), { recursive: true });
     assert.equal(exported(), `squeal ci export --parts ${shards} ${temp}/squeal-parts-node-test/scripts ${out}`);
     fs.mkdirSync(path.join(temp, 'squeal-parts-node-test', 'package'));
-    const withNode = `${shards} ${temp}/squeal-parts-node-test/package ${temp}/squeal-parts-node-test/scripts`;
-    assert.equal(exported(), `squeal ci export --parts ${withNode} ${out}`);
-    // A partial browser shard set is left out so an incomplete browser run never stops the Vitest export.
-    for (const n of [1, 2, 3, 4, 5, 6, 7]) {
-      fs.mkdirSync(path.join(temp, 'squeal-parts-browser', `squeal-parts-browser-shard-${n}`), { recursive: true });
-    }
-    assert.equal(exported(), `squeal ci export --parts ${withNode} ${out}`);
-    fs.mkdirSync(path.join(temp, 'squeal-parts-browser', 'squeal-parts-browser-shard-8'));
-    const browserShards = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `${temp}/squeal-parts-browser/squeal-parts-browser-shard-${n}`).join(' ');
-    assert.equal(exported(), `squeal ci export --parts ${withNode} ${browserShards} ${out}`);
+    assert.equal(exported(), `squeal ci export --parts ${shards} ${temp}/squeal-parts-node-test/package ${temp}/squeal-parts-node-test/scripts ${out}`);
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }

@@ -343,7 +343,7 @@ exactly the `engines.node` minimum (Node 24.21.0). Every job installs Node witho
 - The required typecheck job uses `blacksmith-2vcpu-ubuntu-2404` (2 vCPU, 8 GB) for PRs and manual dispatches, and `ubuntu-24.04` for pushes and merge groups. It runs pinned workflow lint, issue-citation checking and `npm run typecheck` for all change surfaces, including docs, infrastructure and release bumps. It uses the minimum-Node setup.
 - Two unit jobs on `ubuntu-24.04` run package unit tests and repository script tests from source on exactly Node 24.21.0. Each installs dependencies and runs beside build/package.
 - The build/package job on `ubuntu-24.04` runs on exactly Node 24.21.0. It runs the full application build, packaged CLI E2E typecheck and tests, and release-package dry-run packing. Only the packaged tests and their typecheck read build output. The packaged tests install the tarball, start the CLI and exercise the SQLite run store on the minimum supported Node version.
-- Eight cockpit browser E2E shards on GitHub-hosted `ubuntu-latest` each provision the `agent-browser` provider, build and start their own test environment, and run `npm run test:e2e -- --allow-skip --shard=N/8`. In merge groups the same command runs under `squeal ci record` (§ Squeal shared results), with no change to the test command or exit code. Every shard rejects skipped or failed `TEST_E2E_STATUS` logs.
+- Eight cockpit browser E2E shards on GitHub-hosted `ubuntu-latest` each provision the `agent-browser` provider, build and start their own test environment, and run `npm run test:e2e -- --allow-skip --shard=N/8`. Every shard rejects skipped or failed `TEST_E2E_STATUS` logs.
 
 The separate typecheck uses Blacksmith's 3,000 monthly x64 2-vCPU equivalent
 minutes. A seven-day sample projects about 2,833 PR/dispatch typecheck jobs per
@@ -812,9 +812,9 @@ To reproduce a report locally from a downloaded coverage artifact, see the skill
 `squeal-export`, `squeal-publish` and `squeal-ref-check` are normal, non-required
 shared-results jobs. They are not trials.
 
-Merge groups publish their Vitest, cockpit browser E2E and node:test results for Squeal, so
-a new worktree at a main commit can import those passes instead of running the same test
-files again (hearsay-tools/squeal spec 018, D8, D9, D13, D17, D22 to D29, and D30 to D34).
+Merge groups publish their Vitest and node:test results for Squeal, so a new worktree at a
+main commit can import those passes instead of running the same test files again
+(hearsay-tools/squeal spec 018, D8, D9, D13, D17 and, for node:test, D22 to D29).
 
 - Every job that runs Squeal sets it up with Squeal's GitHub Action after its Node setup:
   `uses: hearsay-tools/squeal/ci@<commit> # v<version>`, pinned to a full commit SHA like
@@ -828,14 +828,6 @@ files again (hearsay-tools/squeal spec 018, D8, D9, D13, D17, D22 to D29, and D3
   are the shard's own. The part files upload as `squeal-parts-shard-N`, kept 3 days. When
   Squeal cannot run, the shard runs the plain command with a warning and uploads no parts.
   Other events run the command exactly as before.
-- In a merge group, each `Cockpit browser E2E shard N/8` job first runs
-  `sh .ai/scripts/test-env-up.sh` so `node_modules/vitest` is present before
-  `squeal ci record` starts (and the detached server boots outside the recorder), then runs
-  its unchanged `npm run test:e2e -- --allow-skip --shard=N/8` command under
-  `squeal ci record --out "$RUNNER_TEMP/squeal-parts" --` and checks `require-e2e-passed.cjs`
-  against `$RUNNER_TEMP/e2e.log`. The part files upload as `squeal-parts-browser-shard-N`,
-  kept 3 days. When Squeal cannot run, the shard runs the plain command with a warning and
-  uploads no parts. Other events run the command as before.
 - In a merge group, the `Record node:test for Squeal` job (`squeal-node-test`) runs the
   package and script unit suites once more, on the `.node-version` developers use, each
   under `squeal ci record --out "$RUNNER_TEMP/squeal-parts-node-test/<suite>" --`. Each
@@ -850,22 +842,18 @@ files again (hearsay-tools/squeal spec 018, D8, D9, D13, D17, D22 to D29, and D3
   when tests failed (the export leaves out failed files). The `unit-tests` job on Node
   24.21.0 stays as it is; this job is not in the merge-queue roster, and `verify` waits for
   it only through `squeal-export`.
-- A Vitest or browser shard that reruns after a failed first run (§ Rerun of a failed queue
-  shard) records the rerun into `$RUNNER_TEMP/squeal-parts-rerun`, and only those parts
-  upload. Each shard so has one complete part, which `squeal ci export` needs: it refuses
-  two parts for one shard or one file.
-- The `Export Squeal results` job (`squeal-export`) runs after all eight Vitest shards pass
-  in a merge group, with `contents: read` and no stored credentials. It waits for
-  `squeal-node-test` and `cockpit-browser`, checks out `merge_group.head_sha`, installs
-  dependencies, downloads the Vitest shards' parts, the `node:test` parts when
-  `squeal-node-test` uploaded them, and the browser shard parts when `cockpit-browser`
-  succeeded. It passes the browser parts to `squeal ci export` only when all eight
-  `squeal-parts-browser-shard-N` directories are present, so a failed, skipped or partial
-  browser run still publishes the Vitest and `node:test` results. It uploads
-  `squeal-results.json.gz` as the `squeal-results` artifact, kept 3 days. It runs the
-  queued code, so it never holds write access. An export that writes no file warns and exits
-  0; the `Check for the Squeal results file` step then sets the job output `results` to
-  `false`, the upload is skipped and the job passes.
+- A shard that reruns after a failed first run (§ Rerun of a failed queue shard) records
+  the rerun into `$RUNNER_TEMP/squeal-parts-rerun`, and only those parts upload. Each shard
+  so has one complete part, which `squeal ci export` needs: it refuses two parts for one
+  shard or one file.
+- The `Export Squeal results` job (`squeal-export`) runs after all eight shards pass in a
+  merge group, with `contents: read` and no stored credentials. It checks out
+  `merge_group.head_sha`, installs dependencies, downloads the shards' parts and, when
+  `squeal-node-test` uploaded them, the node:test parts, runs
+  `squeal ci export` and uploads `squeal-results.json.gz` as the `squeal-results` artifact,
+  kept 3 days. It runs the queued code, so it never holds write access. An export that
+  writes no file warns and exits 0; the `Check for the Squeal results file` step then
+  sets the job output `results` to `false`, the upload is skipped and the job passes.
 - The `Publish Squeal shared results` job (`squeal-publish`) is the only job with
   `contents: write`, and it runs no repository code: no install, build or package script. It
   runs only when the export job succeeded and its `results` output is `true`. It
@@ -1278,7 +1266,7 @@ hearsay-tools/cezarion#3290).
 - In a merge group both jobs have a 40-minute limit, room for two runs inside the queue's
   45-minute check timeout. In merge-group runs of 2026-11-11, a Vitest shard's tests took
   up to 16 minutes and a browser shard's up to 13.
-- A Vitest or browser rerun records its own Squeal parts (§ Squeal shared results).
+- A Vitest rerun records its own Squeal parts (§ Squeal shared results).
 
 `.github/scripts/ci-queue-rerun.workflow.test.cjs` pins the events, the conditions, the
 step order, the rerun's Squeal parts, the artifacts and the time limits.
