@@ -4,6 +4,7 @@ import { addRunSource, fallbackRunSource } from './project-run-sources.ts';
 import { registeredWaitRecord, registeredReceiptRecord } from './wait-registration-write.ts';
 import { stageDurableUpdate, stageDebouncedUpdate, stageConversation, stageStepUpdate, stepTotals, redactPatch, type RecordPatch } from './record-write-rules.ts';
 import { RunLifecycle, snapshotRun, type RunLifecycleSource } from './lifecycle.ts';
+import { attachRunLifecycleListeners } from './lifecycle-registry.ts';
 import type { WorkerExecutionRecords, WorkerExecutions } from './ports.ts';
 import { workerExecutionsFactory } from './worker-executions-registry.ts';
 import { randomUUID } from 'node:crypto';
@@ -112,6 +113,8 @@ export class RunStore {
   /** The typed lifecycle events the store publishes after each write (lifecycle.ts). */
   private readonly published = new RunLifecycle();
   readonly lifecycle: RunLifecycleSource = this.published;
+  /** Unsubscribe handles of the process-wide listeners (lifecycle-registry.ts), attached before any write can publish. */
+  private readonly listenerHandles = attachRunLifecycleListeners(this.published);
   /** The lifecycle events run exits write (B12). */
   private readonly exitEvents = new ExitEvents((id, event) => this.eventLog.appendEvent(id, event));
   /** Runs gone from memory whose rows the next save or commit deletes. */
@@ -834,6 +837,7 @@ export class RunStore {
     this.liveItems.clear();
     // Demand-bound feeds stop before storage disappears during project removal/shutdown.
     this.published.publish('store.closed', {});
+    for (const unsubscribe of this.listenerHandles.splice(0)) unsubscribe();
     this.archive.compressor.stop();
     this.transcriptFacts.stop();
     this.persistence.closeSave();

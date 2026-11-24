@@ -9,6 +9,7 @@
       "workspace/",
       "process-wait/",
       "ci-wait/",
+      "plugin/",
       "config.ts",
       "data-gitignore.ts",
       "detached-process.ts",
