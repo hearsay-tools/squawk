@@ -1,4 +1,4 @@
-import { registerBuiltInCliCommands, sealBuiltInCliCommands } from '../built-in-cli-commands.ts';
+import { bootColdCli } from '../boot.ts';
 import { knownCliCommand } from '../core/cli-registry.ts';
 import { commandText } from './command.ts';
 import { productEnv } from '../core/product-env.ts';
@@ -68,8 +68,7 @@ export function serverInstanceForPort(home: Home, port: number): string {
 /** Refuse a changed Home before server consumers read; hold presence for the listener's lifetime. */
 export function prepareHomeLifecycle(home: Home, instance?: string): (server: ServerType) => void {
   // Embedded servers enter here without the CLI executable boot.
-  registerBuiltInCliCommands();
-  sealBuiltInCliCommands();
+  bootColdCli();
   const preparedHome = prepareOperatorHome(home, 'serve', process.env);
   if (preparedHome !== home) {
     throw new Error(commandText(`[hsq] refusing to serve home ${home.root}: preparation selected ${preparedHome.root}. Prepare the home before starting the server.`));

@@ -1,6 +1,7 @@
 import type { Home } from './home/home.ts';
 import { resolveHome } from './home/resolve.ts';
 import { cliCommand } from './core/cli-registry.ts';
+import { bootRuntime } from './boot.ts';
 export type { SubcommandRunner } from './core/cli-registry.ts';
 
 export async function loadSubcommand(name: string | undefined, home: (env: NodeJS.ProcessEnv) => Home = env => resolveHome({ purpose: 'cli', env })) {
@@ -20,19 +21,5 @@ export async function runSubcommand(argv: string[], env: NodeJS.ProcessEnv, home
 export async function prepareCommandRuntime(command: string, argv: readonly string[] = []): Promise<void> {
   const definition = cliCommand(command);
   if (!definition || definition.runtimeMode === 'none' || (typeof definition.runtimeMode === 'function' && !definition.runtimeMode(argv))) return;
-  const { registerBuiltInRunners, sealBuiltInRunners } = await import('./runners/built-in.ts');
-  registerBuiltInRunners();
-  sealBuiltInRunners();
-  const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await import('./built-in-run-slots.ts');
-  registerBuiltInRunSlots();
-  sealBuiltInRunSlots();
-  const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await import('./workflows/step-kind-registry.ts');
-  registerBuiltInStepKinds();
-  sealBuiltInStepKinds();
-  const { registerBuiltInTools, sealBuiltInTools } = await import('./built-in-tools.ts');
-  registerBuiltInTools();
-  sealBuiltInTools();
-  const { registerBuiltInWaitKinds, sealBuiltInWaitKinds } = await import('./built-in-wait-kinds.ts');
-  registerBuiltInWaitKinds();
-  sealBuiltInWaitKinds();
+  await bootRuntime();
 }

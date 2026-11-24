@@ -45,6 +45,7 @@
       "plugin/index.ts",
       "plugin/runner-kit.ts",
       "built-in-run-slots.ts",
+      "boot.ts",
       "built-in-cli-commands.ts",
       "built-in-tools.ts",
       "built-in-tool-definitions.ts",
