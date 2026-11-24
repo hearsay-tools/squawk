@@ -55,13 +55,16 @@ Issue: hearsay-tools/squawk#4199.
 
 - Add `packages/cezar/src/runs/lifecycle-registry.ts` using `createListRegistry<RunLifecycleHandlers>`
   from `core/registry.ts` (`registerRunLifecycleListener`, `sealRunLifecycleListeners`,
-  `runLifecycleListenersSealed`, `registeredRunLifecycleListeners`). Wire `RunStore` to subscribe
-  registered listeners on open (when sealed) and unsubscribe on `store.closed`.
+  `runLifecycleListenersSealed`, `registeredRunLifecycleListeners`). Wire `RunStore`'s constructor
+  to subscribe registered listeners immediately after `new RunLifecycle()` (when sealed) and
+  unsubscribe them in `close()` after `store.closed` publishes. Seal it in `boot.ts` as the 8th
+  process-wide registry.
 - Add `packages/cezar/src/plugin/api.ts` defining `SquawkPlugin`, `SquawkPluginApi`
   (`registerRunner`, `registerAgentTool`, `registerWaitKind`, `registerStepKind`,
   `registerCliCommand`, `registerRemovalSlots`, `onRunLifecycle`), and `runPluginSetup` with
-  all-or-nothing transactional staging (validating key conflicts and reserved legacy keys before
-  committing any entry).
+  all-or-nothing transactional staging across both keyed and list registries (validating key
+  conflicts, reserved legacy keys, and all registration shape checks — including runner-id bounds
+  and `step-kind-registry` rules — before committing any entry).
 - Add `packages/cezar/src/plugin/index.ts` re-exporting the plugin API types.
 - Expose `"./plugin"` in `packages/cezar/package.json` (`exports`), update `packages/cezar/src/lint/layers.json`
   for `plugin/`, and configure monorepo resolution (`tsconfig.json`, `vitest.config.ts`) so
@@ -73,8 +76,9 @@ Issue: hearsay-tools/squawk#4199.
 
 Issue: hearsay-tools/squawk#4200.
 
-- Add `storedRunnerIdSchema` (non-empty trimmed string, bounded length, no control chars) in
-  `packages/cezar/src/core/runner-id-schema.ts` alongside `registeredRunnerIdSchema()`.
+- Add `storedRunnerIdSchema` (non-empty trimmed string, max 64 chars, no control chars) in
+  `packages/cezar/src/core/runner-id-schema.ts` alongside `registeredRunnerIdSchema()`, and
+  enforce the same bound in `registerRunner()` so every registered id survives stored reads.
 - Update `packages/cezar/src/workspace/config.ts`:
   - `agentDefaults.runner` keeps unregistered valid runner ids.
   - `disabledProviders` preserves unregistered valid runner ids alongside registered ones.
@@ -193,15 +197,17 @@ Issue: hearsay-tools/squawk#4208. Starts after: A1 and A2 merged.
 - Add `readonly plugins: string` (`join(config, 'plugins')`) to `Home` in `home/home.ts`.
 - Add `packages/cezar/src/plugin/resolve-hook.ts` installing `node:module` `registerHooks` to map
   `@hearsay-tools/squawk/plugin` to the running Squawk copy (source `.ts` or built `dist/*.js`).
-- Add `packages/cezar/src/plugin/loader.ts` discovering `<config>/plugins/*` in sorted folder-name
-  order, importing `index.mjs` or `index.js`, executing `runPluginSetup`, recording `loaded` and
-  `failed` entries, and logging stderr warnings for skipped plugins.
-- Wire loader + `runs/lifecycle-registry.ts` seal into `packages/cezar/src/boot.ts`.
+- Add `packages/cezar/src/plugin/loader.ts` discovering `<config>/plugins/*` in ASCII code-point
+  folder-name order (`a < b ? -1 : a > b ? 1 : 0`), importing `index.mjs` or `index.js`, executing
+  `runPluginSetup`, recording `loaded` and `failed` entries, and logging stderr warnings for skipped
+  plugins.
+- Wire loader into `packages/cezar/src/boot.ts`.
 - Support plugin CLI commands in `cli-dispatch.ts` / `subcommands.ts`: keep cold commands and
   `hsq --help` cold (with footer note pointing to `hsq plugins`); trigger `bootRuntime()` on
   unknown command names before `unknown command` refusal; add `hsq plugins` subcommand.
-- Add `plugins` summary to `GET /api/v1/health` (`packages/contract/src/health.ts`,
-  `packages/cezar/src/server/server.ts`), redacting host paths when `HSQ_REMOTE=1`.
+- Add required `plugins` summary (`{ loaded, failed }`) to `GET /api/v1/health`
+  (`packages/contract/src/health.ts`, `packages/cezar/src/server/server.ts`), redacting host paths
+  when `HSQ_REMOTE=1`.
 - Add unit tests covering every row of the spec's boot and plugin loading case table.
 
 ## C2. Load built-in runners through the plugin loader and remove runners/built-in.ts and runners/ids.ts

@@ -66,7 +66,7 @@ a runner plugin fails to load. After this step:
 
 ## Evidence
 
-Measured on `main` at `a7b4165bf` (2026-11-24). `layer-import.baseline.json` holds 93 entries.
+Measured on `main` at `a7b4165bf` (2026-11-24). `layer-import.baseline.json` holds 83 entries.
 
 ### Current seal sites in production
 
@@ -163,8 +163,9 @@ Cross-runner and shared `runners/` files:
   Loads zero runner, store, or plugin modules.
 - `bootRuntime(options?)`: registers all built-ins (CLI commands, runners, removal slots, worker
   executions, workflow step kinds, agent tools, wait kinds), runs bundled and host-folder plugins
-  through the loader, and seals all seven registries plus `runs/lifecycle-registry.ts`.
-  Idempotent once full boot has run.
+  through the loader, and seals all process-wide registries in one place (all 7 existing
+  registries in A1, plus `runs/lifecycle-registry.ts` as the 8th once A2 lands). Idempotent once
+  full boot has run.
 - `cli-dispatch.ts` / `subcommands.ts` / `index.ts`:
   - Check built-in CLI commands passively (or register built-in CLI commands unsealed first).
   - If `--help`, `--version`, or a built-in command with `runtimeMode === false` is invoked, call
@@ -181,10 +182,14 @@ Cross-runner and shared `runners/` files:
 ### 2. Plugin API object, transactional staging, and run-lifecycle registry
 
 - **Process-wide run-lifecycle registry (`packages/cezar/src/runs/lifecycle-registry.ts`):**
-  `createListRegistry<RunLifecycleHandlers>` using `core/registry.ts`. Sealed by `boot.ts`. When
-  `RunStore` opens (when the registry is sealed), it subscribes every registered listener to its
-  `store.lifecycle` and unsubscribes them when `store.closed` fires. Tests that do not boot the
-  full runtime keep passive behavior (`isSealed()` check) so isolated store tests stay untouched.
+  `createListRegistry<RunLifecycleHandlers>` using `core/registry.ts`. Sealed by `boot.ts`.
+  Inside `RunStore`'s constructor (immediately after `this.published = new RunLifecycle()`, before
+  `open()` or any run write can publish), when `runLifecycleListenersSealed()` is true, the store
+  subscribes every registered listener to `this.published` and records the unsubscribe handles.
+  In `close()`, after publishing `store.closed` (so listeners receive `store.closed` once) and
+  before disposal completes, the store runs every recorded unsubscribe handle. Tests that do not
+  boot the full runtime leave the registry unsealed and skip attachment via the passive
+  `isSealed()` check, keeping isolated store tests untouched.
 - **Plugin contract (`packages/cezar/src/plugin/api.ts`):**
   - A plugin module exports `default function setup(api: SquawkPluginApi): void | Promise<void>`.
   - `SquawkPluginApi` exposes:
@@ -196,13 +201,24 @@ Cross-runner and shared `runners/` files:
     - `registerRemovalSlots(slots: Partial<RunSlots>): void`
     - `onRunLifecycle(handlers: RunLifecycleHandlers): void`
 - **Transactional staging (`runPluginSetup`):**
-  - Before invoking `setup(api)`, create a staged buffer capturing all calls made on `api`.
-  - Validate each staged key against both the live unsealed registries (existing keys + reserved
-    legacy keys via `peekHas` / reserved check) and duplicates within the same plugin's buffer.
-  - Only after `await setup(api)` completes cleanly AND every staged registration passes conflict
-    validation do all staged entries commit into the real registries.
-  - If `setup(api)` throws or any staged entry conflicts, nothing commits and the error is returned
-    to the loader so the plugin is skipped cleanly.
+  - Before invoking `setup(api)`, create a staged buffer covering all three registry shapes (the
+    five keyed registries: runners, agent tools, wait kinds, step kinds, CLI commands; plus the
+    two list registries: removal slots and run-lifecycle listeners). Nothing writes to any live
+    registry while `setup(api)` runs.
+  - Validate every staged entry before committing any registry:
+    - For keyed registries, check existing entries and reserved legacy keys on the live unsealed
+      registry (via `peekHas` / reserved-key inspection) as well as duplicates within the same
+      plugin's staged buffer.
+    - Apply the exact same shape checks that each real registration applies — including runner-id
+      bounds (`storedRunnerIdSchema`: trimmed non-empty string, max 64 chars, no control chars)
+      and `workflows/step-kind-registry.ts` rules (non-empty, max 64 chars, not `'plugin'`) —
+      before any entry commits.
+    - List registrations (removal slots and run-lifecycle listeners) stay buffered in order and
+      commit only in the commit phase after every validation succeeds.
+  - Only after `await setup(api)` completes cleanly AND every staged registration passes all
+    shape and conflict checks do all staged entries commit into the real registries.
+  - If `setup(api)` throws or any staged entry fails validation or conflicts, zero entries commit
+    to any registry and the error is returned to the loader so the plugin is skipped cleanly.
 - **Public package entry (`packages/cezar/src/plugin/index.ts`):**
   - Exported as `"./plugin"` in `packages/cezar/package.json` (`./dist/plugin/index.js` + types).
   - Re-exports `SquawkPlugin`, `SquawkPluginApi`, registration types, and the runner kit.
@@ -245,8 +261,8 @@ Cross-runner and shared `runners/` files:
     under source/tsx/vitest, `new URL('./index.js', import.meta.url)` under built `dist/`).
 - **Discovery and order (`packages/cezar/src/plugin/loader.ts`):**
   - Reads `<config>/plugins/` (if present). Missing directory is a silent no-op (zero config).
-  - Iterates direct child directories (and symlinks to directories) in deterministic lexicographic
-    order (`localeCompare` / ASCII code-point sort on folder name).
+  - Iterates direct child directories (and symlinks to directories) in deterministic,
+    locale-independent ASCII code-point order by folder name (`a < b ? -1 : a > b ? 1 : 0`).
   - Entry file lookup inside each plugin folder: `index.mjs` first, then `index.js` (and `index.ts`
     only for bundled source folders under tsx/vitest). Folders without an entry file are skipped
     and recorded as failed with a clear message (`missing index.mjs or index.js`).
@@ -254,9 +270,11 @@ Cross-runner and shared `runners/` files:
   - For every failed plugin, logs one concise stderr warning (`[hsq] plugin "<name>" skipped: <reason>`).
 - **Health and CLI reporting:**
   - `GET /api/v1/health` (`packages/contract/src/health.ts` + `packages/cezar/src/server/server.ts`)
-    adds optional `plugins: { loaded: PluginHealthEntry[], failed: FailedPluginHealthEntry[] }`.
-    Each entry carries `name` and `source` (`'bundled' | 'host'`); failed entries carry `error`
-    (sanitized: host filesystem paths omitted when `HSQ_REMOTE=1`).
+    adds a required `plugins: { loaded: PluginHealthEntry[], failed: FailedPluginHealthEntry[] }`
+    field (always sent by the server, matching `contract-parity` rules; defaults to
+    `{ loaded: [], failed: [] }` when no plugins loaded or failed). Each entry carries `name` and
+    `source` (`'bundled' | 'host'`); failed entries carry `error` (sanitized: host filesystem paths
+    omitted when `HSQ_REMOTE=1`).
   - Add `hsq plugins` (runtime CLI command) listing loaded and failed plugins so operators can
     inspect plugin status and plugin-registered CLI commands without slowing `hsq --help`.
 
@@ -278,8 +296,10 @@ Cross-runner and shared `runners/` files:
 
 ### 6. Stored-config preservation (A3)
 
-- Define a non-empty bounded runner-id string schema (`storedRunnerIdSchema`: trimmed non-empty
-  string, max 64 chars, no control chars) for stored configuration files.
+- Define one shared runner-id bound (`storedRunnerIdSchema`: trimmed non-empty string, max 64
+  chars, no control chars) enforced consistently by both `registerRunner()` (and plugin staging)
+  and the stored-config decoders so every runner id accepted by registration or HTTP writes is
+  guaranteed to survive the next read.
 - `workspace/config.ts`:
   - `agentDefaults.runner`: decode with `storedRunnerIdSchema.optional().catch(undefined)`.
   - `disabledProviders`: keep every unique valid `storedRunnerIdSchema` string (ordering registered
@@ -292,8 +312,9 @@ Cross-runner and shared `runners/` files:
   - `defaultRunner`: decode with `storedRunnerIdSchema.default(DEFAULT_RUNNER_ID)` (runtime
     execution still maps unregistered ids to `DEFAULT_RUNNER_ID` via `resolveRunnerId`, without
     mutating stored config).
-  - `defaultModels`: preserve keys for unregistered runner ids (like `registeredRunnerRecord`)
-    while validating values for registered runners.
+  - `defaultModels`: preserve keys for unregistered runner ids (matching `registeredRunnerRecord`,
+    replacing the current filter that drops unregistered keys) while validating values for
+    registered runners.
 - HTTP write routes (`server/models-routes.ts`, `server/server.ts`, `server/runner-fields.ts`)
   continue to validate incoming runner ids against `knownRunnerIds()` and refuse unregistered ids.
 
@@ -313,7 +334,7 @@ Cross-runner and shared `runners/` files:
 
 | Case | Boot path | Registries & plugins | Output / health / behavior |
 | --- | --- | --- | --- |
-| Cold command (`--version`, `job`, `artifact`, `message`, `webhook`, `automation`, `backup --help`, `remote-settings --help`, `worker list\|inspect\|collect\|wait`) | `bootColdCli()` | Only `cli-registry` sealed; zero plugins/runners/stores loaded | Exits identically to current `main`; `index-runners.test.ts` passes |
+| Cold command (`--version`, `job`, `artifact`, `message`, `webhook`, `automation`, `backup --help`, `remote-settings --help`, `worker list\|inspect\|collect\|wait` — every built-in whose `runtimeMode` evaluates to false) | `bootColdCli()` | Only `cli-registry` sealed; zero plugins/runners/stores loaded | Exits identically to current `main`; `index-runners.test.ts` passes |
 | `hsq --help` | `bootColdCli()` | Only `cli-registry` sealed; zero plugins loaded | Lists built-in commands + footer note pointing to `hsq plugins` |
 | Built-in runtime command (`serve`, `run`, `init`, `discover`, `task`, `plugins`, etc.) | `bootRuntime()` | Built-ins + bundled runners + `<config>/plugins/*` loaded, then all registries sealed | Runs with built-in and plugin extensions active |
 | Unknown command matching a plugin CLI command (`hsq my-cmd`) | `bootRuntime()` | Full boot loads plugins before `cli-registry` seals | Dispatches `my-cmd` registered by plugin |
@@ -336,7 +357,8 @@ Cross-runner and shared `runners/` files:
 | `workspace/agent-accounts.ts` `accounts[]` row | Unregistered `provider` | Row preserved verbatim (skips `supportsProfiles` refusal while unregistered) | Row preserved on disk | Excluded from active registered runner listings while unregistered; HTTP POST refuses creating an account for an unregistered runner |
 | `workspace/agent-accounts.ts` `accounts[]` row | Registered `provider` with `supportsProfiles === false` | Row dropped by per-entry salvage (unchanged guarantee) | Dropped on next write | Rejected on HTTP POST (unchanged) |
 | `workspace/agent-accounts.ts` `selections` | Unregistered runner key | Preserved via `registeredRunnerRecord` | Preserved on disk | Active again when plugin loads |
-| `config.ts` repo `defaultRunner` & `defaultModels` | Unregistered runner id | Preserved in decoded config | Preserved on disk | Task execution falls back to `DEFAULT_RUNNER_ID` via `resolveRunnerId`; HTTP settings write refuses unknown runner id |
+| `config.ts` repo `defaultRunner` | Unregistered runner id | Preserved in decoded config (updated from `registeredRunnerIdSchema`) | Preserved on disk | Task execution falls back to `DEFAULT_RUNNER_ID` via `resolveRunnerId`; HTTP settings write refuses unknown runner id |
+| `config.ts` repo `defaultModels` | Unregistered runner key | Preserved in decoded config (updated from the current filter that drops unregistered keys) | Preserved on disk | Ignored while unregistered; active again when plugin loads |
 
 ## Implementation record
 
