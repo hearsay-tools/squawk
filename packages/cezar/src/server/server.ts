@@ -189,7 +189,7 @@ import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { isReclaimable, reclaimWorktree, reclaimWorktrees, selectReclaimableWorktrees } from '../runs/retention.ts';
 import { getCommit, getDiff, getRepoInfo, getStatus } from './git.ts';
 import { createHealthCache, HEALTH_TTL_MS } from './health-cache.ts';
-import { negotiate } from './accept-negotiation.ts';
+import { COMMIT_FORMATS, FILE_FORMATS, negotiate } from './accept-negotiation.ts';
 import { pluginHealth, pluginLoadReport } from '../plugin/loader.ts';
 import { createBackendChecks } from './backend-checks.ts';
 import { createGithubBranchForge } from './repo-branch-forge.ts';
@@ -549,15 +549,6 @@ function foldedLength(task: string, stack: Array<{ text: string }>): number {
 // it only ever carries small GUI prefs.
 const GLOBAL_BODY_LIMIT = 32 * 1024 * 1024; // 32 MiB
 const UI_STATE_BODY_LIMIT = 128 * 1024; // 128 KiB
-
-/** What `GET /repo/commit/:sha` offers, DEFAULT FIRST: the legacy `text/plain` blob is what a
- *  request with no opinion has always received, so it also wins an Accept tie. */
-const COMMIT_FORMATS = ['text/plain', 'application/json'] as const;
-
-/** What `GET /runs/:id/files` offers, DEFAULT FIRST. `image/*` rather than a concrete type: which
- *  image type the bytes are is only known once the path resolves, and the raw branch refuses
- *  everything that is not an image anyway. */
-const FILE_FORMATS = ['application/json', 'image/*'] as const;
 
 function writeErrorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 // The return type is INFERRED on purpose: it is the chained app type built at the bottom of
@@ -986,7 +977,13 @@ export function createApp(deps: ServerDeps) {
   // no refresher keeping a cache coherent, so it computes fresh, exactly as before.
   const readHealth = async () => {
     if (!deps.socketHub) return healthSnapshot();
-    return healthCache.read((payload) => ({ ...payload, capabilities: capabilities() })); // per request, like the gates (ADR 0055)
+    // Capabilities per request, like the gates (ADR 0055). Host paths follow the same read: a
+    // snapshot taken in local mode must not send them once the cockpit is hosted.
+    return healthCache.read((payload) => {
+      const caps = capabilities();
+      const repoRoot = caps.localHandoff ? bootRoot : basename(bootRoot);
+      return { ...payload, capabilities: caps, repoRoot, plugins: pluginHealth(pluginLoadReport(), { hostPaths: caps.localHandoff }) };
+    });
   };
 
   // ---- chained family: health (workspace-level) ----------------------------

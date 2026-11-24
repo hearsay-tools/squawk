@@ -65,3 +65,12 @@ export function negotiate<O extends string>(accept: string | undefined, offers: 
   }
   return best?.offer ?? null;
 }
+
+/** What `GET /repo/commit/:sha` offers, DEFAULT FIRST: the legacy `text/plain` blob is what a
+ *  request with no opinion has always received, so it also wins an Accept tie. */
+export const COMMIT_FORMATS = ['text/plain', 'application/json'] as const;
+
+/** What `GET /runs/:id/files` offers, DEFAULT FIRST. `image/*` rather than a concrete type: which
+ *  image type the bytes are is only known once the path resolves, and the raw branch refuses
+ *  everything that is not an image anyway. */
+export const FILE_FORMATS = ['application/json', 'image/*'] as const;

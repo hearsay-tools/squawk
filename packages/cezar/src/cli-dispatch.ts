@@ -1,5 +1,5 @@
 import { cliCommand, cliCommandsSealed, commandNeedsRuntime, registeredCliCommands } from './core/cli-registry.ts';
-import { bootColdCli, bootRuntime } from './boot.ts';
+import { bootColdCli, bootRuntime, hostPluginsDir } from './boot.ts';
 import { builtInCliCommand } from './built-in-cli-commands.ts';
 import { commandText, oldCommandNotice } from './home/command.ts';
 import { parseArgs } from 'node:util';
@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { operatorHomeEntry, prepareOperatorHome } from './home/entry.ts';
 import { bindManagedCliHome } from './managed-install/runtime-home.ts';
 import type { Home } from './home/home.ts';
-import { hostPluginsDir, runSubcommand, prepareCommandRuntime } from './subcommands.ts';
+import { runSubcommand, prepareCommandRuntime } from './subcommands.ts';
 import { getRepoInfo } from './server/git.ts';
 import { projectPaths } from './project-paths.ts';
 import { assertProjectAdmitted, projectAdmissionRefusal } from './server/cockpit-ownership.ts';

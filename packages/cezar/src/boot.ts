@@ -1,6 +1,7 @@
 import { registerBuiltInCliCommands, sealBuiltInCliCommands } from './built-in-cli-commands.ts';
 import { cliCommandsSealed } from './core/cli-registry.ts';
 import { installPluginResolveHook } from './plugin/resolve-hook.ts';
+import type { Home } from './home/home.ts';
 
 /**
  * Cold CLI (`--help`, `--version`, and commands whose `runtimeMode` is false) seals the CLI
@@ -9,6 +10,16 @@ import { installPluginResolveHook } from './plugin/resolve-hook.ts';
 export function bootColdCli(): void {
   registerBuiltInCliCommands();
   sealBuiltInCliCommands();
+}
+
+/** The operator's `<config>/plugins/`. An unresolvable home loads no host plugin and warns once. */
+export function hostPluginsDir(home: () => Home, warn: (line: string) => void = line => console.error(line)): string | undefined {
+  try {
+    return home().plugins;
+  } catch (error) {
+    warn(`[hsq] plugin folder unavailable (${error instanceof Error ? error.message : String(error)}) — continuing without plugins`);
+    return undefined;
+  }
 }
 
 export interface BootRuntimeOptions {

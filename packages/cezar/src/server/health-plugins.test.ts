@@ -4,7 +4,7 @@ import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { healthResponseSchema } from '@open-mercato/cezar-contract/health';
 import { RunStore } from '../runs/store.ts';
@@ -40,8 +40,9 @@ describe('GET /api/v1/health — plugins', () => {
     vi.unstubAllEnvs();
   });
 
-  const health = async () => {
-    const app = createApp({ home: testHome(), repoRoot, store, manager: {} as RunManager, version: '0.0.0-test' });
+  // A socket hub makes the app answer health from its cache, as the live server does.
+  const socketHub = { registerTopic: () => {}, registerTopicFamily: () => {}, handleUpgrade: () => {}, close: () => {}, onClose: () => () => undefined };
+  const health = async (app = createApp({ home: testHome(), repoRoot, store, manager: {} as RunManager, version: '0.0.0-test' })) => {
     const res = await apiRequest(app, '/api/v1/health');
     expect(res.status).toBe(200);
     return healthResponseSchema.parse(await res.json());
@@ -74,6 +75,17 @@ describe('GET /api/v1/health — plugins', () => {
       loaded: [{ name: 'good', source: 'host' }],
       failed: [{ name: 'bad', source: 'host', error: 'setup broke in <path>' }],
     });
+    expect(JSON.stringify(body.plugins)).not.toContain('/home/me');
+  });
+
+  it('sends no host path from a snapshot cached before the cockpit became hosted', async () => {
+    report.current = loaded;
+    const app = createApp({ home: testHome(), repoRoot, store, manager: {} as RunManager, version: '0.0.0-test', socketHub });
+    expect((await health(app)).plugins.loaded[0]!.path).toBe('/home/me/.config/squawk/plugins/good');
+    vi.stubEnv('HSQ_REMOTE', '1');
+    const body = await health(app);
+    expect(body.capabilities.localHandoff).toBe(false);
+    expect(body.repoRoot).toBe(basename(repoRoot));
     expect(JSON.stringify(body.plugins)).not.toContain('/home/me');
   });
 });
