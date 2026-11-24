@@ -1,13 +1,13 @@
 import { skillOf } from './skill-trigger.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import type { AgentEvent, AgentRunResult, AgentToolCallRecord, ContentBlock, SessionOptions } from './agent-runner.js';
+import type { AgentEvent, AgentRunResult, AgentToolCallRecord, ContentBlock, SessionOptions } from './agent-runner.ts';
 import { isSignalTerminationExit } from './agent-runner-values.ts';
 import { InputSubmissions } from './input-submissions.ts';
 import { contentText, emitImages, isRecord, piMessageText, matchesSkillPrompt, ompSkillPrompt, string } from './pi-rpc-wire.ts';
-import { AUTO_END_DELAY_MS } from './runner-runtime.js';
-import { signalSession } from './session-process.js';
-import type { SkillInputIdentity, UiEvent } from './ui-events.js';
-import { V1TextCoalescer } from './v1-text-coalescer.js';
+import { AUTO_END_DELAY_MS } from './runner-runtime.ts';
+import { signalSession } from './session-process.ts';
+import type { SkillInputIdentity, UiEvent } from './ui-events.ts';
+import { V1TextCoalescer } from './v1-text-coalescer.ts';
 
 /**
  * Turn and input bookkeeping that the Pi-family RPC runners share: pi (`pi-runner.ts`) and its
@@ -29,10 +29,12 @@ import { V1TextCoalescer } from './v1-text-coalescer.js';
 export class PiTextBlocks {
   private readonly coalescer: V1TextCoalescer;
   private readonly open = new Map<number, string>();
+  private readonly keyPrefix: string;
   private seq = 0;
 
   /** Each completed block is appended to the run's `textChunks`, then emitted as v1 `text`. */
-  constructor(private readonly keyPrefix: string, textChunks: string[], onEvent?: (event: AgentEvent) => void) {
+  constructor(keyPrefix: string, textChunks: string[], onEvent?: (event: AgentEvent) => void) {
+    this.keyPrefix = keyPrefix;
     this.coalescer = new V1TextCoalescer((text) => {
       textChunks.push(text);
       onEvent?.({ type: 'text', text });
@@ -143,8 +145,11 @@ export class PiRpcInput {
   private turnFailed = false;
   private latchedProviderError: string | undefined;
   private autoEndTimer: NodeJS.Timeout | undefined;
+  private readonly host: PiRpcInputHost;
 
-  constructor(private readonly host: PiRpcInputHost) {}
+  constructor(host: PiRpcInputHost) {
+    this.host = host;
+  }
 
   /** The head of sendMessage: input is no longer ready. */
   beginPrompt(): void {

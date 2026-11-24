@@ -1,5 +1,5 @@
-import { squawkToolEnvNames } from '../../ci-wait/tool-names.ts';
-import type { AgentRunSpec } from '../../core/agent-runner.ts';
+import { squawkToolEnvNames } from '@hearsay-tools/squawk/plugin/runtime';
+import type { AgentRunSpec } from '@hearsay-tools/squawk/plugin';
 
 /** Config overrides for a minimal session (`AgentRunSpec.minimal`): no hooks, plugins, apps,
  *  memories, subagents, AGENTS.md or web search. */

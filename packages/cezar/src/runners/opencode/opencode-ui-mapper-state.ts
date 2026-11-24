@@ -5,7 +5,7 @@
  */
 
 import type { MessageUsage } from './opencode-usage.ts';
-import type { ToolStatus, UiEvent } from '../../core/ui-events.ts';
+import type { ToolStatus, UiEvent } from '@hearsay-tools/squawk/plugin';
 
 interface SubtaskScope {
   readonly id: string;

@@ -1,4 +1,4 @@
-import type { RunnerModelData } from '../../core/runner-definition.ts';
+import type { RunnerModelData } from '@hearsay-tools/squawk/plugin';
 
 /** The OpenCode runner's model data. Data only: importing it loads no adapter. */
 export const OPENCODE_MODELS: RunnerModelData = {

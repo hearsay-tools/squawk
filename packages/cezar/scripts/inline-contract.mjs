@@ -39,9 +39,43 @@ const scan = (dir) => {
 };
 scan(dist);
 
+// Emitted declarations under dist/ may reference `@hearsay-tools/squawk/plugin*`, which TypeScript
+// cannot resolve while the workspace package name is `@wjarka/cezarion`. Repoint `.d.ts` module
+// specifiers (`from`, `import(...)`, side-effect `import`) to the sibling `dist/plugin/<stem>.js`
+// declaration without touching string-literal type constants; `.js` runtime imports stay on the
+// package specifier and resolve through `installPluginResolveHook()`.
+const PLUGIN_SPEC = /(from\s+|import\s*\(\s*|import\s+)(['"])@hearsay-tools\/squawk\/plugin(?:\/(runtime|model-settings|managed-cli|pi-rpc))?\2/g;
+const pluginDir = join(dist, 'plugin');
+function repointPluginDecls() {
+  if (!existsSync(join(pluginDir, 'index.d.ts'))) return 0;
+  let count = 0;
+  const walk = (dir) => {
+    for (const item of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, item.name);
+      if (item.isDirectory()) {
+        if (p !== outdir) walk(p);
+      } else if (item.name.endsWith('.d.ts')) {
+        const text = readFileSync(p, 'utf8');
+        PLUGIN_SPEC.lastIndex = 0;
+        if (!PLUGIN_SPEC.test(text)) continue;
+        const next = text.replace(PLUGIN_SPEC, (_match, prefix, _quote, sub) => {
+          let rel = relative(dirname(p), join(pluginDir, `${sub ?? 'index'}.js`)).replaceAll('\\', '/');
+          if (!rel.startsWith('.')) rel = `./${rel}`;
+          return `${prefix}'${rel}'`;
+        });
+        writeFileSync(p, next, 'utf8');
+        count++;
+      }
+    }
+  };
+  walk(dist);
+  return count;
+}
+
 rmSync(outdir, { recursive: true, force: true });
 if (referrers.length === 0) {
-  console.log('inline-contract ok — nothing in dist references the contract, nothing bundled');
+  const pluginDeclCount = repointPluginDecls();
+  console.log(`inline-contract ok — nothing in dist references the contract, nothing bundled, ${pluginDeclCount} plugin declaration(s) repointed`);
   process.exit(0);
 }
 
@@ -162,4 +196,5 @@ for (const p of referrers) {
   if (!rel.startsWith('.')) rel = `./${rel}`;
   writeFileSync(p, readFileSync(p, 'utf8').replace(SPEC, `'${rel}'`), 'utf8');
 }
-console.log(`inline-contract ok — contract bundled with declarations, ${referrers.length} file(s) repointed`);
+const pluginDeclCount = repointPluginDecls();
+console.log(`inline-contract ok — contract bundled with declarations, ${referrers.length} file(s) repointed, ${pluginDeclCount} plugin declaration(s) repointed`);

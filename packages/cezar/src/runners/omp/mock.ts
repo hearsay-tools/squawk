@@ -1,5 +1,4 @@
-import type { RunnerMock } from '../../core/runner-definition.ts';
-import { MOCK_BASELINE_PROMPT, COMMON_MOCK_SCENARIOS, STDIO_ASK_MOCK_SCENARIOS, PROVIDER_ERROR_MOCK_SCENARIOS } from '../../core/mock-prompts.ts';
+import { type RunnerMock, MOCK_BASELINE_PROMPT, COMMON_MOCK_SCENARIOS, STDIO_ASK_MOCK_SCENARIOS, PROVIDER_ERROR_MOCK_SCENARIOS } from '@hearsay-tools/squawk/plugin';
 
 /** The omp runner's native mock and its scenario adapter (the `mock` part). Data only. */
 export const OMP_MOCK = {

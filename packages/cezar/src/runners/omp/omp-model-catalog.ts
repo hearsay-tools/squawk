@@ -1,10 +1,8 @@
-import type { ModelDiscoveryOptions } from '../../core/model-discovery-options.ts';
-import { productEnv } from '../../core/product-env.ts';
+import { type ModelDiscoveryOptions, productEnv, type ModelProbeSpawnImpl, type ModelOption } from '@hearsay-tools/squawk/plugin';
+import { spawnModelProbe, modelProbeTeardown } from '@hearsay-tools/squawk/plugin/runtime';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { spawnModelProbe, type ModelProbeSpawnImpl } from '../../core/model-probe-spawn.ts';
-import { effortLevelSchema, type EffortLevel } from '@open-mercato/cezar-contract/effort';
-import { modelProbeTeardown } from '../../core/model-probe-teardown.ts';
-import type { ModelOption } from '../../core/runner-model-catalog.ts';
+import { effortLevelSchema } from '@hearsay-tools/squawk/plugin/runtime';
+import type { EffortLevel } from '@hearsay-tools/squawk/plugin';
 
 export type OmpModelDiscoveryOptions = ModelDiscoveryOptions;
 

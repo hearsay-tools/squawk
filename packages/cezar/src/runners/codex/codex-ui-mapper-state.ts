@@ -5,7 +5,7 @@
  * `CodexUiMapperState`.
  */
 
-import type { TokenUsage, UiToolItem } from '../../core/ui-events.ts';
+import type { TokenUsage, UiToolItem } from '@hearsay-tools/squawk/plugin';
 
 /** The two reasoning delta channels, accumulated separately — see
  *  `CodexUiMapperState.reasonings`. */

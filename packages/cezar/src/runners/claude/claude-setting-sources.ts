@@ -1,4 +1,4 @@
-import { productEnv } from '../../core/product-env.ts';
+import { productEnv } from '@hearsay-tools/squawk/plugin';
 
 /** A probe and a session must discover the same configured skill sources. */
 export function claudeSettingSourceArgs(env: NodeJS.ProcessEnv = process.env): string[] {

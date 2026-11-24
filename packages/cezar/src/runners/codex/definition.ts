@@ -1,6 +1,5 @@
 import { join } from 'node:path';
-import { defineRunner } from '../../core/runner-definition.ts';
-import { productEnv } from '../../core/product-env.ts';
+import { defineRunner, productEnv } from '@hearsay-tools/squawk/plugin';
 import { CODEX_FACTS } from './facts.ts';
 import { CODEX_MODELS } from './models.ts';
 import { CODEX_AGENT_CONFIG, CODEX_CONFIG_FILES } from './config-files.ts';
@@ -24,7 +23,7 @@ export const codexRunner = defineRunner({
   loadAdapter: async () => new (await import('./codex-app-server-runner.ts')).CodexAppServerRunner(),
   models: {
     ...CODEX_MODELS,
-    loadSettings: async () => (await import('../../agent-config/model-settings/codex.ts')).codexModelSettingsStrategy,
+    loadSettings: async () => (await import('./model-settings.ts')).codexModelSettingsStrategy,
   },
   loadModelCatalog: async () => (await import('./codex-model-catalog.ts')).discoverCodexModels,
   loadSkillCatalog: async () => (await import('./codex-skill-catalog.ts')).discoverCodexSkills,

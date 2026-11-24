@@ -28,10 +28,10 @@ import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import { ClaudeCliRunner } from '../src/runners/claude/claude-cli-runner.ts';
 import { workerExecutionsOf } from '../src/delegation/worker-executions.ts';
 
 prepareBenchmarkRuntime();
+const { ClaudeCliRunner } = await import('../src/runners/claude/claude-cli-runner.ts');
 const ownHome = prepareBenchmarkEnv();
 process.env.CEZ_DRY_RUN = '1'; process.env.CEZ_AUTONAME = '0'; process.env.CEZ_MOCK_NUDGE_REPLY = 'plain'; process.env.CEZ_MOCK_NOTES = '0';
 

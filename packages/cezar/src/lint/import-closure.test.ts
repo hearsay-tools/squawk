@@ -107,4 +107,13 @@ describe('folder templates', () => {
     expect(importClosure(join(dir, 'kit/rows.ts')).map(path => path.slice(dir.length + 1)))
       .toEqual(['kit/rows.ts', 'runners/a/adapter.ts', 'runners/a/facts.ts']);
   });
+
+  it('traverses allowlisted @hearsay-tools/squawk/plugin* entries into packages/cezar/src/plugin/', () => {
+    const dir = tree({
+      'runner.ts': "import { defineRunner } from '@hearsay-tools/squawk/plugin';\nexport const r = defineRunner;\n",
+    });
+    const closure = importClosure(join(dir, 'runner.ts'));
+    expect(closure).toContain(join(import.meta.dirname, '..', 'plugin', 'index.ts'));
+    expect(closure).toContain(join(import.meta.dirname, '..', 'plugin', 'runner-kit.ts'));
+  });
 });

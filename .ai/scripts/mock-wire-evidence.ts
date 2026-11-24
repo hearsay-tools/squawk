@@ -9,11 +9,12 @@ import { afterAll, expect, test, vi } from 'vitest';
 import type { AgentEvent, AgentSession } from '../../packages/cezar/src/core/agent-runner.ts';
 import { BUILT_IN_RUNNER_IDS } from '../../packages/cezar/src/runners/ids.ts';
 import { createRunner } from '../../packages/cezar/src/core/runner-registry.ts';
-import { HARNESS_ADAPTERS, PINNED_SESSION_ID, waitFor } from '../../packages/cezar/src/core/harness-parity.testkit.ts';
-import { registerBuiltInRunners, sealBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
+import { installPluginResolveHook } from '../../packages/cezar/src/plugin/resolve-hook.ts';
 
+installPluginResolveHook();
+const { HARNESS_ADAPTERS, PINNED_SESSION_ID, waitFor } = await import('../../packages/cezar/src/core/harness-parity.testkit.ts');
+const { registerBuiltInRunners, sealBuiltInRunners } = await import('../../packages/cezar/src/runners/built-in.ts');
 registerBuiltInRunners();
-
 sealBuiltInRunners();
 
 const output = resolve(process.env.MOCK_WIRE_OUTPUT_DIR!);

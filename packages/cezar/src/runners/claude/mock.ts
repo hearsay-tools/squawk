@@ -1,5 +1,4 @@
-import type { RunnerMock } from '../../core/runner-definition.ts';
-import { COMMON_MOCK_SCENARIOS, STDIO_ASK_MOCK_SCENARIOS } from '../../core/mock-prompts.ts';
+import { type RunnerMock, COMMON_MOCK_SCENARIOS, STDIO_ASK_MOCK_SCENARIOS } from '@hearsay-tools/squawk/plugin';
 
 /** Why the A13 and A14 cells cannot run on this wire. */
 const PROMPT_ACK_REASON = 'Claude acknowledges input with its own stdin write, so no prompt acknowledgement is outstanding at a turn end, and it refuses agent input only while its own agent write is pending.';

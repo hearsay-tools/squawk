@@ -1,5 +1,4 @@
-import { productEnv } from '../../core/product-env.ts';
-import type { RunnerCli } from '../../core/runner-definition.ts';
+import { productEnv, type RunnerCli } from '@hearsay-tools/squawk/plugin';
 
 /** How a terminal starts the OMP CLI and where the installer gets it. Data only: the definition and core read it. */
 export const OMP_CLI = {

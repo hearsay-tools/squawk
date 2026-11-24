@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import type { UiEvent } from '../../core/ui-events.ts';
+import type { UiEvent } from '../../../core/ui-events.ts';
 import { AcpEvents } from './events.ts';
 
 it('ignores native command catalogs on new sessions and resumes', () => {

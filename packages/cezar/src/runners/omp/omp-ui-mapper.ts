@@ -15,18 +15,9 @@
  *
  * Design record: `.ai/specs/2026-10-02-omp-runner.md`.
  */
-import type {
-  FileDiff,
-  StopReason,
-  TokenUsage,
-  UiEvent,
-  UiMessageItem,
-  SkillInputIdentity,
-  UiReasoningItem,
-  UiToolItem,
-} from '../../core/ui-events.js';
-import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
-import { contentText, isRecord, number, ompSkillPrompt, ompRpcError as rpcError, string } from '../../core/pi-rpc-wire.ts';
+import type { FileDiff, StopReason, TokenUsage, UiEvent, UiMessageItem, SkillInputIdentity, UiReasoningItem, UiToolItem } from '@hearsay-tools/squawk/plugin';
+import { contentText, isRecord, number, ompSkillPrompt, ompRpcError as rpcError, string } from '@hearsay-tools/squawk/plugin/pi-rpc';
+import { toolDisplay } from '@hearsay-tools/squawk/plugin/runtime';
 import { childScope, lifecycleStatus, ompToolPlan, singleFormSubagent, startSubagentEntry, withSubagent } from './omp-subagent-rows.ts';
 
 /** One stream of text/reasoning blocks: the parent turn's, or one sub-agent's. */

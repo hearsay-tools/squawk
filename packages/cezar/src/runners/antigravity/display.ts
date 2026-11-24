@@ -1,4 +1,4 @@
-import type { RunnerDisplay } from '../../core/runner-definition.ts';
+import type { RunnerDisplay } from '@hearsay-tools/squawk/plugin';
 export const ANTIGRAVITY_DISPLAY = {
   displayName: 'Antigravity', modelListName: 'Antigravity', modelIdScope: 'own',
   pickerLabel: 'Antigravity', pickerDescription: 'Google Antigravity CLI over ACP', icon: 'bot',

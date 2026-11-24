@@ -1,4 +1,4 @@
-import type { ProviderCommandResult, ProviderConnectionState } from '../../core/provider-auth.ts';
+import type { ProviderCommandResult, ProviderConnectionState } from '@hearsay-tools/squawk/plugin';
 
 /**
  * OMP (Oh My Pi) v18.4.11: `omp models --json` exits 0 and prints `{"models":[...]}` — an object

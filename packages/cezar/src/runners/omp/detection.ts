@@ -1,5 +1,4 @@
-import { productEnv } from '../../core/product-env.ts';
-import type { RunnerDetection } from '../../core/runner-definition.ts';
+import { productEnv, type RunnerDetection } from '@hearsay-tools/squawk/plugin';
 
 /** How the host probe finds the OMP CLI. Data only: the definition reads it and core runs the probe. */
 export const OMP_DETECTION = {

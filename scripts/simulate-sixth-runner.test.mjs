@@ -116,7 +116,8 @@ test('--complete copies the opencode runner as hexacode in its places only, with
   assert.match(readFileSync(join(root, SRC, 'runners/ids.ts'), 'utf8'), /'antigravity', 'hexacode'\]/);
   assert.match(readFileSync(join(root, SRC, 'runners/built-in.ts'), 'utf8'), /import \{ hexacodeRunner \} from '\.\/hexacode\/definition\.ts';\n[^]*antigravityRunner, hexacodeRunner\]/);
   // Only what the copy takes from outside the copied files keeps the old spelling, and each one is reported.
-  assert.ok(shared.includes(`${SRC}/runners/opencode/definition.ts: '../../agent-config/model-settings/opencode.ts'`));
+  assert.ok(shared.includes(`${SRC}/runners/opencode/opencode-minimal.ts: opencodeToolGrantFields`));
+  assert.match(definition, /\(await import\('\.\/model-settings\.ts'\)\)\.hexacodeModelSettingsStrategy/);
   const keptBy = (path) => shared.filter(line => line.startsWith(`${path}: `)).map(line => line.slice(path.length + 2));
   for (const file of filesUnder(runner)) {
     const kept = keptBy(`${SRC}/runners/opencode/${file.replaceAll('hexacode', 'opencode')}`);

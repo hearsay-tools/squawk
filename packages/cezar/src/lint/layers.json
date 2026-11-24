@@ -37,13 +37,16 @@
       "worktree-setup.ts"
     ],
     "runner": [
-      "runners/",
-      "runners/acp/"
+      "runners/"
     ],
     "shell": [
       "server/",
       "plugin/index.ts",
       "plugin/runner-kit.ts",
+      "plugin/runtime.ts",
+      "plugin/model-settings.ts",
+      "plugin/managed-cli.ts",
+      "plugin/pi-rpc.ts",
       "built-in-run-slots.ts",
       "boot.ts",
       "built-in-cli-commands.ts",

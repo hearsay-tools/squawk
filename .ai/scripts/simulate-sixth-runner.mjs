@@ -178,16 +178,17 @@ const IMPORT_CLAUSE = /\b(?:import|export)\s+(?:type\s+)?([^;'"]*?)\s+from\s+['"
 const DYNAMIC_IMPORT = /import\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*\.([\w$]+)/g;
 const RELATIVE_STRING = /(['"`])(\.\.?\/[^'"`\s]*)\1/g;
 
-/** The spellings in `text` (the copied file `path`) that name something outside the copied files `copied`: relative paths, and the names imported from them. */
+/** The spellings in `text` (the copied file `path`) that name something outside the copied files `copied`: relative paths, and the names imported from outside modules or packages. */
 function outsideReferences(path, text, copied) {
-  const outside = (spec) => spec.startsWith('.') && !copied.has(posix.join(posix.dirname(path), spec));
+  const outsideRelative = (spec) => spec.startsWith('.') && !copied.has(posix.join(posix.dirname(path), spec));
+  const outsideImport = (spec) => !spec.startsWith('.') || !copied.has(posix.join(posix.dirname(path), spec));
   const kept = new Set();
-  for (const [, quote, spec] of text.matchAll(RELATIVE_STRING)) if (SOURCE_NAME.test(spec) && outside(spec)) kept.add(`${quote}${spec}${quote}`);
+  for (const [, quote, spec] of text.matchAll(RELATIVE_STRING)) if (SOURCE_NAME.test(spec) && outsideRelative(spec)) kept.add(`${quote}${spec}${quote}`);
   for (const [, clause, spec] of text.matchAll(IMPORT_CLAUSE)) {
-    if (!outside(spec)) continue;
+    if (!outsideImport(spec)) continue;
     for (const [name] of clause.matchAll(/[\w$]+/g)) if (SOURCE_NAME.test(name)) kept.add(name);
   }
-  for (const [, spec, name] of text.matchAll(DYNAMIC_IMPORT)) if (outside(spec) && SOURCE_NAME.test(name)) kept.add(name);
+  for (const [, spec, name] of text.matchAll(DYNAMIC_IMPORT)) if (outsideImport(spec) && SOURCE_NAME.test(name)) kept.add(name);
   return [...kept];
 }
 

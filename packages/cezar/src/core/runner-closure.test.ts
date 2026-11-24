@@ -4,6 +4,7 @@ import { join, relative } from 'node:path';
 import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
 import { runnerClassNames } from '../lint/owner-reader-rules.ts';
+import { PLUGIN_ENTRY_SUBPATHS } from '../plugin/resolve-hook.ts';
 // A test that drives one runner loads that runner's adapter and none of the other five, so an
 // edit to one adapter reruns only its own per-runner tests (hearsay-tools/cezarion#2939). The
 // closure is every module the file reaches through static and dynamic imports; esbuild reads a
@@ -31,11 +32,26 @@ function perRunnerFiles(): Array<{ file: string; runner: string }> {
   }));
 }
 
-/** Each entry's closure, as `src`-relative paths. */
+const PLUGIN_ENTRY_PATHS: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(PLUGIN_ENTRY_SUBPATHS).map(([specifier, stem]) => [specifier, join(src, 'plugin', `${stem}.ts`)]),
+);
+
+const pluginKitAlias = {
+  name: 'plugin-kit-alias',
+  setup(buildApi: { onResolve: (opts: { filter: RegExp }, cb: (args: { path: string }) => { path: string } | undefined) => void }) {
+    buildApi.onResolve({ filter: /^@hearsay-tools\/squawk\/plugin(?:\/[^/]+)?$/ }, (args) => {
+      const target = PLUGIN_ENTRY_PATHS[args.path];
+      return target ? { path: target } : undefined;
+    });
+  },
+};
+
+/** Each entry's closure, as `src`-relative paths (with `@hearsay-tools/squawk/plugin*` resolved). */
 async function closures(files: readonly string[]): Promise<Map<string, Set<string>>> {
   const result = await build({
     entryPoints: files.map(file => join(src, file)), absWorkingDir: src, bundle: true, write: false, metafile: true,
     platform: 'node', format: 'esm', packages: 'external', outdir: join(src, '.closure'), logLevel: 'silent',
+    plugins: [pluginKitAlias],
   });
   const byEntry = new Map<string, Set<string>>();
   for (const output of Object.values(result.metafile.outputs)) {
@@ -45,32 +61,34 @@ async function closures(files: readonly string[]): Promise<Map<string, Set<strin
   return byEntry;
 }
 
-/** Shared runner support (such as runners/acp/) is allowed. Adapters, definitions, per-runner
- * data modules (`facts.ts`, `extra-tools.ts`, `mock.ts`) and the built-in roster remain private
- * to each allowed runner, including transitive imports (hearsay-tools/squawk#4175). */
+/** Every non-testkit module inside another runner's folder (`runners/<other>/*`) and the built-in
+ *  roster remain private to each allowed runner, including transitive imports (hearsay-tools/squawk#4175). */
 function foreignRunnerModules(closure: Set<string>, allowed: ReadonlySet<string>): string[] {
   const others = BUILT_IN_RUNNER_IDS.filter(id => !allowed.has(id));
+  const foreignFiles = others.flatMap(id =>
+    [...closure]
+      .filter(file => file.startsWith(`runners/${id}/`) && !file.endsWith('.testkit.ts'))
+      .sort(),
+  );
   return [
-    ...others.filter(id => closure.has(ADAPTERS[id]!)),
-    ...others.filter(id => closure.has(`runners/${id}/definition.ts`)).map(id => `${id} definition`),
-    ...others.filter(id => closure.has(`runners/${id}/facts.ts`)).map(id => `${id} facts`),
-    ...others.filter(id => closure.has(`runners/${id}/extra-tools.ts`)).map(id => `${id} extra-tools`),
-    ...others.filter(id => closure.has(`runners/${id}/mock.ts`)).map(id => `${id} mock`),
+    ...foreignFiles,
     ...(closure.has('runners/built-in.ts') ? ['built-in'] : []),
   ];
 }
 
 describe('per-runner test closures', () => {
-  it.each([false, true])('allows a runner-shaped ACP consumer and refuses a foreign adapter: %s', async foreign => {
+  it('refuses any import from a foreign runner folder, including antigravity/acp', async () => {
     const result = await build({
-      stdin: { contents: `import { AcpSession } from './runners/acp/session.ts';
-        ${foreign ? "import { PiRunner } from './runners/pi/pi-runner.ts';" : ''}
-        export class FixtureRunner { session = AcpSession; ${foreign ? 'foreign = PiRunner;' : ''} }`, resolveDir: src },
+      stdin: { contents: `import { AcpSession } from './runners/antigravity/acp/session.ts';
+        import { PiRunner } from './runners/pi/pi-runner.ts';
+        export class FixtureRunner { session = AcpSession; foreign = PiRunner; }`, resolveDir: src },
       absWorkingDir: src, bundle: true, write: false, metafile: true, platform: 'node', format: 'esm', packages: 'external', logLevel: 'silent',
+      plugins: [pluginKitAlias],
     });
     const closure = new Set(Object.keys(result.metafile.inputs));
-    expect(closure.has('runners/acp/session.ts')).toBe(true);
-    expect(foreignRunnerModules(closure, new Set(['fixture']))).toEqual(foreign ? ['pi', 'pi facts'] : []);
+    const foreign = foreignRunnerModules(closure, new Set(['fixture']));
+    expect(foreign).toContain('runners/antigravity/acp/session.ts');
+    expect(foreign).toContain('runners/pi/pi-runner.ts');
   });
 
   it('hold their own adapter, no other runner adapter or definition but the wait kit\'s Claude workers and R14\'s second runner, and not the built-in runner list', async () => {

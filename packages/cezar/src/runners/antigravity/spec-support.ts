@@ -1,5 +1,4 @@
-import type { AgentRunSpecSupport } from '../../core/agent-runner.ts';
-import { SQUAWK_SIDE_SPEC_SUPPORT } from '../../core/agent-runner-values.ts';
+import { type AgentRunSpecSupport, SQUAWK_SIDE_SPEC_SUPPORT } from '@hearsay-tools/squawk/plugin';
 export const ANTIGRAVITY_SPEC_SUPPORT: AgentRunSpecSupport = {
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: '_meta.antigravity.systemPrompt.append on session/new, which the CLI saves; a resume prepends it to the opening turn' },

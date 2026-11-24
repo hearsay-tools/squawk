@@ -1,28 +1,19 @@
 import { opencodeHttp } from './opencode-http.ts';
-import { openingInput, skillOf, validSkillMessage } from '../../core/skill-trigger.ts';
-import { productEnv } from '../../core/product-env.ts';
-import { uiAskQuestions, type AskQuestion } from '../../core/ask.ts';
+import { AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS, InputSubmissions, SessionEndedBeforeAcknowledgement, V1TextCoalescer, boundOutputDrainAfterExit, formatModelIdentity, isAbortError, isSignalTerminationExit, openingInput, parseModelIdentity, prependSystemPrompt, signalSession, skillOf, spawnSessionLeader, summarizeRunnerStderr, trackChildExit, uiAskQuestions, validSkillMessage } from '@hearsay-tools/squawk/plugin/runtime';
+import { productEnv, type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentSession, type AgentToolCallRecord, type AskQuestion, type ContentBlock, type InputDelivery, type SessionOptions } from '@hearsay-tools/squawk/plugin';
 import { opencodeSkillWarning, sessionErrorDetail, sessionErrorText } from './opencode-session-error.ts';
-import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import { finished } from 'node:stream/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { parseEffort } from '@open-mercato/cezar-contract/effort';
+import { parseEffort } from '@hearsay-tools/squawk/plugin/runtime';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
-import type { AgentEvent, AgentRunResult, AgentRunSpec, AgentRunner, AgentToolCallRecord, ContentBlock, InputDelivery, AgentSession, SessionOptions } from '../../core/agent-runner.ts';
-import { isAbortError, isSignalTerminationExit, prependSystemPrompt, SessionEndedBeforeAcknowledgement, trackChildExit } from '../../core/agent-runner-values.ts';
 import { OPENCODE_FACTS } from './facts.ts';
 import { OPENCODE_SPEC_SUPPORT } from './spec-support.ts';
-import { InputSubmissions } from '../../core/input-submissions.ts';
-import { signalSession, spawnSessionLeader } from '../../core/session-process.ts';
 import { OPENCODE_MINIMAL_PROMPT_TOOLS, OPENCODE_MINIMAL_SESSION_PERMISSION, opencodeServeLaunch, opencodeSessionBody } from './opencode-minimal.ts';
 
 import { toSquawkQuestions, questionAnswers } from './opencode-questions.ts';
-import { boundOutputDrainAfterExit, AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS } from '../../core/runner-runtime.ts';
-import { formatModelIdentity, parseModelIdentity } from '../../core/model-identity.ts';
-import { V1TextCoalescer } from '../../core/v1-text-coalescer.ts';
 import {
   isOpencodeDefaultAsk,
   opencodePermissionAskSchema,

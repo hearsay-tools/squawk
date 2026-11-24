@@ -1,4 +1,4 @@
-import type { RunnerConfigFiles } from '../../core/runner-definition.ts';
+import type { RunnerConfigFiles } from '@hearsay-tools/squawk/plugin';
 export const ANTIGRAVITY_CONFIG_FILES: RunnerConfigFiles = {
   files: [], agentConfig: { label: 'Antigravity', note: 'Uses your existing Antigravity setup.', groups: [
     { id: 'settings', label: 'Settings', empty: 'Uses your existing Antigravity setup.' },
