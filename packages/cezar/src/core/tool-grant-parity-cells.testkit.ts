@@ -7,7 +7,6 @@ import type { AgentEvent, ToolGrant } from './agent-runner.ts';
 import { TOOL_GRANT_KINDS } from './agent-runner-values.ts';
 import { driveSeam } from './harness-parity-core.testkit.ts';
 import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.ts';
-import { extraToolRows } from './runner-fact-rows.testkit.ts';
 import { runnerGolden } from './runner-golden.testkit.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { allowProbePermissions, policyResponses } from './permission-policy.testkit.ts';
@@ -40,9 +39,14 @@ export type ToolGrantCase = {
 };
 
 const stepDefault = (backend: string): string[] => allowedToolsForStep(undefined, backend);
-/** Another runner's step default, from its data file: a per-runner test registers only its own
- *  runner, so the registry cannot answer for the other one. */
-const otherStepDefault = (backend: string): string[] => [...DEFAULT_ALLOWED_TOOLS, ...extraToolRows()[backend]!];
+/** Another runner's extra tools for TG3 (`inherited`): kept as plain data so per-runner tool-grant
+ *  tests load no other runner's `extra-tools.ts`; `core/runner-fact-rows.test.ts` pins these values
+ *  to `extraToolRows()` (hearsay-tools/squawk#4175). */
+export const INHERITED_EXTRA_TOOLS = {
+  claude: [],
+  pi: ['Subagent', 'SubagentSupervisor', 'SubagentWait'],
+} as const satisfies Readonly<Record<'claude' | 'pi', readonly string[]>>;
+const otherStepDefault = (backend: 'claude' | 'pi'): string[] => [...DEFAULT_ALLOWED_TOOLS, ...INHERITED_EXTRA_TOOLS[backend]];
 
 export const TOOL_GRANT_CASES: readonly ToolGrantCase[] = [
   { id: 'unset', name: 'TG1 an unset grant', grant: () => ({ kind: 'unset' }) },

@@ -37,7 +37,6 @@ import { registerRunner } from '../../core/runner-registry.ts';
 import { piRunner } from './definition.ts';
 import { opencodeRunner } from '../opencode/definition.ts';
 import { claudeRunner } from '../claude/definition.ts';
-import { extraToolRows } from '../../core/runner-fact-rows.testkit.ts';
 
 // The runner's child env reads each backend's allow-list from the registry; the env tests below
 // drive pi, OpenCode (the `provider/model` control) and Claude.
@@ -1055,9 +1054,8 @@ describe('pi RPC argv', () => {
 // built-ins through an extension; a narrowed list keeps the allowlist; a list that maps to
 // nothing fails closed instead of falling back to pi's own default.
 describe('pi tool selection (hearsay-tools/cezarion#1305)', () => {
-  // The Claude step default a worker inherits from a Claude parent, from Claude's data file: this
-  // test registers only pi.
-  const claudeStepDefault = [...DEFAULT_ALLOWED_TOOLS, ...extraToolRows().claude!];
+  // The Claude step default a worker inherits from a Claude parent, from the registered Claude definition.
+  const claudeStepDefault = [...DEFAULT_ALLOWED_TOOLS, ...claudeRunner.extraTools];
   const ci = { name: 'cezar_ci_test', command: 'node', args: ['/x.mjs'] };
   const base = { cwd: '/repo', userPrompt: 'task', toolGrant: UNSET_TOOL_GRANT };
   const stepDefault = allowedToolsForStep(undefined, 'pi');

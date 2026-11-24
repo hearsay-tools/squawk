@@ -13,6 +13,7 @@ import { BUILT_IN_RUNNER_IDS } from '../src/runners/ids.ts';
 import { parseArgs } from 'node:util';
 
 import * as harnessCore from '../src/core/harness-parity-core.testkit.ts';
+import * as parityExemptions from '../src/core/parity-exemptions.testkit.ts';
 import * as harnessRows from '../src/core/harness-parity-rows.testkit.ts';
 import { PARITY_ROW_ID } from '../src/core/parity-classes.testkit.ts';
 import * as seamContract from '../src/core/seam-contract.testkit.ts';
@@ -20,16 +21,19 @@ import * as monitoringTurn from '../src/workflows/monitoring-turn.testkit.ts';
 import * as waits from '../src/workflows/waits-parity.testkit.ts';
 import * as uiRows from '../src/core/ui-parity-rows.testkit.ts';
 import * as subagents from '../src/workflows/waits-subagents-rows.testkit.ts';
+import * as subagentExemptions from '../src/workflows/waits-subagents-exemptions.testkit.ts';
 
 /** The kit modules that declare rows, by path under `packages/cezar/src`. */
 const KITS: Readonly<Record<string, object>> = {
   'core/ui-parity-rows.testkit.ts': uiRows,
   'core/harness-parity-core.testkit.ts': harnessCore,
+  'core/parity-exemptions.testkit.ts': parityExemptions,
   'core/harness-parity-rows.testkit.ts': harnessRows,
   'core/seam-contract.testkit.ts': seamContract,
   'workflows/monitoring-turn.testkit.ts': monitoringTurn,
   'workflows/waits-parity.testkit.ts': waits,
   'workflows/waits-subagents-rows.testkit.ts': subagents,
+  'workflows/waits-subagents-exemptions.testkit.ts': subagentExemptions,
 };
 
 export interface IndexedExemption {

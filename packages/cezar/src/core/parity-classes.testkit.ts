@@ -1,5 +1,5 @@
-import { factRows } from './runner-fact-rows.testkit.ts';
-import { PARITY_EXEMPTIONS, type ScenarioName } from './harness-parity-core.testkit.ts';
+import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import type { ScenarioName } from './harness-parity-core.testkit.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 
 /**
@@ -52,9 +52,9 @@ export function turnPathValues<Id extends string>(ids: readonly Id[], facts: Rea
 export const SCENARIO_RUNNER: string = 'claude';
 
 /** The runners a shared parity row runs on. */
-/** The built-in runners, from the fact rows' keys: a static roster, read at collection time
- *  before any registration, exactly as the closed list answered before runner ids opened. */
-const ROSTER: readonly string[] = Object.keys(factRows());
+/** The built-in runners, from `runners/ids.ts`: a static roster, read at collection time
+ *  before any registration, without loading any runner's data files. */
+const ROSTER: readonly string[] = BUILT_IN_RUNNER_IDS;
 
 export const SHARED_RUNNERS: readonly string[] = [SCENARIO_RUNNER];
 
@@ -317,8 +317,19 @@ export const SCENARIO_CLASSES: Readonly<Record<ScenarioName, readonly [ScenarioC
   'silent-tail-slow-done': ['runner-code', NATIVE_ACK],
 };
 
-/** A row with an exemption on any runner differs by runner, so it runs on every runner. */
-const EXEMPT_ROWS = new Set(PARITY_EXEMPTIONS.map(exemption => exemption.criterion));
+/**
+ * Every criterion that has an exemption on any built-in runner differs by runner, so it runs on
+ * every runner. Kept as plain ids here so single-runner parity tests do not load every runner's
+ * `facts.ts` and `mock.ts`; `parity-classes.test.ts` pins this set to `PARITY_EXEMPTIONS`
+ * (hearsay-tools/squawk#4175).
+ */
+export const EXEMPT_ROWS: ReadonlySet<string> = new Set([
+  'A13', 'A14', 'A15', 'A9', 'D1', 'D3', 'F11', 'F7', 'F8', 'F9', 'H2', 'I2', 'N8',
+  'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9',
+  'R12', 'R15', 'R4', 'R44', 'R45', 'R77',
+  'S11', 'S21', 'S25', 'S9',
+  'U12', 'U13', 'U20h', 'U22s', 'U27', 'U7', 'U7h', 'UI1', 'UI2',
+]);
 
 /**
  * The runners a family's row runs on. `row` is the row id in the cell title; a cell whose title

@@ -15,10 +15,11 @@ import {
 import { WAIT_CRITERIA } from '../workflows/waits-parity.testkit.ts';
 import { MONITORING_ACK_CRITERIA, MONITORING_ORDER_CRITERIA, MONITORING_TURN_CRITERIA } from '../workflows/monitoring-turn.testkit.ts';
 import {
-  FACT_VALUE_TESTS, NO_SESSION_RUNNER, PARITY_FAMILIES, PARITY_FILES, SCENARIO_RUNNER, SHARED_RUNNERS, parityRowId, parityRunners, runsOn, turnPathValues,
+  EXEMPT_ROWS, FACT_VALUE_TESTS, NO_SESSION_RUNNER, PARITY_FAMILIES, PARITY_FILES, SCENARIO_RUNNER, SHARED_RUNNERS, parityRowId, parityRunners, runsOn, turnPathValues,
   type ParityFamilyName, type TurnPathFact,
   SCENARIO_CLASSES,
 } from './parity-classes.testkit.ts';
+import { PARITY_EXEMPTIONS } from './parity-exemptions.testkit.ts';
 import { RUNNER_FACTS, type RunnerFacts } from './runner-facts.ts';
 import { COMBINATION_ROWS, type CombinationException } from '../lint/runner-fact-combination.ts';
 
@@ -97,6 +98,7 @@ describe('the parity classification table (hearsay-tools/cezarion#2991)', () => 
   });
 
   it('runs a row any runner is exempt from, and a cell with no row id, on every runner', () => {
+    expect([...EXEMPT_ROWS].sort()).toEqual([...new Set(PARITY_EXEMPTIONS.map(exemption => exemption.criterion))].sort());
     expect(parityRunners('waits', 'U27')).toEqual(BUILT_IN_RUNNER_IDS);
     expect(parityRunners('workflow-autonomous', 'A9')).toEqual(BUILT_IN_RUNNER_IDS);
     expect(parityRunners('waits', undefined)).toEqual(BUILT_IN_RUNNER_IDS);

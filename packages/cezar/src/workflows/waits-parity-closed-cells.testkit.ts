@@ -15,7 +15,6 @@ import { until, timeline, store, manager, semaphore, eventCheckpoint, root, rest
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { recordCommits } from '../runs/outcome-crash.testkit.ts';
 import { withHeldAck } from '../core/owned-input-delivery.testkit.ts';
-import { factRows } from '../core/runner-fact-rows.testkit.ts';
 import { MESSAGE_WAKE_OPENING, toolCall, thenSay } from './waits-parity.testkit.ts';
 import { NO_WAIT_NUDGE } from './turn-end.ts';
 import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
@@ -94,7 +93,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
   for (const runner of runners) {
     // The wire acknowledges an input with an HTTP reply apart from its turn frames, so a held
     // acknowledgement outlives the turn (F7 reads the same fact).
-    const httpAck = factRows()[runner]!.transport === 'http';
+    const httpAck = runnerDefinition(runner).facts.transport === 'http';
     for (const legacy of [false, true]) {
       it(`${runner} U22c a refusal whose reopened sessions keep closing cleanly is queued once, stops at the delivery bound, and Continue delivers it once${legacy ? ' (legacy Finish)' : ''}`, async () => {
         retryAtOnce();

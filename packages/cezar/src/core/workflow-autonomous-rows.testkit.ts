@@ -1,6 +1,8 @@
 import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
 import { collectedOnly, partitionParity, type CellBody, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
 import { AUTONOMOUS_CRITERIA, exemptionFor, type ParityExemption } from './harness-parity-core.testkit.ts';
+import { runsOn } from './parity-classes.testkit.ts';
+import { isRegisteredRunner } from './runner-registry.ts';
 
 // The workflow-autonomous cells and their partition, apart from the engine the cell bodies
 // drive, so the registration guard collects the same names without loading it.
@@ -84,38 +86,46 @@ export type WorkflowAutonomousCells = {
   capRowTimeoutMs: number;
 };
 
+type AutonomousIt = ReturnType<typeof partitionParity>['it'];
+
+function registerAutonomousRow(it: AutonomousIt, cells: WorkflowAutonomousCells, backend: string, row: AutonomousRow): void {
+  const exemption = exemptionFor(row.id, backend);
+  if (row.id === 'A13' || row.id === 'A14') {
+    // Claude's stdin write is its acknowledgement.
+    const options = { refuses: !exemption, heldAck: backend !== 'claude' };
+    it(`${backend} ${row.id} ${exemption ? `exemption — ${exemption.reason}` : row.name}`,
+      cells.idleClose(backend, row, options), 60_000);
+    return;
+  }
+  if (row.id === 'A16') {
+    it(`${backend} ${row.id} ${row.name}`, cells.answerBound(backend), 60_000);
+    return;
+  }
+  if (row.id === 'A15') {
+    it(`${backend} ${row.id} ${exemption ? `exemption — ${exemption.reason}` : row.name}`,
+      cells.ackBound(backend, exemption), 60_000);
+    return;
+  }
+  if (exemption) {
+    it(`${backend} ${row.id} exemption — ${exemption.reason}`, cells.exemption(backend));
+    return;
+  }
+  // Cap and non-autonomous controls exercise both constructors as well.
+  const modes = row.id === 'A2' || row.id === 'A4' || row.id === 'A12' ? ['continuation'] : row.id === 'A5' || row.id === 'A6' ? ['fresh', 'continuation'] : ['fresh'];
+  for (const mode of modes) it(`${backend} ${row.id} ${row.name} (${mode})`, cells.row(backend, row, mode),
+    row.id === 'A5' || row.id === 'A11' || row.id === 'A12' ? cells.capRowTimeoutMs : 30_000);
+}
+
 /** The registrar over each kind of cell body per runner and criterion. */
 export function workflowAutonomousParity(cells: WorkflowAutonomousCells) {
   return function describeWorkflowAutonomousParity(part: ParityPart, collect?: ParityCollector): void {
     const { describe, it } = partitionParity(part, PARTS, collect, 'workflow-autonomous');
     describe('autonomous turn-end parity — #426', () => {
       for (const backend of BUILT_IN_RUNNER_IDS) {
+        if (part !== 'all' && !isRegisteredRunner(backend)) continue;
         for (const row of AUTONOMOUS_CRITERIA) {
-          const exemption = exemptionFor(row.id, backend);
-          if (row.id === 'A13' || row.id === 'A14') {
-            // Claude's stdin write is its acknowledgement.
-            const options = { refuses: !exemption, heldAck: backend !== 'claude' };
-            it(`${backend} ${row.id} ${exemption ? `exemption — ${exemption.reason}` : row.name}`,
-              cells.idleClose(backend, row, options), 60_000);
-            continue;
-          }
-          if (row.id === 'A16') {
-            it(`${backend} ${row.id} ${row.name}`, cells.answerBound(backend), 60_000);
-            continue;
-          }
-          if (row.id === 'A15') {
-            it(`${backend} ${row.id} ${exemption ? `exemption — ${exemption.reason}` : row.name}`,
-              cells.ackBound(backend, exemption), 60_000);
-            continue;
-          }
-          if (exemption) {
-            it(`${backend} ${row.id} exemption — ${exemption.reason}`, cells.exemption(backend));
-            continue;
-          }
-          // Cap and non-autonomous controls exercise both constructors as well.
-          const modes = row.id === 'A2' || row.id === 'A4' || row.id === 'A12' ? ['continuation'] : row.id === 'A5' || row.id === 'A6' ? ['fresh', 'continuation'] : ['fresh'];
-          for (const mode of modes) it(`${backend} ${row.id} ${row.name} (${mode})`, cells.row(backend, row, mode),
-            row.id === 'A5' || row.id === 'A11' || row.id === 'A12' ? cells.capRowTimeoutMs : 30_000);
+          if (!runsOn('workflow-autonomous', row.id, backend)) continue;
+          registerAutonomousRow(it, cells, backend, row);
         }
       }
     });

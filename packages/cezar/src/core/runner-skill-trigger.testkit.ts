@@ -6,7 +6,7 @@ import type { AgentRunSpec } from './agent-runner.ts';
 import { driveSeam, waitFor, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { parityRunners } from './parity-classes.testkit.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
-import { mockRows } from './runner-mock-rows.testkit.ts';
+import { runnerDefinition } from './runner-registry.ts';
 import type { NativeRecording } from '../workflows/native-session-wire.testkit.ts';
 import { nativeRecording, sessionWire } from '../workflows/runner-session-wires.testkit.ts';
 
@@ -39,8 +39,8 @@ function assertSuccess(obs: SeamObservation): void {
 export function describeNativeSkillTriggers(runner: string): void {
   if (!parityRunners('runner-skill-trigger', 'native').includes(runner)) return;
   describe(`${runner}: native skill trigger`, () => {
-    // Read from the data file: the test registers its runner only when the cells run.
-    const missingSession = mockRows()[runner]!.missingSession;
+    // Read from the registered definition: the per-runner file registers and seals its runner before calling this kit.
+    const missingSession = runnerDefinition(runner).mock.missingSession;
     for (const row of SKILL_TRIGGER_ROWS.filter(row => row !== 'fallback-bootstrap' || missingSession)) it(row, async () => {
       const dir = mkdtempSync(join(tmpdir(), `skill-trigger-${runner}-`));
       const argsFile = join(dir, 'args.ndjson');

@@ -34,8 +34,6 @@ import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 import type { RunnerDefinition, RunnerMock } from './runner-definition.ts';
 
-import { factsWhere, factRows } from './runner-fact-rows.testkit.ts';
-import { mockRows } from './runner-mock-rows.testkit.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
 
@@ -461,18 +459,32 @@ export interface ParityExemption {
   readonly reason: string;
 }
 
+interface FactExemptionRule {
+  readonly criterion: string;
+  readonly kind: ExemptionKind;
+  readonly matches: (facts: RunnerFacts, backend: string) => boolean;
+  readonly reason: (backend: string) => string;
+}
+
 /**
- * Cells a backend's upstream protocol genuinely cannot carry.
+ * Cells a backend's upstream protocol genuinely cannot carry, derived from its declared facts
+ * (hearsay-tools/cezarion#2991) or single-runner wire quirks.
  *
  * An entry here is not a waiver — see `ExemptionKind` for how each is pinned.
  * "Not implemented yet" is never a reason: that is a failing row, and the fix
  * is the runner, not this table.
  */
-export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
-  ...exemptWhere('P1', 'scenario-unconstructible', facts => facts.nativePermission === 'none', backend =>
-    `${backend}'s native wire does not carry a native permission request that Squawk answers through the cockpit permission card. This cell checks that native request/response protocol; ordinary human questions remain covered by R26.`),
-  ...exemptWhere('P2', 'scenario-unconstructible', facts => facts.nativePermission === 'none', backend =>
-    `${backend}'s native wire carries no permission request at all, so there is no built-in default ask for Squawk to answer.`),
+const FACT_EXEMPTION_RULES: readonly FactExemptionRule[] = [
+  {
+    criterion: 'P1', kind: 'scenario-unconstructible',
+    matches: facts => facts.nativePermission === 'none',
+    reason: backend => `${backend}'s native wire does not carry a native permission request that Squawk answers through the cockpit permission card. This cell checks that native request/response protocol; ordinary human questions remain covered by R26.`,
+  },
+  {
+    criterion: 'P2', kind: 'scenario-unconstructible',
+    matches: facts => facts.nativePermission === 'none',
+    reason: backend => `${backend}'s native wire carries no permission request at all, so there is no built-in default ask for Squawk to answer.`,
+  },
   ...([
     ['P3', 'for the backend to settle itself'],
     ['P4', 'to outlive its turn'],
@@ -480,106 +492,160 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     ['P6', 'to arrive malformed'],
     ['P7', 'to hold input while Squawk classifies it'],
     ['P8', 'to arrive after its turn ended'],
-  ] as const).flatMap(([criterion, situation]) => exemptWhere(criterion, 'scenario-unconstructible', facts => facts.nativePermission === 'none', backend =>
-    `${backend}'s native wire does not carry a native permission request that Squawk answers through the cockpit permission card, so there is no pending request ${situation}.`)),
-  ...exemptWhere('P8', 'scenario-unconstructible', facts => facts.nativePermission === 'in-turn', () =>
-    'This wire sends a permission request only inside the turn it names, so none can arrive after that turn completed.'),
+  ] as const).map(([criterion, situation]): FactExemptionRule => ({
+    criterion, kind: 'scenario-unconstructible',
+    matches: facts => facts.nativePermission === 'none',
+    reason: backend => `${backend}'s native wire does not carry a native permission request that Squawk answers through the cockpit permission card, so there is no pending request ${situation}.`,
+  })),
+  {
+    criterion: 'P8', kind: 'scenario-unconstructible',
+    matches: facts => facts.nativePermission === 'in-turn',
+    reason: () => 'This wire sends a permission request only inside the turn it names, so none can arrive after that turn completed.',
+  },
   // S9/R12/R15: a child session's work exists only where the wire nests it under its parent call.
-  ...exemptWhere('S9', 'scenario-unconstructible', facts => facts.childWork === 'none', () =>
-    'This wire carries no child session: a native subagent is a plain tool call on the parent session, so no child terminal signal exists that could end the parent turn.'),
-  ...exemptWhere('R12', 'scenario-unconstructible', facts => facts.childWork === 'none', () =>
-    'This wire carries no child session or child transcript, so no child message can arrive between the parent cezar_wait call and turn end.'),
-  ...exemptWhere('R15', 'scenario-unconstructible', facts => facts.childWork === 'none', () =>
-    'This wire carries no child session or child transcript, so no child item can arrive after the parent parks.'),
-  ...exemptWhere('S25', 'scenario-unconstructible', facts => facts.transport === 'stdio', () =>
-    'This runner speaks its native wire over the spawned process\'s stdio, so there is no listen phase between spawn and session: a start that exits before listening cannot be constructed, and an early exit is the crash path (S15–S18). hearsay-tools/cezarion#872 retries only a server start; stdio process starts are out of scope.'),
-  ...exceptRunner('omp').map(backend => ({
-    criterion: 'S21', backend, kind: 'scenario-unconstructible' as const,
-    reason: 'This native wire has no OMP get_state.messageCount response for an implicit autoResume. Fresh/start and explicit resume remain covered by S1/S3/S14 and spec-support rows.',
-  })),
+  {
+    criterion: 'S9', kind: 'scenario-unconstructible',
+    matches: facts => facts.childWork === 'none',
+    reason: () => 'This wire carries no child session: a native subagent is a plain tool call on the parent session, so no child terminal signal exists that could end the parent turn.',
+  },
+  {
+    criterion: 'R12', kind: 'scenario-unconstructible',
+    matches: facts => facts.childWork === 'none',
+    reason: () => 'This wire carries no child session or child transcript, so no child message can arrive between the parent cezar_wait call and turn end.',
+  },
+  {
+    criterion: 'R15', kind: 'scenario-unconstructible',
+    matches: facts => facts.childWork === 'none',
+    reason: () => 'This wire carries no child session or child transcript, so no child item can arrive after the parent parks.',
+  },
+  {
+    criterion: 'S25', kind: 'scenario-unconstructible',
+    matches: facts => facts.transport === 'stdio',
+    reason: () => 'This runner speaks its native wire over the spawned process\'s stdio, so there is no listen phase between spawn and session: a start that exits before listening cannot be constructed, and an early exit is the crash path (S15–S18). hearsay-tools/cezarion#872 retries only a server start; stdio process starts are out of scope.',
+  },
+  {
+    criterion: 'S21', kind: 'scenario-unconstructible',
+    matches: (_facts, backend) => backend !== 'omp',
+    reason: () => 'This native wire has no OMP get_state.messageCount response for an implicit autoResume. Fresh/start and explicit resume remain covered by S1/S3/S14 and spec-support rows.',
+  },
   // R44/R45: a recoverable skill diagnostic is a server-wide session.error that names no session.
-  ...(['R44', 'R45'] as const).flatMap(criterion => exemptWhere(criterion, 'scenario-unconstructible', facts => facts.transport === 'stdio', () =>
-    'This wire speaks over the spawned process\'s stdio, so it has no server-wide unscoped session.error: the UnknownError skill diagnostics of a server wire (an unreadable skill file, or a skill with malformed YAML frontmatter) have no equivalent on it. R2/R46 retain native provider failure coverage.')),
-  ...exemptWhere('H2', 'capability-absent', facts => facts.inputDelivery.humanInputAtTurnEnd !== 'always-held', () =>
-    'This wire writes or steers a mid-turn human follow-up immediately; discardQueuedMessages cannot unwrite it. A runner that holds every mid-turn human message until the turn ends queues and drops it (H2 live rows).'),
-  ...exemptWhere('F7', 'scenario-unconstructible', facts => facts.transport === 'stdio', () =>
-    'This wire has no separate HTTP ACK retained after turn completion. Turn frames and the transport ACK share one stream, so a silent-tail turn cannot end while its agent-input ACK is still pending.'),
-  ...exceptRunner('codex').map(backend => ({
-    criterion: 'F11', backend, kind: 'scenario-unconstructible' as const,
-    reason: 'This wire has no native turn-start frame that reaches v2 after the nudge is sent; turn.started is synthetic inside sendAgentMessage and fires at nudge send, before the bound.',
+  ...(['R44', 'R45'] as const).map((criterion): FactExemptionRule => ({
+    criterion, kind: 'scenario-unconstructible',
+    matches: facts => facts.transport === 'stdio',
+    reason: () => 'This wire speaks over the spawned process\'s stdio, so it has no server-wide unscoped session.error: the UnknownError skill diagnostics of a server wire (an unreadable skill file, or a skill with malformed YAML frontmatter) have no equivalent on it. R2/R46 retain native provider failure coverage.',
   })),
+  {
+    criterion: 'H2', kind: 'capability-absent',
+    matches: facts => facts.inputDelivery.humanInputAtTurnEnd !== 'always-held',
+    reason: () => 'This wire writes or steers a mid-turn human follow-up immediately; discardQueuedMessages cannot unwrite it. A runner that holds every mid-turn human message until the turn ends queues and drops it (H2 live rows).',
+  },
+  {
+    criterion: 'F7', kind: 'scenario-unconstructible',
+    matches: facts => facts.transport === 'stdio',
+    reason: () => 'This wire has no separate HTTP ACK retained after turn completion. Turn frames and the transport ACK share one stream, so a silent-tail turn cannot end while its agent-input ACK is still pending.',
+  },
+  {
+    criterion: 'F11', kind: 'scenario-unconstructible',
+    matches: (_facts, backend) => backend !== 'codex',
+    reason: () => 'This wire has no native turn-start frame that reaches v2 after the nudge is sent; turn.started is synthetic inside sendAgentMessage and fires at nudge send, before the bound.',
+  },
   // S11 (hearsay-tools/cezarion#2397): these wires have no answerable native ask; the `ask`
   // scenario calls cezar_ask, whose human wait the workflow holds input behind (R6), not the runner.
-  ...exemptWhere('S11', 'capability-absent', facts => facts.nativeAsk !== 'answerable', () =>
-    'this wire has no native ask; cezar_ask is the workflow\'s human wait, so the runner admits non-human input and the run tier holds it (R6)'),
+  {
+    criterion: 'S11', kind: 'capability-absent',
+    matches: facts => facts.nativeAsk !== 'answerable',
+    reason: () => 'this wire has no native ask; cezar_ask is the workflow\'s human wait, so the runner admits non-human input and the run tier holds it (R6)',
+  },
   // R4: a malformed question is a native ask's failure. cezar_ask validates its arguments and
   // answers the agent with invalid_request, so no malformed question reaches the run.
-  ...exemptWhere('R4', 'scenario-unconstructible', facts => facts.nativeAsk === 'none', () =>
-    'this wire has no native ask; a malformed cezar_ask is refused to the agent as invalid_request before any card exists'),
+  {
+    criterion: 'R4', kind: 'scenario-unconstructible',
+    matches: facts => facts.nativeAsk === 'none',
+    reason: () => 'this wire has no native ask; a malformed cezar_ask is refused to the agent as invalid_request before any card exists',
+  },
   // hearsay-tools/cezarion#1233 U7: cezar_wait stays live on every wire; only a declared native
   // timer tool (Claude's ScheduleWakeup, the Antigravity CLI's schedule) is an alias.
-  ...exemptWhere('U7', 'capability-absent', facts => facts.nativeTimerTool === null, () =>
-    'this wire has no native timer tool'),
+  {
+    criterion: 'U7', kind: 'capability-absent',
+    matches: facts => facts.nativeTimerTool === null,
+    reason: () => 'this wire has no native timer tool',
+  },
   // U7h (hearsay-tools/cezarion#1234): the ask scenario on these wires calls cezar_ask, so its
   // human wait opens through cezar_ask rather than a native ask; the cell asserts that instead.
-  ...exemptWhere('U7h', 'capability-absent', facts => facts.nativeAsk !== 'answerable', () =>
-    'this wire has no native ask; its ask scenario calls cezar_ask'),
-  // The cells one runner's wire cannot carry, each declared in its runners/<id>/mock.ts.
-  ...declaredExemptions(),
+  {
+    criterion: 'U7h', kind: 'capability-absent',
+    matches: facts => facts.nativeAsk !== 'answerable',
+    reason: () => 'this wire has no native ask; its ask scenario calls cezar_ask',
+  },
 ];
 
-// A9: a native mid-turn ask.requested exists only where the declared native ask is answerable.
-requireDeclaredWhere('A9', facts => facts.nativeAsk !== 'answerable');
-// R77 & UI2: hook telemetry exists only where hookEvents is 'reported'; a runner declaring 'none'
-// must name its wire gap explicitly in runners/<id>/mock.ts rather than self-exempting via facts.
-requireDeclaredWhere('R77', facts => facts.hookEvents === 'none');
-requireDeclaredWhere('UI2', facts => facts.hookEvents === 'none');
+/** Criteria each runner must declare in `runners/<id>/mock.ts` exactly when its facts match. */
+const REQUIRED_DECLARED_EXEMPTIONS: ReadonlyArray<readonly [string, (facts: RunnerFacts) => boolean]> = [
+  // A9: a native mid-turn ask.requested exists only where the declared native ask is answerable.
+  ['A9', facts => facts.nativeAsk !== 'answerable'],
+  // R77 & UI2: hook telemetry exists only where hookEvents is 'reported'; a runner declaring 'none'
+  // must name its wire gap explicitly in runners/<id>/mock.ts rather than self-exempting via facts.
+  ['R77', facts => facts.hookEvents === 'none'],
+  ['UI2', facts => facts.hookEvents === 'none'],
+];
 
-/**
- * One exemption for each runner whose declared facts match (hearsay-tools/cezarion#2991), so a row
- * and the shared code that reads the same fact cannot disagree on which runners it covers.
- */
-function exemptWhere(criterion: string, kind: ExemptionKind, matches: (facts: RunnerFacts) => boolean,
-  reason: (backend: string) => string): ParityExemption[] {
-  return factsWhere(matches).map(backend => ({ criterion, backend, kind, reason: reason(backend) }));
-}
-
-/** The runners whose human-prompt hold ends when the wire reports the prompt read, before the
+/** Whether a runner's human-prompt hold ends when the wire reports the prompt read, before the
  *  prompt's acknowledgement (`humanPromptHold`). */
+export function releasesHumanPromptOnRead(facts: RunnerFacts): boolean {
+  return facts.humanPromptHold === 'consumption';
+}
+
+/** The registered runners whose human-prompt hold ends when the wire reports the prompt read. */
 export function humanPromptReadReleases(): string[] {
-  return factsWhere(facts => facts.humanPromptHold === 'consumption');
+  return registeredRunners().filter(def => releasesHumanPromptOnRead(def.facts)).map(def => def.id);
 }
 
-/** Every runner but `live`: a protocol quirk that only one runner's wire carries. Read from the
- *  fact rows, not the registry, so the static exemption table builds in a test that registers no
- *  runner. */
-function exceptRunner(live: string): string[] {
-  return Object.keys(factRows()).filter(backend => backend !== live);
-}
-
-/** Every exemption a built-in runner's mock part declares (`mock.parityExemptions`), in runner
- *  order. Read from the data files, as the fact rows are, so the table builds in a test that
- *  registers no runner. */
-function declaredExemptions(): ParityExemption[] {
-  return Object.entries(mockRows()).flatMap(([backend, mock]) =>
-    Object.entries(mock.parityExemptions ?? {}).map(([criterion, { kind, reason }]) => ({ criterion, backend, kind, reason })));
-}
-
-/** A criterion each runner declares only when its facts match: a runner the facts select without a
- *  declared reason, or a runner that declares one its facts do not select, fails the table at load. */
-function requireDeclaredWhere(criterion: string, matches: (facts: RunnerFacts) => boolean): void {
-  const selected = factsWhere(matches);
-  const declared = Object.keys(mockRows()).filter(backend => mockRows()[backend]!.parityExemptions?.[criterion] !== undefined);
-  for (const backend of selected.filter(id => !declared.includes(id))) {
-    throw new Error(`${criterion} exempts ${backend} by its declared facts, but runners/${backend}/mock.ts gives no reason`);
+/** Build the all-runner `PARITY_EXEMPTIONS` table and verify required declared exemptions. */
+export function buildParityExemptions(
+  factsById: Readonly<Record<string, RunnerFacts>>,
+  mocksById: Readonly<Record<string, RunnerMock>>,
+): ParityExemption[] {
+  const runnerIds = Object.keys(factsById);
+  const byFact = FACT_EXEMPTION_RULES.flatMap(rule =>
+    runnerIds
+      .filter(backend => rule.matches(factsById[backend]!, backend))
+      .map(backend => ({ criterion: rule.criterion, backend, kind: rule.kind, reason: rule.reason(backend) })),
+  );
+  const declared = Object.entries(mocksById).flatMap(([backend, mock]) =>
+    Object.entries(mock.parityExemptions ?? {}).map(([criterion, { kind, reason }]) => ({ criterion, backend, kind, reason })),
+  );
+  for (const [criterion, matches] of REQUIRED_DECLARED_EXEMPTIONS) {
+    const selected = runnerIds.filter(backend => matches(factsById[backend]!));
+    const hasDeclared = Object.keys(mocksById).filter(backend => mocksById[backend]!.parityExemptions?.[criterion] !== undefined);
+    for (const backend of selected.filter(id => !hasDeclared.includes(id))) {
+      throw new Error(`${criterion} exempts ${backend} by its declared facts, but runners/${backend}/mock.ts gives no reason`);
+    }
+    for (const backend of hasDeclared.filter(id => !selected.includes(id))) {
+      throw new Error(`runners/${backend}/mock.ts exempts ${backend} from ${criterion}, but its declared facts do not`);
+    }
   }
-  for (const backend of declared.filter(id => !selected.includes(id))) {
-    throw new Error(`runners/${backend}/mock.ts exempts ${backend} from ${criterion}, but its declared facts do not`);
+  return [...byFact, ...declared];
+}
+
+/** Whether `backend` is exempt from `criterion`, evaluated against its own facts and mock only. */
+export function exemptionForFacts(
+  criterion: string,
+  backend: string,
+  facts: RunnerFacts,
+  mock?: RunnerMock,
+): ParityExemption | undefined {
+  for (const rule of FACT_EXEMPTION_RULES) {
+    if (rule.criterion === criterion && rule.matches(facts, backend)) {
+      return { criterion, backend, kind: rule.kind, reason: rule.reason(backend) };
+    }
   }
+  const declared = mock?.parityExemptions?.[criterion];
+  return declared ? { criterion, backend, kind: declared.kind, reason: declared.reason } : undefined;
 }
 
 export function exemptionFor(criterion: string, backend: string): ParityExemption | undefined {
-  return PARITY_EXEMPTIONS.find((e) => e.criterion === criterion && e.backend === backend);
+  const definition = runnerDefinition(backend);
+  return exemptionForFacts(criterion, backend, definition.facts, definition.mock);
 }
 
 /** Poll a condition. Generous on purpose: under a full suite run these share the
