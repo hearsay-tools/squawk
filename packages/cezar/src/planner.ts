@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { RunnerFactory } from './core/agent-runner.ts';
 import { RUNNER_FACTS } from './core/runner-facts.ts';
+import { resolveRunnerId } from './core/runner-registry.ts';
 import { loadConfig } from './config.ts';
 import type { RunnerSkill } from '@open-mercato/cezar-contract/runner-skills';
 import { resolveRunnerSkill } from './core/runner-skill-reference.ts';
@@ -67,18 +68,20 @@ export async function planChain(repoRoot: string, task: string, catalog: RunnerS
   // Plan with the configured default runner. `plannerModel` ("sonnet") is a
   // Claude alias, so only a runner that takes those gets it; another picks its
   // own default model instead.
-  const runner = await createRunner(config.defaultRunner);
-  const plannerModel = RUNNER_FACTS[config.defaultRunner]!.claudeModelAliases ? config.plannerModel : undefined;
+  // A preserved unknown default plans as the registered runner. The stored id stays.
+  const planner = resolveRunnerId(config.defaultRunner);
+  const runner = await createRunner(planner);
+  const plannerModel = RUNNER_FACTS[planner]!.claudeModelAliases ? config.plannerModel : undefined;
   // Plan under the SAME agent account this project's tasks run on (spec
   // 2026-07-29-agent-profiles). Without this the planner would quietly bill the personal
   // subscription for a project the user pointed at their work account.
   // An explicit `agentProfile` (the composer's pick) wins over the project's selection.
-  const account = await resolveProfileEnvForRoot(repoRoot, config.defaultRunner, agentProfile, process.env, home).catch(() => null);
+  const account = await resolveProfileEnvForRoot(repoRoot, planner, agentProfile, process.env, home).catch(() => null);
   const profileEnv = account?.env ?? {};
-  const listed = account === null ? [] : (await catalog.get({ runner: config.defaultRunner, cwd: repoRoot,
+  const listed = account === null ? [] : (await catalog.get({ runner: planner, cwd: repoRoot,
     accountHome: account.profile.isDefault ? undefined : account.profile.path })).skills;
   const skills = listed.filter(skill => resolveRunnerSkill(listed, { id: skill.id }, {
-    runner: config.defaultRunner, account: account?.profile.id ?? 'default', cwd: repoRoot,
+    runner: planner, account: account?.profile.id ?? 'default', cwd: repoRoot,
   }).skill === skill);
   const skillNames = new Set(skills.map(skill => skill.id));
   const userPrompt = buildPlannerPrompt(task, skills, verifyCommands);

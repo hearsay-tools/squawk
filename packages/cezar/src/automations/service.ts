@@ -14,7 +14,7 @@ import { githubBaselineState } from './github-baseline.ts';
 import { SCHEDULE_LEASE_HELD_REASON, ScheduleRunner, type ScheduleRunnerHandle } from './schedule-runner.ts';
 import type { AutomationStore } from './store.ts';
 import { validateAutomationPrompt } from './task-template.ts';
-import { isRegisteredRunner } from '../core/runner-registry.ts';
+import { isRegisteredRunner, resolveRunnerId } from '../core/runner-registry.ts';
 import {
   isGithubAutomation,
   isOnceSchedule,
@@ -148,7 +148,8 @@ export function createAutomationService(deps: AutomationServiceDeps) {
   /** An explicit model the fresh host catalog does not list, for a one-time schedule's task. */
   const modelRefusal = async (root: string, task: AutomationEditable['task']): Promise<string | undefined> => {
     if (!deps.discovery || !task.model) return undefined;
-    const runner = task.runner ?? (await loadConfig(root, deps.home)).defaultRunner;
+    // A preserved unknown default is checked as the runner it executes as.
+    const runner = task.runner ?? resolveRunnerId((await loadConfig(root, deps.home)).defaultRunner);
     if (!isRegisteredRunner(runner)) return undefined;
     const choices = await missingModelChoices(deps.discovery, runner, task.model);
     if (!choices) return undefined;

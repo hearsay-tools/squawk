@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { loadConfig } from '../config.ts';
 import type { RunnerFactory } from '../core/agent-runner.ts';
 import { RUNNER_FACTS } from '../core/runner-facts.ts';
+import { resolveRunnerId } from '../core/runner-registry.ts';
 import { parseStructured } from '../core/structured-output.ts';
 import type { ProviderId } from '../core/provider-auth.ts';
 import { extractTaskRefs, refineTaskRefs, titleRefNumber, type TaskRefs } from './task-refs.ts';
@@ -159,12 +160,14 @@ export type ResolveProfileEnv = (repoRoot: string, provider: ProviderId, profile
 export async function generateRunName(repoRoot: string, ctx: NamerContext, home: Home, createRunner: RunnerFactory, resolveProfileEnvForRoot: ResolveProfileEnv): Promise<NameResult | null> {
   try {
     const config = await loadConfig(repoRoot, home);
-    const runner = await createRunner(config.defaultRunner);
-    const model = RUNNER_FACTS[config.defaultRunner]!.claudeModelAliases ? config.namerModel : undefined;
+    // A preserved unknown default names as the registered runner. The stored id stays.
+    const namer = resolveRunnerId(config.defaultRunner);
+    const runner = await createRunner(namer);
+    const model = RUNNER_FACTS[namer]!.claudeModelAliases ? config.namerModel : undefined;
     // Name under the project's own agent account (spec 2026-07-29-agent-profiles) — naming is
     // a model call like any other, and billing it to the personal subscription for a work
     // project is the exact confusion accounts exist to remove.
-    const { env: profileEnv } = await resolveProfileEnvForRoot(repoRoot, config.defaultRunner, undefined, process.env, home);
+    const { env: profileEnv } = await resolveProfileEnvForRoot(repoRoot, namer, undefined, process.env, home);
     for (let attempt = 0; attempt < 2; attempt++) {
       const result = await runner.run({
         systemPrompt: NAMER_SYSTEM_PROMPT,
