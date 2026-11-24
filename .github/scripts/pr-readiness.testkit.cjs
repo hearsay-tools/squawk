@@ -31,6 +31,7 @@ function readinessData(s, route, args) {
   if (route.endsWith('/pulls/{pull_number}')) return livePull(s, args.pull_number);
   if (route.endsWith('/rules/branches/{branch}')) return s.rules;
   if (route.endsWith('/commits/{ref}/status')) return { statuses: s.statuses };
+  if (route.endsWith('/commits/{commit_sha}/pulls')) return s.commitPulls ?? s.pulls.filter(p => p.head.sha === args.commit_sha);
   if (route.endsWith('/commits/{ref}/check-runs')) return { total_count: s.checkRuns.length, check_runs: s.checkRuns };
   if (route.includes('/actions/')) return actionsData(s, route, args);
   if (route === 'POST /graphql') return { data: { repository: { pullRequest: { reviewThreads: {

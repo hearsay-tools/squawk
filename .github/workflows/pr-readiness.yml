@@ -11,6 +11,10 @@ on:
   workflow_run:
     workflows: [CI, Review signal]
     types: [completed]
+  # A pre-PR review round's commit status (`pre-pr-review`, set by
+  # .github/scripts/pre-pr-review.cjs) holds or releases the card. Other
+  # status contexts skip the discovery job.
+  status:
   # Actions has no review-thread event: after a manual thread change, dispatch
   # this workflow with the PR number.
   workflow_dispatch:
@@ -24,6 +28,7 @@ permissions: {}
 # One event selects at most four associated PRs.
 jobs:
   discover:
+    if: github.event_name != 'status' || github.event.context == 'pre-pr-review'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:

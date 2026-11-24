@@ -102,6 +102,52 @@ test('evaluates the latest run per required check, and commit statuses as a fall
   assert.deepEqual(evaluateChecks({ required: ['s'], checkRuns: [], statuses: [{ context: 's', state: 'error' }] }).failing, ['s']);
 });
 
+test('an open or blocked pre-PR review round holds readiness; absent or clean leaves it to the required checks', () => {
+  const green = { required: [VERIFY], checkRuns: [checkRun(1, VERIFY, 'success')] };
+  const review = state => ({ ...green, statuses: [{ context: 'pre-pr-review', state }] });
+  assert.deepEqual(evaluateChecks(review('pending')), { ready: false, pending: ['pre-pr-review'], failing: [], missing: [] });
+  assert.deepEqual(evaluateChecks(review('failure')), { ready: false, pending: [], failing: ['pre-pr-review'], missing: [] });
+  assert.equal(evaluateChecks(review('error')).ready, false);
+  assert.equal(evaluateChecks(review('success')).ready, true);
+  assert.equal(evaluateChecks(green).ready, true);
+  // The combined status lists the newest state per context first.
+  assert.equal(evaluateChecks({ ...green, statuses: [{ context: 'pre-pr-review', state: 'success' },
+    { context: 'pre-pr-review', state: 'pending' }] }).ready, true);
+  // A success never stands in for a red required check.
+  assert.equal(evaluateChecks({ required: [VERIFY], checkRuns: [checkRun(1, VERIFY, 'failure')],
+    statuses: [{ context: 'pre-pr-review', state: 'success' }] }).ready, false);
+  // Required by a ruleset, it counts once, as a required check.
+  assert.deepEqual(evaluateChecks({ required: ['pre-pr-review'], checkRuns: [], statuses: [{ context: 'pre-pr-review', state: 'pending' }] }).pending,
+    ['pre-pr-review']);
+});
+
+test('a green PR with an open review round stays In progress, and the clean status wakes it to In review', async () => {
+  const github = fakeGithub({ statuses: [{ context: 'pre-pr-review', state: 'pending' }] });
+  const board = fakeBoard({ current: 'In review' });
+  const logs = await completeRun(github, { projectGithub: board });
+  assert.deepEqual(cards(board), IN_PROGRESS);
+  assert.match(logs.join('\n'), /board follows In progress \(checks=false/);
+  github.state.statuses = [{ context: 'pre-pr-review', state: 'success' }];
+  await handleEvent({ github, projectGithub: board, eventName: 'status', payload: { context: 'pre-pr-review', sha, state: 'success' } });
+  assert.deepEqual(cards(board), IN_REVIEW);
+});
+
+test('a status event wakes only the open PRs of its head, and only for the pre-pr-review context', async () => {
+  const other = pullFixture({ number: 8, node_id: 'PR_8', head: { ...pullFixture().head, sha: 'c'.repeat(40) } });
+  const github = fakeGithub({ pulls: [pullFixture(), other] });
+  const status = payload => discover(eventArgs({ github, eventName: 'status', payload }));
+  assert.deepEqual((await status({ context: 'pre-pr-review', sha, state: 'pending' })).numbers, [7]);
+  const reads = github.calls.length;
+  for (const payload of [{ context: 'CodeRabbit', sha, state: 'success' }, { context: 'pre-pr-review', sha: 'nope' }]) {
+    assert.deepEqual((await status(payload)).numbers, []);
+  }
+  assert.equal(github.calls.length, reads, 'another context or a bad sha reads nothing');
+  github.state.commitPulls = [pullFixture({ state: 'closed' }), pullFixture({ number: 9, head: { ...pullFixture().head, sha: 'd'.repeat(40) } })];
+  assert.deepEqual((await status({ context: 'pre-pr-review', sha })).numbers, [], 'closed PRs and other heads are skipped');
+  github.state.commitPulls = { not: 'a list' };
+  await assert.rejects(status({ context: 'pre-pr-review', sha }), /manual recovery/);
+});
+
 test('a ready PR whose head checks are green moves its linked cards to In review', async () => {
   const github = fakeGithub();
   const board = fakeBoard({ current: 'In progress' });
