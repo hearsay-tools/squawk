@@ -67,14 +67,18 @@ export function daemonAlive(status) {
 }
 
 // Squeal's own answers for "no daemon validates this worktree"; any other answer comes from a daemon that may be busy.
+// A daemon `down` only because its heartbeat is late (`heartbeatLate`) may be busy: Squeal says "busy or stopped".
 const NO_STORE = new Set(['no-store', 'not-registered']);
 const noDaemon = status => (status.available === false ? NO_STORE.has(status.reason)
-  : status.daemon?.state === 'down' || status.selection?.reason === 'no-daemon');
+  : !status.daemon?.heartbeatLate && (status.daemon?.state === 'down' || status.selection?.reason === 'no-daemon'));
 
 /** Why a status that is not a live daemon's answer gives no result, for the report. */
-const unansweredCause = status => (status.available === false
-  ? `squeal status: ${[status.reason ?? 'unavailable', status.message].filter(Boolean).join(': ')}`
-  : `the daemon is ${status.daemon?.state ?? 'in an unknown state'}`);
+function unansweredCause(status) {
+  if (status.available === false) return `squeal status: ${[status.reason ?? 'unavailable', status.message].filter(Boolean).join(': ')}`;
+  const late = status.daemon?.heartbeatLate?.ageMs;
+  if (late !== undefined) return `the daemon's heartbeat is late (${Math.round(late / 1000)} s), so it may be busy or stopped`;
+  return `the daemon is ${status.daemon?.state ?? 'in an unknown state'}`;
+}
 
 /**
  * Run a command and collect its output. `boundMs` stops it at that bound: on POSIX the command runs in

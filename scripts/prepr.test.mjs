@@ -137,6 +137,16 @@ test('a daemon that does not answer is unreadable with its cause and the load, a
   assert.doesNotMatch(report.report, /No Squeal daemon/);
 });
 
+// Squeal 0.1.623 answers a busy daemon with a late heartbeat as `down` / `no-daemon`, adding `heartbeatLate`.
+test('a daemon down only by a late heartbeat is busy: it gets the wait and never the fallback', async () => {
+  const late = JSON.stringify({ available: true, daemon: { state: 'down', since: 1, heartbeatLate: { ageMs: 24_000 } }, selection: { testFiles: [], result: 'none', reason: 'no-daemon' }, lint: doneLint });
+  const io = fakeIo({ responses: { 'squeal status --json': ok(late), 'squeal status --wait': ok(live([file('a.test.ts', 'current', 'pass')], doneLint)) } });
+  assert.equal((await squealChecks(['a.ts'], 1000, io)).state, 'pass');
+  const r = await squealChecks(['a.ts'], 1000, fakeIo({ responses: { squeal: { code: 3, out: late, err: '' } } }));
+  assert.deepEqual([r.daemon, r.state], [true, 'unreadable']);
+  assert.match(squealLines(r, 1000)[0].text, /the daemon's heartbeat is late \(24 s\), so it may be busy or stopped[^]*load 31\.5 on 24 cores/);
+});
+
 test('a daemon that is starting or lapsed gets the wait, and stays unreadable if it never comes alive', async () => {
   const lapsed = JSON.stringify({ available: true, daemon: { state: 'lapsed' }, selection: { testFiles: [] }, lint: doneLint });
   const io = fakeIo({ responses: { 'squeal status --json': ok(lapsed), 'squeal status --wait': ok(live([file('a.test.ts', 'current', 'pass')], doneLint)) } });
