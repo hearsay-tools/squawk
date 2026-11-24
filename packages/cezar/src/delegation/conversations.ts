@@ -6,7 +6,7 @@ import { ConversationIdInUseError } from '../runs/conversation-identity.ts';
 import type { RunRecord } from '../runs/run-decode.ts';
 import type { RunStore } from '../runs/store.ts';
 import { RunWriteRefusedError } from '../runs/run-claims-topic.ts';
-import type { RunAccess, RunEventLog, RunQueries, RunLookup, RunWrites } from '../runs/ports.ts';
+import type { ConversationLedger, RunAccess, RunEventLog, RunQueries, RunLookup, RunWrites } from '../runs/ports.ts';
 import { conversationOf, DEFAULT_GRANTS, familyRecordIdOf, familyRecordOf, finishing, historyDeleting, holdsOperation, messageRelation, receiptsOf, type Lookup } from '../runs/task-rights.ts';
 import { DelegationPolicyError } from './policy.ts';
 import { reservedReplies } from './questions.ts';
@@ -185,13 +185,10 @@ export function inboxSlotsUsed(run: RunRecord): number {
 
 /** A reply settles its request, or amends a deadline expiry to `replied-late`. Cancellation,
  *  lifecycle settlement and an earlier reply still win; the request never becomes pending again. */
-export function replyOutcomes(state: ConversationState, request: ConversationSendRequest, settled: RequestOutcome | undefined, now: string): RequestOutcome[] {
-  const outcomes = [...state.outcomes];
-  if (request.kind !== 'reply' || (settled && settled.status !== 'timed-out')) return outcomes;
-  const outcome = { requestId: request.requestId!, status: settled ? 'replied-late' as const : 'replied' as const, observedAt: now, replyId: request.id };
-  if (settled) outcomes[outcomes.indexOf(settled)] = outcome;
-  else outcomes.push(outcome);
-  return outcomes;
+export function withReplyOutcome(ledger: ConversationLedger, rootId: string, state: ConversationState, request: ConversationSendRequest,
+  settled: RequestOutcome | undefined, now: string): ConversationState {
+  if (request.kind !== 'reply' || (settled && settled.status !== 'timed-out')) return state;
+  return ledger.amendOutcome(rootId, state, { requestId: request.requestId!, status: settled ? 'replied-late' : 'replied', observedAt: now, replyId: request.id });
 }
 
 /** One write for the message, its ledger and the recipient's input; a message ID already in use
@@ -212,15 +209,11 @@ export function commitAccepted(store: RunStore, ledgerId: string, next: Conversa
 
 export type InboxEntry = { message: ConversationMessage; outcome?: RequestOutcome | undefined };
 
-/** The accepted message an input carries, as its ledger holds it, with its request's outcome. */
-export function inboxEntryIn(state: ConversationState, input: AgentInput, recipientId: string): InboxEntry | undefined {
-  const message = state.messages.find(entry => entry.id === input.id && entry.state === 'accepted' && entry.senderRunId === input.conversation?.senderRunId && entry.recipientRunId === recipientId);
-  return message && { message, outcome: state.outcomes.find(entry => entry.requestId === (message.requestId ?? message.id)) };
-}
-
-/** The merged history order: `createdAt`, then `id`, a total order a cursor can name. */
-export function byCreatedAtAndId(a: { createdAt: string; id: string }, b: { createdAt: string; id: string }): number {
-  return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+/** The accepted message an input carries, as root `rootId`'s ledger holds it, with its request's outcome. */
+export function inboxEntryIn(ledger: ConversationLedger, rootId: string, input: AgentInput, recipientId: string): InboxEntry | undefined {
+  const found = ledger.findMessage(rootId, input.id);
+  const message = found?.state === 'accepted' && found.senderRunId === input.conversation?.senderRunId && found.recipientRunId === recipientId ? found : undefined;
+  return message && { message, outcome: ledger.findOutcome(rootId, message.requestId ?? message.id) };
 }
 
 /** A peer message whose sender's ledger was deleted with the sender: the recipient's own input
@@ -243,10 +236,8 @@ export function commitNewMessage(store: RunWrites,
 /** The caller took part in a peer conversation with `otherId`: a peer message between them in
  *  either ledger while it exists, or, after the peer's deletion, a peer input from it that the
  *  caller still holds (spec 2026-10-27-task-communication-protocol § 2, records level). */
-export function takesPart(self: RunRecord, other: RunRecord | undefined, otherId: string): boolean {
-  const between = (message: ConversationMessage) => { return message.relationship === 'peer' && [message.senderRunId, message.recipientRunId].includes(otherId) && [message.senderRunId, message.recipientRunId].includes(self.id); };
-  const ledger = (run: RunRecord | undefined) => conversationOf(run)?.messages ?? [];
-  return ledger(self).some(between) || ledger(other).some(between) ||
+export function takesPart(ledger: ConversationLedger, self: RunRecord, otherId: string): boolean {
+  return ledger.peerExchanged(self.id, otherId) ||
     !!self.agentInputs?.some(input => input.conversation?.relationship === 'peer' && input.conversation.senderRunId === otherId);
 }
 

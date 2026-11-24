@@ -81,7 +81,7 @@ export class WorkerQuestions {
     const message = questionMessage({ workerRunId: workerId, parentRunId: parentId, askSeq: ask.seq, request, now });
     // Already committed (a crash before the routing event): the question did reach the parent,
     // whatever its capacity or state is now. Record the routing; the close sweeps follow.
-    const committed = root?.delegation?.role === 'root' && !!root.delegation.conversation?.messages.some(m => m.id === message.id);
+    const committed = root?.delegation?.role === 'root' && !!this.context.store.conversations.findMessage(parentId, message.id);
     if (committed) {
       this.context.store.eventLog.appendEvent(workerId, { type: 'worker-question-routed', askSeq: ask.seq, messageId: message.id, parentRunId: parentId });
       return;
@@ -251,7 +251,7 @@ export class WorkerQuestions {
     if (root?.delegation?.role !== 'root' || !parent || !this.supervisorTakesMessages(parent) ||
       !supervisedReceipts(root, parentId).some(receipt => receipt.workerId === worker.id && !receipt.deletion)) return undefined;
     const state = root.delegation.conversation ?? { messages: [], outcomes: [] };
-    const wait = parkNoticeWait(worker.id, parent.waits ?? [], state.messages, noticeIdFor);
+    const wait = parkNoticeWait(worker.id, parent.waits ?? [], id => this.context.store.conversations.findMessage(root.id, id), noticeIdFor);
     return wait ? { root, parent, parentId, state, wait } : undefined;
   }
 
@@ -310,8 +310,7 @@ export class WorkerQuestions {
     const ask = this.context.store.transcriptFacts.transcriptFacts(runId).pendingAsk;
     if (!ask || ask.fallback || ask.routedMessageId === undefined) return undefined;
     const root = this.context.store.getRun(run.delegation.parentRunId);
-    const message = root?.delegation?.role === 'root'
-      ? root.delegation.conversation?.messages.find(entry => entry.id === ask.routedMessageId) : undefined;
+    const message = root?.delegation?.role === 'root' ? this.context.store.conversations.findMessage(root.id, ask.routedMessageId) : undefined;
     return message ? { askSeq: ask.seq, message } : undefined;
   }
 
@@ -378,7 +377,7 @@ export class WorkerQuestions {
     return this.context.store.queries.listWorkersOf(parentId).flatMap(run => {
       const routed = this.routedAsk(run.id);
       const root = this.context.store.getRun(parentId);
-      const answered = root?.delegation?.role === 'root' && root.delegation.conversation?.outcomes.some(outcome => outcome.requestId === routed?.message.id);
+      const answered = root?.delegation?.role === 'root' && !!routed && !!this.context.store.conversations.findOutcome(root.id, routed.message.id);
       return routed && !answered ? [{ workerId: run.id, messageId: routed.message.id }] : [];
     });
   }

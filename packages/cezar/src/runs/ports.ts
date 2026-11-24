@@ -24,6 +24,7 @@ import type { WorkerProcessRecord } from '../core/process-stat.ts';
 import type { AgentRunSpec } from '../core/agent-runner.ts';
 
 export type { RunLifecycleSource } from './lifecycle.ts';
+export type { ConversationLedger } from './conversation-ledger.ts';
 
 /** One run's record, by id. Nearly every caller needs only this. */
 export interface RunLookup {

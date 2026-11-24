@@ -1,5 +1,7 @@
 import { commandText } from '../home/command.ts';
-import type { AgentInput, ConversationMessage, ConversationSendRequest, ConversationState, RequestOutcome } from '@open-mercato/cezar-contract';
+import type { AgentInput, ConversationMessage, ConversationSendRequest, RequestOutcome } from '@open-mercato/cezar-contract';
+import type { ConversationLedger } from '../runs/ports.ts';
+import { acceptedRequest } from '../runs/conversation-ledger.ts';
 import { MAX_CONVERSATION_REQUEST_SECONDS } from '@open-mercato/cezar-contract/conversations';
 import { messagingAllowed } from '@open-mercato/cezar-contract/task-options';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
@@ -11,22 +13,22 @@ import { DelegationPolicyError } from './policy.ts';
 
 export type ConversationPair = { project: DelegationProject } & ResolvedPair;
 
-export function sendRequestContext(state: ConversationState, request: ConversationSendRequest, sender: RunRecord, recipient: RunRecord) {
-  assertReplyDirection(state, request, sender, recipient);
-  const original = request.requestId ? state.messages.find(message => message.id === request.requestId && message.kind === 'request' && message.state === 'accepted') : undefined;
+/** The accepted request a reply or follow-up names, from root `rootId`'s ledger, and its outcome. */
+export function sendRequestContext(ledger: ConversationLedger, rootId: string, request: ConversationSendRequest, sender: RunRecord, recipient: RunRecord) {
+  assertReplyDirection(ledger, rootId, request, sender, recipient);
+  const original = request.requestId ? acceptedRequest(ledger.findMessage(rootId, request.requestId)) : undefined;
   if (request.requestId && (!original || (request.kind === 'reply'
     ? original.recipientRunId !== sender.id || original.senderRunId !== recipient.id
     : original.senderRunId !== sender.id || original.recipientRunId !== recipient.id))) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
-  const settled = state.outcomes.find(outcome => outcome.requestId === request.requestId);
+  const settled = request.requestId ? ledger.findOutcome(rootId, request.requestId) : undefined;
   // A worker's question has exactly one answer (hearsay-tools/cezarion#505): a second reply is refused, not recorded late.
   if (request.kind === 'reply' && settled && original?.question) throw new DelegationPolicyError('incompatible_state', 'This question was already answered');
   return { original, settled };
 }
-export function assertReplyDirection(state: ConversationState, request: ConversationSendRequest, sender: RunRecord, recipient: RunRecord): void {
-  if (request.kind !== 'reply') return;
-  const original = state.messages.find(message => message.id === request.requestId && message.kind === 'request' &&
-    message.state === 'accepted' && message.senderRunId === sender.id && message.recipientRunId === recipient.id);
-  if (original) throw new DelegationPolicyError('incompatible_state',
+export function assertReplyDirection(ledger: ConversationLedger, rootId: string, request: ConversationSendRequest, sender: RunRecord, recipient: RunRecord): void {
+  if (request.kind !== 'reply' || !request.requestId) return;
+  const original = acceptedRequest(ledger.findMessage(rootId, request.requestId));
+  if (original && original.senderRunId === sender.id && original.recipientRunId === recipient.id) throw new DelegationPolicyError('incompatible_state',
     commandText(`Cannot reply to your own request. Use cez message follow-up ${recipient.id} "<text>" --id <new-message-UUID> --request-id ${original.id}; for a new request, use cez message request ${recipient.id} "<text>" --id <new-message-UUID>.`));
 }
 function recipientNeedsResume(pair: ConversationPair, request: ConversationSendRequest): { closed: boolean; resumable: boolean } {

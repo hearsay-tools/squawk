@@ -1,4 +1,5 @@
 import type { AgentInput, RunRecord } from '@open-mercato/cezar-contract';
+import type { ConversationLedger } from './conversation-ledger.ts';
 
 /** The delivery steps a `conversation-message:<id>:<step>` projection names (`projectConversationEvents`). */
 const CONVERSATION_DELIVERY_STEPS = ['queued', 'delivered', 'consumed', 'not-delivered'] as const;
@@ -18,7 +19,7 @@ export class ConversationIdInUseError extends Error {
  * (spec 2026-10-27-task-communication-protocol § Message identity). The store runs this inside the
  * synchronous write that stores the message, so of two senders on two ledgers only the first passes.
  */
-export function assertConversationIdFree(root: RunRecord, subject: ConversationIdentity | AgentInput | undefined, peek: (id: string) => RunRecord | undefined,
+export function assertConversationIdFree(root: RunRecord, subject: ConversationIdentity | AgentInput | undefined, ledger: ConversationLedger, peek: (id: string) => RunRecord | undefined,
   hasProjection: (runId: string, projectionId: string) => boolean): void {
   // Every new message is checked: a delivered input names its own message (hearsay-tools/cezarion#1990 review).
   // Such a write is Squawk's own (a routed question, a park notice), retried under its deterministic ID
@@ -27,7 +28,7 @@ export function assertConversationIdFree(root: RunRecord, subject: ConversationI
   const replay = !!subject && 'source' in subject;
   const message = subject && 'source' in subject ? subject.conversation && { id: subject.id, ...subject.conversation } : subject;
   if (!message) return;
-  const inLedger = root.delegation?.role === 'root' && !!root.delegation.conversation?.messages.some(entry => entry.id === message.id);
+  const inLedger = root.delegation?.role === 'root' && !!ledger.findMessage(root.id, message.id);
   const queued = !!peek(message.recipientRunId)?.agentInputs?.some(input => input.id === message.id);
   const projections = replay ? [`conversation-message:${message.id}:not-delivered`]
     : [...CONVERSATION_DELIVERY_STEPS.map(step => `conversation-message:${message.id}:${step}`), `request-outcome:${message.id}`, `request-outcome:${message.id}:replied-late`];

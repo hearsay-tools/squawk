@@ -1,4 +1,4 @@
-import type { ActivityPrProgress, ActivityWait, ConversationState, Wait, WorkerWaitEntry } from '@open-mercato/cezar-contract';
+import type { ActivityPrProgress, ActivityWait, ConversationMessage, Wait, WorkerWaitEntry } from '@open-mercato/cezar-contract';
 import { ACTIVITY_TEXT_MAX } from '@open-mercato/cezar-contract/activity';
 import { isLiveStatus } from '@open-mercato/cezar-contract/run-predicates';
 import { asksQuestion, computeWaitingOn, workerWaitTargets } from '@open-mercato/cezar-contract/waiting-on';
@@ -19,17 +19,17 @@ const earliest = (values: readonly (string | undefined)[]): string | undefined =
 /**
  * A run's top wait, as `computeWaitingOn` names it, so the view and the Tasks list never disagree
  * on what a task waits for. `computeWaitingOn` aggregates worker, peer and subagent entries and
- * names none, so those kinds aggregate every open entry here too. `ledger` holds the family's
- * requests: the root's own, or a worker's parent's.
+ * names none, so those kinds aggregate every open entry here too. `findMessage` reads the family's
+ * ledger by message ID: the root's own, or a worker's parent's.
  */
-export function activityWait(run: RunRecord, ledger: ConversationState | undefined, ci: CiProgressSource): ActivityWait | undefined {
+export function activityWait(run: RunRecord, findMessage: (id: string) => ConversationMessage | undefined, ci: CiProgressSource): ActivityWait | undefined {
   if (!isLiveStatus(run.status)) return undefined;
   const waitingOn = computeWaitingOn(run);
   switch (waitingOn?.kind) {
     case undefined: return undefined;
     case 'human': return humanWait(run);
     case 'usage-limit': return { kind: 'usage-limit', detail: { resumeAt: waitingOn.at } };
-    case 'workers': return workersWait(openOf(run, 'worker'), waitingOn.count, waitingOn.replies === true, ledger);
+    case 'workers': return workersWait(openOf(run, 'worker'), waitingOn.count, waitingOn.replies === true, findMessage);
     case 'peers': {
       const entries = openOf(run, 'peer');
       return { kind: 'peers', since: earliest(entries.map((entry) => entry.registeredAt))!, deadline: earliest(entries.map((entry) => entry.deadline))!,
@@ -85,14 +85,13 @@ function humanWait(run: RunRecord): ActivityWait {
 /** Completion and reply waits, both kind `worker`. `owed` is `computeWaitingOn`'s count; the bar
  *  counts the same targets, each worker or request once however many entries name it
  *  (hearsay-tools/cezarion#2588). A mode is shown only for one entry. */
-function workersWait(entries: readonly WorkerWaitEntry[], owed: number, replies: boolean, ledger: ConversationState | undefined): ActivityWait {
+function workersWait(entries: readonly WorkerWaitEntry[], owed: number, replies: boolean, findMessage: (id: string) => ConversationMessage | undefined): ActivityWait {
   const total = new Set(entries.flatMap((entry) => workerWaitTargets(entry).map((target) => target.key))).size;
-  const recipients = new Map((ledger?.messages ?? []).map((message) => [message.id, message.recipientRunId]));
   const recipientRunIds = new Set<string>();
   for (const entry of entries) {
     const answered = new Set(entry.requestOutcomes?.map((outcome) => outcome.requestId));
     for (const id of entry.requestIds ?? []) {
-      const recipient = recipients.get(id);
+      const recipient = findMessage(id)?.recipientRunId;
       if (!answered.has(id) && recipient !== undefined) recipientRunIds.add(recipient);
     }
   }

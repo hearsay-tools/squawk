@@ -31,6 +31,7 @@ import { trackReferencedIssues, trackReferencedPrs } from './run-references.ts';
 import { applyExit, doneCommits, exitDurability, RUN_EXITS, type ExitCall, type ExitDurability, type RunExitId, type RunExitSpec, type RunPatch } from './run-exits.ts';
 import { assertConversationIdFree, type ConversationIdentity } from './conversation-identity.ts';
 export { ConversationIdInUseError } from './conversation-identity.ts';
+import { RowConversationLedger, type ConversationLedger } from './conversation-ledger.ts';
 
 import {
   RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunDatabase, RunDatabaseBusyError,
@@ -164,6 +165,8 @@ export class RunStore {
   readonly queries: RunQueriesTopic;
   /** The repository this project is, and the repair of the runs it rescopes (hearsay-tools/squawk#4044). */
   readonly repoScope: RunRepoScopeTopic;
+  /** The family conversation ledgers, read by message and request ID (hearsay-tools/squawk#4192). */
+  readonly conversations: ConversationLedger = new RowConversationLedger((id) => this.getRun(id));
   private executions: (WorkerExecutions & WorkerExecutionRecords) | undefined;
   /** A worker's execution, process, identity and scope records (hearsay-tools/squawk#4039), built on
    *  first use by the factory this process registered; throws when none is registered. */
@@ -457,7 +460,7 @@ export class RunStore {
     message?: ConversationIdentity): void {
     const root = this.rows.peek(rootId);
     if (root?.delegation?.role !== 'root') throw new Error('missing conversation root');
-    assertConversationIdFree(root, message ?? delivery?.input, id => this.rows.peek(id), (runId, id) => this.eventLog.hasProjection(runId, id));
+    assertConversationIdFree(root, message ?? delivery?.input, this.conversations, id => this.rows.peek(id), (runId, id) => this.eventLog.hasProjection(runId, id));
     const staged = new Map<string, RunRecord>();
     stageConversation(staged, root, conversation, delivery, id => this.rows.peek(id), text => this.redaction.redactText(text));
     this.persistence.commitIndex(staged);

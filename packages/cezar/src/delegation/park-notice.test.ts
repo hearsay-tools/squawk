@@ -32,11 +32,12 @@ describe('park notices (hearsay-tools/cezarion#1327)', () => {
     const byId = workerWait({ workerIds: [worker] });
     const byRequest = workerWait({ requestIds: [request] });
     const waits = [timer, workerWait({ workerIds: [worker], phase: WAIT_PHASE.delivered }), workerWait({ workerIds: [randomUUID()] }), byId, byRequest];
+    const finder = (messages: ConversationMessage[]) => (id: string) => messages.find(entry => entry.id === id);
     const messages = [message({ id: request })];
-    expect(parkNoticeWait(worker, waits, messages)).toBe(byId);
-    expect(parkNoticeWait(worker, waits, [...messages, message({ id: parkNoticeId(worker, byId.id) })])).toBe(byRequest);
+    expect(parkNoticeWait(worker, waits, finder(messages))).toBe(byId);
+    expect(parkNoticeWait(worker, waits, finder([...messages, message({ id: parkNoticeId(worker, byId.id) })]))).toBe(byRequest);
     // A request to another worker does not select this one.
-    expect(parkNoticeWait(worker, [byRequest], [message({ id: request, recipientRunId: randomUUID() })])).toBeUndefined();
+    expect(parkNoticeWait(worker, [byRequest], finder([message({ id: request, recipientRunId: randomUUID() })]))).toBeUndefined();
   });
 
   it('knows whether the parking turn already messaged the parent', () => {

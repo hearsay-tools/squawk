@@ -40,12 +40,12 @@ export function parkedByTurn(run: Pick<RunRecord, 'status' | 'autoResumeAt' | 'p
 export function parkNoticeWait(
   workerRunId: string,
   waits: readonly Wait[],
-  messages: readonly ConversationMessage[],
+  findMessage: (id: string) => ConversationMessage | undefined,
   noticeIdFor: (workerId: string, waitId: string) => string = parkNoticeId,
 ): WorkerWaitEntry | undefined {
   const selects = (wait: WorkerWaitEntry) => wait.workerIds ? wait.workerIds.includes(workerRunId)
-    : (wait.requestIds ?? []).some(id => messages.some(message => message.id === id && message.recipientRunId === workerRunId));
-  const noticed = (wait: WorkerWaitEntry) => { const id = noticeIdFor(workerRunId, wait.id); return messages.some(message => message.id === id); };
+    : (wait.requestIds ?? []).some(id => findMessage(id)?.recipientRunId === workerRunId);
+  const noticed = (wait: WorkerWaitEntry) => findMessage(noticeIdFor(workerRunId, wait.id)) !== undefined;
   return WAIT_KINDS.worker.selectOpen(waits).find(wait => selects(wait) && !noticed(wait));
 }
 
