@@ -4,21 +4,9 @@
  * Contract: https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/rpc.md
  * Unknown or malformed wire data is ignored; this mapper never throws.
  */
-import {
-  contentText,
-  isRecord,
-  number,
-  piRpcError as rpcError,
-  string,
-  type PlanEntry,
-  type StopReason,
-  type TokenUsage,
-  type UiEvent,
-  type UiMessageItem,
-  type UiReasoningItem,
-  type UiToolItem,
-} from '@hearsay-tools/squawk/plugin';
-import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
+import { contentText, isRecord, number, piRpcError as rpcError, string } from '@hearsay-tools/squawk/plugin/pi-rpc';
+import type { PlanEntry, StopReason, TokenUsage, UiEvent, UiMessageItem, UiReasoningItem, UiToolItem } from '@hearsay-tools/squawk/plugin';
+import { toolDisplay } from '@hearsay-tools/squawk/plugin/runtime';
 
 export interface PiUiMapperState {
   readonly sessionStarted: boolean;

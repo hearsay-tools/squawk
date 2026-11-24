@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { claudeSettingSourceArgs } from './claude-setting-sources.ts';
-import { type SkillCatalog, skillLines, skillProbe, type SkillDiscoveryOptions } from '@hearsay-tools/squawk/plugin';
+import type { SkillCatalog, SkillDiscoveryOptions } from '@hearsay-tools/squawk/plugin';
+import { skillLines, skillProbe } from '@hearsay-tools/squawk/plugin/runtime';
 
 const responseSchema = z.object({ skills: z.array(z.object({
   name: z.string(), display_name: z.string().optional(), description: z.string().optional(), source: z.string(),

@@ -2,7 +2,8 @@ import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { accessSync, constants, realpathSync, statSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
-import { productEnv, leaseManagedCli, managedCliExecutable, managedCliHome } from '@hearsay-tools/squawk/plugin';
+import { productEnv } from '@hearsay-tools/squawk/plugin';
+import { leaseManagedCli, managedCliExecutable, managedCliHome } from '@hearsay-tools/squawk/plugin/managed-cli';
 import { ANTIGRAVITY_CLI } from './cli.ts';
 
 /** The names Google's CLI is installed under: `agy` (Windows, symlinks) and `antigravity` (archives). */

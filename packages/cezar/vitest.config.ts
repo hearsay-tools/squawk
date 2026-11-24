@@ -11,7 +11,13 @@ export default defineConfig({
   // The public plugin entry: the built package resolves it through `exports`; source and tests map
   // it here, as tsconfig.json `paths` does for the typechecker.
   resolve: {
-    alias: { '@hearsay-tools/squawk/plugin': fileURLToPath(new URL('./src/plugin/index.ts', import.meta.url)) },
+    alias: [
+      { find: /^@hearsay-tools\/squawk\/plugin$/, replacement: fileURLToPath(new URL('./src/plugin/index.ts', import.meta.url)) },
+      { find: /^@hearsay-tools\/squawk\/plugin\/runtime$/, replacement: fileURLToPath(new URL('./src/plugin/runtime.ts', import.meta.url)) },
+      { find: /^@hearsay-tools\/squawk\/plugin\/model-settings$/, replacement: fileURLToPath(new URL('./src/plugin/model-settings.ts', import.meta.url)) },
+      { find: /^@hearsay-tools\/squawk\/plugin\/managed-cli$/, replacement: fileURLToPath(new URL('./src/plugin/managed-cli.ts', import.meta.url)) },
+      { find: /^@hearsay-tools\/squawk\/plugin\/pi-rpc$/, replacement: fileURLToPath(new URL('./src/plugin/pi-rpc.ts', import.meta.url)) },
+    ],
   },
   test: {
     name: 'server',

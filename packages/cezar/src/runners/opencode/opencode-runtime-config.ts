@@ -1,4 +1,5 @@
-import { parseConfigContent, type AgentRunSpec } from '@hearsay-tools/squawk/plugin';
+import { parseConfigContent } from '@hearsay-tools/squawk/plugin/model-settings';
+import type { AgentRunSpec } from '@hearsay-tools/squawk/plugin';
 
 /**
  * The OpenCode runtime config a session already carries (`OPENCODE_CONFIG_CONTENT`), read from

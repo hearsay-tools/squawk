@@ -31,11 +31,30 @@ function perRunnerFiles(): Array<{ file: string; runner: string }> {
   }));
 }
 
-/** Each entry's closure, as `src`-relative paths. */
+const PLUGIN_ENTRY_PATHS: Readonly<Record<string, string>> = {
+  '@hearsay-tools/squawk/plugin': join(src, 'plugin/index.ts'),
+  '@hearsay-tools/squawk/plugin/runtime': join(src, 'plugin/runtime.ts'),
+  '@hearsay-tools/squawk/plugin/model-settings': join(src, 'plugin/model-settings.ts'),
+  '@hearsay-tools/squawk/plugin/managed-cli': join(src, 'plugin/managed-cli.ts'),
+  '@hearsay-tools/squawk/plugin/pi-rpc': join(src, 'plugin/pi-rpc.ts'),
+};
+
+const pluginKitAlias = {
+  name: 'plugin-kit-alias',
+  setup(buildApi: { onResolve: (opts: { filter: RegExp }, cb: (args: { path: string }) => { path: string } | undefined) => void }) {
+    buildApi.onResolve({ filter: /^@hearsay-tools\/squawk\/plugin(?:\/[^/]+)?$/ }, (args) => {
+      const target = PLUGIN_ENTRY_PATHS[args.path];
+      return target ? { path: target } : undefined;
+    });
+  },
+};
+
+/** Each entry's closure, as `src`-relative paths (with `@hearsay-tools/squawk/plugin*` resolved). */
 async function closures(files: readonly string[]): Promise<Map<string, Set<string>>> {
   const result = await build({
     entryPoints: files.map(file => join(src, file)), absWorkingDir: src, bundle: true, write: false, metafile: true,
     platform: 'node', format: 'esm', packages: 'external', outdir: join(src, '.closure'), logLevel: 'silent',
+    plugins: [pluginKitAlias],
   });
   const byEntry = new Map<string, Set<string>>();
   for (const output of Object.values(result.metafile.outputs)) {
@@ -45,32 +64,32 @@ async function closures(files: readonly string[]): Promise<Map<string, Set<strin
   return byEntry;
 }
 
-/** Support modules in another runner's folder (such as runners/antigravity/acp/) are allowed. Adapters, definitions, per-runner
- * data modules (`facts.ts`, `extra-tools.ts`, `mock.ts`) and the built-in roster remain private
- * to each allowed runner, including transitive imports (hearsay-tools/squawk#4175). */
+/** Every module inside another runner's folder (`runners/<other>/*`) and the built-in roster remain
+ *  private to each allowed runner, including transitive imports (hearsay-tools/squawk#4175). */
 function foreignRunnerModules(closure: Set<string>, allowed: ReadonlySet<string>): string[] {
   const others = BUILT_IN_RUNNER_IDS.filter(id => !allowed.has(id));
+  const foreignFiles = others.flatMap(id =>
+    [...closure].filter(file => file.startsWith(`runners/${id}/`)).sort(),
+  );
   return [
-    ...others.filter(id => closure.has(ADAPTERS[id]!)),
-    ...others.filter(id => closure.has(`runners/${id}/definition.ts`)).map(id => `${id} definition`),
-    ...others.filter(id => closure.has(`runners/${id}/facts.ts`)).map(id => `${id} facts`),
-    ...others.filter(id => closure.has(`runners/${id}/extra-tools.ts`)).map(id => `${id} extra-tools`),
-    ...others.filter(id => closure.has(`runners/${id}/mock.ts`)).map(id => `${id} mock`),
+    ...foreignFiles,
     ...(closure.has('runners/built-in.ts') ? ['built-in'] : []),
   ];
 }
 
 describe('per-runner test closures', () => {
-  it.each([false, true])('allows a runner-shaped ACP consumer and refuses a foreign adapter: %s', async foreign => {
+  it('refuses any import from a foreign runner folder, including antigravity/acp', async () => {
     const result = await build({
       stdin: { contents: `import { AcpSession } from './runners/antigravity/acp/session.ts';
-        ${foreign ? "import { PiRunner } from './runners/pi/pi-runner.ts';" : ''}
-        export class FixtureRunner { session = AcpSession; ${foreign ? 'foreign = PiRunner;' : ''} }`, resolveDir: src },
+        import { PiRunner } from './runners/pi/pi-runner.ts';
+        export class FixtureRunner { session = AcpSession; foreign = PiRunner; }`, resolveDir: src },
       absWorkingDir: src, bundle: true, write: false, metafile: true, platform: 'node', format: 'esm', packages: 'external', logLevel: 'silent',
+      plugins: [pluginKitAlias],
     });
     const closure = new Set(Object.keys(result.metafile.inputs));
-    expect(closure.has('runners/antigravity/acp/session.ts')).toBe(true);
-    expect(foreignRunnerModules(closure, new Set(['fixture']))).toEqual(foreign ? ['pi', 'pi facts'] : []);
+    const foreign = foreignRunnerModules(closure, new Set(['fixture']));
+    expect(foreign).toContain('runners/antigravity/acp/session.ts');
+    expect(foreign).toContain('runners/pi/pi-runner.ts');
   });
 
   it('hold their own adapter, no other runner adapter or definition but the wait kit\'s Claude workers and R14\'s second runner, and not the built-in runner list', async () => {

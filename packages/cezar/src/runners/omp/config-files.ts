@@ -1,8 +1,6 @@
 import { join } from 'node:path';
-import {
-  agentHome, type AgentHomePaths, type RunnerConfigFile, EDITOR_PLUS_COMMIT_NOTE, PROJECT_AGENTS_FILE,
-} from '@hearsay-tools/squawk/plugin';
-import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
+import { agentHome, type AgentHomePaths, type RunnerConfigFile, EDITOR_PLUS_COMMIT_NOTE, PROJECT_AGENTS_FILE } from '@hearsay-tools/squawk/plugin';
+import type { RunnerAgentConfig } from '@hearsay-tools/squawk/plugin';
 import { OMP_ACCOUNTS } from './accounts.ts';
 
 const ompHome = (home: AgentHomePaths): string => agentHome(home, OMP_ACCOUNTS.homeSlot);

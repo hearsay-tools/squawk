@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { agentHome, type AgentHomePaths, type RunnerConfigFile } from '@hearsay-tools/squawk/plugin';
-import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
+import type { RunnerAgentConfig } from '@hearsay-tools/squawk/plugin';
 import { CLAUDE_ACCOUNTS } from './accounts.ts';
 
 const claudeHome = (home: AgentHomePaths): string => agentHome(home, CLAUDE_ACCOUNTS.homeSlot);

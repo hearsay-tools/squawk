@@ -2,8 +2,11 @@ import { registerBuiltInWaitKinds, sealBuiltInWaitKinds } from '../src/built-in-
 import { registerBuiltInStepKinds, sealBuiltInStepKinds } from '../src/workflows/step-kind-registry.ts';
 import { registerBuiltInTools, sealBuiltInTools } from '../src/built-in-tools.ts';
 import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
-import { registerBuiltInRunners, sealBuiltInRunners } from '../src/runners/built-in.ts';
+import { installPluginResolveHook } from '../src/plugin/resolve-hook.ts';
 import { registerBuiltInRunSlots, sealBuiltInRunSlots } from '../src/built-in-run-slots.ts';
+
+installPluginResolveHook();
+const { registerBuiltInRunners, sealBuiltInRunners } = await import('../src/runners/built-in.ts');
 
 /** Boot the process services used by benchmarks that open a run store. */
 export function prepareBenchmarkRuntime(): void {

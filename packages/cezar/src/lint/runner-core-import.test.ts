@@ -47,6 +47,8 @@ describe('runner-core-import (hearsay-tools/squawk#4201)', () => {
     expect(outsideTarget(file, './pi-ui-mapper.ts')).toBeUndefined();
     expect(outsideTarget(file, './rpc/../pi-ui-mapper.ts')).toBeUndefined();
     expect(outsideTarget(file, '@hearsay-tools/squawk/plugin')).toBeUndefined();
+    expect(outsideTarget(file, '@hearsay-tools/squawk/plugin/runtime')).toBeUndefined();
+    expect(outsideTarget(file, '@open-mercato/cezar-contract/effort')).toBe('@open-mercato/cezar-contract/effort');
     expect(outsideTarget(file, undefined)).toBeUndefined();
   });
 
@@ -72,6 +74,7 @@ describe('runner-core-import (hearsay-tools/squawk#4201)', () => {
       "import env = require('../../core/product-env.ts');",
       "import { OmpRunner } from '../omp/omp-runner.ts';",
       "import { normalizedLines } from '../login-output.ts';",
+      "import { parseEffort } from '@open-mercato/cezar-contract/effort';",
     ],
   });
 

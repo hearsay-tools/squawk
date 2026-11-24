@@ -82,4 +82,21 @@ describe('inline-contract fails the build on a contract import the bundle lacks 
     expect(record).not.toContain('@open-mercato/cezar-contract');
     expect(record.match(/'\.\.\/contract\/index\.js'/g)).toHaveLength(2);
   });
+
+  it('repoints @hearsay-tools/squawk/plugin* specifiers in emitted declarations while leaving runtime .js imports intact', () => {
+    const { dist, status, stderr } = inline({
+      'ask.js': "import { ASK_LIMITS } from '@open-mercato/cezar-contract/ask-schema';\nexport const limits = ASK_LIMITS;\n",
+      'plugin/index.d.ts': 'export type RunnerFacts = {};\n',
+      'plugin/runtime.d.ts': 'export declare function readNdjson(): void;\n',
+      'runners/demo/config.d.ts': "import type { RunnerFacts } from '@hearsay-tools/squawk/plugin';\nimport type { readNdjson } from '@hearsay-tools/squawk/plugin/runtime';\nexport type Demo = [RunnerFacts, typeof readNdjson];\n",
+      'runners/demo/config.js': "import { defineRunner } from '@hearsay-tools/squawk/plugin';\nexport const demo = defineRunner;\n",
+    });
+
+    expect(status, stderr).toBe(0);
+    const decl = readFileSync(join(dist, 'runners/demo/config.d.ts'), 'utf8');
+    expect(decl).toContain("from '../../plugin/index.js'");
+    expect(decl).toContain("from '../../plugin/runtime.js'");
+    expect(decl).not.toContain('@hearsay-tools/squawk/plugin');
+    expect(readFileSync(join(dist, 'runners/demo/config.js'), 'utf8')).toContain("from '@hearsay-tools/squawk/plugin'");
+  });
 });

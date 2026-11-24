@@ -2,7 +2,7 @@ import { constants } from 'node:fs';
 import { open, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { inspect } from 'node:util';
-import { redactBrowserSignInDetails, collectSecretValues, redactSecrets } from '@hearsay-tools/squawk/plugin';
+import { redactBrowserSignInDetails, collectSecretValues, redactSecrets } from '@hearsay-tools/squawk/plugin/runtime';
 import { ANTIGRAVITY_APP_DATA_DIR } from './launch-args.ts';
 
 const MAX_FILES = 4;

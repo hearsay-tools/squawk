@@ -1,4 +1,4 @@
-import { parseEffort } from '@open-mercato/cezar-contract/effort';
+import { parseEffort } from '@hearsay-tools/squawk/plugin/runtime';
 import { type AgentRunSpec, productEnv } from '@hearsay-tools/squawk/plugin';
 
 const REASONING_SUMMARIES = new Set(['auto', 'concise', 'detailed', 'none']);

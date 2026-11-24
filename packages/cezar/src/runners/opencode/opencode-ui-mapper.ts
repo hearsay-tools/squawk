@@ -36,19 +36,9 @@ import { opencodeSkillWarning } from './opencode-session-error.ts';
  *    subtask scope is dropped.
  */
 
-import {
-  ownLookup,
-  type FileDiff,
-  type PlanEntry,
-  type PlanStatus,
-  type ToolLocation,
-  type ToolStatus,
-  type UiEvent,
-  type UiMessageItem,
-  type UiReasoningItem,
-  type UiToolItem,
-} from '@hearsay-tools/squawk/plugin';
-import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
+import { ownLookup } from '@hearsay-tools/squawk/plugin/runtime';
+import type { FileDiff, PlanEntry, PlanStatus, ToolLocation, ToolStatus, UiEvent, UiMessageItem, UiReasoningItem, UiToolItem } from '@hearsay-tools/squawk/plugin';
+import { toolDisplay } from '@hearsay-tools/squawk/plugin/runtime';
 import { EMPTY_MESSAGE_USAGE, addUsage, emitUsage, maxCost, tokensToUsage, usageForMessages } from './opencode-usage.ts';
 import type { MessageUsage } from './opencode-usage.ts';
 import type { OpencodeUiMapperState, OpencodeUiMapping, SubtaskScope } from './opencode-ui-mapper-state.ts';

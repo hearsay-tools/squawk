@@ -1,16 +1,10 @@
-import {
-  openingContent, skillOf, validSkillMessage, productEnv, isRecord, parseRpcLine, ompRpcError as rpcError, string,
-  toPiPrompt, truncate, waitForExit, adoptRpcSessionId, armEndWatchdog, dispatchPiTurnMessage, type PiEndWatchdog,
-  PiRpcInput, PiTextBlocks, type PiTurnMessages, type PiSkillSubmission, settlePiFamilyExit, type AgentEvent,
-  type AgentRunResult, type AgentRunSpec, type InputDelivery, type AgentRunner, type AgentSession,
-  type AgentToolCallRecord, type ContentBlock, type SessionOptions, type ToolGrant, SessionEndedBeforeAcknowledgement,
-  ompRequestedTools, ownLookup, signalSession, spawnSessionLeader, buildChildEnv, type SkillInputIdentity,
-  type UiEvent, squawkToolNames, readNdjson, summarizeRunnerStderr, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS,
-} from '@hearsay-tools/squawk/plugin';
+import { openingContent, skillOf, validSkillMessage, SessionEndedBeforeAcknowledgement, ompRequestedTools, ownLookup, signalSession, spawnSessionLeader, buildChildEnv, squawkToolNames, readNdjson, summarizeRunnerStderr, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from '@hearsay-tools/squawk/plugin/runtime';
+import { productEnv, type PiEndWatchdog, type PiTurnMessages, type PiSkillSubmission, type AgentEvent, type AgentRunResult, type AgentRunSpec, type InputDelivery, type AgentRunner, type AgentSession, type AgentToolCallRecord, type ContentBlock, type SessionOptions, type ToolGrant, type SkillInputIdentity, type UiEvent } from '@hearsay-tools/squawk/plugin';
+import { isRecord, parseRpcLine, ompRpcError as rpcError, string, toPiPrompt, truncate, waitForExit, adoptRpcSessionId, armEndWatchdog, dispatchPiTurnMessage, PiRpcInput, PiTextBlocks, settlePiFamilyExit } from '@hearsay-tools/squawk/plugin/pi-rpc';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseEffort } from '@open-mercato/cezar-contract/effort';
+import { parseEffort } from '@hearsay-tools/squawk/plugin/runtime';
 import { OMP_FACTS } from './facts.js';
 import { OMP_SPEC_SUPPORT, OMP_MINIMAL_ARGS } from './spec-support.js';
 import {

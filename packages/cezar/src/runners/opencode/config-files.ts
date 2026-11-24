@@ -1,12 +1,6 @@
 import { join } from 'node:path';
-import {
-  agentHome,
-  EDITOR_PLUS_COMMIT_NOTE,
-  PROJECT_AGENTS_FILE,
-  type AgentHomePaths,
-  type RunnerConfigFile,
-} from '@hearsay-tools/squawk/plugin';
-import type { RunnerAgentConfig } from '@open-mercato/cezar-contract/runners';
+import { agentHome, EDITOR_PLUS_COMMIT_NOTE, PROJECT_AGENTS_FILE, type AgentHomePaths, type RunnerConfigFile } from '@hearsay-tools/squawk/plugin';
+import type { RunnerAgentConfig } from '@hearsay-tools/squawk/plugin';
 import { OPENCODE_ACCOUNTS } from './accounts.ts';
 
 const opencodeHome = (home: AgentHomePaths): string => agentHome(home, OPENCODE_ACCOUNTS.homeSlot);

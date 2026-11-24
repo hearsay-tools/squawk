@@ -1,6 +1,7 @@
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { z } from 'zod';
-import { trackChildExit, buildChildEnv, readNdjson, type ModelOption } from '@hearsay-tools/squawk/plugin';
+import { trackChildExit, buildChildEnv, readNdjson } from '@hearsay-tools/squawk/plugin/runtime';
+import type { ModelOption } from '@hearsay-tools/squawk/plugin';
 import { resolveClaudeExecutable } from './claude-executable.ts';
 
 export interface ClaudeModelDiscoveryOptions {

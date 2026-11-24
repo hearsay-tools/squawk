@@ -3,10 +3,9 @@ import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { effortLevelSchema } from '@open-mercato/cezar-contract/effort';
-import {
-  type ModelDiscoveryContext, type ModelOption, profileEnv, agentHomeDir, productEnv,
-} from '@hearsay-tools/squawk/plugin';
+import { effortLevelSchema } from '@hearsay-tools/squawk/plugin/runtime';
+import { type ModelDiscoveryContext, type ModelOption, agentHomeDir, productEnv } from '@hearsay-tools/squawk/plugin';
+import { profileEnv } from '@hearsay-tools/squawk/plugin/runtime';
 import { AntigravityProbe } from './probe-process.ts';
 import { antigravityPersonalSignIn } from './login-probe.ts';
 import { antigravityExecutable, resolveAntigravityCommand } from './executable.ts';

@@ -1,6 +1,5 @@
-import {
-  firstConfiguredModel, firstConfiguredProvider, readNativeSettingsFiles, type AgentModelSettingsStrategy,
-} from '@hearsay-tools/squawk/plugin';
+import { firstConfiguredModel, firstConfiguredProvider, readNativeSettingsFiles } from '@hearsay-tools/squawk/plugin/model-settings';
+import type { AgentModelSettingsStrategy } from '@hearsay-tools/squawk/plugin';
 
 export const codexModelSettingsStrategy: AgentModelSettingsStrategy = {
   runner: 'codex',

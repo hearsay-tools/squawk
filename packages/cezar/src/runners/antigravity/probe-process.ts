@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises';
 import { rmSync } from 'node:fs';
-import { spawnSessionLeader, signalSession, SessionDescendants } from '@hearsay-tools/squawk/plugin';
+import { spawnSessionLeader, signalSession, SessionDescendants } from '@hearsay-tools/squawk/plugin/runtime';
 import { AcpSession } from './acp/session.ts';
 import { antigravityEnv } from './runtime-env.ts';
 import type { AcpHooks } from './acp/protocol.ts';

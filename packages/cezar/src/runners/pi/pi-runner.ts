@@ -1,49 +1,10 @@
 import { piBaseArgs } from './pi-args.ts';
-import {
-  adoptRpcSessionId,
-  armEndWatchdog,
-  boundOutputDrainAfterExit,
-  buildChildEnv,
-  DEFAULT_RUNNER_TIMINGS,
-  dispatchPiTurnMessage,
-  isRecord,
-  number,
-  openingContent,
-  parseRpcLine,
-  piRpcError as rpcError,
-  PiRpcInput,
-  PiTextBlocks,
-  productEnv,
-  readNdjson,
-  SessionEndedBeforeAcknowledgement,
-  settlePiFamilyExit,
-  signalSession,
-  spawnSessionLeader,
-  squawkToolNames,
-  string,
-  summarizeRunnerStderr,
-  toPiPrompt,
-  truncate,
-  unknownToolGrant,
-  validSkillMessage,
-  waitForEofExit,
-  waitForExit,
-  type AgentEvent,
-  type AgentRunner,
-  type AgentRunResult,
-  type AgentRunSpec,
-  type AgentSession,
-  type AgentToolCallRecord,
-  type ContentBlock,
-  type InputDelivery,
-  type PiEndWatchdog,
-  type PiTurnMessages,
-  type SessionOptions,
-  type ToolGrant,
-} from '@hearsay-tools/squawk/plugin';
+import { adoptRpcSessionId, armEndWatchdog, dispatchPiTurnMessage, isRecord, number, parseRpcLine, piRpcError as rpcError, PiRpcInput, PiTextBlocks, settlePiFamilyExit, string, toPiPrompt, truncate, waitForExit } from '@hearsay-tools/squawk/plugin/pi-rpc';
+import { boundOutputDrainAfterExit, buildChildEnv, DEFAULT_RUNNER_TIMINGS, openingContent, readNdjson, SessionEndedBeforeAcknowledgement, signalSession, spawnSessionLeader, squawkToolNames, summarizeRunnerStderr, unknownToolGrant, validSkillMessage, waitForEofExit } from '@hearsay-tools/squawk/plugin/runtime';
+import { productEnv, type AgentEvent, type AgentRunner, type AgentRunResult, type AgentRunSpec, type AgentSession, type AgentToolCallRecord, type ContentBlock, type InputDelivery, type PiEndWatchdog, type PiTurnMessages, type SessionOptions, type ToolGrant } from '@hearsay-tools/squawk/plugin';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseEffort } from '@open-mercato/cezar-contract/effort';
+import { parseEffort } from '@hearsay-tools/squawk/plugin/runtime';
 import { PI_FACTS } from './facts.js';
 import { PI_SPEC_SUPPORT, PI_MINIMAL_ARGS } from './spec-support.js';
 import { createPiUiState, mapPiRpcMessage, piFlushProviderError, piProviderErrorMessage, piTurnStarted } from './pi-ui-mapper.js';

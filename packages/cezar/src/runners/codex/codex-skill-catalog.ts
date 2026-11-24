@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CodexAppServerRpc } from './codex-app-server-transport.ts';
-import { type SkillCatalog, skillLines, skillProbe, type SkillDiscoveryOptions } from '@hearsay-tools/squawk/plugin';
+import type { SkillCatalog, SkillDiscoveryOptions } from '@hearsay-tools/squawk/plugin';
+import { skillLines, skillProbe } from '@hearsay-tools/squawk/plugin/runtime';
 const listSchema = z.object({ data: z.array(z.object({ cwd: z.string(),
   skills: z.array(z.object({ name: z.string(), description: z.string().optional(), path: z.string(),
     scope: z.string(), pluginId: z.string().nullable().optional() })),

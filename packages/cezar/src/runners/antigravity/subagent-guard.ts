@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { shellQuote } from '@hearsay-tools/squawk/plugin';
+import { shellQuote } from '@hearsay-tools/squawk/plugin/runtime';
 
 /**
  * The native tools that start or drive native subagents. On the CLI 1.5.14 ACP wire a subagent's

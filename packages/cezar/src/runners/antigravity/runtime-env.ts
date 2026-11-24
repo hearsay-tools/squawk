@@ -1,7 +1,8 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { agentHomeDir, type AgentRunSpec, buildChildEnv } from '@hearsay-tools/squawk/plugin';
+import { agentHomeDir, type AgentRunSpec } from '@hearsay-tools/squawk/plugin';
+import { buildChildEnv } from '@hearsay-tools/squawk/plugin/runtime';
 import { prepareAntigravityAccount } from './account-home.ts';
 
 /** The account folder the CLI gets as --gemini-dir: the selected account, else the host's ~/.gemini. */

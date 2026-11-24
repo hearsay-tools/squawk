@@ -25,7 +25,13 @@
     "rootDir": "src",
     // The public plugin entry. A built install resolves it through the package's own `exports`;
     // the source checkout's package name differs, so source and tests map it here (and in vitest.config.ts).
-    "paths": { "@hearsay-tools/squawk/plugin": ["./src/plugin/index.ts"] }
+    "paths": {
+      "@hearsay-tools/squawk/plugin": ["./src/plugin/index.ts"],
+      "@hearsay-tools/squawk/plugin/runtime": ["./src/plugin/runtime.ts"],
+      "@hearsay-tools/squawk/plugin/model-settings": ["./src/plugin/model-settings.ts"],
+      "@hearsay-tools/squawk/plugin/managed-cli": ["./src/plugin/managed-cli.ts"],
+      "@hearsay-tools/squawk/plugin/pi-rpc": ["./src/plugin/pi-rpc.ts"]
+    }
   },
   // Build config: tests and their `*.testkit.ts` helpers are excluded so they never reach
   // `dist` (and the published tarball).

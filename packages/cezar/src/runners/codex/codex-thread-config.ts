@@ -1,4 +1,5 @@
-import { squawkToolEnvNames, type AgentRunSpec } from '@hearsay-tools/squawk/plugin';
+import { squawkToolEnvNames } from '@hearsay-tools/squawk/plugin/runtime';
+import type { AgentRunSpec } from '@hearsay-tools/squawk/plugin';
 
 /** Config overrides for a minimal session (`AgentRunSpec.minimal`): no hooks, plugins, apps,
  *  memories, subagents, AGENTS.md or web search. */

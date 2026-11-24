@@ -162,4 +162,35 @@ for (const p of referrers) {
   if (!rel.startsWith('.')) rel = `./${rel}`;
   writeFileSync(p, readFileSync(p, 'utf8').replace(SPEC, `'${rel}'`), 'utf8');
 }
-console.log(`inline-contract ok — contract bundled with declarations, ${referrers.length} file(s) repointed`);
+
+// Emitted declarations under dist/ may reference `@hearsay-tools/squawk/plugin*`, which TypeScript
+// cannot resolve while the workspace package name is `@wjarka/cezarion`. Repoint `.d.ts` files
+// to the sibling `dist/plugin/<stem>.js` declaration; `.js` runtime imports stay on the package
+// specifier and resolve through `installPluginResolveHook()`.
+const PLUGIN_SPEC = /(['"])@hearsay-tools\/squawk\/plugin(?:\/(runtime|model-settings|managed-cli|pi-rpc))?\1/g;
+const pluginDir = join(dist, 'plugin');
+let pluginDeclCount = 0;
+if (existsSync(join(pluginDir, 'index.d.ts'))) {
+  const repointPluginDecls = (dir) => {
+    for (const item of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, item.name);
+      if (item.isDirectory()) {
+        if (p !== outdir) repointPluginDecls(p);
+      } else if (item.name.endsWith('.d.ts')) {
+        const text = readFileSync(p, 'utf8');
+        PLUGIN_SPEC.lastIndex = 0;
+        if (!PLUGIN_SPEC.test(text)) continue;
+        const next = text.replace(PLUGIN_SPEC, (_match, _quote, sub) => {
+          let rel = relative(dirname(p), join(pluginDir, `${sub ?? 'index'}.js`)).replaceAll('\\', '/');
+          if (!rel.startsWith('.')) rel = `./${rel}`;
+          return `'${rel}'`;
+        });
+        writeFileSync(p, next, 'utf8');
+        pluginDeclCount++;
+      }
+    }
+  };
+  repointPluginDecls(dist);
+}
+
+console.log(`inline-contract ok — contract bundled with declarations, ${referrers.length} file(s) repointed, ${pluginDeclCount} plugin declaration(s) repointed`);

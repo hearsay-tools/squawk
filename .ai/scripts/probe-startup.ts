@@ -48,14 +48,15 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline';
 import type { AgentRunSpec } from '../../packages/cezar/src/core/agent-runner.ts';
-import { buildOmpArgs } from '../../packages/cezar/src/runners/omp/omp-runner.ts';
-import { buildPiArgs } from '../../packages/cezar/src/runners/pi/pi-runner.ts';
 import { agentHomeDir } from '../../packages/cezar/src/paths.ts';
 import { allowedToolsForStep } from '../../packages/cezar/src/workflows/types.ts';
-import { registerBuiltInRunners, sealBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
+import { installPluginResolveHook } from '../../packages/cezar/src/plugin/resolve-hook.ts';
 
+installPluginResolveHook();
+const { buildOmpArgs } = await import('../../packages/cezar/src/runners/omp/omp-runner.ts');
+const { buildPiArgs } = await import('../../packages/cezar/src/runners/pi/pi-runner.ts');
+const { registerBuiltInRunners, sealBuiltInRunners } = await import('../../packages/cezar/src/runners/built-in.ts');
 registerBuiltInRunners();
-
 sealBuiltInRunners();
 
 type Frame = Record<string, unknown>;

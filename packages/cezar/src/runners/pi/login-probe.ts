@@ -1,8 +1,5 @@
-import {
-  normalizedLines,
-  type ProviderCommandResult,
-  type ProviderConnectionState,
-} from '@hearsay-tools/squawk/plugin';
+import { normalizedLines } from '@hearsay-tools/squawk/plugin/runtime';
+import type { ProviderCommandResult, ProviderConnectionState } from '@hearsay-tools/squawk/plugin';
 
 /** Pi's auth-status parser, moved verbatim from `core/provider-auth.ts`. Loads only through
  *  the definition's `loadLogin()`. */

@@ -1,10 +1,4 @@
-import {
-  COMMON_MOCK_SCENARIOS,
-  MOCK_BASELINE_PROMPT,
-  NATIVE_APPROVAL_MOCK_SCENARIOS,
-  PROVIDER_ERROR_MOCK_SCENARIOS,
-  type RunnerMock,
-} from '@hearsay-tools/squawk/plugin';
+import { COMMON_MOCK_SCENARIOS, MOCK_BASELINE_PROMPT, NATIVE_APPROVAL_MOCK_SCENARIOS, PROVIDER_ERROR_MOCK_SCENARIOS, type RunnerMock } from '@hearsay-tools/squawk/plugin';
 
 /** The opencode runner's native mock and its scenario adapter (the `mock` part). Data only. */
 export const OPENCODE_MOCK = {

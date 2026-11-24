@@ -1,9 +1,4 @@
-import {
-  COMMON_MOCK_SCENARIOS,
-  PROVIDER_ERROR_MOCK_SCENARIOS,
-  STDIO_ASK_MOCK_SCENARIOS,
-  type RunnerMock,
-} from '@hearsay-tools/squawk/plugin';
+import { COMMON_MOCK_SCENARIOS, PROVIDER_ERROR_MOCK_SCENARIOS, STDIO_ASK_MOCK_SCENARIOS, type RunnerMock } from '@hearsay-tools/squawk/plugin';
 
 /** The pi runner's native mock and its scenario adapter (the `mock` part). Data only. */
 export const PI_MOCK = {

@@ -1,15 +1,8 @@
-import {
-  openingContent, claudeSkillContent, productEnv, summarizeRunnerStderr, AUTO_END_DELAY_MS,
-  boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS, type RunnerTimings, type AgentEvent, type AgentRunResult,
-  type AgentRunSpec, type AgentRunner, type AgentSession, type AgentToolCallRecord, type ContentBlock,
-  type SessionOptions, type InputDelivery, type ToolGrant, isSignalTerminationExit,
-  SessionEndedBeforeAcknowledgement, trackChildExit, unknownToolGrant, signalSession, spawnSessionLeader,
-  waitForEofExit, buildChildEnv, squawkToolEnvNames, squawkToolNames, costWeightedTokens, readNdjson,
-  InputSubmissions,
-} from '@hearsay-tools/squawk/plugin';
+import { openingContent, claudeSkillContent, summarizeRunnerStderr, AUTO_END_DELAY_MS, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS, isSignalTerminationExit, SessionEndedBeforeAcknowledgement, trackChildExit, unknownToolGrant, signalSession, spawnSessionLeader, waitForEofExit, buildChildEnv, squawkToolEnvNames, squawkToolNames, costWeightedTokens, readNdjson, InputSubmissions } from '@hearsay-tools/squawk/plugin/runtime';
+import { productEnv, type RunnerTimings, type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentSession, type AgentToolCallRecord, type ContentBlock, type SessionOptions, type InputDelivery, type ToolGrant } from '@hearsay-tools/squawk/plugin';
 import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { parseEffort } from '@open-mercato/cezar-contract/effort';
+import { parseEffort } from '@hearsay-tools/squawk/plugin/runtime';
 import { resolveClaudeExecutable } from './claude-executable.ts';
 import { claudeSettingSourceArgs } from './claude-setting-sources.ts';
 import { CLAUDE_FACTS } from './facts.ts';

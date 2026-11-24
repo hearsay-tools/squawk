@@ -1,4 +1,5 @@
-import { buildChildEnv, opencodeToolGrantFields, type AgentRunSpec } from '@hearsay-tools/squawk/plugin';
+import { buildChildEnv, opencodeToolGrantFields } from '@hearsay-tools/squawk/plugin/runtime';
+import type { AgentRunSpec } from '@hearsay-tools/squawk/plugin';
 import { ciOpenCodeEnv, isObject, suppliedOpenCodeConfig } from './opencode-runtime-config.ts';
 import { opencodeTaskScopeEnv } from './opencode-task-scope.ts';
 
