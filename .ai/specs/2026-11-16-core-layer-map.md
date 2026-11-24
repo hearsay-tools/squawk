@@ -36,12 +36,11 @@ relative to `packages/cezar/src`. The longest matching path wins.
 
 | Layer | Paths |
 | --- | --- |
-| `core` | `core/` (except the accounts file), `runs/` (except `runs/webhook.ts`), `workflows/`, `home/` and `workspace/` (except the accounts files below), `process-wait/`, `ci-wait/` (except the forge files below), and the root files `config.ts`, `data-gitignore.ts`, `detached-process.ts`, `git-*.ts`, `handoff.ts`, `legacy-runs.ts`, `merged-streams.ts`, `paths.ts`, `project-fence.ts`, `project-paths.ts`, `session-context.ts`, `task-branch-head.ts`, `ui-state.ts`, `worktree-manifest.ts`, `worktree-setup.ts` |
+| `core` | `core/`, `runs/` (except `runs/webhook.ts`), `workflows/`, `home/` and `workspace/`, `process-wait/`, `ci-wait/` (except the forge files below), and the root files `config.ts`, `data-gitignore.ts`, `detached-process.ts`, `git-*.ts`, `handoff.ts`, `legacy-runs.ts`, `merged-streams.ts`, `paths.ts`, `project-fence.ts`, `project-paths.ts`, `session-context.ts`, `task-branch-head.ts`, `ui-state.ts`, `worktree-manifest.ts`, `worktree-setup.ts` |
 | `runner` | `runners/` (each runner's folder, since hearsay-tools/squawk#3960; [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md)) |
 | `shell` | `server/` (except `server/forge/`), `cez.ts`, `cezarion.ts`, `cli-dispatch.ts`, `headless-run.ts`, `hsq.ts`, `index.ts`, `project-commands.ts`, `serve-*.ts`, `server-command.ts`, `subcommands.ts`, `use-command-notice.ts` |
 | `tooling` | `lint/` |
 | `feature:workers` | `delegation/`, `worker-scope/` |
-| `feature:accounts` | `core/agent-profiles.ts`, `workspace/agent-accounts.ts`, `workspace/agent-profiles.ts`, and in `home/` the account migration: `legacy-account-paths.ts`, `migration-account-source.ts`, `migration-accounts.ts` |
 | `feature:forge` | `server/forge/`, and in `ci-wait/` the PR watcher: `github.ts`, `supervisor.ts`, `progress.ts`, `merge-progress.ts`, `resources.ts`, `resource-pool.ts` |
 | `feature:skills` | Root `skills*.ts` |
 | `feature:autosave` | Root `autosave-*.ts` |
@@ -55,11 +54,18 @@ relative to `packages/cezar/src`. The longest matching path wins.
 splits it by file. The tool files (`tools.ts`, `tool-catalog.ts`, `mcp.ts`, `client.ts`,
 `controller.ts`, `injection.ts`, `errors.ts`, `text.ts`) are core.
 
-Agent accounts became `feature:accounts` on 2026-11-18 (hearsay-tools/squawk#3865): the core can
-run every task on the discovered login. The usage-limit key (`workflows/execution-account.ts`)
-and the per-account login cache (`core/provider-auth.ts`) stay core: they take the account as a
-plain label. The 11 imports this added to the baseline go when the core gains a
-launch-environment slot.
+Agent accounts are core (owner decision, 2026-11-24). They were `feature:accounts` from
+2026-11-18 (hearsay-tools/squawk#3865) until that decision. The account contract already lives
+in the core: each runner's definition declares its `login` and `accounts` parts
+(`core/runner-definition.ts`), and the run engine stores the chosen login on a step, passes it
+back on Continue, pins it for a worker and keys usage-limit holds by it
+(`workflows/execution-account.ts`). The six files that held the list of saved logins
+(`core/agent-profiles.ts`, `workspace/agent-accounts.ts`, `workspace/agent-profiles.ts`, and in
+`home/` `legacy-account-paths.ts`, `migration-account-source.ts` and `migration-accounts.ts`)
+are back in the `core` layer, and their 10 baseline entries are gone. Two account
+implementations cannot both resolve one stored login, so a plugin slot for accounts could have
+only one implementer. The cuts of hearsay-tools/squawk#3865 stay.
+hearsay-tools/squawk#3871 and hearsay-tools/squawk#3872 are closed as not planned.
 
 ## Evidence
 

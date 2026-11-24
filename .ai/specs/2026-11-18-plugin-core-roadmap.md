@@ -49,7 +49,7 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 | 2 | A typed run lifecycle, and a narrower run store | Done: epic hearsay-tools/squawk#4007, [spec](2026-11-21-run-lifecycle-and-store-ports.md), [ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md) |
 | 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Done: epic hearsay-tools/squawk#4152, [spec](2026-11-23-open-registries-and-tables.md), [ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md) |
 | 4 | Loader and package format | Filed on 2026-11-24: epic hearsay-tools/squawk#4188 (first version) |
-| 5 | Move features out of the core, smallest first | Not filed; hearsay-tools/squawk#3874 moved accounts to a feature layer |
+| 5 | Move features out of the core, smallest first | Not filed; the first slice is a launch slot for environment variables and prompt text |
 | 6 | Cockpit slots | Not filed |
 
 Steps 0 to 3 pay off with no outside plugin: the code is modular and every change is internal.
@@ -59,6 +59,12 @@ One change ran beside the steps. Squawk dropped its own skill layer and uses eac
 skills (epic hearsay-tools/squawk#3746,
 [ADR 0066](../../docs/adr/0066-use-runner-native-skills.md)). A skill therefore belongs to the
 runner, and the package format of step 4 does not hold skills.
+
+Agent accounts are core (owner decision, 2026-11-24). hearsay-tools/squawk#3874 had marked them
+as a feature layer; the [core layer map spec](2026-11-16-core-layer-map.md) records why that
+changed. The account contract lives in each runner's definition and in the run engine, so a
+runner that loads as a plugin gets account support with no accounts plugin.
+hearsay-tools/squawk#3871 and hearsay-tools/squawk#3872 are closed as not planned.
 
 ### Step 1: runner definitions
 
@@ -167,6 +173,11 @@ Each feature becomes a built-in plugin and takes its routes out of `server/serve
 order is by size and by how deep the feature reaches into the run store: listeners such as
 webhooks and the activity view first, then preview and automations, then the forge.
 `feature:workers` is the deepest; the layer map spec plans no removal for it.
+
+The first slice is a launch slot: a registration through which a feature adds environment
+variables or prompt text to an agent launch. `workflows/run/launch-context.ts` imports
+automations, webhooks and artifacts code for exactly that today, and a plugin that sets a
+provider base URL would need the same slot.
 
 ### Step 6: cockpit slots
 

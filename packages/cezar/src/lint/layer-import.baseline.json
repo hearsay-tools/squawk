@@ -14,40 +14,16 @@
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
     {
-      "file": "packages/cezar/src/core/provider-auth.ts",
-      "target": "packages/cezar/src/core/agent-profiles.ts",
-      "count": 1,
-      "reason": "feature:accounts: the core reads the per-provider account table directly. A later step moves the read behind the launch-environment slot (ADR 0065, hearsay-tools/squawk#3865)"
-    },
-    {
       "file": "packages/cezar/src/core/session-process.ts",
       "target": "packages/cezar/src/worker-scope/scope.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
     {
-      "file": "packages/cezar/src/core/skill-probe.ts",
-      "target": "packages/cezar/src/core/agent-profiles.ts",
-      "count": 1,
-      "reason": "feature:accounts: the core reads the per-provider account table directly. A later step moves the read behind the launch-environment slot (ADR 0065, hearsay-tools/squawk#3865)"
-    },
-    {
       "file": "packages/cezar/src/git-worktree-release.ts",
       "target": "packages/cezar/src/preview/registration.ts",
       "count": 1,
       "reason": "feature:preview: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
-      "file": "packages/cezar/src/home/legacy-recovery.ts",
-      "target": "packages/cezar/src/home/legacy-account-paths.ts",
-      "count": 1,
-      "reason": "feature:accounts: the home migration moves account folders directly. A later step turns the call into a registration (ADR 0065, hearsay-tools/squawk#3865)"
-    },
-    {
-      "file": "packages/cezar/src/home/migrate.ts",
-      "target": "packages/cezar/src/home/migration-accounts.ts",
-      "count": 1,
-      "reason": "feature:accounts: the home migration moves account folders directly. A later step turns the call into a registration (ADR 0065, hearsay-tools/squawk#3865)"
     },
     {
       "file": "packages/cezar/src/home/migrate.ts",
@@ -63,12 +39,6 @@
     },
     {
       "file": "packages/cezar/src/home/migration-boot.ts",
-      "target": "packages/cezar/src/home/migration-accounts.ts",
-      "count": 1,
-      "reason": "feature:accounts: the home migration moves account folders directly. A later step turns the call into a registration (ADR 0065, hearsay-tools/squawk#3865)"
-    },
-    {
-      "file": "packages/cezar/src/home/migration-boot.ts",
       "target": "packages/cezar/src/server-install/state.ts",
       "count": 1,
       "reason": "feature:server-install: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
@@ -78,12 +48,6 @@
       "target": "packages/cezar/src/server-install/types.ts",
       "count": 1,
       "reason": "feature:server-install: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
-      "file": "packages/cezar/src/home/migration-plan.ts",
-      "target": "packages/cezar/src/home/migration-accounts.ts",
-      "count": 1,
-      "reason": "feature:accounts: the home migration moves account folders directly. A later step turns the call into a registration (ADR 0065, hearsay-tools/squawk#3865)"
     },
     {
       "file": "packages/cezar/src/workflows/completion-policy.ts",
@@ -96,12 +60,6 @@
       "target": "packages/cezar/src/delegation/execution-identity.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/workflows/continuation-admission.ts",
-      "target": "packages/cezar/src/workspace/agent-accounts.ts",
-      "count": 1,
-      "reason": "feature:accounts: the core reads the accounts store directly. A later step moves the read behind the launch-environment slot (ADR 0065, hearsay-tools/squawk#3865)"
     },
     {
       "file": "packages/cezar/src/workflows/grouped-command.ts",
@@ -338,18 +296,6 @@
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
     {
-      "file": "packages/cezar/src/workflows/run/launch-read-resolver.ts",
-      "target": "packages/cezar/src/workspace/agent-accounts.ts",
-      "count": 1,
-      "reason": "feature:accounts: the core reads the accounts store directly. A later step moves the read behind the launch-environment slot (ADR 0065, hearsay-tools/squawk#3865)"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/launch-read-resolver.ts",
-      "target": "packages/cezar/src/workspace/agent-profiles.ts",
-      "count": 1,
-      "reason": "feature:accounts: the core resolves a step's account directly. A later step moves the call behind the launch-environment slot (ADR 0065, hearsay-tools/squawk#3865)"
-    },
-    {
       "file": "packages/cezar/src/workflows/run/queued-revival.ts",
       "target": "packages/cezar/src/delegation/execution-identity.ts",
       "count": 1,
@@ -540,12 +486,6 @@
       "target": "packages/cezar/src/delegation/policy.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/workspace/backup-cli.ts",
-      "target": "packages/cezar/src/workspace/agent-accounts.ts",
-      "count": 1,
-      "reason": "feature:accounts: the core reads the accounts store directly. A later step moves the read behind the launch-environment slot (ADR 0065, hearsay-tools/squawk#3865)"
     },
     {
       "file": "packages/cezar/src/workspace/projects.ts",
