@@ -1,5 +1,5 @@
 import { createListRegistry } from '../core/registry.ts';
-import type { WorkerResults } from './ports.ts';
+import type { RunAccess, RunEventLog, WorkerExecutions, WorkerResults } from './ports.ts';
 import type { RunRecord } from './store.ts';
 
 /**
@@ -25,11 +25,19 @@ export interface DeletionGate {
   refuse(runId: string, kind: DeletionKind, dataDir: string): string | undefined;
 }
 
+/** The store topics a reclaim preparation reads and commits to. */
+export interface ReclaimStore {
+  readonly workerResults: Pick<WorkerResults, 'readWorkerResult' | 'readWorkerResultDiff' | 'workerResultSnapshotPath' | 'commitWorkerResult'>;
+  readonly eventLog: Pick<RunEventLog, 'readEventsAsync'>;
+  readonly workerExecutions: Pick<WorkerExecutions, 'readWorkerExecution'>;
+  readonly claims: Pick<RunAccess, 'sourceDataDir'>;
+}
+
 /** What a reclaim preparation gets from the reclaim: the repository and the store it reclaims in. */
 export interface ReclaimContext {
   readonly repoRoot: string;
-  /** The store the reclaim runs in, and the worker results it saves. */
-  readonly store: { readonly workerResults: WorkerResults };
+  /** The store topics the reclaim hands to each preparation. */
+  readonly store: ReclaimStore;
 }
 
 /** Work that must finish before a reclaimed worktree goes. A rejection stops the reclaim. */

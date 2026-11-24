@@ -1,7 +1,6 @@
 import { makeRunRecord } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { beforeEach, expect, it, vi } from 'vitest';
-import type { DeletionGate, DeletionKind, ReclaimPreparation, RemovalCleanup } from './removal-slots.ts';
-import type { WorkerResults } from './ports.ts';
+import type { DeletionGate, DeletionKind, ReclaimPreparation, ReclaimStore, RemovalCleanup } from './removal-slots.ts';
 
 // Each case loads its own copy of the registry module, so it starts empty and unsealed and runs alone.
 const calls: string[] = [];
@@ -20,7 +19,7 @@ const cleanup = (name: string, fails = false): RemovalCleanup => ({
 const first = gate('first', 'history'), second = gate('second', 'archive-tmp');
 const run = makeRunRecord({ id: 'run-1' });
 // The preparations here read no store.
-const context = { repoRoot: '/repo', store: {} as { workerResults: WorkerResults } };
+const context = { repoRoot: '/repo', store: {} as ReclaimStore };
 
 it('throws on every read before the seal, naming the missing registration', async () => {
   const slots = await fresh();

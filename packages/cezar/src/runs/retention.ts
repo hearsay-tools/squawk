@@ -6,12 +6,12 @@ import { isFallbackProjectPath, projectPaths } from '../project-paths.ts';
 // recoverable) and the thin I/O enforcer that performs the reclaim. The selector
 // is pure and unit-testable; the enforcer never throws (helper discipline).
 import { existsSync } from 'node:fs';
-import { assertRunSlotsSealed, deletionRefusal, prepareReclaim } from './removal-slots.ts';
+import { assertRunSlotsSealed, deletionRefusal, prepareReclaim, type ReclaimStore } from './removal-slots.ts';
 import { hostsLiveSharedWorker } from './shared-hosts.ts';
 import { createWorktree } from '../git-worktree.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { isEndedRoot, isLiveRecord } from './run-row.ts';
-import type { RunPins, RunAccess, RunFamilyReads, RunQueries, WorkerExecutions, WorkerResults } from './ports.ts';
+import type { RunPins, RunAccess, RunFamilyReads, RunQueries, WorkerExecutions } from './ports.ts';
 import type { RunRecord, RunStatus } from './store.ts';
 
 /** The "finished" status set — mirrors the statuses `RunStore.archiveFinished` sweeps. A run at the
@@ -98,11 +98,9 @@ export function selectReclaimableWorktrees(
 /** The store members a real store has and a structural test store may lack: each use checks for it. */
 type RealStoreMembers = Partial<{ readonly queries: Partial<RunFamilyReads>; readonly claims: Partial<RunAccess>; readonly runPins: Partial<RunPins>; readonly workerExecutions: Partial<WorkerExecutions> }>;
 
-/** The slice of the runs store the enforcer needs, and the worker results a reclaim preparation
- *  saves. Kept structural so the enforcer stays easy to test and never imports the concrete store. */
-export interface RetentionStore {
-  /** The worker results a reclaim preparation saves. */
-  readonly workerResults: WorkerResults;
+/** The slice of the runs store the enforcer and its reclaim preparations need. Kept structural so
+ *  the enforcer stays easy to test and never imports the concrete store. */
+export interface RetentionStore extends ReclaimStore {
   /** The candidates: runs with a materialized worktree (an indexed query, #779). */
   readonly queries: Pick<RunQueries, 'listRunsWithWorktree'>;
   getRun(id: string): RunRecord | undefined;
