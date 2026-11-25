@@ -14,7 +14,16 @@ import type {
 import type { PreviewServer, PreviewServerState } from '@open-mercato/cezar-api-client/contract/preview'
 
 import { applyThreadEvent } from './thread-fold-reducers'
-import { createFoldState, type DraftEntry, type DraftTurn, type FoldState } from './thread-fold-state'
+import {
+  addFailureDetail,
+  createFoldState,
+  normalizeFailureCause,
+  unwrapFailureCause,
+  type DraftEntry,
+  type DraftFailure,
+  type DraftTurn,
+  type FoldState,
+} from './thread-fold-state'
 
 /**
  * Pure, total fold of ordered v1 and v2 events into turns. Prefer v2 tools; preserve v1-only
@@ -22,6 +31,15 @@ import { createFoldState, type DraftEntry, type DraftTurn, type FoldState } from
  * Malformed events must not break the transcript. Each event family has its own reducer in
  * `thread-fold-reducers.ts`, over the explicit state in `thread-fold-state.ts`.
  */
+
+/** Which event source contributed a folded failure detail (hearsay-tools/squawk#4018). */
+export type ThreadFailureSource = 'assistant' | 'error' | 'session.error' | 'step-end' | 'lifecycle'
+
+/** One additional source folded into a single visible failure entry (hearsay-tools/squawk#4018). */
+export interface ThreadFailureDetail {
+  source: ThreadFailureSource
+  text: string
+}
 
 /** A dim/danger transcript line (v1 note/lifecycle/error, v2 non-fatal session.error). */
 export interface ThreadNote {
@@ -35,6 +53,8 @@ export interface ThreadNote {
   /** A task-webhook hand-off line (#589), or a sent agent report (#1576) — rendered with the send
    *  glyph, not the dim bullet. */
   icon?: 'handoff' | undefined
+  /** Other failure sources carrying the same cause folded into this entry (hearsay-tools/squawk#4018). */
+  details?: ThreadFailureDetail[] | undefined
 }
 
 export type ThreadConversationDelivery = 'queued' | 'delivered' | 'consumed' | 'not-delivered'
@@ -234,12 +254,24 @@ export function threadFilePaths(state: ThreadState): string[] {
   return [...deduped]
 }
 
-export function threadFooter(status: RunStatus, error?: string): ThreadFooter {
+function threadCoversFailure(thread: ThreadState | undefined, error: string): boolean {
+  const latest = thread?.turns.at(-1)
+  if (!latest) return false
+  const cause = unwrapFailureCause(error)
+  if (cause === '') return false
+  return latest.items.some(
+    (item) => item.kind === 'note' && item.tone === 'danger' && unwrapFailureCause(item.text) === cause,
+  )
+}
+
+export function threadFooter(status: RunStatus, error?: string, thread?: ThreadState): ThreadFooter {
   switch (status) {
     case 'waiting':
       return { state: 'waiting' }
-    case 'failed':
-      return { state: 'closed', tone: 'danger', label: error ? `Session failed — ${error}` : 'Session failed' }
+    case 'failed': {
+      const showError = error !== undefined && error !== '' && !threadCoversFailure(thread, error)
+      return { state: 'closed', tone: 'danger', label: showError ? `Session failed — ${error}` : 'Session failed' }
+    }
     case 'review':
       return { state: 'closed', tone: 'dim', label: 'Session closed — waiting for your review' }
     case 'done':
@@ -351,6 +383,25 @@ function dropTwinnedV1Messages(draft: DraftTurn): void {
   dropLegacyDeltaRuns(draft)
 }
 
+/** Fold assistant prose whose entire body echoes a fatal failure in the same turn (hearsay-tools/squawk#4018). */
+function foldDuplicateFailureMessages(draft: DraftTurn): void {
+  const fatalFailures = draft.failures?.filter((failure) => failure.fatal && failure.cause !== '')
+  if (!fatalFailures || fatalFailures.length === 0) return
+  const byCause = new Map<string, DraftFailure>()
+  for (const failure of fatalFailures) byCause.set(failure.cause, failure)
+  draft.entries = draft.entries.filter((item) => {
+    if (item.entry.kind !== 'message' || item.entry.role !== 'assistant') return true
+    const trimmed = stripDoneMarker(item.entry.text, true).trim()
+    if (trimmed === '') return true
+    const failure = byCause.get(normalizeFailureCause(trimmed))
+    if (!failure) return true
+    failure.draft.firstSeq = Math.min(failure.draft.firstSeq, item.firstSeq)
+    failure.draft.lastSeq = Math.max(failure.draft.lastSeq, item.lastSeq)
+    addFailureDetail(failure, 'assistant', trimmed)
+    return false
+  })
+}
+
 /** The adapter identifies which submission expanded. Display text can include context,
  * attachment notes or native trimming, so it must never decide whether an input is an echo. */
 function dropHumanInputEchoes(draft: DraftTurn): void {
@@ -405,6 +456,7 @@ export function reduceThread(events: RunEvent[], options: ThreadReduceOptions = 
   for (const event of events) applyThreadEvent(fold, event)
   for (const draft of fold.turns) {
     if (draft.v2Items) dropTwinnedV1Messages(draft)
+    foldDuplicateFailureMessages(draft)
     dropHumanInputEchoes(draft)
   }
   markPendingRequests(fold)

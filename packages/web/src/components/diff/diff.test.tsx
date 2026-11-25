@@ -421,6 +421,66 @@ describe('Diff facade — Markdown preview (hearsay-tools/cezarion#1012)', () =>
   })
 })
 
+describe('Diff facade — full file path in card headers (hearsay-tools/squawk#3525)', () => {
+  const LONG_PATH = 'packages/web/src/routes/task-thread/components/deeply/nested/very-long-module-name-for-header.tsx'
+  const LONG_OLD = 'packages/web/src/routes/task-thread/components/legacy/old-deeply-nested-module-name.tsx'
+  const LONG_NEW = 'packages/web/src/routes/task-thread/components/current/new-deeply-nested-module-name.tsx'
+  const LONG_FILE: DiffFileChange = {
+    path: LONG_PATH,
+    status: 'modified',
+    adds: 1,
+    dels: 0,
+    patch: [`diff --git a/${LONG_PATH} b/${LONG_PATH}`, '@@ -1,1 +1,2 @@', ' export {}', '+export const x = 1', ''].join('\n'),
+  }
+  const RENAMED_FILE: DiffFileChange = {
+    path: LONG_NEW,
+    oldPath: LONG_OLD,
+    status: 'renamed',
+    adds: 0,
+    dels: 0,
+    patch: '',
+  }
+
+  it('exposes the complete path and rename path without truncation on Changes diff cards, open and closed', async () => {
+    await renderDiff(<Diff files={[LONG_FILE, RENAMED_FILE]} />, LONG_PATH)
+
+    const paths = Array.from(document.querySelectorAll<HTMLElement>('[data-slot="diff-file-path"]'))
+    expect(paths).toHaveLength(2)
+
+    expect(paths[0]!.textContent).toBe(LONG_PATH)
+    expect(paths[0]!.getAttribute('title')).toBe(LONG_PATH)
+    expect(paths[0]!.className).toContain('wrap-anywhere')
+    expect(paths[0]!.className).not.toContain('truncate')
+
+    const renameLabel = `${LONG_OLD} → ${LONG_NEW}`
+    expect(paths[1]!.textContent).toBe(renameLabel)
+    expect(paths[1]!.getAttribute('title')).toBe(renameLabel)
+    expect(paths[1]!.className).toContain('wrap-anywhere')
+    expect(paths[1]!.className).not.toContain('truncate')
+
+    // Closing the card keeps the complete path exposed in the header.
+    const headers = document.querySelectorAll<HTMLButtonElement>('[data-slot="diff-file-header"]')
+    fireEvent.click(headers[0]!)
+    expect(headers[0]!.getAttribute('aria-expanded')).toBe('false')
+    expect(paths[0]!.getAttribute('title')).toBe(LONG_PATH)
+    expect(paths[0]!.className).toContain('wrap-anywhere')
+  })
+
+  it('exposes the complete path and rename path in the fallback renderer too', () => {
+    render(<DiffFallback files={[LONG_FILE, RENAMED_FILE]} />)
+
+    const paths = Array.from(document.querySelectorAll<HTMLElement>('[data-slot="diff-file-path"]'))
+    expect(paths).toHaveLength(2)
+    expect(paths[0]!.getAttribute('title')).toBe(LONG_PATH)
+    expect(paths[0]!.className).toContain('wrap-anywhere')
+    expect(paths[0]!.className).not.toContain('truncate')
+    const renameLabel = `${LONG_OLD} → ${LONG_NEW}`
+    expect(paths[1]!.getAttribute('title')).toBe(renameLabel)
+    expect(paths[1]!.className).toContain('wrap-anywhere')
+    expect(paths[1]!.className).not.toContain('truncate')
+  })
+})
+
 function findCard(path: string): HTMLElement {
   const card = Array.from(document.querySelectorAll<HTMLElement>('[data-slot="diff-file"]')).find(
     (element) => element.dataset.path === path,

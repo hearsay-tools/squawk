@@ -79,7 +79,6 @@ export class RunReadFlagsTopic implements RunReadFlags {
    * (hearsay-tools/cezarion#1616); absent stamps both.
    */
   markAllRead(automation?: boolean): number {
-    const now = new Date().toISOString();
     let count = 0;
     // Runs not in memory are picked by the same rule over their stored summary, then re-checked
     // on the record before they are stamped.
@@ -96,7 +95,8 @@ export class RunReadFlagsTopic implements RunReadFlags {
       if (!unread) continue;
       if (automation !== undefined && (automationIdOf(run) !== undefined) !== automation) continue;
       const before = snapshotRun(run);
-      run.seenAt = now;
+      const now = new Date().toISOString();
+      run.seenAt = run.finishedAt !== undefined && now < run.finishedAt ? run.finishedAt : now;
       this.state.touch(run, before);
       count++;
     }

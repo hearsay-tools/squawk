@@ -1985,3 +1985,47 @@ describe('native approval transcript integration', () => {
     expect((screen.getByRole('button', { name: 'Decline command' }) as HTMLButtonElement).disabled).toBe(true)
   })
 })
+
+describe('folded provider failure in thread (hearsay-tools/squawk#4018)', () => {
+  it('renders a single provider failure once while keeping step and run failed status and expandable details', () => {
+    const cause = '⚠ agent executor error: CLI Proxy 400'
+    const events: RunEvent[] = [
+      line(1, 'turn.started', { turnId: 'acp-turn-1', stepId: 'task' }),
+      line(2, 'item.completed', { item: { kind: 'message', id: 'msg_1', role: 'assistant', text: `\n${cause}\n` }, stepId: 'task' }),
+      line(3, 'error', { message: cause, stepId: 'task' }),
+      line(4, 'session.error', { message: cause, fatal: true, stepId: 'task' }),
+      line(5, 'session.ended', { reason: 'error', message: cause, stepId: 'task' }),
+      line(6, 'step-end', { stepId: 'task', status: STEP_STATUS.failed, error: cause }),
+      line(7, 'lifecycle', { message: `run failed — step "task" failed: ${cause}` }),
+    ]
+    const failedRun = run(RUN_STATUS.failed, {
+      error: `step "task" failed: ${cause}`,
+      steps: [{
+        id: 'task',
+        name: 'Do the task',
+        kind: STEP_KIND.agent,
+        status: STEP_STATUS.failed,
+        error: cause,
+        iterations: 1,
+        tokensUsed: 0,
+      }],
+    })
+
+    renderView(<ThreadView run={failedRun} thread={reduceThread(events)} />)
+
+    const conversation = document.querySelector('[data-slot="session-conversation"]')!
+    // The provider error text appears once in the visible thread (collapsed details stay hidden).
+    expect(conversation.textContent?.split(cause)).toHaveLength(2)
+    expect(document.querySelectorAll('[data-slot="note-line"][data-tone="danger"]')).toHaveLength(1)
+    expect(document.querySelector('[data-slot="assistant-message"]')).toBeNull()
+    // Run and session status still show failed.
+    expect(document.querySelector('[data-slot="pill"]')?.textContent?.toLowerCase()).toContain('failed')
+    expect(document.querySelector('[data-slot="thread-footer"]')?.textContent).toBe('Session failed')
+
+    // Expanding details makes the other folded sources reachable from the single failure entry.
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }))
+    const details = document.querySelector('[data-slot="note-details"]')!
+    expect(details.textContent).toContain(`step task failed — ${cause}`)
+    expect(details.textContent).toContain(`run failed — step "task" failed: ${cause}`)
+  })
+})

@@ -56,6 +56,18 @@ it('applies the bold large-text threshold and follows inherited size and weight'
   expect(scan(`<div className="bg-card-2 text-danger text-xl font-bold md:font-normal">small at md</div>`)).toHaveLength(1)
   expect(scan(`<div className="bg-card-2 text-danger text-xl font-semibold">small</div>`)).toHaveLength(1)
 })
+it('keeps inherited size and weight paired per conditional parent branch', () => {
+  expect(scan(`<div className={big ? 'bg-card-2 text-danger text-2xl' : 'bg-card-2 text-danger text-xl font-bold'}><span>Safe</span></div>`)).toEqual([])
+  expect(scan(`<div className={big ? 'bg-card-2 text-danger text-2xl' : 'bg-card-2 text-danger text-xl font-bold'}><div><span>Safe</span></div></div>`)).toEqual([])
+  expect(scan(`<div className={big ? 'bg-card-2 text-danger text-2xl' : 'bg-card-2 text-danger text-xl font-bold'}><span className="font-normal">small in bold branch</span></div>`)).toHaveLength(1)
+  expect(scan(`<div className={big ? 'bg-card-2 text-danger text-2xl' : 'bg-card-2 text-danger text-xl font-bold'}><span className="text-xl">small in 2xl branch</span></div>`)).toHaveLength(1)
+  expect(scan(`<div className={big ? 'bg-card-2 text-danger text-2xl' : 'bg-card-2 text-danger text-xl font-bold'}><span className="md:font-normal">small at md</span></div>`)).toHaveLength(1)
+  expect(scan(`<div className={big ? 'bg-card-2 text-danger text-2xl' : 'bg-card-2 text-danger text-xl'}><span>small in non-bold branch</span></div>`)).toHaveLength(1)
+  expect(scan(`<div className={big ? 'bg-card-2 text-danger text-2xl' : 'bg-card-2 text-danger text-xl'}><span className="font-bold">Safe</span></div>`)).toEqual([])
+  expect(scan(`<div className={big ? 'bg-card-2 text-danger text-2xl' : 'bg-card-2 text-danger text-xl font-bold'}><span className={tight ? 'text-2xl' : 'font-bold'}>Safe</span></div>`)).toEqual([])
+  expect(scan(`<div className={muted ? 'bg-card-2 text-muted-foreground text-xs' : 'bg-background text-danger text-xs'}><span>Safe</span></div>`)).toEqual([])
+  expect(scan(`<div className={muted ? 'bg-card-2 text-danger text-xs' : 'bg-background text-muted-foreground text-xs'}><span>Unsafe</span></div>`)).toHaveLength(1)
+})
 it('treats destructive as the unsafe danger palette alias', () => {
   expect(scan(`<p className="bg-card-2 text-xs text-destructive">bad</p>`)).toHaveLength(1)
   expect(scan(`<div className="bg-card-2 text-destructive text-xs"><span>bad</span></div>`)).toHaveLength(1)

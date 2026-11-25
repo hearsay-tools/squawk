@@ -1,7 +1,6 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { z } from 'zod';
-import type { AgentRunSpec } from '@hearsay-tools/squawk/plugin';
+import { z, type AgentRunSpec } from '@hearsay-tools/squawk/plugin';
 import { spawnSessionLeader, signalSession, boundOutputDrainAfterExit } from '@hearsay-tools/squawk/plugin/runtime';
 import { AcpTransport, AcpRpcError } from './acp/transport.ts';
 import { ANTIGRAVITY_MCP_NAME } from './mcp-name.ts';

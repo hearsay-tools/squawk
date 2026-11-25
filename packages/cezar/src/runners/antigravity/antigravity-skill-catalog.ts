@@ -2,13 +2,12 @@ import { existsSync, lstatSync } from 'node:fs';
 import { copyFile, mkdir, mkdtemp, readdir, rm, stat, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { z } from 'zod';
-import { profileEnv, skillPathScope, skillLines, skillProbe } from '@hearsay-tools/squawk/plugin/runtime';
-import { productEnv, type SkillCatalog, type SkillDiscoveryOptions, agentHomeDir, agentUserHome } from '@hearsay-tools/squawk/plugin';
+import { nativeMockPath, profileEnv, skillPathScope, skillLines, skillProbe } from '@hearsay-tools/squawk/plugin/runtime';
+import { z, productEnv, type SkillCatalog, type SkillDiscoveryOptions, agentHomeDir, agentUserHome } from '@hearsay-tools/squawk/plugin';
 import { ANTIGRAVITY_SHARED_SKILL_ENTRIES } from './account-home.ts';
 import { launchAntigravity, missingAntigravity, type AntigravityLaunch } from './executable.ts';
 import { ANTIGRAVITY_APP_DATA_DIR } from './launch-args.ts';
+import { ANTIGRAVITY_MOCK } from './mock.ts';
 
 const skillSchema = z.object({
   name: z.string(),
@@ -145,7 +144,7 @@ export async function discoverAntigravitySkills(options: SkillDiscoveryOptions):
   let launch: AntigravityLaunch | undefined;
   try {
     const override = options.bin || productEnv('ANTIGRAVITY_BIN') || (productEnv('DRY_RUN') === '1'
-      ? fileURLToPath(new URL('../../../scripts/mock-acp.mjs', import.meta.url)) : undefined);
+      ? nativeMockPath(ANTIGRAVITY_MOCK) : undefined);
     launch = launchAntigravity(override) ?? missingAntigravity(root);
     const args = ['--settings', '{"modelProvider":"gemini"}', '--output-format', 'stream-json',
       '--log-file', join(root, 'cli.log'), '--print=/skills'];

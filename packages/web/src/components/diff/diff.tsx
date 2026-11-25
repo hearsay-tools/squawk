@@ -109,11 +109,12 @@ function FallbackFile({
   imageSrc?: ((path: string) => string) | undefined
   onOpenInApp?: ((path: string) => void) | undefined
 }) {
+  const fullPath = file.oldPath ? `${file.oldPath} → ${file.path}` : file.path
   return (
     <section data-slot="diff-file" data-path={file.path} className="min-w-0 overflow-clip rounded-md border border-border bg-card">
-      <header className="flex items-center gap-2 border-b border-border/50 px-3 py-2">
-        <span data-slot="diff-file-path" className="min-w-0 truncate font-mono text-xs font-medium">
-          {file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
+      <header className="flex items-start gap-2 border-b border-border/50 px-3 py-2">
+        <span data-slot="diff-file-path" title={fullPath} className="min-w-0 wrap-anywhere font-mono text-xs font-medium">
+          {fullPath}
         </span>
         <span className="ml-auto shrink-0">
           <DiffStatLabel stat={{ adds: file.adds, dels: file.dels, files: 1 }} className="text-[11px]" />

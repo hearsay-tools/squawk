@@ -119,37 +119,72 @@ function fontSize(utility: string): number {
   return pixels ? Number(pixels[1]) : namedSizes[value] ?? 0 // unknown explicit size is conservatively small
 }
 
-interface ContrastState { onCard: boolean; colors: string[]; size: number; bold: boolean; large: boolean }
+interface ContrastState { onCard: boolean; unsafeInk: boolean; size: number; bold: boolean; large: boolean }
 const unsafe = (ink: string) => ['text-danger', 'text-destructive', 'text-soft-foreground', 'text-pending-strong'].includes(ink)
-const initialState: ContrastState = { onCard: false, colors: [''], size: 0, bold: false, large: false }
+const initialState: ContrastState = { onCard: false, unsafeInk: false, size: 0, bold: false, large: false }
+
+interface ClassOverrides {
+  hasCard2: boolean
+  inheritsSurface: boolean
+  ownUnsafe: boolean | undefined
+  ownSize: number | undefined
+  ownBold: boolean | undefined
+}
+
+function classOverrides(classes: string[], surfaceClasses: Set<string>): ClassOverrides {
+  const backgrounds = classes.filter(c => surfaceClasses.has(c) || c === 'bg-transparent' || surfaceClasses.has(c.split('/')[0] ?? ''))
+  const inheritsSurface = backgrounds.length === 0 || backgrounds.some(c => c === 'bg-transparent' || c.includes('/'))
+  const ownColors = classes
+    .map(c => c.replace(/^(text-(?:danger|destructive|soft-foreground|pending-strong))\/.+$/, '$1'))
+    .filter(c => /^text-(?:danger|destructive|soft-foreground|pending-strong|muted-foreground|supporting-foreground|link-foreground|foreground|signal-word-red|signal-word-amber)$/.test(c))
+  const sizes = classes.filter(c => /^text-(?:xs|sm|base|lg|xl|\d+xl)(?:\/.*)?$|^text-(?:\[|\(length:)/.test(c))
+  const weights = classes.filter(c => /^font-(?:thin|extralight|light|normal|medium|semibold|bold|extrabold|black)$|^font-(?:\[|\(weight:)/.test(c))
+  return {
+    hasCard2: backgrounds.includes('bg-card-2'),
+    inheritsSurface,
+    ownUnsafe: ownColors.length ? ownColors.some(unsafe) : undefined,
+    ownSize: sizes.length ? Math.min(...sizes.map(fontSize)) : undefined,
+    ownBold: weights.length ? weights.every(w => /^font-(?:bold|extrabold|black)$/.test(w)) : undefined,
+  }
+}
+
+function applyOverrides(parent: ContrastState, overrides: ClassOverrides, bodySlot: boolean): ContrastState {
+  const onCard = overrides.hasCard2 || (overrides.inheritsSurface && (parent.onCard || bodySlot))
+  const unsafeInk = overrides.ownUnsafe ?? parent.unsafeInk
+  const size = overrides.ownSize ?? parent.size
+  const bold = overrides.ownBold ?? parent.bold
+  return { onCard, unsafeInk, size, bold, large: size >= 24 || (bold && size >= 56 / 3) }
+}
+
+function stateKey(state: ContrastState): string {
+  const sizeBand = state.size >= 24 ? 2 : state.size >= 56 / 3 ? 1 : 0
+  return `${state.onCard ? 1 : 0}${state.unsafeInk ? 1 : 0}${sizeBand}${state.bold ? 1 : 0}`
+}
+
+function nodeStrings(n: EsNode | undefined): string[] {
+  if (!n) return []
+  if (n.type === 'Literal') return typeof n.value === 'string' ? [n.value] : []
+  if (n.type === 'TemplateElement') return [(n.value as { raw: string }).raw]
+  const result: string[] = []
+  eachChild(n, c => result.push(...nodeStrings(c)))
+  return result
+}
 
 function elementStates(node: EsNode, inherited: ContrastState[], surfaceClasses: Set<string>): ContrastState[] {
   const opening = child(node, 'openingElement')!
   const attr = (name: string) => children(opening, 'attributes').find(p => p.type === 'JSXAttribute' && child(p, 'name')?.name === name)
-  const strings = (n: EsNode | undefined): string[] => {
-    if (!n) return []
-    if (n.type === 'Literal') return typeof n.value === 'string' ? [n.value] : []
-    if (n.type === 'TemplateElement') return [(n.value as { raw: string }).raw]
-    const result: string[] = []
-    eachChild(n, c => result.push(...strings(c)))
-    return result
-  }
-  const slot = strings(child(attr('data-slot') ?? opening, 'value'))[0]
+  const slot = nodeStrings(child(attr('data-slot') ?? opening, 'value'))[0]
   const bodySlot = ['tool-error', 'tool-command', 'hook-entry', 'hook-source', 'hook-raw-toggle', 'hook-stdout', 'hook-stderr'].includes(slot ?? '')
-  const inks = inherited.flatMap(state => state.colors)
-  const color = inks.find(unsafe) ?? inks[0] ?? ''
-  return classBranches(child(attr('className') ?? opening, 'value')).flatMap(utilityStates).map(classes => {
-    const backgrounds = classes.filter(c => surfaceClasses.has(c) || c === 'bg-transparent' || surfaceClasses.has(c.split('/')[0] ?? ''))
-    const inheritsSurface = backgrounds.length === 0 || backgrounds.some(c => c === 'bg-transparent' || c.includes('/'))
-    const onCard = backgrounds.includes('bg-card-2') || inheritsSurface && (inherited.some(state => state.onCard) || bodySlot)
-    const ownColors = classes.map(c => c.replace(/^(text-(?:danger|destructive|soft-foreground|pending-strong))\/.+$/, '$1')).filter(c => /^text-(?:danger|destructive|soft-foreground|pending-strong|muted-foreground|supporting-foreground|link-foreground|foreground|signal-word-red|signal-word-amber)$/.test(c))
-    const colors = ownColors.length ? ownColors : [color]
-    const sizes = classes.filter(c => /^text-(?:xs|sm|base|lg|xl|\d+xl)(?:\/.*)?$|^text-(?:\[|\(length:)/.test(c))
-    const size = sizes.length ? Math.min(...sizes.map(fontSize)) : Math.min(...inherited.map(state => state.size))
-    const weights = classes.filter(c => /^font-(?:thin|extralight|light|normal|medium|semibold|bold|extrabold|black)$|^font-(?:\[|\(weight:)/.test(c))
-    const bold = weights.length ? weights.every(w => /^font-(?:bold|extrabold|black)$/.test(w)) : inherited.every(state => state.bold)
-    return { onCard, colors, size, bold, large: size >= 24 || bold && size >= 56 / 3 }
-  })
+  const deduped = new Map<string, ContrastState>()
+  for (const classes of classBranches(child(attr('className') ?? opening, 'value')).flatMap(utilityStates)) {
+    const overrides = classOverrides(classes, surfaceClasses)
+    for (const parent of inherited) {
+      const next = applyOverrides(parent, overrides, bodySlot)
+      const key = stateKey(next)
+      if (!deduped.has(key)) deduped.set(key, next)
+    }
+  }
+  return [...deduped.values()]
 }
 
 /** Each JSX element reads the state of its nearest JSX ancestor; expression wrappers preserve it. */
@@ -161,7 +196,7 @@ export function contrastVisitors(surfaceClasses: Set<string>, report: (node: EsN
       while (ancestor && ancestor.type !== 'JSXElement') ancestor = ancestor.parent
       const current = elementStates(node, ancestor ? states.get(ancestor) ?? [initialState] : [initialState], surfaceClasses)
       states.set(node, current)
-      if (children(node, 'children').some(rendersText) && current.some(state => state.onCard && !state.large && state.colors.some(unsafe))) report(child(node, 'openingElement')!)
+      if (children(node, 'children').some(rendersText) && current.some(state => state.onCard && !state.large && state.unsafeInk)) report(child(node, 'openingElement')!)
     },
   }
 }

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hearsay-tools/squawk/plugin';
 import type { AcpHooks } from './acp/protocol.ts';
 import { antigravityTool } from './tool-normalization.ts';
 

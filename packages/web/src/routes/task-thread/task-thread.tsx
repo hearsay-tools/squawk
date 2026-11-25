@@ -212,7 +212,7 @@ export function ThreadView({
   // decides whether the composer answers it (hearsay-tools/cezarion#1236, split by fact).
   const { pendingAsk, transcriptAsk, pendingAskId, historyLoading } = pendingThreadAsk(history, currentThread)
   const attention = deriveAttention(run)
-  const footer = threadFooter(run.status, run.error)
+  const footer = threadFooter(run.status, run.error, thread)
   // The Agents dock's data: the current fan-out's sub-agents, or [] when there is none to
   // show (#474). Derived from the same reduced turns the thread renders — no new subscription.
   // The legacy session-open rule (web/app.js `updateDetail`): the composer can deliver while
