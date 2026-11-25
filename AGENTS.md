@@ -8,14 +8,15 @@ This file holds what every task needs. A new agent rule goes in the narrowest do
 
 ## Issue and PR citations
 
-This fork is `hearsay-tools/cezarion`; upstream is `open-mercato/cezar`. Both
-trackers reuse numbers, so never infer the tracker from the number or the current
-remote. Cite issues and PRs as `hearsay-tools/cezarion#N` / `open-mercato/cezar#N`,
-`fork #N` / `upstream #N`, or a repository-qualified GitHub link. A bare `#N` in older
-code is legacy; CI's `Check issue citations` step fails a change that adds one. Run
-`node .github/scripts/check-citations.cjs` before a PR. An archive under a
+This fork is `hearsay-tools/squawk` (was `hearsay-tools/cezarion`; old citations stay
+valid); upstream is `open-mercato/cezar`. Use `hearsay-tools/squawk` in `gh`, API and
+board calls: list, search and URL lookups miss the old name. Both trackers reuse
+numbers, so never infer the tracker. Cite `hearsay-tools/squawk#N` /
+`open-mercato/cezar#N`, `fork #N` / `upstream #N`, or a qualified GitHub link. An old
+bare `#N` is legacy; CI's `Check issue citations` step fails a change that adds one.
+Run `node .github/scripts/check-citations.cjs` before a PR. An archive under a
 `> Historical source:` note keeps upstream's bare citations. A verbatim upstream
-commit title keeps its numbers, which belong to `open-mercato/cezar`.
+commit title keeps its upstream numbers.
 
 ## Zero config
 

@@ -53,7 +53,7 @@ of one commit. Use the median per file; files introduced later use the available
 observations. The manifest records the exact run, job and Git SHA for each input.
 
 All six jobs ran on GitHub-hosted Ubuntu 24.04 with four workers. Obtain a source
-log with `gh run view <run> --repo hearsay-tools/cezarion --job <job> --log`.
+log with `gh run view <run> --repo hearsay-tools/squawk --job <job> --log`.
 Strip ANSI escapes, take only passed file summary lines, and resolve project names
 `server`, `web`, `contract`, and `api-client` to their workspace paths. File summary
 milliseconds measure test work, not import/setup time or whole-job wall time.

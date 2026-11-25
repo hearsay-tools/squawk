@@ -77,9 +77,9 @@ values are milliseconds. Recompute the historical set with:
 
 ```sh
 node -e 'const d=require("./.github/test-durations.json").durationsMs; console.log(Object.entries(d).filter(([,ms])=>ms>60000))'
-gh run list --repo hearsay-tools/cezarion --branch main --workflow ci.yml \
+gh run list --repo hearsay-tools/squawk --branch main --workflow ci.yml \
   --status success --limit 100 --json databaseId,headSha
-gh run view 41334112445 --repo hearsay-tools/cezarion --log
+gh run view 41334112445 --repo hearsay-tools/squawk --log
 ```
 
 The manifest has 36 entries over 60 s. `workflows/monitoring-channel-order.test.ts`

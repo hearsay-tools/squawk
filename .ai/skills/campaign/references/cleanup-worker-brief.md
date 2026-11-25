@@ -18,7 +18,7 @@ workers: across 25 PRs of hearsay-tools/cezarion#2051, dev-flow's own steps
 caught nothing, and the coordinator's gate does its checks.
 
 ```text
-Work hearsay-tools/cezarion#<N> to a ready PR with green CI. This brief replaces
+Work hearsay-tools/squawk#<N> to a ready PR with green CI. This brief replaces
 dev-flow: load none of dev-flow, plan-issue, implement-issue, run-preflight,
 pr-checks or log-friction. This shortcut applies only to approved cleanup work.
 The coordinator owns the board, the claim, labels, landing and the friction log.
@@ -114,7 +114,7 @@ your runner's own prompt; this brief adds none.
 PR, after the coordinator's release: git push, then gh pr create --base main
 (ready, not draft). Title in Conventional Commits, for example
 refactor(<area>): <what moved>. Write the body in
-.ai/qa/<N>/pr-body.md with: Closes hearsay-tools/cezarion#<N>; Summary (at most
+.ai/qa/<N>/pr-body.md with: Closes hearsay-tools/squawk#<N>; Summary (at most
 3 sentences); Changed names (against the issue's list, and the reason for every
 extra); Seams kept (each with the test that needs it); Orders preserved (for any
 non-verbatim change); Verification (command and result lines); Left undone (or
