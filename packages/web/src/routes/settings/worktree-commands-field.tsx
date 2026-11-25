@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
 
 import { ApiError, putConfig } from '@/api/client'
 import { queryKeys, useHealth } from '@/api/queries'
@@ -12,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { useUnsentDraft } from '@/lib/version-reload'
+import { useSavedDraft } from '@/lib/saved-draft'
 import { WorktreeCommandsStatus } from './worktree-commands-status'
 import { parseWorktreeSetupInput } from './worktree-setup-input'
 import { SettingsField } from './settings-field'
@@ -93,8 +93,8 @@ export function WorktreeCommandsField({ config, copy }: { config: ConfigResponse
   const issue = config[copy.issueKey]
   const savedCommands = saved?.commands ?? []
   const savedTimeout = saved?.timeoutSeconds ?? WORKTREE_SETUP_DEFAULT_TIMEOUT_SECONDS
-  const [text, setText] = useState(savedCommands.join('\n'))
-  const [timeoutText, setTimeoutText] = useState(String(savedTimeout))
+  const [text, setText] = useSavedDraft(savedCommands.join('\n'))
+  const [timeoutText, setTimeoutText] = useSavedDraft(String(savedTimeout))
 
   const { commands, timeoutSeconds, invalid } = parseWorktreeSetupInput(text, timeoutText)
   const matchesSaved =

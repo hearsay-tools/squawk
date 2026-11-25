@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { GaugeIcon } from '@/components/design-icons'
 
-import { useState } from 'react'
 import { Link } from 'react-router'
 
 import { putWorkspaceConfig } from '@/api/client'
@@ -12,6 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { useUnsentDraft } from '@/lib/version-reload'
+import { useSavedDraft } from '@/lib/saved-draft'
 import { SettingsField } from './settings-field'
 
 /**
@@ -73,12 +73,12 @@ function ResourcesForm({ config }: { config: WorkspaceConfigResponse }) {
   })
 
   // Memory edits locally and saves explicitly — an empty field means "no limit".
-  const [memory, setMemory] = useState(
+  const [memory, setMemory] = useSavedDraft(
     config.resources.memoryLimitMb ? String(config.resources.memoryLimitMb) : '',
   )
   const configuredWake = config.resources.monitoringWakeIntervalMinutes ?? null
-  const [wakeMode, setWakeMode] = useState<'park' | 'interval'>(configuredWake === null ? 'park' : 'interval')
-  const [wakeInterval, setWakeInterval] = useState(String(configuredWake ?? 5))
+  const [wakeMode, setWakeMode] = useSavedDraft<'park' | 'interval'>(configuredWake === null ? 'park' : 'interval')
+  const [wakeInterval, setWakeInterval] = useSavedDraft(String(configuredWake ?? 5))
   const wakeNum = Number(wakeInterval)
   const wakeInvalid = !Number.isInteger(wakeNum) || wakeNum < WAKE_INTERVAL_MIN || wakeNum > WAKE_INTERVAL_MAX
   const wakeSaved = wakeMode === 'park'

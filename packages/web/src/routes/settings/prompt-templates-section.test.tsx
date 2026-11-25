@@ -245,6 +245,20 @@ describe('the prompt templates section', () => {
       stop()
     }
   })
+
+  it('a saved trailing newline does not leave the form dirty or hold a reload', async () => {
+    serve({ promptTemplates: [{ id: 'custom-1', label: 'My snippet', text: 'Custom instructions.' }] })
+    renderSection()
+    await waitFor(() => expect(rows()).toHaveLength(1))
+
+    const textInput = rows()[0]!.querySelector<HTMLTextAreaElement>('[data-slot="prompt-template-text-input"]')!
+    fireEvent.change(textInput, { target: { value: 'Custom instructions.\n' } })
+    expect(hasUnsentInput()).toBe(true)
+
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(saveButton().disabled).toBe(true))
+    expect(hasUnsentInput()).toBe(false)
+  })
 })
 
 // ---- assigning templates to skills (#413 follow-up) ---------------------------------------------

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { BotIcon } from '@/components/design-icons'
 
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 
 import { putConfig } from '@/api/client'
 import {
@@ -25,6 +25,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { providerStatusFor } from '@/lib/provider-status'
 import { useUnsentDraft } from '@/lib/version-reload'
+import { useSavedDraft } from '@/lib/saved-draft'
 import {
   agentPickerRows,
   hasAgentAccounts,
@@ -112,7 +113,7 @@ function AgentsForm({
 
   // The system prompt edits locally and saves explicitly — a textarea that PUT-ed 20k
   // characters on every keystroke would be a worse control, not a simpler one.
-  const [prompt, setPrompt] = useState(config.systemPrompt ?? '')
+  const [prompt, setPrompt] = useSavedDraft(config.systemPrompt ?? '')
   const trimmedPrompt = prompt.trim()
   const promptSaved = trimmedPrompt === (config.systemPrompt ?? '')
   const promptOverLimit = trimmedPrompt.length > SYSTEM_PROMPT_MAX

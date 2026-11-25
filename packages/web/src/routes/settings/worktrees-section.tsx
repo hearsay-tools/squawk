@@ -1,6 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { FolderGit2Icon } from 'lucide-react'
-import { useState } from 'react'
 
 import { putConfig } from '@/api/client'
 import { queryKeys, useConfig } from '@/api/queries'
@@ -9,6 +8,7 @@ import { CenteredState } from '@/components/centered-state'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { useUnsentDraft } from '@/lib/version-reload'
+import { useSavedDraft } from '@/lib/saved-draft'
 import { SettingsField } from './settings-field'
 import { WORKTREE_COMMANDS_COPY, WorktreeCommandsField } from './worktree-commands-field'
 import { ChevronRightIcon } from '@/components/design-icons'
@@ -65,7 +65,7 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
 
   // Retention edits locally and saves explicitly (#483). 0 = unlimited (a meaningful value,
   // always sent as a number so it is never mistaken for "clear back to the default").
-  const [retention, setRetention] = useState(String(config.worktreeRetention))
+  const [retention, setRetention] = useSavedDraft(String(config.worktreeRetention))
   const retentionNum = Number(retention)
   const retentionInvalid =
     retention.trim() === '' ||

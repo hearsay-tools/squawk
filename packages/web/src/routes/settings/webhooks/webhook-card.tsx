@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { toast } from '@/components/ui/toaster'
 import { useUnsentDraft } from '@/lib/version-reload'
+import { sameJson, useSavedDraft } from '@/lib/saved-draft'
 import { webhookLabel } from '@/lib/webhook'
 import { createBody, draftFrom, EMPTY_DRAFT, hasDraftChanges, updateBody, type WebhookDraft } from './webhook-draft'
 import { WebhookFields } from './webhook-fields'
@@ -68,7 +69,7 @@ export function WebhookCard({
   const remove = useRemoveProjectWebhook()
   const test = useTestOneProjectWebhook()
   const [open, setOpen] = useState(defaultOpen)
-  const [draft, setDraft] = useState<WebhookDraft>(() => draftFrom(webhook))
+  const [draft, setDraft] = useSavedDraft<WebhookDraft>(draftFrom(webhook), sameJson)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
 
   const body = updateBody(draft, webhook)

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ProjectListEntry, ProjectWebhook } from '@open-mercato/cezar-api-client'
@@ -19,6 +19,8 @@ let webhooks: ProjectWebhook[] = []
 let requests: Array<{ method: string; url: string; body?: unknown }> = []
 /** When set, the next webhook write answers 409 with this error. */
 let refuse: string | null = null
+/** The query client of the last `renderSection`, to push a registry refresh from another tab. */
+let lastClient: ReturnType<typeof createQueryClient>
 
 const entry = (): ProjectListEntry => ({
   id: 'demo',
@@ -107,6 +109,7 @@ function Live() {
 function renderSection() {
   const client = createQueryClient()
   client.setQueryData(workspaceQueryKeys.projects, { projects: [entry()], bootProject: 'demo', projectsDir: '~/cezar/projects' })
+  lastClient = client
   return render(
     <QueryClientProvider client={client}>
       <Live />
@@ -297,5 +300,19 @@ describe('Webhooks', () => {
     } finally {
       stop()
     }
+  })
+
+  it('an untouched card takes a webhook another tab changed, and does not hold a reload', async () => {
+    webhooks = [hook('w1')]
+    renderSection()
+    expect(hasUnsentInput()).toBe(false)
+
+    webhooks = [hook('w1', { name: 'Renamed elsewhere' })]
+    act(() => {
+      lastClient.setQueryData(workspaceQueryKeys.projects, { projects: [entry()], bootProject: 'demo', projectsDir: '~/cezar/projects' })
+    })
+    await waitFor(() => expect(card('Renamed elsewhere')).toBeTruthy())
+    expect(hasUnsentInput()).toBe(false)
+    expect(open('Renamed elsewhere').getByLabelText<HTMLInputElement>('Name').value).toBe('Renamed elsewhere')
   })
 })

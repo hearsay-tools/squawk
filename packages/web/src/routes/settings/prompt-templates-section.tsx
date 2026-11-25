@@ -30,6 +30,7 @@ import {
 import { isProjectSkill, searchSkillsForDisplay, skillKeywords, skillKey } from '@/lib/skills'
 import { cn } from '@/lib/utils'
 import { useUnsentDraft } from '@/lib/version-reload'
+import { sameJson, useSavedDraft } from '@/lib/saved-draft'
 
 /**
  * Settings → Prompt templates (#413): "add the settings pane for editing these prompt templates
@@ -74,7 +75,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
   const skills = useRunnerSkills()
   // Already cached by the section gate above; read again here for the picker's #519 tiers.
   const uiState = useUiState()
-  const [templates, setTemplates] = useState<PromptTemplate[]>(initial)
+  const [templates, setTemplates] = useSavedDraft<PromptTemplate[]>(initial, sameJson)
   const [newLabel, setNewLabel] = useState('')
   const [newText, setNewText] = useState('')
 
@@ -82,6 +83,9 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
     mutationFn: (next: PromptTemplate[]) => putUiState({ promptTemplates: next }),
     onSuccess: (merged) => {
       queryClient.setQueryData(queryKeys.uiState, merged)
+      // The server stores the normalized list (trimmed text); hold that, so a save never leaves
+      // whitespace the form counts as an unsaved edit.
+      setTemplates(normalizePromptTemplates(merged.promptTemplates))
       toast('Prompt templates saved')
     },
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
