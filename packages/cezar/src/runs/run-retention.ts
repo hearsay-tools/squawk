@@ -237,7 +237,7 @@ export class RunRetentionTopic implements RunRetention {
     if (family.some((run) => isLiveRecord(run) || run.pinned) || (root.delegation?.role === 'root' && root.delegation.historyDeletion)) return;
     for (const id of family.map((run) => run.id)) {
       const member = this.state.record(id);
-      if (!member || member.archived) continue;
+      if (!member || member.archived || isLiveRecord(member) || member.pinned) continue;
       this.state.applyArchived(member, true);
       if (!deletionRefusal(member.id, 'archive-tmp', this.dataDir)) removeAgentTmpDir(this.dataDir, member.id);
     }

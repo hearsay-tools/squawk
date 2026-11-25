@@ -132,4 +132,27 @@ describe('RunRetentionTopic.archiveSettledFamily publish re-entrancy (hearsay-to
     expect(persisted(rootId)?.archived).toBe(true);
     expect(persisted(workerId)).toMatchObject({ archived: true, title: 'updated after root publish' });
   });
+
+  it('skips archiving a worker pinned by another store after a flush during root publish', () => {
+    const rootId = randomUUID();
+    const workerId = randomUUID();
+    seedRuns(dataDir, [...settledFamily(rootId, workerId), ...fillerRuns(300)]);
+    const store = open();
+    const other = open();
+    store.lifecycle.subscribe({
+      'run.updated': ({ run }) => {
+        if (run.id === rootId && run.archived) {
+          store.persistence.flush();
+          other.readFlags.setPinned(workerId, true);
+          other.persistence.flush();
+        }
+      },
+    });
+
+    store.createRun({ title: 'trigger retention', workflow: 'quick-task', task: 'task', steps: [] });
+    store.persistence.flush();
+
+    expect(persisted(rootId)?.archived).toBe(true);
+    expect(persisted(workerId)).toMatchObject({ archived: false, pinned: true });
+  });
 });
