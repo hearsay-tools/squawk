@@ -48,7 +48,10 @@ that the code has fallen below. It passes and prints a `lowered:` line, and `npm
 that line into its report. Commit the baseline with the change. CI (`CI=true`) writes nothing and
 fails a stale entry, so a lowering that was not committed cannot reach `main`. The `*_UPDATE=1`
 variables remain for one decision: writing a baseline that does not exist. They also lower in CI.
-A run never adds or raises an entry.
+A run never adds or raises an entry. A committed lowering does not block auto-merge: the lint-gate
+rule in `.ai/skills/auto-merge/check.mjs` lets a changed baseline through when it only lowers or
+drops entries and keeps its `$comment` and every field (`limit`, a site's `count`). A new or
+moved entry, a deleted baseline or a dropped field still needs the owner.
 
 CI's `Reject baseline growth` step accepts one relocation without the `baseline-growth` label: an
 entry or key that names a file the change moved. The old path must be gone from the head, the

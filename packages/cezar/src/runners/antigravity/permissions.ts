@@ -1,5 +1,4 @@
-import { z } from 'zod';
-import type { ToolGrant } from '@hearsay-tools/squawk/plugin';
+import { z, type ToolGrant } from '@hearsay-tools/squawk/plugin';
 import { unknownToolGrant } from '@hearsay-tools/squawk/plugin/runtime';
 import type { AcpPermissionOutcome, AcpPermissionRequest } from './acp/protocol.ts';
 import { antigravityTool, antigravityNativeToolName, antigravityMcpTool } from './tool-normalization.ts';
