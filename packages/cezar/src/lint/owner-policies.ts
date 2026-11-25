@@ -255,7 +255,7 @@ export const OWNER_POLICIES: Record<string, OwnerPolicy> = {
       "packages/cezar/src/delegation/wait-kinds.ts",
       "packages/cezar/src/runs/legacy-waits.ts",
       "packages/cezar/src/runs/wait-helpers.ts",
-      "packages/cezar/src/server/forge/github.ts",
+      "packages/cezar/src/server/forge/github*.ts",
       "packages/cezar/src/workflows/run/wait-kinds.ts"
     ]
   },

@@ -1,7 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { z } from 'zod';
+import { z, type ModelOption } from '@hearsay-tools/squawk/plugin';
 import { readNdjson } from '@hearsay-tools/squawk/plugin/runtime';
-import type { ModelOption } from '@hearsay-tools/squawk/plugin';
 import {
   CodexAppServerRpc,
   endCodexAppServer,

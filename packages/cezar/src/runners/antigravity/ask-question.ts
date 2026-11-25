@@ -1,5 +1,4 @@
-import { z } from 'zod';
-import type { UiAskQuestion } from '@hearsay-tools/squawk/plugin';
+import { z, type UiAskQuestion } from '@hearsay-tools/squawk/plugin';
 
 const RECOMMENDED = /^\(Recommended\)\s*/;
 const inputSchema = z.object({ questions: z.array(z.object({
