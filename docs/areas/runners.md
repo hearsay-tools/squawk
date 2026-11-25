@@ -150,11 +150,12 @@ definitions, provider requests and workspace config (`core/runner-fields.ts`,
   empty registry treats every non-legacy id as unregistered.
 - The stored-config decoders (`config.ts`, `workspace/config.ts`,
   `workspace/agent-accounts.ts`) keep a runner id that no runner registered, so a runner whose
-  plugin did not load keeps its settings. They check only the shared bound
-  (`storedRunnerIdSchema`, `core/runner-id-schema.ts`). `agentDefaults.runner`,
-  `disabledProviders`, the repo `defaultRunner` and `defaultModels`, `agentDefaults.models`, the
-  account selections and an account row's `provider` all keep the id; an account row checks
-  `supportsProfiles` only for a registered runner. The next write stores what the decoder read.
+  plugin did not load keeps its settings. `agentDefaults.runner`, `disabledProviders`, the repo
+  `defaultRunner` and `defaultModels` and an account row's `provider` check only the shared bound
+  (`storedRunnerIdSchema`, `core/runner-id-schema.ts`); an account row checks `supportsProfiles`
+  only for a registered runner. `agentDefaults.models` and the account selections
+  (`registeredRunnerRecord`) keep every unregistered key as stored and validate only the values of
+  registered runners. The next write stores what the decoder read.
   At run time an unregistered id is ignored or falls back to the default runner
   (`resolveRunnerId`), and HTTP write routes still refuse it.
 
