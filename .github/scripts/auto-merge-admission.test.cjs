@@ -112,3 +112,46 @@ test('path rules name each guarded file, file mode change and new baseline', asy
     'symlink or submodule: docs/link',
   ]);
 });
+
+for (const [label, before, after] of [
+  ['adding an HSQ_* entry', '# existing\n', '# existing\n# HSQ_SECRET_BYPASS=1\n'],
+  ['editing an HSQ_* entry', '# HSQ_SECRET_BYPASS=1\n', '# HSQ_SECRET_BYPASS=0\n'],
+  ['removing an HSQ_* entry', '# HSQ_SECRET_BYPASS=1\n', '# existing\n'],
+  ['adding an HSQ_MOCK_* entry', '# existing\n', '# existing\n# HSQ_MOCK_CONTROL=1\n'],
+  ['adding a CEZ_* entry', '# existing\n', '# existing\n# CEZ_SECRET_BYPASS=1\n'],
+]) test(`${label} in .env.example requires owner review`, t => {
+  const result = checkChange(t, '.env.example', before, after);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.ok(result.stdout.includes('DOES NOT QUALIFY'), result.stdout);
+  assert.ok(result.stdout.includes('changes an HSQ_* or CEZ_* entry in .env.example'), result.stdout);
+});
+
+for (const [label, before, after, variable] of [
+  ['adding an HSQ_* variable', 'export const flag = false;\n', 'export const flag = Boolean(process.env.HSQ_SECRET_BYPASS);\n', 'HSQ_SECRET_BYPASS'],
+  ['creating a file with an HSQ_* variable', null, 'export const flag = Boolean(process.env.HSQ_SECRET_BYPASS);\n', 'HSQ_SECRET_BYPASS'],
+  ['removing an HSQ_* variable', 'export const flag = Boolean(process.env.HSQ_SECRET_BYPASS);\n', 'export const flag = false;\n', 'HSQ_SECRET_BYPASS'],
+  ['adding an HSQ_MOCK_* variable', 'export const flag = false;\n', 'export const flag = Boolean(process.env.HSQ_MOCK_CONTROL);\n', 'HSQ_MOCK_CONTROL'],
+  ['adding a CEZ_* variable', 'export const flag = false;\n', 'export const flag = Boolean(process.env.CEZ_SECRET_BYPASS);\n', 'CEZ_SECRET_BYPASS'],
+]) test(`${label} in production source requires owner review`, t => {
+  const result = checkChange(t, 'packages/cezar/src/sample.ts', before, after);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.ok(result.stdout.includes('DOES NOT QUALIFY'), result.stdout);
+  assert.ok(result.stdout.includes(`adds or removes an HSQ_* or CEZ_* variable: ${variable}`), result.stdout);
+});
+
+test('editing an existing HSQ_* reference or a CEZ_MOCK_* variable still qualifies', t => {
+  const editedExisting = checkChange(
+    t,
+    'packages/cezar/src/sample.ts',
+    "export const flag = process.env.HSQ_EXISTING === '1';\n",
+    "export const flag = process.env.HSQ_EXISTING === '0';\n",
+  );
+  assert.equal(editedExisting.status, 0, editedExisting.stdout + editedExisting.stderr);
+  assert.ok(editedExisting.stdout.includes('QUALIFIES'), editedExisting.stdout);
+
+  const mockEnvExample = checkChange(t, '.env.example', '# existing\n', '# existing\n# CEZ_MOCK_CONTROL=1\n');
+  assert.equal(mockEnvExample.status, 0, mockEnvExample.stdout + mockEnvExample.stderr);
+
+  const mockSource = checkChange(t, 'packages/cezar/src/sample.ts', 'export const flag = false;\n', 'export const flag = Boolean(process.env.CEZ_MOCK_CONTROL);\n');
+  assert.equal(mockSource.status, 0, mockSource.stdout + mockSource.stderr);
+});
