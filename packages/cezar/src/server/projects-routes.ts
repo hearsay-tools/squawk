@@ -247,6 +247,14 @@ export function createProjectsRoutes(deps: ProjectsRouteDeps) {
     return ctx.store.queries.listRuns().filter((run) => ACTIVE_RUN_STATUSES.has(run.status)).length;
   };
 
+  const recordCheckoutProgress = (event: Parameters<CheckoutProgressCache['record']>[0]) => {
+    checkoutProgress.record(event);
+    workspaceEvents.emit('checkout-progress', event);
+  };
+
+  const checkoutFailureBody = (result: { error: string; reason?: string }) =>
+    'reason' in result ? { error: result.error, reason: result.reason } : { error: result.error };
+
   return new Hono<ProjectApiEnv>()
     .get('/projects', async (c) => {
       let projects: ProjectListEntry[] = [];
@@ -442,15 +450,12 @@ export function createProjectsRoutes(deps: ProjectsRouteDeps) {
         name,
         checkoutId,
         projectsDir: expandTilde(await workspaceProjectsDir()),
-        onProgress: (event) => { checkoutProgress.record(event); workspaceEvents.emit('checkout-progress', event); },
+        onProgress: recordCheckoutProgress,
         signal: c.req.raw.signal,
         ...(deps.cloneRunner ? { run: deps.cloneRunner } : {}),
       });
       if (!result.ok) {
-        return c.json(
-          'reason' in result ? { error: result.error, reason: result.reason } : { error: result.error },
-          result.status,
-        );
+        return c.json(checkoutFailureBody(result), result.status);
       }
       const registered = await registerFolder(result.target, 'checkout');
       if (registered.status !== 200) {
@@ -481,15 +486,12 @@ export function createProjectsRoutes(deps: ProjectsRouteDeps) {
         github,
         checkoutId,
         projectsDir,
-        onProgress: (event) => { checkoutProgress.record(event); workspaceEvents.emit('checkout-progress', event); },
+        onProgress: recordCheckoutProgress,
         signal: c.req.raw.signal,
         ...(deps.projectCommandRunner ? { run: deps.projectCommandRunner } : {}),
       });
       if (!result.ok) {
-        return c.json(
-          'reason' in result ? { error: result.error, reason: result.reason } : { error: result.error },
-          result.status,
-        );
+        return c.json(checkoutFailureBody(result), result.status);
       }
       const registered = await registerFolder(result.target, result.slug ? 'checkout' : 'local');
       if (registered.status !== 200) {
