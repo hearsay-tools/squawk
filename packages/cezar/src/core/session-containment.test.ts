@@ -1,10 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { pathToFileURL } from 'node:url';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { CgroupFs } from './os-cgroup.ts';
-import { startBreakawayProcess, type JobHelper } from './os-win-job.ts';
+import { probeJobs, realJobHelper, startBreakawayProcess, terminateJob, type JobHelper } from './os-win-job.ts';
 import {
   discardSessionContainer,
   executableReachable,
@@ -15,7 +17,7 @@ import {
   SESSION_JOB_PREFIX,
   setSessionContainment,
 } from './session-containment.ts';
-import { isNormalSessionExit } from './session-process.ts';
+import { isNormalSessionExit, spawnSessionLeader } from './session-process.ts';
 
 function fakeCgroupFs() {
   const dirs = new Set<string>(['/sys/fs/cgroup/app.slice/squawk.service', '/sys/fs/cgroup/app.slice/squawk.service/squawk-worker-w1']);
@@ -105,6 +107,9 @@ describe('session containment (hearsay-tools/squawk#1345)', () => {
     expect(isNormalSessionExit(null, 'SIGTERM')).toBe(false);
     expect(isNormalSessionExit(null, 'SIGTERM', { gracefulEnd: true })).toBe(true);
     expect(isNormalSessionExit(143, null, { gracefulEnd: true })).toBe(true);
+    expect(isNormalSessionExit(null, 'SIGSEGV', { gracefulEnd: true })).toBe(false);
+    expect(isNormalSessionExit(null, 'SIGABRT', { gracefulEnd: true })).toBe(false);
+    expect(isNormalSessionExit(1, null, { gracefulEnd: true })).toBe(false);
     expect(isNormalSessionExit(0, null, { forcedKill: true })).toBe(false);
     expect(isNormalSessionExit(null, 'SIGKILL', { gracefulEnd: true })).toBe(false);
     expect(isNormalSessionExit(null, 'SIGTERM', { gracefulEnd: true, forcedKill: true })).toBe(false);
@@ -237,5 +242,107 @@ describe('session containment (hearsay-tools/squawk#1345)', () => {
     const breakCall = jobs.calls.find(([op]) => op === 'breakaway')!;
     expect(readFileSync(breakCall[1]!, 'utf8').split('\0')).toEqual(['node.exe', 'job.js']);
     rmSync(breakCall[1]!, { force: true });
+  });
+});
+
+// Native Windows Job Object verification (run by worker-scope-native.yml).
+describe.runIf(process.platform === 'win32')('session containment on Windows', { timeout: 240_000 }, () => {
+  const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  const exited = (child: ReturnType<typeof spawnSessionLeader>) => new Promise<void>(resolve => {
+    if (child.exitCode !== null || child.signalCode !== null) resolve();
+    else child.once('exit', () => resolve());
+  });
+  beforeAll(() => {
+    setSessionContainment(undefined);
+    expect(probeJobs()).toEqual({ ok: true });
+  }, 240_000);
+
+  it('windows-native: abnormal exit ends a detached descendant while clean exit 0 keeps it alive', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cez-win-session-'));
+    const crashPidFile = join(dir, 'crash.pid');
+    const cleanPidFile = join(dir, 'clean.pid');
+    let cleanPid = 0;
+    try {
+      const crashLeader = spawnSessionLeader(process.execPath, ['-e', `
+        const { spawn } = require('child_process');
+        const fs = require('fs');
+        const c = spawn(process.execPath, ['-e', 'setInterval(() => {}, 20000)'], { detached: true, stdio: 'ignore' });
+        c.unref();
+        fs.writeFileSync(${JSON.stringify(crashPidFile)}, String(c.pid));
+        process.exit(1);
+      `], { cwd: dir, env: process.env, timings: { killGraceMs: 2_000 } });
+      await exited(crashLeader);
+      // bound: PowerShell job wrapper startup and PID file write.
+      await vi.waitFor(() => expect(existsSync(crashPidFile)).toBe(true), { timeout: 60_000 });
+      const crashPid = Number(readFileSync(crashPidFile, 'utf8'));
+      // bound: exit drain and TerminateJobObject after abnormal session exit.
+      await vi.waitFor(() => expect(alive(crashPid)).toBe(false), { timeout: 60_000 });
+
+      const cleanLeader = spawnSessionLeader(process.execPath, ['-e', `
+        const { spawn } = require('child_process');
+        const fs = require('fs');
+        const c = spawn(process.execPath, ['-e', 'setInterval(() => {}, 20000)'], { detached: true, stdio: 'ignore' });
+        c.unref();
+        fs.writeFileSync(${JSON.stringify(cleanPidFile)}, String(c.pid));
+        process.exit(0);
+      `], { cwd: dir, env: process.env, timings: { killGraceMs: 2_000 } });
+      await exited(cleanLeader);
+      // bound: PowerShell job wrapper startup and PID file write.
+      await vi.waitFor(() => expect(existsSync(cleanPidFile)).toBe(true), { timeout: 60_000 });
+      cleanPid = Number(readFileSync(cleanPidFile, 'utf8'));
+      expect(alive(cleanPid)).toBe(true);
+    } finally {
+      if (cleanPid) try { process.kill(cleanPid, 'SIGKILL'); } catch { /* gone */ }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('windows-native: nested worker+session job lets breakaway survive session crash and die on worker stop', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cez-win-nested-'));
+    const mcpPidFile = join(dir, 'mcp.pid');
+    const jobPidFile = join(dir, 'job.pid');
+    const workerJob = `Local\\squawk-worker-${randomUUID()}`;
+    const keeper = realJobHelper.keep(workerJob, 'keep');
+    const osWinJobUrl = pathToFileURL(join(import.meta.dirname, 'os-win-job.ts')).href;
+    let jobPid = 0;
+    try {
+      const scope = {
+        command: (file: string, args: readonly string[]): [string, string[]] => [file, [...args]],
+        started: () => undefined,
+        jobName: () => workerJob,
+      };
+      const leader = spawnSessionLeader(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', `
+        import { spawn } from 'node:child_process';
+        import { writeFileSync } from 'node:fs';
+        const { startBreakawayProcess } = await import(${JSON.stringify(osWinJobUrl)});
+        const mcp = spawn(process.execPath, ['-e', 'setInterval(() => {}, 20000)'], { detached: true, stdio: 'ignore' });
+        mcp.unref();
+        writeFileSync(${JSON.stringify(mcpPidFile)}, String(mcp.pid));
+        const bPid = startBreakawayProcess(process.execPath, ['-e', 'setInterval(() => {}, 20000)'], ${JSON.stringify(dir)}, process.env);
+        writeFileSync(${JSON.stringify(jobPidFile)}, String(bPid));
+        process.exit(1);
+      `], { cwd: dir, env: process.env, timings: { killGraceMs: 2_000 }, scope });
+      await exited(leader);
+      // bound: nested job startup and PID publication.
+      await vi.waitFor(() => {
+        expect(existsSync(mcpPidFile)).toBe(true);
+        expect(existsSync(jobPidFile)).toBe(true);
+      }, { timeout: 60_000 });
+      const mcpPid = Number(readFileSync(mcpPidFile, 'utf8'));
+      jobPid = Number(readFileSync(jobPidFile, 'utf8'));
+      // bound: session job TerminateJobObject after abnormal exit 1.
+      await vi.waitFor(() => expect(alive(mcpPid)).toBe(false), { timeout: 60_000 });
+      // Breakaway child escaped sessionJob into workerJob, so it survived the session crash.
+      expect(alive(jobPid)).toBe(true);
+      // Terminating the outer worker job kills the breakaway child too.
+      expect(terminateJob(workerJob, 30_000)).toBe(true);
+      // bound: asynchronous process exit after TerminateJobObject.
+      await vi.waitFor(() => expect(alive(jobPid)).toBe(false), { timeout: 30_000 });
+    } finally {
+      try { terminateJob(workerJob, 5_000); } catch { /* gone */ }
+      try { keeper.stdin?.end(); } catch { /* gone */ }
+      if (jobPid) try { process.kill(jobPid, 'SIGKILL'); } catch { /* gone */ }
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
