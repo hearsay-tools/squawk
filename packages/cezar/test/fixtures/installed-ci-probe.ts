@@ -24,13 +24,13 @@ type Extension = (api: { registerTool(tool: RegisteredTool): void }) => Promise<
 
 // Application types resolve from src at compile time. The bootstrap supplies only
 // installed runtime modules; this probe has no application value imports.
-export async function probe({ Client, StdioClientTransport, CiToolController, createRunner, piExtension, ompExtension }: {
+export async function probe({ Client, StdioClientTransport, CiToolController, createRunner, piExtensionUrl, ompExtensionUrl }: {
   Client: typeof McpClient;
   StdioClientTransport: typeof McpTransport;
   CiToolController: typeof Controller;
   createRunner: typeof RunnerFactory;
-  piExtension: Extension;
-  ompExtension: Extension;
+  piExtensionUrl: string;
+  ompExtensionUrl: string;
 }, scenario: CiProbeScenario): Promise<void> {
   assert.deepEqual(process.execArgv, []);
   assert.equal(process.env.NODE_OPTIONS, '');
@@ -93,12 +93,15 @@ export async function probe({ Client, StdioClientTransport, CiToolController, cr
    assert.notEqual(closed.isError, true);
    assert.equal(count, 1);
    Object.assign(process.env, session.env);
+   assert.match(session.env.HSQ_TOOL_CLIENT ?? '', /\/dist\/ci-wait\/client\.js$/);
+   const { default: piExtension } = await import(piExtensionUrl) as { default: Extension };
    const registered: RegisteredTool[] = [];
    await piExtension({ registerTool(tool) { registered.push(tool); } });
    assert.deepEqual(registered.map(tool => tool.name), defaultTools);
    const piResult = await registered[0]!.execute('pi-call', {kind:scenario.kind, pr:wait.prUrl});
    assert.notEqual(piResult.isError, true);
    assert.equal(count, 2);
+   const { default: ompExtension } = await import(ompExtensionUrl) as { default: Extension };
    const ompRegistered: RegisteredTool[] = [];
    await ompExtension({ registerTool(tool) { ompRegistered.push(tool); } });
    assert.deepEqual(ompRegistered.map(tool => tool.name), defaultTools);

@@ -1,6 +1,6 @@
 import { isRecord } from '@hearsay-tools/squawk/plugin/pi-rpc';
 
-/** The prefix scripts/pi-runaway-reply-guard.mjs puts on a reply it stopped. */
+/** The prefix extensions/pi-runaway-reply-guard.mjs puts on a reply it stopped. */
 const RUNAWAY_REPLY_MARKER = '[cezar:runaway-reply] ';
 
 /** What the model reads after Squawk stopped its reply (hearsay-tools/squawk#4236). */

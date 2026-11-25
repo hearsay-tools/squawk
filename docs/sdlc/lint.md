@@ -307,7 +307,7 @@ classification preserves existing commands and legacy paths (hearsay-tools/cezar
 | `packages/cezar/scripts/*benchmark*` | Developer tools; their sandbox/marker checks protect benchmark state while retaining explicit command environments |
 | `packages/cezar/scripts/measure-transcript-facts-health.mjs` | Developer measurement tool; it selects its own marked scratch home |
 | `.github/scripts/mutants-file.cjs` | Developer mutation tool; probe children use test homes and its host `~/.cache/cez/mutants` remains a cache |
-| `packages/cezar/scripts/pi-project-skills.mjs` | Runtime helper; it discovers the operator's installed agent skills |
+| `packages/cezar/src/runners/pi/extensions/pi-project-skills.mjs` | Runtime helper; it discovers the operator's installed agent skills (listed in `home-readers.baseline.json`) |
 | `packages/web/e2e/browser-launch.ts` | Read-only discovery of installed browser launch settings |
 | `scripts/test-parity.mjs` | Read-only discovery of the installed Squeal launcher |
 | `packages/web/e2e/workspace-registry.ts` | Its homedir read is a refusal guard; writes use the explicit shared sandbox |

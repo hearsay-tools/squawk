@@ -203,7 +203,7 @@ describe('buildOmpArgs', () => {
   it('squawkTools adds --extension omp-ci-wait.mjs before other flags', () => {
     expect(buildOmpArgs({ ...base, squawkTools: ciServer, systemPrompt: 'S' })).toEqual([
       '--mode', 'rpc',
-      '--extension', expect.stringMatching(/scripts\/omp-ci-wait\.mjs$/),
+      '--extension', expect.stringMatching(/runners\/omp\/omp-ci-wait\.mjs$/),
       '--append-system-prompt', 'S',
       '--tools', 'read,edit,write,grep,glob,bash,cezar_wait,cezar_ask,cezar_cancel_wait,cezar_done,cezar_schedule_task,cezar_automation,cezar_scheduled_tasks',
     ]);

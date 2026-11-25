@@ -1,7 +1,6 @@
-import { z } from 'zod';
 import { piBaseArgs } from './pi-args.ts';
 import { skillLines, skillPathScope, skillProbe } from '@hearsay-tools/squawk/plugin/runtime';
-import type { SkillCatalog, SkillDiscoveryOptions } from '@hearsay-tools/squawk/plugin';
+import { z, type SkillCatalog, type SkillDiscoveryOptions } from '@hearsay-tools/squawk/plugin';
 const commandsSchema = z.object({ commands: z.array(z.object({ name: z.string(), description: z.string().optional(),
   source: z.string(), sourceInfo: z.object({ path: z.string().optional(), source: z.string().optional(), scope: z.string().optional() }).optional(),
 })) });
