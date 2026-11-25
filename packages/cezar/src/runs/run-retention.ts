@@ -235,7 +235,9 @@ export class RunRetentionTopic implements RunRetention {
     assertRunSlotsSealed();
     const workers = this.state.listWorkersOf(root.id), family = [root, ...workers];
     if (family.some((run) => isLiveRecord(run) || run.pinned) || (root.delegation?.role === 'root' && root.delegation.historyDeletion)) return;
-    for (const member of [root, ...workers.flatMap((worker) => this.state.record(worker.id) ?? [])].filter((run) => !run.archived)) {
+    for (const id of family.map((run) => run.id)) {
+      const member = this.state.record(id);
+      if (!member || member.archived) continue;
       this.state.applyArchived(member, true);
       if (!deletionRefusal(member.id, 'archive-tmp', this.dataDir)) removeAgentTmpDir(this.dataDir, member.id);
     }
