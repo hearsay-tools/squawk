@@ -1,5 +1,5 @@
 import '../built-in-run-slots.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import childProcess, { execFileSync, spawn, type ChildProcess, type ExecFileOptions, type SpawnOptions } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';

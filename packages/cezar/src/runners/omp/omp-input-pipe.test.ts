@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from '../../core/built-in-runner-ids.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

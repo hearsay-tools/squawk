@@ -24,7 +24,8 @@ export function hostPluginsDir(home: () => Home, warn: (line: string) => void = 
 
 export interface BootRuntimeOptions {
   /**
-   * The host plugin folder, `<config>/plugins/`. Its child folders load after the built-ins.
+   * The host plugin folder, `<config>/plugins/`. Its child folders load after the built-ins and
+   * the bundled runners.
    * Absent: no host plugin loads, so a test boot never reads the operator's folder.
    */
   pluginsDir?: string | undefined;
@@ -33,11 +34,14 @@ export interface BootRuntimeOptions {
 }
 
 let runtimeBoot: Promise<void> | undefined;
+/** One load per process: a retry after a failed hook reuses it, and a failed bundled runner fails every retry. */
+let bundledRunnersLoad: Promise<unknown> | undefined;
 /** A retry after a failed hook keeps what the plugins committed and does not load them twice. */
 let hostPluginsLoaded = false;
 
 /**
- * Register every built-in extension table, load the host plugins, run the optional hook, then seal
+ * Register every built-in extension table, load the bundled runners and then the host plugins
+ * through the plugin loader, run the optional hook, then seal
  * all eight registries in this one place. A second call returns the same boot and does not load
  * plugins or run the hook again.
  */
@@ -55,24 +59,25 @@ async function sealRuntime({ pluginsDir, beforeSeal }: BootRuntimeOptions): Prom
   installPluginResolveHook();
   // A test may seal a custom command table before dispatch asks for a full boot.
   if (!cliCommandsSealed()) registerBuiltInCliCommands();
-  const { registerBuiltInRunners, sealBuiltInRunners } = await import('./runners/built-in.ts');
   const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await import('./built-in-run-slots.ts');
   const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await import('./workflows/step-kind-registry.ts');
   const { registerBuiltInTools, sealBuiltInTools } = await import('./built-in-tools.ts');
   const { registerBuiltInWaitKinds, sealBuiltInWaitKinds } = await import('./built-in-wait-kinds.ts');
   const { sealRunLifecycleListeners } = await import('./runs/lifecycle-registry.ts');
-  registerBuiltInRunners();
+  const { sealRunners } = await import('./core/runner-registry.ts');
+  const loader = await import('./plugin/loader.ts');
   registerBuiltInRunSlots();
   registerBuiltInStepKinds();
   registerBuiltInTools();
   registerBuiltInWaitKinds();
+  await (bundledRunnersLoad ??= loader.loadBundledRunners());
   if (pluginsDir !== undefined && !hostPluginsLoaded) {
     hostPluginsLoaded = true;
-    await (await import('./plugin/loader.ts')).loadPluginFolder({ dir: pluginsDir, source: 'host' });
+    await loader.loadPluginFolder({ dir: pluginsDir, source: 'host' });
   }
   await beforeSeal?.();
   sealBuiltInCliCommands();
-  sealBuiltInRunners();
+  sealRunners();
   sealBuiltInRunSlots();
   sealBuiltInStepKinds();
   sealBuiltInTools();

@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from '../core/built-in-runner-ids.testkit.ts';
 import { checkRule } from './ast-rule.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -28,7 +28,7 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
   ])('refuses %s', (_case, source) => {
     expect(runnerRosters(file, `\n${source}`)).toHaveLength(1);
     expect(checkRule(runnerRosterLiteral, file, `\n${source}`)).toEqual([
-      { line: 2, message: expect.stringMatching(/Use BUILT_IN_RUNNERS from packages\/cezar\/src\/runners\/built-in\.ts, or BUILT_IN_RUNNER_IDS from packages\/cezar\/src\/runners\/ids\.ts;.+GET \/api\/v1\/runners.+open-mercato\/cezar#387/) },
+      { line: 2, message: expect.stringMatching(/Read the registry \(registeredRunners in packages\/cezar\/src\/core\/runner-registry\.ts\), or in a test BUILT_IN_RUNNER_IDS from packages\/cezar\/src\/core\/built-in-runner-ids\.testkit\.ts;.+GET \/api\/v1\/runners.+open-mercato\/cezar#387/) },
     ]);
   });
 
@@ -53,7 +53,7 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
   });
 
   it.each([
-    ['packages/cezar/src/runners/ids.ts', false],
+    ['packages/cezar/src/runners/claude/index.ts', true],
     ['packages/cezar/src/core/provider-auth.ts', true],
     ['packages/cezar/src/core/ui-parity.test.ts', true],
     ['packages/web/e2e/tools-menu.e2e.ts', true],
@@ -95,17 +95,17 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
       mkdirSync(dirname(join(root, path)), { recursive: true });
       writeFileSync(join(root, path), text);
     };
-    const definition = 'packages/cezar/src/runners/ids.ts';
+    const outside = 'scripts/roster.mjs';
     const derived = 'packages/web/src/lib/derived.ts';
     const unreasoned = 'packages/web/src/lib/unreasoned.ts';
     write(file, `const a = [${ALL}];\n`);
-    write(definition, `export const BUILT_IN_RUNNER_IDS = [${ALL}] as const;\n`);
+    write(outside, `export const ROSTER = [${ALL}];\n`);
     write(derived, 'const a = runnerSchema.options;\n');
     write(unreasoned, `const a = [${ALL}];\n`);
     write(runnerRostersFile, JSON.stringify({ entries: [
       { file, count: 1, reason: 'kept' },
       { file, count: 1, reason: 'repeated' },
-      { file: definition, count: 1, reason: 'the definition is outside the rule' },
+      { file: outside, count: 1, reason: 'the file is outside the rule' },
       { file: derived, count: 1, reason: 'derived since' },
       { file: unreasoned, count: 1, reason: '' },
       { file: 'packages/web/src/lib/gone.ts', count: 2, reason: 'deleted' },
@@ -114,7 +114,7 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
       `${runnerRostersFile} cez/runner-roster-literal: stale or invalid entry ${path} (lists ${lists}, the file has ${has}); lower the count or remove the entry`;
     expect(staleRunnerRosters(root)).toEqual([
       stale(file, 1, 1),
-      stale(definition, 1, 1),
+      stale(outside, 1, 1),
       stale(derived, 1, 0),
       stale(unreasoned, 1, 1),
       stale('packages/web/src/lib/gone.ts', 2, 0),

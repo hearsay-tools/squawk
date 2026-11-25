@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from './src/runners/ids.ts'
+import { BUILT_IN_RUNNER_IDS } from './src/core/built-in-runner-ids.testkit.ts'
 import { configureTestHome } from '../../scripts/test-home-setup.mjs'
 import { configureTestHomeSelector } from './src/home/test-home-selector.testkit.ts'
 import { checkWorkspaceResolution } from '../../scripts/check-workspace-resolution.mjs'

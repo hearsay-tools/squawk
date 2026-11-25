@@ -1,8 +1,8 @@
-import { BUILT_IN_RUNNER_IDS } from './runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './core/built-in-runner-ids.testkit.ts';
 import { checkRule } from './lint/ast-rule.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { RUNNER_MOCKS, mockScript, mockScenarioBoundary as rule } from './lint/mock-scenario-boundary.ts';
-import { BUILT_IN_RUNNERS } from './runners/built-in.ts';
+import { bundledRunnerDefinitions } from './core/bundled-runners.testkit.ts';
 
 const file = 'packages/cezar/scripts/mock-pi-rpc.mjs';
 const adopted = "import { play, scenarioFor } from './mock-scenario.mjs';\n";
@@ -12,8 +12,8 @@ describe('shared scenario boundary', () => {
     expect([...RUNNER_MOCKS.keys()].sort()).toEqual([...BUILT_IN_RUNNER_IDS].sort());
   });
 
-  it('reads each runner\'s mock script from source as its definition declares it', () => {
-    expect(Object.fromEntries(RUNNER_MOCKS)).toEqual(Object.fromEntries(BUILT_IN_RUNNERS.map(definition => [definition.id, definition.mock.script])));
+  it('reads each runner\'s mock script from source as its definition declares it', async () => {
+    expect(Object.fromEntries(RUNNER_MOCKS)).toEqual(Object.fromEntries((await bundledRunnerDefinitions()).map(definition => [definition.id, definition.mock.script])));
   });
 
   it.each([

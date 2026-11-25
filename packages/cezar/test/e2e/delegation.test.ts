@@ -120,9 +120,10 @@ test('installed CLI completes owned-worker lifecycle with lost spawn reply and o
     const { createRunner } = await load('core/runner-registry.js') as typeof import('../../src/core/runner-registry.ts');
     const { installPluginResolveHook } = await load('plugin/resolve-hook.js') as typeof import('../../src/plugin/resolve-hook.ts');
     installPluginResolveHook();
-    const { registerBuiltInRunners, sealBuiltInRunners } = await load('runners/built-in.js') as typeof import('../../src/runners/built-in.ts');
-    registerBuiltInRunners();
-    sealBuiltInRunners();
+    const { loadBundledRunners } = await load('plugin/loader.js') as typeof import('../../src/plugin/loader.ts');
+    const { sealRunners } = await load('core/runner-registry.js') as typeof import('../../src/core/runner-registry.ts');
+    await loadBundledRunners();
+    sealRunners();
     // This process admits and settles workers from the installed tarball, so it seals the removal slots as an entry does.
     const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await load('built-in-run-slots.js') as typeof import('../../src/built-in-run-slots.ts');
     registerBuiltInRunSlots();

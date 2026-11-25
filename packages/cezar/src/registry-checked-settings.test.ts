@@ -1,5 +1,5 @@
 import './core/register-all-runners.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from './runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './core/built-in-runner-ids.testkit.ts';
 import { runnerGolden } from './core/runner-golden.testkit.ts';
 import { Home } from './home/home.ts';
 import { useTestHome, testHome } from './home/test-home.testkit.ts';

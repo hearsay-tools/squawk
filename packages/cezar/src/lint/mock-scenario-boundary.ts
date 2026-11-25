@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from '@babel/parser';
 import type { Node } from '@babel/types';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { bundledRunnerIds } from '../plugin/bundled-runners.ts';
 import { child, stringOf, type AstRule, type EsNode } from './ast-rule.ts';
 import { literalText, unwrapped } from './runner-id-branch.ts';
 import { repoRoot } from './source-rule.ts';
@@ -29,10 +29,10 @@ export function mockScript(id: string, source: string): string {
 /**
  * The mock script of every built-in runner, read from the source of its `runners/<id>/mock.ts`,
  * so a new built-in runner cannot bypass the import guard. The rule parses the files instead of
- * importing them: an import of a definition or `runners/built-in.ts` puts every runner into the
+ * importing them: an import of a definition or a plugin entry puts every runner into the
  * lint plugin's import closure, and an edit to any runner file then relints the whole project.
  */
-export const RUNNER_MOCKS: ReadonlyMap<string, string> = new Map(BUILT_IN_RUNNER_IDS.map(id =>
+export const RUNNER_MOCKS: ReadonlyMap<string, string> = new Map(bundledRunnerIds().map(id =>
   [id, mockScript(id, readFileSync(join(repoRoot, 'packages/cezar/src/runners', id, 'mock.ts'), 'utf8'))]));
 const REQUIRED_MOCKS = new Set([...RUNNER_MOCKS.values()].map(name => `packages/cezar/scripts/${name}`));
 

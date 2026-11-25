@@ -55,9 +55,10 @@ import { installPluginResolveHook } from '../../packages/cezar/src/plugin/resolv
 installPluginResolveHook();
 const { buildOmpArgs } = await import('../../packages/cezar/src/runners/omp/omp-runner.ts');
 const { buildPiArgs } = await import('../../packages/cezar/src/runners/pi/pi-runner.ts');
-const { registerBuiltInRunners, sealBuiltInRunners } = await import('../../packages/cezar/src/runners/built-in.ts');
-registerBuiltInRunners();
-sealBuiltInRunners();
+const { loadBundledRunners } = await import('../../packages/cezar/src/plugin/loader.ts');
+const { sealRunners } = await import('../../packages/cezar/src/core/runner-registry.ts');
+await loadBundledRunners();
+sealRunners();
 
 type Frame = Record<string, unknown>;
 type SpyRequest = { path: string; body: Frame };

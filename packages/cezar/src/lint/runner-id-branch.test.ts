@@ -1,5 +1,5 @@
-import { BUILT_IN_RUNNERS } from '../runners/built-in.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { bundledRunnerDefinitions } from '../core/bundled-runners.testkit.ts';
+import { BUILT_IN_RUNNER_IDS } from '../core/built-in-runner-ids.testkit.ts';
 import { checkRule } from './ast-rule.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,8 +20,8 @@ const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
 describe('runner-id-branch (hearsay-tools/cezarion#2991)', () => {
-  it('reads the ids the built-in runner list declares', () => {
-    expect(declaredRunnerIds()).toEqual(BUILT_IN_RUNNERS.map(({ id }) => id));
+  it('reads the ids the bundled runner entries register', async () => {
+    expect(declaredRunnerIds()).toEqual((await bundledRunnerDefinitions()).map(({ id }) => id));
   });
 
   it.each([...BUILT_IN_RUNNER_IDS, 'claude-cli'])('refuses a comparison and a case label with %s', (id) => {

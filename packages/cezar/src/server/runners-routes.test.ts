@@ -12,11 +12,11 @@ import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { readRunners } from './runners-routes.ts';
 import { createApp } from './server.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { registerBundledRunners } from '../core/bundled-runners.testkit.ts';
+import { BUILT_IN_RUNNER_IDS } from '../core/built-in-runner-ids.testkit.ts';
 import { runnerGolden } from '../core/runner-golden.testkit.ts';
 
-registerBuiltInRunners();
+await registerBundledRunners();
 sealTestRunners();
 
 const roots: string[] = [];

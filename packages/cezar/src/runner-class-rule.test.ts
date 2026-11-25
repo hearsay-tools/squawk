@@ -40,7 +40,7 @@ it('lets only a runner folder load a runner module', () => {
   for (const file of ['runners/pi/definition.ts', 'runners/pi/pi-runner.ts', 'runners/claude/claude-cli-runner.ts']) {
     expect(runnerClass.applies(`packages/cezar/src/${file}`), file).toBe(false);
   }
-  for (const file of ['runners/built-in.ts', 'core/runner-registry.ts', 'core/runner-facts.ts', 'workflows/run.ts']) {
+  for (const file of ['runners/beside.ts', 'core/runner-registry.ts', 'core/runner-facts.ts', 'workflows/run.ts']) {
     expect(runnerClass.applies(`packages/cezar/src/${file}`), file).toBe(true);
   }
 });

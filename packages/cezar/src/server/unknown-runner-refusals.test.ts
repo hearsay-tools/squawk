@@ -14,10 +14,10 @@ import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { connectedProviderAuth } from './provider-auth.testkit.ts';
 import { jsonZodValidator } from './validators.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { registerBundledRunners } from '../core/bundled-runners.testkit.ts';
+import { BUILT_IN_RUNNER_IDS } from '../core/built-in-runner-ids.testkit.ts';
 
-registerBuiltInRunners();
+await registerBundledRunners();
 sealTestRunners();
 
 /** The closed enum's refusal of a runner id, recorded on main at 9b5394c4a. */

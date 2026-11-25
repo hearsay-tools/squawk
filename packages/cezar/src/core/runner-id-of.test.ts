@@ -1,5 +1,5 @@
 import { sealTestRunners } from './runner-registry.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { defineRunner } from './runner-definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';

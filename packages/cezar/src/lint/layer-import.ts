@@ -17,7 +17,7 @@ import { child, stringOf, type AstRule, type EsNode, type Report, type Visitors 
  * `import x = require('…')`. It maps `.js` to `.ts` and reports
  * - an import of a `feature:<name>` file;
  * - an import of a `runner` file. The core builds runners only through the registry
- *   (`core/runner-registry.ts`), which the entries fill from `runners/built-in.ts`.
+ *   (`core/runner-registry.ts`), which boot fills through the plugin loader.
  * It does not read package specifiers, a computed specifier or a re-export chain: a core file
  * that imports a core file that imports a feature is not reported at the first file. Imports from
  * `shell`, `tooling`, `runner` and `feature` files are out of its scope.

@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import type { RunnerDefinition } from './runner-definition.ts';
 import { sealTestRunners } from './runner-registry.testkit.ts';
 import { skillResumeCellNames } from './skill-resume-rows.testkit.ts';

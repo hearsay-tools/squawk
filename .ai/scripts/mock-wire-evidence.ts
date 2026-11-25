@@ -7,15 +7,16 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, expect, test, vi } from 'vitest';
 import type { AgentEvent, AgentSession } from '../../packages/cezar/src/core/agent-runner.ts';
-import { BUILT_IN_RUNNER_IDS } from '../../packages/cezar/src/runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from '../../packages/cezar/src/core/built-in-runner-ids.testkit.ts';
 import { createRunner } from '../../packages/cezar/src/core/runner-registry.ts';
 import { installPluginResolveHook } from '../../packages/cezar/src/plugin/resolve-hook.ts';
 
 installPluginResolveHook();
 const { HARNESS_ADAPTERS, PINNED_SESSION_ID, waitFor } = await import('../../packages/cezar/src/core/harness-parity.testkit.ts');
-const { registerBuiltInRunners, sealBuiltInRunners } = await import('../../packages/cezar/src/runners/built-in.ts');
-registerBuiltInRunners();
-sealBuiltInRunners();
+const { loadBundledRunners } = await import('../../packages/cezar/src/plugin/loader.ts');
+const { sealRunners } = await import('../../packages/cezar/src/core/runner-registry.ts');
+await loadBundledRunners();
+sealRunners();
 
 const output = resolve(process.env.MOCK_WIRE_OUTPUT_DIR!);
 const AUTONOMOUS = 'Continue working autonomously until the task is fully complete.';

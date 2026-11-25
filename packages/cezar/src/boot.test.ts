@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, expect, it, vi } from 'vitest';
+import { BUILT_IN_RUNNER_IDS } from './core/built-in-runner-ids.testkit.ts';
+import { bundledRunnersDir } from './plugin/bundled-runners.ts';
 
 const srcRoot = fileURLToPath(new URL('.', import.meta.url));
 
@@ -109,7 +111,7 @@ it('boots the other registries after the CLI command table is already sealed', a
   expect(runnersSealed()).toBe(true);
 });
 
-afterEach(() => { vi.doUnmock('./plugin/resolve-hook.ts'); vi.doUnmock('./runners/built-in.ts'); });
+afterEach(() => { vi.doUnmock('./plugin/resolve-hook.ts'); vi.doUnmock('./plugin/loader.ts'); });
 
 /** A host plugin folder with one plugin that registers a CLI command and a run lifecycle listener. */
 function pluginsDir(): string {
@@ -123,13 +125,22 @@ function pluginsDir(): string {
   return dir;
 }
 
-it('installs the resolve hook before built-in runners load, loads host plugins, then seals', async () => {
+/** The ids of the bundled runners the loader reported, in load order. */
+async function bundledNames(): Promise<string[]> {
+  return (await import('./plugin/loader.ts')).pluginLoadReport().loaded.filter(plugin => plugin.source === 'bundled').map(plugin => plugin.name);
+}
+
+it('installs the resolve hook, loads the bundled runners, then host plugins, then seals', async () => {
   vi.resetModules();
   const order: string[] = [];
   vi.doMock('./plugin/resolve-hook.ts', () => ({ installPluginResolveHook: () => { order.push('hook'); } }));
-  vi.doMock('./runners/built-in.ts', async original => {
-    order.push('runners');
-    return original();
+  vi.doMock('./plugin/loader.ts', async (original) => {
+    const loader = await original<typeof import('./plugin/loader.ts')>();
+    return {
+      ...loader,
+      loadBundledRunners: async (...args: Parameters<typeof loader.loadBundledRunners>) => { order.push('runners'); return loader.loadBundledRunners(...args); },
+      loadPluginFolder: async (...args: Parameters<typeof loader.loadPluginFolder>) => { order.push('plugins'); return loader.loadPluginFolder(...args); },
+    };
   });
   const dir = pluginsDir();
   try {
@@ -141,11 +152,14 @@ it('installs the resolve hook before built-in runners load, loads host plugins, 
       // The plugin committed before the hook runs and before any seal.
       expect(cli.cliCommandsSealed()).toBe(false);
     } });
-    // The loader asks for the hook again before the first plugin; the real install is idempotent.
-    expect(order).toEqual(['hook', 'runners', 'hook', 'beforeSeal']);
+    // The loader asks for the hook again before the first plugin of each folder; the real install is idempotent.
+    expect(order).toEqual(['hook', 'runners', 'hook', 'plugins', 'hook', 'beforeSeal']);
     expect(cli.cliCommand('extra')?.name).toBe('extra');
     expect(lifecycle.registeredRunLifecycleListeners()).toHaveLength(1);
-    expect((await import('./plugin/loader.ts')).pluginLoadReport()).toMatchObject({ folders: [dir], loaded: [{ name: 'extra' }], failed: [] });
+    const report = (await import('./plugin/loader.ts')).pluginLoadReport();
+    expect(report.folders).toEqual([bundledRunnersDir(), dir]);
+    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([...BUILT_IN_RUNNER_IDS.map(id => [id, 'bundled']), ['extra', 'host']]);
+    expect(report.failed).toEqual([]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -159,8 +173,11 @@ it('loads no host plugin without a plugin folder and never installs the hook on 
   boot.bootColdCli();
   expect(install).not.toHaveBeenCalled();
   await boot.bootRuntime();
-  expect(install).toHaveBeenCalledOnce();
-  expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([]);
+  // Once by boot and once by the bundled runner load.
+  expect(install).toHaveBeenCalledTimes(2);
+  expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([bundledRunnersDir()]);
+  expect(await bundledNames()).toEqual([...BUILT_IN_RUNNER_IDS]);
+  expect((await import('./core/runner-registry.ts')).registeredRunners().map(runner => runner.id)).toEqual([...BUILT_IN_RUNNER_IDS]);
 });
 
 it('does not load host plugins twice when a failed hook is retried', async () => {
@@ -170,7 +187,10 @@ it('does not load host plugins twice when a failed hook is retried', async () =>
     const boot = await import('./boot.ts');
     await expect(boot.bootRuntime({ pluginsDir: dir, beforeSeal: () => { throw new Error('hook failed'); } })).rejects.toThrow('hook failed');
     await boot.bootRuntime({ pluginsDir: dir });
-    expect((await import('./plugin/loader.ts')).pluginLoadReport()).toMatchObject({ folders: [dir], loaded: [{ name: 'extra' }], failed: [] });
+    const report = (await import('./plugin/loader.ts')).pluginLoadReport();
+    expect(report.folders).toEqual([bundledRunnersDir(), dir]);
+    expect(report.loaded.map(plugin => plugin.name)).toEqual([...BUILT_IN_RUNNER_IDS, 'extra']);
+    expect(report.failed).toEqual([]);
     expect((await import('./core/cli-registry.ts')).cliCommand('extra')?.name).toBe('extra');
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -185,4 +205,16 @@ it('seals registries from boot.ts and the registry definitions only', () => {
     return sealFunction.test(source) || sealCall.test(source);
   });
   expect(offenders).toEqual([]);
+});
+
+it('fails boot, and every retry, when a bundled runner fails to load', async () => {
+  vi.resetModules();
+  const failure = new Error('Bundled runner "claude" failed to load: broken');
+  const load = vi.fn(async () => { throw failure; });
+  vi.doMock('./plugin/loader.ts', async (original) => ({ ...await original<typeof import('./plugin/loader.ts')>(), loadBundledRunners: load }));
+  const boot = await import('./boot.ts');
+  await expect(boot.bootRuntime()).rejects.toBe(failure);
+  await expect(boot.bootRuntime()).rejects.toBe(failure);
+  expect(load).toHaveBeenCalledOnce();
+  expect((await import('./core/runner-registry.ts')).runnersSealed()).toBe(false);
 });

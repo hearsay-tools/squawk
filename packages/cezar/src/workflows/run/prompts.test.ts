@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from '../../core/built-in-runner-ids.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { applyTemplate, resumeNotice, withResumeContext } from './prompts.ts';
 describe('applyTemplate (hearsay-tools/squawk#1207)', () => {

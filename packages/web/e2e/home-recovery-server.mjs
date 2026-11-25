@@ -12,11 +12,12 @@ const { acquireCiResources } = await load('ci-wait/resources.js')
 const { startServer } = await load('server/start-server.js')
 const { installPluginResolveHook } = await load('plugin/resolve-hook.js')
 installPluginResolveHook()
-const { registerBuiltInRunners, sealBuiltInRunners } = await load('runners/built-in.js')
+const { loadBundledRunners } = await load('plugin/loader.js')
+const { sealRunners } = await load('core/runner-registry.js')
 // This fixture is a process entry like index.ts: the server reads every registered runner, and
 // a deletion or a reclaim asks the removal slots.
-registerBuiltInRunners();
-sealBuiltInRunners();
+await loadBundledRunners();
+sealRunners();
 const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await load('built-in-run-slots.js')
 registerBuiltInRunSlots()
 sealBuiltInRunSlots()

@@ -16,9 +16,9 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { workflowsResponseSchema } from '@open-mercato/cezar-contract/workflows';
 import { createRunInputSchema } from '@open-mercato/cezar-contract/runs';
 import { connectedProviderAuth } from './provider-auth.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerBundledRunners } from '../core/bundled-runners.testkit.ts';
 
-registerBuiltInRunners();
+await registerBundledRunners();
 sealTestRunners();
 
 /**

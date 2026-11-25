@@ -3,8 +3,8 @@ import type { PluginLoadReport } from './loader.ts';
 
 const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: 0, runLifecycleListeners: 0 };
 const report: PluginLoadReport = {
-  folders: ['/cfg/plugins'],
-  loaded: [{ name: 'greeter', source: 'host', path: '/cfg/plugins/greeter', contributions: { ...none, cliCommands: ['greet'], runners: ['echo'], removalSlots: 1 } }],
+  folders: ['/squawk/dist/runners/', '/cfg/plugins'],
+  loaded: [{ name: 'claude', source: 'bundled', path: '/squawk/dist/runners/claude', contributions: { ...none, runners: ['claude'] } }, { name: 'greeter', source: 'host', path: '/cfg/plugins/greeter', contributions: { ...none, cliCommands: ['greet'], runners: ['echo'], removalSlots: 1 } }],
   failed: [{ name: 'broken', source: 'host', path: '/cfg/plugins/broken', reason: 'missing-entry', error: 'missing index.mjs or index.js' }],
 };
 
@@ -20,16 +20,19 @@ describe('hsq plugins', () => {
     const console = out();
     expect(await runPluginsCommand([], {}, console)).toBe(0);
     expect(console.log.mock.calls[0]![0]).toBe([
+      'Plugin folder: /squawk/dist/runners/',
       'Plugin folder: /cfg/plugins',
       '',
-      'Loaded (1):',
-      '  greeter  /cfg/plugins/greeter',
+      'Loaded (2):',
+      '  claude  bundled  /squawk/dist/runners/claude',
+      '    runners: claude',
+      '  greeter  host  /cfg/plugins/greeter',
       '    commands: greet',
       '    runners: echo',
       '    removal slots: 1',
       '',
       'Skipped (1):',
-      '  broken  /cfg/plugins/broken',
+      '  broken  host  /cfg/plugins/broken',
       '    error: missing index.mjs or index.js',
     ].join('\n'));
   });

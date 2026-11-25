@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { it as registerTest } from 'vitest';
 import { ANSWER_DELIVERY_CRITERIA, exemptionFor, type ParityExemption } from './harness-parity-core.testkit.ts';
 import { collectedOnly, type CellBody } from './parity-partition.testkit.ts';

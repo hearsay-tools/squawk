@@ -37,7 +37,7 @@ describe('runner-core-import (hearsay-tools/squawk#4201)', () => {
     expect(runnerFolder('packages/cezar/src/runners/pi/pi-runner.ts')).toBe('packages/cezar/src/runners/pi/');
     expect(runnerFolder('packages/cezar/src/runners/antigravity/acp/session.ts')).toBe('packages/cezar/src/runners/antigravity/');
     expect(runnerFolder('packages/cezar/src/runners/fixture/fixture-adapter.ts')).toBeUndefined();
-    expect(runnerFolder('packages/cezar/src/runners/built-in.ts')).toBeUndefined();
+    expect(runnerFolder('packages/cezar/src/runners/beside.ts')).toBeUndefined();
     expect(runnerFolder('packages/cezar/src/core/agent-runner.ts')).toBeUndefined();
   });
 
@@ -87,7 +87,7 @@ describe('runner-core-import (hearsay-tools/squawk#4201)', () => {
       'packages/cezar/src/runners/pi/__fixtures__/rpc.ts',
       'packages/cezar/src/runners/pi/types.d.ts',
       'packages/cezar/src/runners/fixture/fixture-adapter.ts',
-      'packages/cezar/src/runners/built-in.ts',
+      'packages/cezar/src/runners/beside.ts',
       'packages/cezar/src/core/agent-runner.ts',
     ]) expect(runnerCoreImport.applies(path)).toBe(false);
   });

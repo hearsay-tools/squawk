@@ -7,6 +7,12 @@ including the owner's five product decisions of 2026-11-18 and the amendment of 
 It applies rule 1 of [ADR 0065](0065-define-the-core-by-a-layer-map.md): a built-in runner and an
 outside runner take the same path.
 
+**Amended 2026-11-25** (hearsay-tools/squawk#4209, roadmap step 4): `runners/built-in.ts`,
+`runners/ids.ts` and `cez/runner-ids-import` are removed. Each runner folder has a plugin entry
+`index.ts`, and boot loads the bundled runner folders through the plugin loader
+([plugin loader and runner kit](../../.ai/specs/2026-11-24-plugin-loader-and-runner-kit.md) § 5).
+The rows and rules below that name the two lists record the step 1 design.
+
 ## Decision
 
 Each runner is one object, its **definition**, in its own folder

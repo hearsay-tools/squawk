@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import '../core/register-all-runners.testkit.ts';
 import { expect, it } from 'vitest';
 import { extraToolRows, factRows } from './runner-fact-rows.testkit.ts';

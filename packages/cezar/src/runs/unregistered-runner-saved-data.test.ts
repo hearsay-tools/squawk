@@ -16,11 +16,11 @@ type Registration = 'none' | 'unsealed' | 'sealed empty' | 'built-in' | 'built-i
 async function processWith(registration: Registration) {
   vi.resetModules();
   const registry = await import('../core/runner-registry.ts');
-  const builtIn = await import('../runners/built-in.ts');
+  const bundled = await import('../core/bundled-runners.testkit.ts');
   const { RunStore } = await import('./store.ts');
-  if (registration !== 'none' && registration !== 'sealed empty') builtIn.registerBuiltInRunners();
+  if (registration !== 'none' && registration !== 'sealed empty') await bundled.registerBundledRunners();
   // A runner this build does not ship: the Claude definition under another id.
-  if (registration === 'built-in and gemini') registry.registerRunner({ ...builtIn.BUILT_IN_RUNNERS[0]!, id: 'gemini' as never });
+  if (registration === 'built-in and gemini') registry.registerRunner({ ...(await bundled.bundledRunnerDefinitions())[0]!, id: 'gemini' as never });
   if (registration !== 'none' && registration !== 'unsealed') registry.sealRunners();
   return RunStore;
 }

@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testHome } from './home/test-home.testkit.ts';
 import type { CliDeps } from './cli-dispatch.ts';
+import { BUILT_IN_RUNNER_IDS } from './core/built-in-runner-ids.testkit.ts';
+import { bundledRunnersDir } from './plugin/bundled-runners.ts';
 
 // Real dispatch from an unsealed process, as `hsq` starts: the command line picks the boot.
 const home = testHome();
@@ -88,8 +90,12 @@ describe('plugin commands at dispatch', () => {
     const { processStub } = await dispatch(['plugins', '--json']);
     expect(processStub.exitCode).toBe(0);
     const report = JSON.parse(log.mock.calls[0]![0] as string);
-    expect(report.folders).toEqual([home.plugins]);
-    expect(report.loaded).toEqual([expect.objectContaining({ name: 'greeter', source: 'host', contributions: expect.objectContaining({ cliCommands: ['greet'] }) })]);
+    // The bundled runners load first, through the same loader, then the host folder.
+    expect(report.folders).toEqual([bundledRunnersDir(), home.plugins]);
+    expect(report.loaded).toEqual([
+      ...BUILT_IN_RUNNER_IDS.map(id => expect.objectContaining({ name: id, source: 'bundled', contributions: expect.objectContaining({ runners: [id] }) })),
+      expect.objectContaining({ name: 'greeter', source: 'host', contributions: expect.objectContaining({ cliCommands: ['greet'] }) }),
+    ]);
     expect(report.failed).toEqual([expect.objectContaining({ name: 'empty', error: 'missing index.mjs or index.js' })]);
   });
 
@@ -98,7 +104,7 @@ describe('plugin commands at dispatch', () => {
     const { prepareCommandRuntime } = await import('./subcommands.ts');
     await prepareCommandRuntime('serve');
     expect((await import('./core/cli-registry.ts')).cliCommand('greet')?.name).toBe('greet');
-    expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([home.plugins]);
+    expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([bundledRunnersDir(), home.plugins]);
   });
 
   it('keeps help cold: no Home, no plugin, no runner, and a footer that points to hsq plugins', async () => {

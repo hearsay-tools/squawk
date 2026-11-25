@@ -1,5 +1,5 @@
 import { mockRows } from './runner-mock-rows.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 /**
  * Backend-parity roll-up — the spec's hard rule made executable.
  *

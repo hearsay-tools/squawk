@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { registrationCollector, registrationCalls } from './split-registration.testkit.ts';
 import { expect, it } from 'vitest';
 import { CLEAN_EOF_REAP_RUNNERS, EOF_CLEANUP_RUNNERS, SHUTDOWN_GROUPS, shutdownCells } from './runner-shutdown.testkit.ts';

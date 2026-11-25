@@ -17,7 +17,7 @@ it.each([
   const script = `
     import { registerHooks } from 'node:module';
     registerHooks({ resolve(specifier, context, next) {
-      if (/(?:^|\\/)(?:serve-command|headless-run|runs\\/store|runners\\/built-in)\\.[jt]s$/.test(specifier)) {
+      if (/(?:^|\\/)(?:serve-command|headless-run|runs\\/store|plugin\\/loader|runners\\/[^/]+\\/(?:index|definition))\\.[jt]s$/.test(specifier)) {
         throw new Error('Unexpected heavy CLI import: ' + specifier);
       }
       return next(specifier, context);
@@ -44,9 +44,9 @@ it('renders runner help after registration even when imported before it', async 
   const { taskHelp } = await import('./task-cli/cli.ts');
   const { knownRunnerIds } = await import('./core/runner-registry.ts');
   expect(knownRunnerIds()).toEqual([]);
-  const { registerBuiltInRunners, sealBuiltInRunners } = await import('./runners/built-in.ts');
-  registerBuiltInRunners();
-  sealBuiltInRunners();
+  const { loadBundledRunners } = await import('./plugin/loader.ts');
+  await loadBundledRunners();
+  (await import('./core/runner-registry.ts')).sealRunners();
   expect(taskHelp('start')).toContain('claude | codex | opencode | pi | omp | antigravity');
 });
 

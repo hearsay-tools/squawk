@@ -3,13 +3,16 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { PluginHealthEntry, PluginsHealth } from '@open-mercato/cezar-contract';
 import { runPluginSetup, type PluginContributions, type SquawkPlugin } from './api.ts';
+import { bundledRunnerFolders, bundledRunnersDir } from './bundled-runners.ts';
 import { installPluginResolveHook } from './resolve-hook.ts';
 
 /**
  * The plugin loader (spec 2026-11-24-plugin-loader-and-runner-kit § 4). A plugin is one folder
  * whose `index.mjs` or `index.js` default-exports a setup function. The loader runs each folder's
  * setup through `runPluginSetup`, so a plugin that throws or collides commits nothing. A broken
- * plugin is skipped with one stderr warning and never stops boot.
+ * host plugin is skipped with one stderr warning and never stops boot. The bundled runners
+ * (`runners/<id>/index.ts`) load through the same setup first; a bundled runner that fails stops
+ * boot, because it is a defect of Squawk itself.
  */
 
 /** `bundled` ships inside Squawk; `host` comes from `<config>/plugins/`. */
@@ -115,6 +118,11 @@ function pluginFolders(dir: string, warn: (line: string) => void): string[] {
 async function loadOne(path: string): Promise<PluginContributions> {
   const entry = PLUGIN_ENTRY_FILES.map(file => join(path, file)).find(isFile);
   if (!entry) throw new PluginLoadFailure('missing-entry', `missing ${PLUGIN_ENTRY_FILES.join(' or ')}`);
+  return loadEntry(path, entry);
+}
+
+/** Import `entry`, the entry file of the plugin folder `path`, and run its setup. */
+async function loadEntry(path: string, entry: string): Promise<PluginContributions> {
   const entryModule = await import(pathToFileURL(entry).href).catch((error: unknown) => {
     throw new PluginLoadFailure('import', errorText(error));
   }) as { default?: unknown };
@@ -144,12 +152,38 @@ export async function loadPluginFolder({ dir, source, warn = line => { process.s
       warn(`[hsq] plugin "${name}" skipped: ${failure.error}`);
     }
   }
+  return addToReport(dir, loaded, failed);
+}
+
+function addToReport(dir: string, loaded: readonly LoadedPlugin[], failed: readonly FailedPlugin[]): PluginLoadReport {
   report = Object.freeze({
     folders: Object.freeze([...report.folders, dir]),
     loaded: Object.freeze([...report.loaded, ...loaded]),
     failed: Object.freeze([...report.failed, ...failed]),
   });
   return report;
+}
+
+/**
+ * Load the bundled runners under `dir` (default: the `runners/` folder of this Squawk copy) in
+ * display order, each through `runPluginSetup` like a host plugin, and add them to the report as
+ * `bundled`. A folder with no bundled runner, or a bundled runner that fails to import or to register, throws: Squawk shipped it, so
+ * the cockpit would miss a runner it promises, and boot stops instead of hiding the defect.
+ */
+export async function loadBundledRunners(dir: string = bundledRunnersDir()): Promise<PluginLoadReport> {
+  const folders = bundledRunnerFolders(dir);
+  // Squawk always ships its runners: none found means a broken build, never an empty cockpit.
+  if (folders.length === 0) throw new Error(`No bundled runner was found in ${dir}: Squawk ships runners/<id>/index.js for each runner; rebuild it.`);
+  installPluginResolveHook();
+  const loaded: LoadedPlugin[] = [];
+  for (const { id, path, entry } of folders) {
+    try {
+      loaded.push(Object.freeze({ name: id, source: 'bundled' as const, path, contributions: await loadEntry(path, entry) }));
+    } catch (error) {
+      throw new Error(`Bundled runner "${id}" failed to load: ${errorText(error)}`, { cause: error });
+    }
+  }
+  return addToReport(dir, loaded, []);
 }
 
 /**
