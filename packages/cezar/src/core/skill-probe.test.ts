@@ -4,11 +4,12 @@ import { type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
 import { spawnSessionLeader } from './session-process.ts';
 import { tmpdir } from 'node:os';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { nativeMockPath } from './native-mock.ts';
 import { profileEnv } from './agent-profiles.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { RunnerSkillCatalog, type SkillCatalogQuery } from './runner-skill-catalog.ts';
-import { skillProbe, type SkillDiscoveryOptions } from './skill-probe.ts';
+import { skillExecutable, skillProbe, type SkillDiscoveryOptions } from './skill-probe.ts';
 import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 
 // Every case runs over each runner id; the probe builds each one's child env through the registry.
@@ -94,4 +95,17 @@ describe.runIf(process.platform !== 'win32')('leader-first probe cleanup on ever
     await expect(probe).rejects.toThrow('lease bind failed');
     expect(() => process.kill(-child.pid!, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }));
   }, 5000); // bound: child starts, onSpawn throws, and cleanup kills and reaps the group.
+});
+
+describe('skillExecutable', () => {
+  it('resolves every built-in runner mock through nativeMockPath under HSQ_DRY_RUN=1', () => {
+    vi.stubEnv('HSQ_DRY_RUN', '1');
+    try {
+      for (const runner of BUILT_IN_RUNNER_IDS) {
+        expect(skillExecutable(runner)).toBe(nativeMockPath(runnerDefinition(runner).mock));
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

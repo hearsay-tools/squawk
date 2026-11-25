@@ -7,7 +7,7 @@ import { chmod, mkdtemp, rm } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
 import { Hono, type MiddlewareHandler } from 'hono';
@@ -70,6 +70,11 @@ function startFailureDetail(error: unknown): string {
   return text.replace(/\s+/g, ' ').trim().slice(0, 300) || 'unknown error';
 }
 
+/** The file URL of the running copy's tool client (`client.ts` under source, `client.js` when built). */
+export function runningToolClientUrl(moduleUrl: string = import.meta.url): string {
+  return new URL(extname(fileURLToPath(moduleUrl)) === '.ts' ? './client.ts' : './client.js', moduleUrl).href;
+}
+
 /** Separate from the cockpit and delegation APIs. No TCP listener or durable credentials. */
 export class CiToolController {
   private readonly capabilities = new Map<string, Capability>();
@@ -120,7 +125,7 @@ export class CiToolController {
       descriptor: { name: `cezar_ci_${randomUUID().replaceAll('-', '')}`, command: process.execPath, args: source ? ['--import', fileURLToPath(import.meta.resolve('tsx')), entry.replace(/\.js$/, '.ts')] : [entry] },
       // #781: the session carries the preview opt-in, so its runner admits and forwards exactly
       // the tools this session's adapter lists.
-      env: { ...Object.fromEntries(Object.entries(capability.env).filter((entry): entry is [string, string] => entry[1] !== undefined && squawkToolEnvNames(capability.env).includes(entry[0]))), ...productEnvEntries('TOOL_TOKEN', token), ...productEnvEntries('TOOL_SOCKET', this.address), ...Object.assign({}, ...registeredAgentTools().map(tool => tool.sessionEnv?.(capability.env) ?? {})) },
+      env: { ...Object.fromEntries(Object.entries(capability.env).filter((entry): entry is [string, string] => entry[1] !== undefined && squawkToolEnvNames(capability.env).includes(entry[0]))), ...productEnvEntries('TOOL_TOKEN', token), ...productEnvEntries('TOOL_SOCKET', this.address), ...productEnvEntries('TOOL_CLIENT', runningToolClientUrl()), ...Object.assign({}, ...registeredAgentTools().map(tool => tool.sessionEnv?.(capability.env) ?? {})) },
       revoke: () => { this.capabilities.delete(token); capability.lifetime.abort(); },
     };
   }

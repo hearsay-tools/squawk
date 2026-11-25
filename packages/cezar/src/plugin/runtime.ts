@@ -33,6 +33,7 @@ export { costWeightedTokens } from '../core/usage.ts';
 export { squawkToolEnvNames, squawkToolNames } from '../ci-wait/tool-names.ts';
 export { claudeSkillContent, openingContent, openingInput, skillOf, slashSkillPrompt, validSkillMessage } from '../core/skill-trigger.ts';
 export { skillLines, skillOutput, skillProbe } from '../core/skill-probe.ts';
+export { nativeMockPath } from '../core/native-mock.ts';
 export { skillPathPlugin, skillPathScope } from '../core/skill-path-scope.ts';
 export { formatModelIdentity, parseModelIdentity } from '../core/model-identity.ts';
 export { spawnModelProbe } from '../core/model-probe-spawn.ts';

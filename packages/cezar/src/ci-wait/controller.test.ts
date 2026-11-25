@@ -3,17 +3,17 @@ import './tools.testkit.ts';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/wait-factories.testkit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { stat, access, rm, mkdtemp, mkdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { type Wait } from '@open-mercato/cezar-contract/waits';
 import { squawkAskAnswerSchema, squawkCancelWaitAnswerSchema, squawkDoneAnswerSchema, squawkWaitAnswerSchema, type SquawkAskAnswer, type SquawkCancelWaitAnswer, type SquawkDoneAnswer } from '@open-mercato/cezar-contract/wait-tools';
 import { fork, spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { request } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { CiToolController, type SquawkToolHandlers, type WaitRegistration } from './controller.ts';
-import { callSquawkAsk, callSquawkCancelWait, callSquawkDone, callSquawkWait } from './client.ts';
+import { CiToolController, runningToolClientUrl, type SquawkToolHandlers, type WaitRegistration } from './controller.ts';
+import { callSquawkAsk, callSquawkCancelWait, callSquawkDone, callSquawkWait, registerRemoteSquawkTools } from './client.ts';
 
 const OBSOLETE_HUMAN_WAIT_KIND = 'human';
 
@@ -424,10 +424,22 @@ it('says nothing was created when no local tool capability exists before dispatc
 it('controller emits matching generated env names', async () => {
   vi.stubEnv('HSQ_PREVIEW', '1'); vi.stubEnv('HSQ_AUTOMATIONS', '0');
   const session = (await controller()).provision(handlers());
-  for (const suffix of ['TOOL_TOKEN', 'TOOL_SOCKET', 'PREVIEW', 'AUTOMATIONS']) {
+  for (const suffix of ['TOOL_TOKEN', 'TOOL_SOCKET', 'TOOL_CLIENT', 'PREVIEW', 'AUTOMATIONS']) {
     expect(session.env[`CEZ_${suffix}`]).toBeDefined();
     expect(session.env[`HSQ_${suffix}`]).toBe(session.env[`CEZ_${suffix}`]);
   }
   expect(session.env.CEZ_AUTOMATIONS).toBe('0');
   expect(session.env.CEZ_PREVIEW).toBe('1');
+});
+
+it('resolves the running tool client URL for source and built layouts and exports registerRemoteSquawkTools', async () => {
+  const url = (...parts: string[]) => pathToFileURL(join(sep, ...parts)).href;
+  expect(runningToolClientUrl(url('repo', 'src', 'ci-wait', 'controller.ts'))).toBe(url('repo', 'src', 'ci-wait', 'client.ts'));
+  expect(runningToolClientUrl(url('lib', 'squawk', 'dist', 'ci-wait', 'controller.js'))).toBe(url('lib', 'squawk', 'dist', 'ci-wait', 'client.js'));
+
+  const session = (await controller()).provision(handlers());
+  expect(session.env.HSQ_TOOL_CLIENT).toBe(new URL('./client.ts', import.meta.url).href);
+  expect(session.env.CEZ_TOOL_CLIENT).toBe(session.env.HSQ_TOOL_CLIENT);
+  const loaded = await import(session.env.HSQ_TOOL_CLIENT!) as { registerRemoteSquawkTools?: unknown };
+  expect(loaded.registerRemoteSquawkTools).toBe(registerRemoteSquawkTools);
 });

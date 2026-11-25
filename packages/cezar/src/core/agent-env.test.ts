@@ -399,6 +399,8 @@ describe('buildCommandEnv — a host command no backend runs (#781 dev servers)'
     CEZ_PREVIEW: '1',
     CEZ_TOOL_TOKEN: 'tool',
     CEZ_TOOL_SOCKET: '/tmp/s',
+    CEZ_TOOL_CLIENT: 'file:///parent/client.js',
+    HSQ_TOOL_CLIENT: 'file:///parent/client.js',
     CEZ_DELEGATION_TOKEN: 'del',
     CEZ_DELEGATION_URL: 'http://x',
   };
@@ -421,10 +423,16 @@ describe('buildCommandEnv — a host command no backend runs (#781 dev servers)'
   });
 
   it('never forwards session authority, whatever the escape hatches say', () => {
-    for (const extra of [{ CEZ_ENV_PASSTHROUGH: 'CEZ_TOOL_TOKEN,CEZ_DELEGATION_TOKEN' }, { CEZ_AGENT_ENV_FULL: '1' }]) {
+    for (const extra of [{ CEZ_ENV_PASSTHROUGH: 'CEZ_TOOL_TOKEN,CEZ_TOOL_CLIENT,HSQ_TOOL_CLIENT,CEZ_DELEGATION_TOKEN' }, { CEZ_AGENT_ENV_FULL: '1' }]) {
       const env = buildCommandEnv({ source: { ...source, ...extra } });
-      for (const name of ['CEZ_TOOL_TOKEN', 'CEZ_TOOL_SOCKET', 'CEZ_DELEGATION_TOKEN', 'CEZ_DELEGATION_URL']) expect(env[name], name).toBeUndefined();
+      for (const name of ['CEZ_TOOL_TOKEN', 'CEZ_TOOL_SOCKET', 'CEZ_TOOL_CLIENT', 'HSQ_TOOL_CLIENT', 'CEZ_DELEGATION_TOKEN', 'CEZ_DELEGATION_URL']) expect(env[name], name).toBeUndefined();
     }
+    const childWithoutExtra = buildChildEnv({ backend: 'claude', source: { ...source, CEZ_AGENT_ENV_FULL: '1' } });
+    expect(childWithoutExtra.CEZ_TOOL_CLIENT).toBeUndefined();
+    expect(childWithoutExtra.HSQ_TOOL_CLIENT).toBeUndefined();
+    const childWithExtra = buildChildEnv({ backend: 'claude', source, extraEnv: { HSQ_TOOL_CLIENT: 'file:///child/client.js', CEZ_TOOL_CLIENT: 'file:///child/client.js' } });
+    expect(childWithExtra.HSQ_TOOL_CLIENT).toBe('file:///child/client.js');
+    expect(childWithExtra.CEZ_TOOL_CLIENT).toBe('file:///child/client.js');
   });
 
   it('honors CEZ_ENV_PASSTHROUGH and the CEZ_AGENT_ENV_FULL escape hatch', () => {

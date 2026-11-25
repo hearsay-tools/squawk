@@ -331,6 +331,7 @@ function curateEnv(
     // inherited from a parent agent — even through passthrough or full-env mode.
     'CEZ_TOOL_TOKEN', 'HSQ_TOOL_TOKEN',
     'CEZ_TOOL_SOCKET', 'HSQ_TOOL_SOCKET',
+    'CEZ_TOOL_CLIENT', 'HSQ_TOOL_CLIENT',
     'CEZ_DELEGATION_TOKEN', 'HSQ_DELEGATION_TOKEN',
     'CEZ_DELEGATION_URL', 'HSQ_DELEGATION_URL',
     // The cockpit address (#774) names THIS run's cockpit and project. A nested headless

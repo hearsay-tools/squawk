@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { z as zod } from 'zod';
 import type { SquawkPlugin, SquawkPluginApi } from './api.ts';
 import type { AgentToolDefinition, CliCommandDefinition, RunnerDefinition, StepKindDefinition, WaitKindRow } from './index.ts';
 
@@ -134,7 +135,9 @@ describe('runPluginSetup', () => {
 });
 
 describe('@hearsay-tools/squawk/plugin', () => {
-  it('resolves to the plugin entry in tests', async () => {
-    await expect(import('@hearsay-tools/squawk/plugin')).resolves.toBeDefined();
+  it('resolves to the plugin entry in tests and re-exports z', async () => {
+    const plugin = await import('@hearsay-tools/squawk/plugin');
+    expect(plugin.z).toBe(zod);
+    expect(plugin.z.object({ ok: plugin.z.boolean() }).parse({ ok: true })).toEqual({ ok: true });
   });
 });
