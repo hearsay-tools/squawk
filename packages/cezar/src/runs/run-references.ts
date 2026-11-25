@@ -78,17 +78,46 @@ export function referencedPrDeclaration(run: RunRecord): number | undefined {
   return declared === refUrlNumber(run.pullRequestUrl) ? undefined : declared;
 }
 
-/** Prompt attribution survives declarations of follow-up issues. Bare hashes become issues
- * only after an issue signal; explicit PR prompts never acquire an invented issue identity. */
+const POLITENESS_PREFIX_RE = /^(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+|i\s+(?:want|would\s+like)\s+you\s+to\s+)/i;
+const SUBJECT_ACTION_RE = /^(?:please\s+)?(?:fix|resolve|address|implement|investigate|review|work(?:\s+on)?|handle|triage|repair|plan|refine|reproduce|debug|diagnose|check|process|follow\s+up(?:\s+on)?)\s+/i;
+const ISSUE_SUBJECT_REF_RE = /(https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/\d+|(?:[\w.-]+\/[\w.-]+)?#\d+|\d+)\b/i;
+const ACTION_SUBJECT_RE = new RegExp(`^((?:[a-z][a-z-]*\\s+){0,5})${ISSUE_SUBJECT_REF_RE.source}`, 'i');
+const DIRECT_SUBJECT_RE = new RegExp(`^((?:the\\s+)?(?:(?:github|fork|upstream)\\s+)?issue\\s*|(?:fork|upstream)\\s+)?${ISSUE_SUBJECT_REF_RE.source}`, 'i');
+const NON_SUBJECT_WORDS = new Set([
+  'pr', 'pull', 'pull-request', 'against', 'like', 'unlike', 'versus', 'vs', 'instead',
+  'see', 'from', 'after', 'before', 'while', 'for', 'with', 'without', 'about', 'into',
+  'onto', 'over', 'under', 'between', 'than', 'that', 'which', 'why', 'how', 'when',
+  'where', 'if', 'whether', 'and', 'or', 'but', 'not', 'no', 'related', 'similar',
+  'based', 'mentioned', 'referenced', 'linked', 'per',
+]);
+
+/** Extract the leading subject issue ref from a prompt, rejecting PR prompts and background mentions. */
+function promptSubjectIssue(task: string): { ref: string; explicitIssue: boolean } | undefined {
+  const stripped = task.trimStart().replace(POLITENESS_PREFIX_RE, '');
+  const action = SUBJECT_ACTION_RE.exec(stripped);
+  const match = action ? ACTION_SUBJECT_RE.exec(stripped.slice(action[0].length)) : DIRECT_SUBJECT_RE.exec(stripped);
+  if (!match) return undefined;
+  const words = (match[1] ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (action && words.some((word) => NON_SUBJECT_WORDS.has(word))) return undefined;
+  const ref = match[2]!;
+  const explicitIssue = words.at(-1) === 'issue';
+  // Bare unhashed digits ("Fix 2 bugs") are only an issue ref after the word "issue".
+  if (/^\d+$/.test(ref) && !explicitIssue) return undefined;
+  return { ref, explicitIssue };
+}
+
+/** Prompt attribution survives declarations of follow-up issues. An issue automation's own
+ * subject URL or an issue-led prompt stays primary; bare hashes become issues only after an
+ * issue signal, and explicit PR prompts or background mentions never lock in. */
 export function originatingIssue(run: RunRecord): number | undefined {
-  // Only an issue-led subject is stable attribution. Mentions inside comparisons or
-  // background instructions remain evidence, but an agent declaration may supersede them.
-  const prompt = run.task.trimStart()
-    .replace(/^(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+|i\s+(?:want|would\s+like)\s+you\s+to\s+)/i, '')
-    .replace(/^(?:please\s+)?(?:fix|resolve|address|implement|investigate|review|work(?:\s+on)?)\s+/i, '');
-  const subject = /^(?:(?:the\s+)?(?:(?:github|fork|upstream)\s+)?issue\s*|(?:fork|upstream)\s+)?(?:https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/\d+|(?:[\w.-]+\/[\w.-]+)?#?\d+)\b/i.exec(prompt);
+  if (run.automation?.event.startsWith('issue.')) {
+    const automated = extractTaskRefs(run.automation.githubUrl).issueNumber;
+    if (automated !== undefined) return automated;
+  }
+  const subject = promptSubjectIssue(run.task);
   if (!subject) return undefined;
-  const refs = extractTaskRefs(subject[0]);
+  const refs = extractTaskRefs(subject.explicitIssue ? `issue ${subject.ref}` : subject.ref);
+  if (subject.explicitIssue) return refs.issueNumber ?? refs.ambiguousNumber;
   return refs.issueNumber ?? ((run.issueNumber !== undefined || run.markerRefs?.issue !== undefined)
     ? refs.ambiguousNumber : undefined);
 }

@@ -1499,7 +1499,10 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
     'Fix the upstream issue #1200', 'Review the issue #1200',
     'Address upstream issue #1200', 'Investigate the GitHub issue #1200',
     'Could you fix issue #1200?', 'Can you please fix issue #1200?',
-    'Please could you review issue #1200?', 'I would like you to fix issue #1200'])(
+    'Please could you review issue #1200?', 'I would like you to fix issue #1200',
+    'Handle main CI failure https://github.com/hearsay-tools/cezarion/issues/1200 in hearsay-tools/cezarion.',
+    'Handle friction issue https://github.com/hearsay-tools/squawk/issues/1200 in hearsay-tools/squawk. Expected handling label: friction-auto.',
+    'Triage #1200', 'Work hearsay-tools/squawk#1200 to a ready PR with green CI.'])(
     'keeps the originating issue after filing a follow-up: %s', (task) => {
       const { store, run } = freshRun(task);
       store.updateRun(run.id, { issueNumber: 1200 });
@@ -1513,7 +1516,9 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
       expect(run.referencedIssueCandidates).toContain('https://github.com/open-mercato/cezar/issues/1216');
       store.eventLog.appendEvent(run.id, { type: 'result', result:
         'Working https://github.com/open-mercato/cezar/issues/1200' });
-      expect(run.referencedIssueUrl).toBe('https://github.com/open-mercato/cezar/issues/1200');
+      expect(run.referencedIssueUrl).toBe(task.includes('/issues/1200')
+        ? /https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/1200/.exec(task)![0]
+        : 'https://github.com/open-mercato/cezar/issues/1200');
       store.persistence.flush();
       expect(RunStore.open(dataDir).getRun(run.id)?.issueNumber).toBe(1200);
     });
