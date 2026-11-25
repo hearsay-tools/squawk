@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { githubRequestGate } from './github-request-gate.ts';
 import { refStatusQuery } from './github-ref-status-query.ts';
 import { mergedPullRequestChunk } from './github-merged-pr-chunk.ts';
+import { reviewerKey, reviewerRefSchema } from './github-reviewer-ref.ts';
 import { gh, githubContext, parseOwnerName, type GithubContext } from './github-cli.ts';
 import { canonicalRepoRef, discoverRepoHandle, forgetRepoHandle, forgettingNameOnMiss, resolveRepoHandle, sharedRepoHandle } from './github-repo-handle.ts';
 export { parseOwnerName } from './github-cli.ts';
@@ -1128,7 +1129,7 @@ export function __clearCommentsCacheForTests(): void {
 const itemCache = new Map<string, { at: number; data: Extract<GithubItemResponse, { available: true }> }>();
 
 function itemCacheKey(repoRoot: string, kind: 'issue' | 'pr', number: number): string {
-  return `${repoRoot}\0${kind}#${number}`;
+  return `${githubContext(repoRoot).key}\0${kind}#${number}`;
 }
 
 export function forgetGithubItem(repoRoot: string, kind: 'issue' | 'pr', number: number): void {
@@ -1426,7 +1427,7 @@ function mockGithubCommentCounts(kind: 'issue' | 'pr', numbers: number[]): Githu
   return { available: true, counts };
 }
 
-// Per-PR checks cache: keyed `repoRoot␀number`, same 60 s TTL as the list cache but BOUNDED. Lets
+// Per-PR checks cache: keyed `githubContext␀number`, same 60 s TTL as the list cache but BOUNDED. Lets
 // a repeated visible-window hydration within a minute serve cached glyphs instead of re-querying.
 const checksCache = new Map<string, { at: number; glyph: ChecksGlyph }>();
 const CHECKS_CACHE_MAX = 500;
@@ -1448,26 +1449,27 @@ export async function fetchGithubChecks(repoRoot: string, numbers: number[]): Pr
   const checks: Record<number, ChecksGlyph> = {};
   const misses: number[] = [];
   const now = Date.now();
+  const context = githubContext(repoRoot);
   for (const n of wanted) {
-    const hit = checksCache.get(`${repoRoot}\0${n}`);
+    const hit = checksCache.get(`${context.key}\0${n}`);
     if (hit && now - hit.at < CACHE_MS) checks[n] = hit.glyph;
     else misses.push(n);
   }
   if (misses.length === 0) return { available: true, checks };
   try {
-    const repoOut = await gh(repoRoot, ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner']);
+    const repoOut = await gh(repoRoot, ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], undefined, undefined, context);
     const ownerName = parseOwnerName(repoOut);
     if (!ownerName) return { available: false, reason: 'repository handle unavailable' };
     const runGraphql: GraphqlRunner = (query, variables) => {
       const args = ghGraphqlArgs(query, variables);
-      return gh(repoRoot, args);
+      return gh(repoRoot, args, undefined, undefined, context);
     };
     const fetched = await fetchPrChecks(runGraphql, ownerName.owner, ownerName.name, misses);
     for (const n of misses) {
       // Absent (unknown/closed PR) caches as `null` so a nonexistent number isn't re-queried.
       const glyph: ChecksGlyph = n in fetched ? fetched[n]! : null;
       checks[n] = glyph;
-      checksCache.set(`${repoRoot}\0${n}`, { at: now, glyph });
+      checksCache.set(`${context.key}\0${n}`, { at: now, glyph });
     }
     while (checksCache.size > CHECKS_CACHE_MAX) {
       const oldest = checksCache.keys().next().value;
@@ -1538,23 +1540,6 @@ export type GithubRefStatusData =
  *  contract rather than restated, because the cockpit caps its batches by the same number and a
  *  client that guessed high would have every chip in a batch 400 instead of losing its tail. */
 export const GH_REF_STATUS_MAX = REFERENCE_STATUS_MAX;
-
-/** A requested reviewer, as either connection spells them. `login` covers `User` and `Bot`, `slug`
- *  covers `Team`; `reviewerKey` folds them into one comparable string. */
-const reviewerRefSchema = z
-  .object({
-    __typename: z.string().nullish(),
-    login: z.string().nullish(),
-    slug: z.string().nullish(),
-  })
-  .nullish();
-
-/** One reviewer as a comparable key, or `null` when GitHub named nobody we can match on — which
- *  must never compare equal to another unnamed reviewer, hence `null` rather than a shared "". */
-function reviewerKey(ref: z.infer<typeof reviewerRefSchema>): string | null {
-  const name = ref?.login ?? ref?.slug;
-  return name ? `${ref?.__typename ?? '?'}:${name}` : null;
-}
 
 const ghRefStatusPrSchema = z
   .object({
@@ -2322,7 +2307,7 @@ function mockGithubRefStatus(prs: number[], issues: number[]): GithubRefStatusDa
  */
 function commentsCacheKey(repoRoot: string, kind: 'issue' | 'pr', number: number): string {
   // NUL separator: cannot appear in a filesystem path, so roots can never alias.
-  return `${repoRoot}\0${kind}#${number}`;
+  return `${githubContext(repoRoot).key}\0${kind}#${number}`;
 }
 
 function cachedGithubComments(key: string, refresh: boolean): ForgeCommentsData | undefined {
@@ -2657,19 +2642,19 @@ function mockGithubComments(kind: 'issue' | 'pr', number?: number): ForgeComment
 // ---- the driver -------------------------------------------------------------
 
 /**
- * Cached availability probe so `GET /api/health` never pays a full listing. Keyed by repo root:
+ * Cached availability probe so `GET /api/health` never pays a full listing. Keyed by GitHub context (root, host, account):
  * every registered project reads its own slot, so the boot project's constant health refresh can't
  * evict another project's answer (a single slot made `GET /automations` flap between "still being
- * checked" and available). One in-flight probe per root dedupes a burst of reads.
+ * checked" and available). One in-flight probe per context dedupes a burst of reads.
  */
 const DETECT_CACHE_MAX = 64;
 const detectCache = new Map<string, { at: number; result: ForgeAvailability }>();
 const detectInflight = new Map<string, Promise<ForgeAvailability>>();
 
-async function probeGithub(repoRoot: string): Promise<ForgeAvailability> {
+async function probeGithub(repoRoot: string, context: GithubContext): Promise<ForgeAvailability> {
   let result: ForgeAvailability;
   try {
-    await gh(repoRoot, ['repo', 'view', '--json', 'nameWithOwner'], 5_000);
+    await gh(repoRoot, ['repo', 'view', '--json', 'nameWithOwner'], 5_000, undefined, context);
     result = { available: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -2680,8 +2665,8 @@ async function probeGithub(repoRoot: string): Promise<ForgeAvailability> {
         : firstLine(message),
     };
   }
-  detectCache.delete(repoRoot); // re-insert so Map order tracks recency
-  detectCache.set(repoRoot, { at: Date.now(), result });
+  detectCache.delete(context.key); // re-insert so Map order tracks recency
+  detectCache.set(context.key, { at: Date.now(), result });
   while (detectCache.size > DETECT_CACHE_MAX) {
     const oldest = detectCache.keys().next().value;
     if (oldest === undefined) break;
@@ -2692,12 +2677,13 @@ async function probeGithub(repoRoot: string): Promise<ForgeAvailability> {
 
 async function detectGithub(repoRoot: string): Promise<ForgeAvailability> {
   if (productEnv('DRY_RUN') === '1') return { available: true };
-  const hit = detectCache.get(repoRoot);
+  const context = githubContext(repoRoot);
+  const hit = detectCache.get(context.key);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.result;
-  const pending = detectInflight.get(repoRoot);
+  const pending = detectInflight.get(context.key);
   if (pending) return pending;
-  const probe = probeGithub(repoRoot).finally(() => detectInflight.delete(repoRoot));
-  detectInflight.set(repoRoot, probe);
+  const probe = probeGithub(repoRoot, context).finally(() => detectInflight.delete(context.key));
+  detectInflight.set(context.key, probe);
   return probe;
 }
 
@@ -2723,7 +2709,7 @@ export const HEALTH_AVAILABILITY_TTL_MS = 10 * 60_000;
  */
 export function detectGithubCached(repoRoot: string): ForgeAvailability | null {
   if (productEnv('DRY_RUN') === '1') return { available: true };
-  const hit = detectCache.get(repoRoot);
+  const hit = detectCache.get(githubContext(repoRoot).key);
   const cached = hit?.result ?? null;
   const fresh = hit !== undefined && Date.now() - hit.at < HEALTH_AVAILABILITY_TTL_MS;
   if (!fresh) {
@@ -2806,10 +2792,10 @@ export function evictGithubProjectCaches(repoRoot: string): void {
     if (key.startsWith(`${repoRoot}:`)) mergeStateCache.delete(key);
   });
   commentsCache.forEach((_value, key) => {
-    if (key.startsWith(`${repoRoot}\0`)) commentsCache.delete(key);
+    if (key.startsWith(`${contextKey}\0`)) commentsCache.delete(key);
   });
   itemCache.forEach((_value, key) => {
-    if (key.startsWith(`${repoRoot}\0`)) itemCache.delete(key);
+    if (key.startsWith(`${contextKey}\0`)) itemCache.delete(key);
   });
 }
 
