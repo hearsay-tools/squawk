@@ -1,40 +1,15 @@
-import { memoizeRead } from './bounded-read-cache.ts';
-import { cachedWorktreeSizeBytes } from './worktree-size-cache.ts';
-import { readRepoRefs, forgetRepoRead } from './repo-read-cache.ts';
-import { runnerSkillsQuerySchema } from '@open-mercato/cezar-contract/runner-skills';
 import type { RunnerSkillCatalog } from '../core/runner-skill-catalog.ts';
-import { readRunnerSkills } from './runner-skills.ts';
-import { runCheckout, preparePublishCheckout, reclaimCheckoutError } from './run-checkout.ts';
+import { runCheckout, preparePublishCheckout } from './run-checkout.ts';
 import { adoptFallbackControl, protectFallbackRun, runArtifactDirectory } from './project-run-files.ts';
-import { deleteSavedWorkflow } from './workflow-files.ts';
 import { projectPaths, fallbackProjectWriteError } from '../project-paths.ts';
-import { productIdentity } from '../home/identity.ts';
-import { productEnv } from '../core/product-env.ts';
 import { reportsRoutes } from './reports-api.ts';
-import { writeMergedConfig } from './config-merge.ts';
-import { applyWorkspaceConfigPatch } from './workspace-config-patch.ts';
-import { retryAutomationLogReceipt } from './automation-log-retry.ts';
-import { automationCreateSchema, automationUpdateSchema, automationCheckRequestSchema, automationLogQuerySchema } from '@open-mercato/cezar-contract/automation-requests';
-import { planSchema, parseWorkflowSchema } from '@open-mercato/cezar-contract/workflow-requests';
-import { uiStateBody } from '@open-mercato/cezar-contract/ui-state-requests';
 import { queuedMessagePatchSchema, continueSchema, archiveSchema, openInSchema } from '@open-mercato/cezar-contract/run-requests';
-import { refreshQuery, browseQuerySchema, worktreeFilesQuerySchema } from '@open-mercato/cezar-contract/query-requests';
-import { mergeNumberParams, prChangesParams, prChangesQuery, mergeBodySchema } from '@open-mercato/cezar-contract/github-requests';
-import { gitCommitSchema, reclaimBodySchema, repoBranchSchema } from '@open-mercato/cezar-contract/repo-requests';
-import { setConfigSchema, setAgentConfigSchema } from '@open-mercato/cezar-contract/config-requests';
-import { saveWorkflowInputSchema as saveWorkflowSchema } from '@open-mercato/cezar-contract/workflows';
+import { worktreeFilesQuerySchema } from '@open-mercato/cezar-contract/query-requests';
+import { gitCommitSchema } from '@open-mercato/cezar-contract/repo-requests';
 import { patchRunInputSchema as patchRunSchema, messageInputSchema as messageSchema } from '@open-mercato/cezar-contract/runs';
-import { setWorkspaceConfigInputSchema as workspaceConfigUpdateSchema } from '@open-mercato/cezar-contract/workspace';
-import { reclaimRunParamsSchema } from '@open-mercato/cezar-contract/repo-requests';
-import { githubChecksQuerySchema } from '@open-mercato/cezar-contract/github-requests';
-import { githubRefsQuerySchema } from '@open-mercato/cezar-contract/github-requests';
-import { commitQuerySchema } from '@open-mercato/cezar-contract/query-requests';
 import { imageMimeType } from '@open-mercato/cezar-contract/image-path';
 import { providerForActiveRun } from '@open-mercato/cezar-contract/active-provider';
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
-import { isAbsoluteHostPath } from '../core/host-path.ts';
-import { resolveArchiveOnMerge, resolveGlobalArchiveOnMerge } from '../archive-on-merge-setting.ts';
-import type { AgentWebhooksResponse, SendAgentReportResponse, WorkspaceConfigResponse, ConfigResponse } from '@open-mercato/cezar-contract';
 export type { WorkspaceConfigResponse } from '@open-mercato/cezar-contract';
 import { permissionDecisionSchema } from '@open-mercato/cezar-contract/permissions';
 import { runIdParamSchema as permissionRunIdParamSchema } from '@open-mercato/cezar-contract/events';
@@ -44,70 +19,34 @@ import { createActivityRoutes, type ActivityServerDeps } from './activity-routes
 import { createRunnersRoutes } from './runners-routes.ts';
 import type { Home } from '../home/home.ts';
 import { createWorkspaceProjects, createWorkspaceProjectContexts, createTaskWebhooks, type WorkspaceProjects } from './workspace-projects.ts';
-import { subscribeRunFeed } from './run-event-feed.ts';
-import type { ApiRun, ArchivedRunsResponse, RunSummary, RunsSearchResponse } from '@open-mercato/cezar-contract';
+import type { ApiRun, ArchivedRunsResponse, RunSummary } from '@open-mercato/cezar-contract';
 import { latestSession } from '@open-mercato/cezar-contract/run-predicates';
-import { probeWritableDir } from './probe-writable-dir.ts';
 import { ARCHIVED_RUNS_PAGE_DEFAULT } from '@open-mercato/cezar-contract/run-limits';
-import { RUNS_SEARCH_PER_PROJECT_MAX, archivedRunsQuerySchema, createRunInputSchema, runSummariesQuerySchema, runsSearchQuerySchema } from '@open-mercato/cezar-contract/runs';
-import { workspaceEventsQuerySchema, type RunsIndexResponse } from '@open-mercato/cezar-contract/workspace-events';
-import { automationListQuerySchema } from '@open-mercato/cezar-contract/automations';
-import { localTimeZone } from '@open-mercato/cezar-contract/zoned-time';
+import { archivedRunsQuerySchema, createRunInputSchema, runSummariesQuerySchema } from '@open-mercato/cezar-contract/runs';
 import { DelegationService, type WorkerCleanupFactory } from '../delegation/service.ts';
 import { runRelationships } from './run-relationships.ts';
 import type { DelegationController } from '../delegation/provision.ts';
 import { delegationFailure } from '../delegation/routes.ts';
-import { githubItemParamsSchema } from '@open-mercato/cezar-contract/github';
 import { workerDestroyRequestSchema, workerEmptyRequestSchema, runRelationshipsSchema } from '@open-mercato/cezar-contract/delegation';
-import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { AutomationStore } from '../automations/store.ts';
-import { createAutomationService, onceCreateAnswer } from '../automations/service.ts';
-import { createAutomationToolService } from '../automations/tool-adapter.ts';
-import { GithubPoller } from '../automations/github-poller.ts';
-import { githubRepository } from '../automations/github-repository.ts';
-import { ProjectAutomationScheduler } from '../automations/scheduler.ts';
-import type { ScheduleRunnerHandle } from '../automations/schedule-runner.ts';
-import { launchAutomationRun, launchScheduledRun, reconcileAutomationReceipts } from '../automations/task-template.ts';
-import {
-  isGithubAutomation,
-} from '../automations/types.ts';
 import type { IncomingMessage } from 'node:http';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Hono, type Context, type Next } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { matchedRoutes } from 'hono/route';
 import { jsonZodValidator, paramZodValidator, queryZodValidator } from './validators.ts';
-import { registryEntry, sendAgentReport, TaskWebhooks } from '../runs/webhook.ts';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { z } from 'zod';
-import { repoPullInputSchema, deleteBranchesInputSchema } from '@open-mercato/cezar-contract/repo';
-import {
-  pinRunInputSchema,
-  archiveFinishedRequestSchema,
-  markAllReadRequestSchema,
-  notifyRunInputSchema,
-  type RunIndexEntry,
-} from '@open-mercato/cezar-contract/runs';
-import {
-  githubSearchQuerySchema,
-  githubProjectsQuerySchema,
-  githubListQuerySchema,
-  githubCommentCountsQuerySchema,
-} from '@open-mercato/cezar-contract/github';
-import { setWorkspaceUiStateInputSchema } from '@open-mercato/cezar-contract/workspace';
+import { TaskWebhooks } from '../runs/webhook.ts';
+import { pinRunInputSchema, archiveFinishedRequestSchema, markAllReadRequestSchema, notifyRunInputSchema } from '@open-mercato/cezar-contract/runs';
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
-import { openProjectInSchema } from '@open-mercato/cezar-contract/workspace';
 import { registeredRunnerId, registeredRunners, resolveRunnerId, runnerDefinition } from '../core/runner-registry.ts';
-import { REMOVED_RUNNER_IDS } from '../runs/legacy-run-rows.ts';
 import {
   attachmentFileParamSchema,
 } from '@open-mercato/cezar-contract/runs';
-import { agentWebhookParamsSchema, sendAgentReportInputSchema } from '@open-mercato/cezar-contract/projects';
-import { agentWebhook, agentWebhooks, taskWebhooks as taskWebhookList } from '../workspace/webhooks.ts';
+import { taskWebhooks as taskWebhookList } from '../workspace/webhooks.ts';
 import { environmentStamp, type detectEnvironment } from '../core/backend-detect.ts';
 import type { ContentBlock } from '../core/agent-runner.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
@@ -116,32 +55,12 @@ import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { createModelsRoutes } from './models-routes.ts';
 import { createProviderSignInRoutes } from './provider-sign-in-routes.ts';
 import { allUsage, currentUsage, onUsage } from '../core/process-usage.ts';
-import { loadWorkflows } from '../workflows/load.ts';
-import {
-  normalizeWorkflowDoc,
-  skillStackOf,
-  skillsToSteps,
-  stepsIssue,
-  workflowFileSchema,
-} from '../workflows/types.ts';
-import { planChain, slugify } from '../planner.ts';
 import { readHandoff, renderHandoffRecords } from '../handoff.ts';
-import type { RepoHandle, RunRecord, RunStore } from '../runs/store.ts';
-import {
-  HistoryCursorError,
-  deriveRunContextEvents,
-  readRunHistoryPage,
-  validateLiveCursor,
-} from '../runs/event-history.ts';
-import { ARCHIVED_WINDOW, readRunIndexFromDisk, searchRunIndexFromDisk } from '../runs/run-index.ts';
-import { searchTokens } from '@open-mercato/cezar-contract/run-search';
+import type { RunRecord, RunStore } from '../runs/store.ts';
+import { HistoryCursorError, deriveRunContextEvents, readRunHistoryPage } from '../runs/event-history.ts';
+import { ARCHIVED_WINDOW } from '../runs/run-index.ts';
 import { ownPullRequestNumbers } from '../runs/pull-requests.ts';
-import { ColdRepoHandles } from './cold-repo-handles.ts';
-import { isV2WireEventType } from '../runs/ui-event-sink.ts';
-import {
-  runEventsQuerySchema, runHistoryQuerySchema,
-  runIdParamSchema,
-} from '@open-mercato/cezar-contract/events';
+import { runHistoryQuerySchema, runIdParamSchema } from '@open-mercato/cezar-contract/events';
 import { resolveAttachmentPathAsync } from '../workflows/attachment-path.ts';
 import { artifactParamsSchema, fileLinkQuerySchema } from '@open-mercato/cezar-contract/artifacts';
 import { listArtifacts, readArtifact, readArtifactMetadata } from '../artifacts/store.ts';
@@ -150,58 +69,36 @@ import { toPastedContent, type PastedContent } from '../workflows/pasted-content
 import { isUntouchedCancelledRun } from '../workflows/run/run-guards.ts';
 import { worktreeDiff } from '../git-worktree.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
-import { isReclaimable, reclaimWorktree, reclaimWorktrees, selectReclaimableWorktrees } from '../runs/retention.ts';
-import { getCommit, getDiff, getRepoInfo, getStatus, type RepoInfo } from './git.ts';
+import { getRepoInfo, type RepoInfo } from './git.ts';
 import { createHealthCache, HEALTH_TTL_MS } from './health-cache.ts';
-import { COMMIT_FORMATS, FILE_FORMATS, negotiate } from './accept-negotiation.ts';
+import { FILE_FORMATS, negotiate } from './accept-negotiation.ts';
 import { authorityOfHost, authorityOfOrigin, hostnameOfHost, hostnameOfOrigin } from './host-authority.ts';
 import { pluginHealth, pluginLoadReport } from '../plugin/loader.ts';
 import { createBackendChecks } from './backend-checks.ts';
-import { createGithubBranchForge } from './repo-branch-forge.ts';
-import { classifyInputFor, deleteBranches, forgetRepoBranches, readRepoBranchCounts, readRepoBranches, type BranchForge, type ClassifyProject } from './repo-branches.ts';
-import { claimRepoGitMutation, localPullBranches, pullRepoCheckout } from './repo-pull.ts';
-import {
-  collectChanges,
-  collectCommitChanges,
-  collectRunCommits,
-  commitAll,
-  createOrSwitchBranch,
-  pushCurrentBranch,
-  readWorktreePath,
-} from './git-changes.ts';
-import { healthConfig, loadConfig, resolveWorktreeRetention, type CezConfig } from '../config.ts';
-import { reportWorktreeCommands } from '../worktree-setup.ts';
-import { readConfigFile, writeConfigFile } from '../agent-config/files.ts';
-import { readAgentModelDefaults } from '../agent-config/models.ts';
-import { listAgentConfig } from '../agent-config/service.ts';
-import { findConfigFile } from '../agent-config/catalog.ts';
-import { defaultWorkspaceConfig, loadWorkspaceConfig, mergeWriteWorkspaceConfig, effectiveComposerDefault, type WorkspaceConfig } from '../workspace/config.ts';
+import { type BranchForge } from './repo-branches.ts';
+import { collectChanges, collectCommitChanges, collectRunCommits, commitAll, pushCurrentBranch, readWorktreePath } from './git-changes.ts';
+import { healthConfig, loadConfig } from '../config.ts';
+import { defaultWorkspaceConfig, loadWorkspaceConfig, mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { DEFAULT_AGENT_ACCOUNT_ID, defaultAgentAccountStore, loadAgentAccounts, type AgentAccount } from '../workspace/agent-accounts.ts';
 import { defaultAgentProfile, listAgentProfiles, resolveStoredProfile, type ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
 import { profileEnv } from '../core/agent-profiles.ts';
 import { shellQuote, withEnvPrefix } from '../core/shell-env.ts';
 import { resumeCommand } from '../core/runner-cli.ts';
-import { type ProjectListEntry } from '../workspace/projects.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-import { mergeWriteWorkspaceUiState, readWorkspaceUiState } from '../workspace/ui-state.ts';
 import { type CloneRunner } from './checkout.ts';
 import { type CommandRunner } from './create-project.ts';
-import { createWorkspaceRunFeed, currentRecord, type RunWrite } from './workspace-run-feed.ts';
+import { createWorkspaceRunFeed } from './workspace-run-feed.ts';
 import { ProjectContexts, type ProjectContext, type ProjectRunManager, type RunManagerFactory } from './project-context.ts';
 
-import { mergeWriteProjectUiState, readUiState } from '../ui-state.ts';
-import { expandTilde } from '../paths.ts';
 import { isLoopbackHostHeader, resolveCapabilities } from './capabilities.ts';
 import type { SocketHub, WsUpgradeVerdict } from './ws.ts';
 import type { PreviewHost } from '../preview/host.ts';
-import { browseDirectory, resolveBrowseRoot } from './fs-browse.ts';
-import { resolveForge, forgeWebRoot, resolveForgeRoot, GithubPrNotFoundError, GH_CHECKS_MAX, GH_REF_STATUS_MAX, type ForgeFactory } from './forge/index.ts';
-import { refNumberFromUrl } from '@open-mercato/cezar-contract/run-search';
-import { projectAdmissionRefusal, withProjectAdmission, type CockpitOwnership } from './cockpit-ownership.ts';
+import { resolveForge, forgeWebRoot, resolveForgeRoot, type ForgeFactory } from './forge/index.ts';
+import { withProjectAdmission, type CockpitOwnership } from './cockpit-ownership.ts';
 import { prepareProjects } from '../project-migration/auto.ts';
 import { openInTerminal } from './open-in-terminal.ts';
 import { freshCliHandoff, openRunApp, openRunCli, openRunDefaultApp } from './open-in-targets.ts';
-import { agentCliRunner, detectOpenTargets, openFileInDefaultApp, openInApp } from './open-in-app.ts';
+import { agentCliRunner, openFileInDefaultApp, openInApp } from './open-in-app.ts';
 import { ProviderRuntimeAuthObserver } from './provider-auth-runtime.ts';
 import { continueRunProviders } from './provider-action-gate.ts';
 import { attachProjectWebhooks, createBootContext, createProviderStatus, resolveServerDeps, watchProviderRuntimeAuth } from './server-deps.ts';
@@ -228,7 +125,12 @@ import { compression, createStaticAssets, isFile } from './static-assets.ts';
 import { registerBrandFileRoutes } from './brand-file-routes.ts';
 import { createProjectsRoutes } from './projects-routes.ts';
 import { createAgentProfilesRoutes, createProvidersRoutes } from './providers-routes.ts';
-import { hostedProfileRefusal, streamSSENoBuffer, UI_STATE_BODY_LIMIT, WorkspaceEventBus, type ProjectApiEnv } from './server-types.ts';
+import { hostedProfileRefusal, WorkspaceEventBus, type ProjectApiEnv } from './server-types.ts';
+import { createAutomationsRouteBundles } from './automations-routes.ts';
+import { createGithubRoutes } from './github-routes.ts';
+import { createOpenTargetsRoutes, createRepoRoutes, createWorktreesRoutes } from './repo-routes.ts';
+import { createFsBrowseRoutes, createRunsIndexRoutes, createWorkspaceConfigRoutes, createWorkspaceEventsRoutes } from './workspace-routes.ts';
+import { createAgentConfigRoutes, createAgentWebhooksRoutes, createConfigRoutes, createPlanRoutes, createSkillsRoutes, createSseRoutes, createUiStateRoutes, createWorkflowsRoutes } from './project-settings-routes.ts';
 export interface ServerDeps extends ActivityServerDeps {
   home: Home;
   /** Per-repository forge injection for embedded servers and tests. */
@@ -384,7 +286,6 @@ export function projectRouteManifest(app: Hono): ProjectRouteInfo[] {
 }
 
 /** 409 body for every automations route while GitHub automations are off (#801). */
-const AUTOMATIONS_OFF = 'Automations are disabled — unset CEZ_AUTOMATIONS or set it to 1 and restart to enable them';
 
 /** 404 body for a run whose row is in runs.db but whose record this Squawk cannot decode (#779). */
 const UNREADABLE_RUN_ERROR = `this run could not be read by this Squawk: its record in runs.db does not fit this version (a newer Squawk may have written it). It is left in the database untouched.`;
@@ -488,17 +389,6 @@ export function createApp(deps: ServerDeps) {
   const serverGeneration = randomUUID();
   const checkoutProgress = new CheckoutProgressCache();
   const workspaceEvents = deps.workspaceEvents ?? new WorkspaceEventBus();
-  const emitAutomationChange = (
-    project: ProjectContext,
-    automationId: string,
-    revision: number,
-    deleted = false,
-  ) => workspaceEvents.emit('automation-change', {
-    project: project.id,
-    automationId,
-    revision,
-    ...(deleted ? { deleted: true } : {}),
-  });
   const automationsChanged = () => deps.automationsChanged?.();
 
   const providerRuntimeAuth = deps.providerRuntimeAuth
@@ -1004,486 +894,29 @@ export function createApp(deps: ServerDeps) {
   // correlation token, echoed on every event so two tabs cloning at once never
   // render each other's progress.
 
-  // ---- workspace settings (multi-project spec, step 2.7) -------------------
-  // WORKSPACE-level routes: single-mount (never mirrored under /api/p/),
-  // same-origin. The config routes carry the settings UI's slice of
-  // `~/.cezar/config.json` — global knobs only; the registry stays on
-  // /api/projects above, and schemaVersion (a migration cursor, not a
-  // setting) is deliberately omitted.
-  const workspaceConfigBody = (config: WorkspaceConfig): WorkspaceConfigResponse => ({
-    browseRoot: config.browseRoot,
-    projectsDir: config.projectsDir,
-    archiveOnMerge: config.archiveOnMerge ?? null,
-    effectiveArchiveOnMerge: resolveGlobalArchiveOnMerge(config).enabled,
-    archiveOnMergeSource: resolveGlobalArchiveOnMerge(config).source,
-    composerDefaults: {
-      autonomous: config.composerDefaults.autonomous ?? null,
-      worktree: config.composerDefaults.worktree ?? null,
-      inheritedAutonomous:
-        productEnv('AUTONOMOUS_DEFAULT') === '0'
-          ? false
-          : productEnv('AUTONOMOUS_DEFAULT') === '1'
-            ? true
-            : 'source-dependent',
-      inheritedWorktree: effectiveComposerDefault(
-        undefined,
-        productEnv('WORKTREE_DEFAULT'),
-        true,
-      ),
-    },
-    resources: {
-      maxParallel: config.resources.maxParallel,
-      maxMonitoringSessions: config.resources.maxMonitoringSessions,
-      monitoringWakeIntervalMinutes: config.resources.monitoringWakeIntervalMinutes,
-      autoResumeOnUsageLimit: config.resources.autoResumeOnUsageLimit,
-      memoryLimitMb: config.resources.memoryLimitMb,
-      worktreeRetentionDefault: config.resources.worktreeRetentionDefault,
-    },
-    // SPREAD, never `runner: maybeUndefined`: hono would type the key as always-present while
-    // `JSON.stringify` drops it, which is the exact drift `contract-parity` catches. And absent has
-    // to keep meaning "no opinion" here, or the fallback collapses into "always claude".
-    agentDefaults: {
-      ...(config.agentDefaults.runner !== undefined ? { runner: config.agentDefaults.runner } : {}),
-      ...(config.agentDefaults.models !== undefined ? { models: config.agentDefaults.models } : {}),
-    },
+  const workspaceConfigRoutes = createWorkspaceConfigRoutes({
+    home: deps.home,
+    semaphore: deps.semaphore,
+    archiveOnMergeChanged: deps.archiveOnMergeChanged,
   });
-  // ---- chained family: workspace settings + GUI prefs (workspace-level) ----
-  const workspaceConfigRoutes = new Hono<ProjectApiEnv>()
-    .get('/workspace/config', async (c) => c.json(workspaceConfigBody(await loadWorkspaceConfig(deps.home.workspaceConfig))))
 
-    .put('/workspace/config', jsonZodValidator(() => workspaceConfigUpdateSchema, { runners: { ids: ['agentDefaults.runner'], keys: ['agentDefaults.models'] } }), async (c) => {
-      const parsed = { data: c.req.valid('json') };
-      const { browseRoot, projectsDir, archiveOnMerge, resources } = parsed.data;
-      for (const [configuredRoot, create] of [
-        [browseRoot, false],
-        [projectsDir, true],
-      ] as const) {
-        if (configuredRoot === undefined) continue;
-        // Validated ON CHANGE, never at load (spec): browse roots must already
-        // exist; checkout roots use `mkdir -p`. Both get a real write probe.
-        // Any failure → 400 and NO change persisted.
-        const expanded = expandTilde(configuredRoot);
-        if (!isAbsoluteHostPath(expanded)) return c.json({ error: `not writable: ${configuredRoot} is not an absolute path` }, 400);
-        if (!create) {
-          try {
-            if (!(await stat(expanded)).isDirectory()) {
-              return c.json({ error: `browse folder is not a directory: ${configuredRoot}` }, 400);
-            }
-          } catch (err) {
-            if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-              return c.json({ error: `browse folder does not exist: ${configuredRoot}` }, 400);
-            }
-            return c.json({ error: `browse folder unavailable: ${err instanceof Error ? err.message : String(err)}` }, 400);
-          }
-        }
-        const probeError = await probeWritableDir(expanded, create);
-        if (probeError !== null) return c.json({ error: `not writable: ${probeError}` }, 400);
-      }
-      let written: WorkspaceConfig;
-      try {
-        written = await mergeWriteWorkspaceConfig((config) => {
-          applyWorkspaceConfigPatch(config, parsed.data);
-        }, deps.home);
-      } catch (err) {
-        // e.g. a read-only home — nothing was persisted (atomic tmp+rename).
-        return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
-      }
-      if (archiveOnMerge !== undefined) deps.archiveOnMergeChanged?.();
-      // A resource change takes effect WITHOUT a restart: refresh the shared
-      // semaphore's in-memory snapshot and pump every manager (step 2.5's hook).
-      if (resources !== undefined) await deps.semaphore?.refresh();
-      return c.json(workspaceConfigBody(written));
-    })
+  const fsBrowseRoutes = createFsBrowseRoutes(workspaceBrowseRoot);
+  const skillsRoutes = createSkillsRoutes({ home: deps.home, capabilities, skillCatalog, resolveWorkspaceProfile });
+  const uiStateRoutes = createUiStateRoutes();
+  const workflowsRoutes = createWorkflowsRoutes();
+  const planRoutes = createPlanRoutes({ home: deps.home, skillCatalog, providerActionError, resolveWorkspaceProfile });
 
-    // Global GUI state (`~/.cezar/ui-state.json`) — same parse/key-cap/shallow-
-    // merge semantics as the per-repo /api/v1/ui-state route below (the shared half
-    // is `uiStateBodySchema`), but backed by the workspace file.
-    .get('/workspace/ui-state', async (c) => c.json(await readWorkspaceUiState(deps.home.workspaceUiState, deps.home)))
-
-    // The tighter body cap rides on `use` rather than inline on the route: `bodyLimit` is typed
-    // as a bare MiddlewareHandler, and passing one to `.put()` collapses the route's schema, so
-    // the PUT went missing from `AppType` and `hc` could not see its body at all. `use` runs at
-    // the same point (before the handler, so the cap still precedes any read) and leaves the
-    // chain's type accumulation alone. Method-agnostic here, which the GET does not mind.
-    .use('/workspace/ui-state', bodyLimit({ maxSize: UI_STATE_BODY_LIMIT }))
-
-    .put('/workspace/ui-state', jsonZodValidator(setWorkspaceUiStateInputSchema, { runners: { strictKeys: { path: 'dismissedProviderAuthFailures', also: REMOVED_RUNNER_IDS } } }), async (c) => {
-      const parsed = { data: c.req.valid('json') };
-      try {
-        return c.json(
-          await mergeWriteWorkspaceUiState((state) => ({
-            ...state,
-            ...parsed.data,
-          }), deps.home),
-        );
-      } catch (err) {
-        // A read-only home degrades to an unsaved pref, never a crash.
-        return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
-      }
-    });
-
-  // Partial updates only — absent keys stay untouched. Bounds mirror the
-  // workspace schema (src/workspace/config.ts, step 1.2) exactly, so a value
-  // this route accepts can never be degraded away by the next load's `.catch`.
-
-  // ---- chained family: filesystem browse (workspace-level) ----
-  const fsBrowseRoutes = new Hono<ProjectApiEnv>()
-    .get(
-      '/fs/browse',
-      queryZodValidator(browseQuerySchema),
-      async (c) => {
-        const query = c.req.valid('query');
-        const root = resolveBrowseRoot(await workspaceBrowseRoot());
-        const result = await browseDirectory({
-          root,
-          path: query.path,
-          showHidden: query.showHidden === '1',
-        });
-        if (!result.ok) return c.json({ error: result.error }, result.status);
-        return c.json(result.body);
-      },
-    );
-  // ---- chained family: skills (project-scoped) ----
-  const skillsRoutes = new Hono<ProjectApiEnv>()
-    .get('/runner-skills', queryZodValidator(runnerSkillsQuerySchema, { runners: { ids: ['runner'] } }), async c => {
-      if (c.req.valid('query').account !== undefined && !capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
-      const result = await readRunnerSkills(c.req.valid('query'), c.get('project').root, deps.home, skillCatalog, resolveWorkspaceProfile);
-      if ('error' in result) return c.json(result, 400);
-      return c.json(result);
-    });
-
-  // ---- chained family: GUI prefs / ui-state (project-scoped) ----
-  const uiStateRoutes = new Hono<ProjectApiEnv>()
-    .get('/ui-state', async (c) => c.json(await readUiState(c.get('project').root)))
-
-    // On `use`, not inline on the route — see the workspace ui-state PUT above.
-    .use('/ui-state', bodyLimit({ maxSize: UI_STATE_BODY_LIMIT }))
-
-    .put('/ui-state', jsonZodValidator(uiStateBody), async (c) => {
-      // `.passthrough()` keeps unknown prefs, but a
-      // single request may not stuff an unbounded key set (#429) — the shared
-      // schema+cap half of both ui-state routes lives in `uiStateBody`.
-      const patch = c.req.valid('json');
-      try {
-        return c.json(await mergeWriteProjectUiState(c.get('project').root, (current) => ({ ...current, ...patch })));
-      } catch (err) {
-        return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
-      }
-    });
-
-  // ---- chained family: workflows (project-scoped) --------------------------
-  // One chained expression, mounted by `createApp` into BOTH the legacy `api`
-  // table and the versioned `v1` one — see `healthRoutes` for why the chain
-  // shape (not the statement shape) is what carries the types.
-  const workflowsRoutes = new Hono<ProjectApiEnv>()
-    .get('/workflows', async (c) => c.json(await loadWorkflows(c.get('project').root)))
-
-    // Save an approved plan as a reusable chain (spec 008): YAML in
-    // `.ai/cezar/workflows/<slug>.yaml` — from then on it's in the dropdown
-    // like any other workflow.
-    .post('/workflows', jsonZodValidator(saveWorkflowSchema, { runners: { ids: ['steps.*.runner'] } }), async (c) => {
-      const { root: repoRoot } = c.get('project');
-      const parsed = { data: c.req.valid('json') };
-      const steps = parsed.data.steps ?? skillsToSteps(parsed.data.skills ?? []);
-      const issue = stepsIssue(steps);
-      if (issue) return c.json({ error: issue }, 400);
-      const slug = slugify(parsed.data.name) || 'chain';
-      const dir = join(projectPaths(repoRoot).write, 'workflows');
-      const path = join(dir, `${slug}.yaml`);
-      // Pure skill stacks are written in the portable compact form (spec 012) —
-      // `name` + `skills:` — so the file imports cleanly in any repo.
-      const stack = skillStackOf(steps);
-      const doc = {
-        name: parsed.data.name,
-        ...(parsed.data.description ? { description: parsed.data.description } : {}),
-        ...(stack ? { skills: stack } : { steps }),
-      };
-      try {
-        await mkdir(dir, { recursive: true });
-        // `wx` = fail if the file exists — no silent overwrite of a chain.
-        await writeFile(path, stringifyYaml(doc), {
-          encoding: 'utf8',
-          flag: parsed.data.overwrite ? 'w' : 'wx',
-        });
-      } catch (err) {
-        if (err instanceof Error && 'code' in err && err.code === 'EEXIST') {
-          return c.json({ error: `workflow file already exists: ${path}`, exists: true }, 409);
-        }
-        const message = err instanceof Error ? err.message : String(err);
-        return c.json({ error: message }, 500);
-      }
-      return c.json({ path, name: parsed.data.name }, 201);
-    })
-
-    // Delete saved workflows only; built-ins always remain (spec 012).
-    .delete('/workflows/:name', async (c) => {
-      const result = await deleteSavedWorkflow(c.get('project').root, c.req.param('name'));
-      if ('error' in result) return c.json({ error: result.error }, result.status);
-      return c.json({ ok: true, path: result.path });
-    })
-
-    // Import support for the builder (spec 012): parse + validate a pasted
-    // workflow YAML (either form) and hand back the normalized definition. The
-    // server owns YAML parsing — the GUI stays dependency-free.
-    .post('/workflows/parse', jsonZodValidator(parseWorkflowSchema), async (c) => {
-      const parsed = { data: c.req.valid('json') };
-      let raw: unknown;
-      try {
-        raw = parseYaml(parsed.data.yaml);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return c.json({ error: `not valid YAML: ${message}` }, 400);
-      }
-      const doc = workflowFileSchema.safeParse(raw);
-      if (!doc.success) {
-        return c.json({ error: doc.error.issues.map((i) => i.message).join('; ') }, 400);
-      }
-      const normalized = normalizeWorkflowDoc(doc.data);
-      const issue = stepsIssue(normalized.steps);
-      if (issue) return c.json({ error: issue }, 400);
-      return c.json(normalized);
-    });
-
-  // ---- chained family: plan (project-scoped) ----
-  const planRoutes = new Hono<ProjectApiEnv>()
-    .post('/plan', jsonZodValidator(planSchema), async (c) => {
-      const { root: repoRoot, manager } = c.get('project');
-      const parsed = { data: c.req.valid('json') };
-      const planner = resolveRunnerId((await loadConfig(repoRoot, deps.home)).defaultRunner);
-      const blocked = await providerActionError([planner], { repoRoot, picks: { [planner]: parsed.data.agentProfile } });
-      if (blocked) return c.json({ error: blocked }, 409);
-      const badProfile = await agentProfileRefusal(resolveWorkspaceProfile, planner, parsed.data.agentProfile);
-      if (badProfile) return c.json({ error: badProfile.error }, badProfile.status);
-      return c.json(await planChain(repoRoot, parsed.data.task, skillCatalog, deps.home, manager.createRunner, parsed.data.agentProfile));
-    });
-
-  // ---- GitHub automations --------------------------------------------------
-
-  /**
-   * One manual "test filter" check, in server memory only.
-   *
-   * Declared here rather than inferred from `contract/src/automations.ts`: the contract's
-   * `automationCheckSchema` is checked against what this route ANSWERS
-   * (`contract-parity.automations.test.ts`), and a schema that annotated the handler it is
-   * compared with would be true by construction.
-   */
-  type ManualCheck = {
-    id: string;
-    automationId: string;
-    mode: 'preview' | 'execute';
-    status: 'queued' | 'running' | 'complete' | 'error';
-    createdAt: string;
-    completedAt?: string;
-    matches?: number;
-    truncated?: boolean;
-    error?: string;
-  };
-  const manualChecks = new Map<string, ManualCheck>();
-
-  /**
-   * The automations gate (#801): with `CEZ_AUTOMATIONS=0`, every route of the feature
-   * answers 409 before touching a store, a lease or GitHub.
-   *
-   * Written as MIDDLEWARE rather than a line in each handler so the family cannot drift: a route
-   * added to either chain below inherits the gate from its path, where a per-handler check is one
-   * omission away from an ungated endpoint.
-   *
-   * Registered against EXPLICIT paths, never `use('*')`. Both chains are mounted with
-   * `.route('/', …)` alongside a dozen unrelated sub-apps, and `route()` re-registers a sub-app's
-   * middleware under the mount prefix — so a `'*'` here would gate the entire `/api/v1` surface,
-   * including `/health`. The two-line pairing (`/automations` and `/automations/*`) is what makes
-   * a path match both the collection and everything under it.
-   */
-  const requireAutomations = async (c: Context, next: Next) => {
-    if (!capabilities().automations) return c.json({ error: AUTOMATIONS_OFF }, 409);
-    await next();
-  };
-
-  /** The schedule runner for a route's project: launches into that project's own run manager. */
-  const scheduleHandle = (project: ProjectContext): ScheduleRunnerHandle => {
-    const timeZone = localTimeZone();
-    return {
-      projectId: project.id,
-      store: project.automationStore,
-      timeZone,
-      launch: (definition, occurrence, receiptId) => launchScheduledRun({
-        root: project.root,
-        manager: project.manager,
-        store: project.store,
-        definition,
-        occurrence,
-        receiptId,
-        projectName: basename(project.root),
-        timeZone,
-      }),
-      onChange: (automationId, revision) => emitAutomationChange(project, automationId, revision),
-      // A route's write settles a crash-left reservation first, as the timer does (#1465).
-      reconcile: async () => { reconcileAutomationReceipts(project.automationStore, project.store); },
-    };
-  };
-
-  /** The automations family's behavior, shared with the session tools (#1465). */
-  const automationService = createAutomationService({ home: deps.home,
-    timeZone: localTimeZone,
-    discovery: { models: modelCatalog, providers: () => providerStatus() },
-    scheduleHandle: (project) => scheduleHandle(project as ProjectContext),
-    emitChange: (project, automationId, revision, deleted) => emitAutomationChange(project as ProjectContext, automationId, revision, deleted),
-    changed: automationsChanged,
-    // Awaits the driver's settled probe (per-repo cache + in-flight dedupe, 5 s timeout, never
-    // throws): a "still being checked" answer would leave the cockpit's GitHub option disabled
-    // because it does not refetch when the probe completes. `/health` keeps `detectCached`.
-    githubAvailability: async (root) => {
-      const forge = resolveProjectForge(await getRepoInfo(root));
-      return forge ? forge.detect() : { available: false, reason: 'No GitHub remote is configured' };
-    },
-    hasGithubRemote: async (root) => Boolean(resolveProjectForge(await getRepoInfo(root))),
+  const { automationsRoutes, automationChecksRoutes } = createAutomationsRouteBundles({
+    home: deps.home,
+    capabilities,
+    modelCatalog,
+    providerStatus,
+    bootContext,
+    contexts,
+    workspaceEvents,
+    automationsChanged,
+    resolveProjectForge,
   });
-  // #1465: every project's manager gets the schedule tools over this service. A manager reads
-  // them at call time, so a session recovered before its project's context finished building
-  // reaches them once this runs. The tools themselves are disabled by CEZ_AUTOMATIONS=0.
-  const attachAutomationTools = (project: ProjectContext) => project.manager.setAutomationTools?.(
-    createAutomationToolService(automationService, project, { timeZone: localTimeZone }),
-  );
-  attachAutomationTools(bootContext);
-  for (const id of contexts.ids()) {
-    const ctx = contexts.peek(id);
-    if (ctx) attachAutomationTools(ctx);
-  }
-  contexts.onContextBuilt(attachAutomationTools);
-
-  // ---- chained family: GitHub automations (project-scoped) ----
-  // Every handler below reads `c.get('project')` — the definitions, their runtime state and the
-  // execution log are per-project files — so the family is project-scoped and mounted with the
-  // rest of the mirrored table. The one exception is the manual-check read, which touches no
-  // project at all; it is its own workspace-level family below.
-  const automationsRoutes = new Hono<ProjectApiEnv>()
-    .use('/automations', requireAutomations)
-    .use('/automations/*', requireAutomations)
-    .use('/automation-log', requireAutomations)
-    .use('/automation-log/*', requireAutomations)
-    .get('/automations', queryZodValidator(automationListQuerySchema), async (c) => {
-      return c.json(await automationService.list(c.get('project'), c.req.valid('query')));
-    })
-
-    .post('/automations', jsonZodValidator(() => automationCreateSchema, { runners: { ids: ['task.runner', 'task.steps.*.runner'] } }), async (c) => {
-      const result = await automationService.create(c.get('project'), c.req.valid('json'));
-      if (!result.ok) return c.json({ error: result.error }, result.status);
-      const once = onceCreateAnswer(result.automation);
-      return c.json({ automation: result.automation, ...(once ? { once } : {}) }, 201);
-    })
-
-    .get('/automations/:id', (c) => {
-      const result = automationService.get(c.get('project'), c.req.param('id'));
-      if (!result.ok) return c.json({ error: result.error }, result.status);
-      return c.json(result.body);
-    })
-
-    .put('/automations/:id', jsonZodValidator(() => automationUpdateSchema, { runners: { ids: ['task.runner', 'task.steps.*.runner'] } }), async (c) => {
-      const result = await automationService.update(c.get('project'), c.req.param('id'), c.req.valid('json'));
-      if (!result.ok) return c.json({ error: result.error }, result.status);
-      return c.json({ automation: result.automation });
-    })
-
-    .delete('/automations/:id', async (c) => {
-      const result = await automationService.remove(c.get('project'), c.req.param('id'));
-      if (!result.ok) return c.json({ error: result.error }, result.status);
-      return c.body(null, 204);
-    })
-
-    .post('/automations/:id/enable', async (c) => {
-      const result = await automationService.enable(c.get('project'), c.req.param('id'));
-      if (!result.ok) return c.json({ error: result.error }, result.status);
-      return c.json({ automation: result.automation });
-    })
-
-    .post('/automations/:id/pause', async (c) => {
-      const result = await automationService.pause(c.get('project'), c.req.param('id'));
-      if (!result.ok) return c.json({ error: result.error }, result.status);
-      return c.json({ automation: result.automation });
-    })
-
-    // One-time schedules only (#1465): archive without launching. 409 for any other automation.
-    .post('/automations/:id/cancel', async (c) => {
-      const result = await automationService.cancel(c.get('project'), c.req.param('id'));
-      if (!result.ok) return c.json({ error: result.error }, result.status);
-      return c.json({ automation: result.automation });
-    })
-
-    // Run now: a schedule fired once by hand, paused or not, outside the timer and under the same
-    // lease. A repeating schedule keeps `nextRunAt` and `enabled`; a one-time schedule is consumed
-    // (archived) by it. A GitHub automation's equivalent is `check`.
-    .post('/automations/:id/run', async (c) => {
-      const result = await automationService.runNow(c.get('project'), c.req.param('id'));
-      if (!result.ok) return c.json({ error: result.error }, result.status);
-      return c.json({ runId: result.runId }, 202);
-    })
-
-    // The body is validated as MIDDLEWARE, which is what puts it in the route type — and moves
-    // the 400 ahead of this route's 404: `POST /automations/<unknown>/check` with a malformed
-    // body now answers 400 rather than 404. Nothing else about either answer changed.
-    .post('/automations/:id/check', jsonZodValidator(() => automationCheckRequestSchema), async (c) => {
-      const project = c.get('project');
-      const store = project.automationStore;
-      const automation = store.get(c.req.param('id'));
-      if (!automation) return c.json({ error: 'not found' }, 404);
-      if (!isGithubAutomation(automation)) return c.json({ error: 'a schedule has nothing to preview; use run' }, 409);
-      const parsed = { data: c.req.valid('json') };
-      // `string`, not `randomUUID`'s template-literal type: the wire carries an opaque id, and
-      // leaking `${string}-${string}-…` into the route type would make the contract describe the
-      // generator rather than the answer.
-      const id: string = randomUUID();
-      const check: ManualCheck = { id, automationId: automation.id, mode: parsed.data.mode, status: 'queued', createdAt: new Date().toISOString() };
-      if (manualChecks.size >= 200) manualChecks.delete(manualChecks.keys().next().value!);
-      manualChecks.set(id, check);
-      void withProjectAdmission(project.dataDir, async function manualCheck() {
-        check.status = 'running';
-        try {
-          const repository = githubRepository(project.root, (await getRepoInfo(project.root))?.remote);
-          if (!repository) throw new Error('No GitHub remote is configured');
-          const scheduler = new ProjectAutomationScheduler({
-            projectId: project.id,
-            store,
-            timeZone: localTimeZone(),
-            github: { ...repository, poller: new GithubPoller() },
-            launch: parsed.data.mode === 'execute'
-              ? (definition, candidate, receiptId) => launchAutomationRun({ root: project.root, manager: project.manager, store: project.store, definition, candidate, receiptId })
-              : undefined,
-            onChange: (automationId, revision) => emitAutomationChange(project, automationId, revision),
-          });
-          const result = await scheduler.check(automation, parsed.data.mode);
-          Object.assign(check, { status: 'complete', completedAt: new Date().toISOString(), matches: result.candidates.length, truncated: result.truncated });
-        } catch (error) {
-          Object.assign(check, { status: 'error', completedAt: new Date().toISOString(), error: error instanceof Error ? error.message : String(error) });
-        }
-      }, (error) => { Object.assign(check, { status: 'error', completedAt: new Date().toISOString(), error: error.message }); });
-      return c.json({ checkId: id }, 202);
-    })
-
-    .get('/automation-log', queryZodValidator(automationLogQuerySchema), (c) => {
-      return c.json({ records: c.get('project').automationStore.logs(c.req.valid('query')) });
-    })
-
-    .post('/automation-log/:receiptId/retry', async (c) => {
-      const result = await retryAutomationLogReceipt({
-        project: c.get('project'),
-        receiptId: c.req.param('receiptId'),
-        scheduleHandle,
-        emitChange: emitAutomationChange,
-      });
-      if (result.status === 202) return c.json(result.body, 202);
-      return result.status === 404 ? c.json(result.body, 404) : c.json(result.body, 409);
-    });
-
-  // ---- chained family: manual automation checks (workspace-level) ----
-  // Workspace-level because the handler reads no project: a check lives in the server-memory map
-  // above, keyed by an unguessable id that the project-scoped POST hands back. Mounting it under
-  // `/api/v1/p/:projectId` too would be a second spelling of a lookup that consults no project.
-  const automationChecksRoutes = new Hono()
-    .use('/automation-checks/*', requireAutomations)
-    .get('/automation-checks/:checkId', (c) => {
-      const check = manualChecks.get(c.req.param('checkId'));
-      return check ? c.json(check) : c.json({ error: 'not found' }, 404);
-    });
 
   // ---- runs ----------------------------------------------------------------
 
@@ -2322,36 +1755,7 @@ export function createApp(deps: ServerDeps) {
       } finally { release(); }
     });
 
-  // ---- chained family: open-targets (project-scoped) ----
-  const openTargetsRoutes = new Hono<ProjectApiEnv>()
-    .get('/open-targets', (c) => c.json({ targets: capabilities().localHandoff ? detectOpenTargets() : [] }))
-
-    // Open the PROJECT ROOT itself (Settings → "Project folder" → Open with). The run route
-    // above opens a task worktree and needs a run to name one; this is the repo the cockpit is
-    // scoped to, which the scope middleware has already resolved — so no path is accepted from
-    // the client and there is nothing to contain.
-    .post('/open-in', jsonZodValidator(openProjectInSchema), async (c) => {
-      const { root } = c.get('project');
-      if (!capabilities().localHandoff) {
-        return c.json(
-          { error: 'local handoff is disabled — this cockpit runs in hosted mode (CEZ_REMOTE)' },
-          409,
-        );
-      }
-      const { target } = c.req.valid('json');
-      // Refused here rather than left to the menu, on the same principle as the accounts route:
-      // a `cli:<runner>` handoff would START AN AGENT in the checkout everything else runs in a
-      // worktree to protect. Which app APPLIES is a property of the route, not of one client.
-      if (agentCliRunner(target) !== null) {
-        return c.json({ error: 'agent CLIs open a task worktree, not the project folder' }, 400);
-      }
-      if (!detectOpenTargets().some((candidate) => candidate.id === target)) {
-        return c.json({ error: `no such app on this machine: ${target}` }, 400);
-      }
-      const opened = await openApp(target, root);
-      if (!opened) return c.json({ error: `could not open ${target}`, path: root }, 409);
-      return c.json({ opened: true as const, path: root });
-    });
+  const openTargetsRoutes = createOpenTargetsRoutes({ capabilities, openApp });
 
   // Agent screenshots and user attachments — what the run manager persisted out of tool
   // results and pasted messages (`persistAttachment`). `basename` pins reads inside the
@@ -2375,728 +1779,24 @@ export function createApp(deps: ServerDeps) {
     txt: 'text/plain; charset=utf-8',
     md: 'text/plain; charset=utf-8',
   };
-  // ---- chained family: worktrees (project-scoped) ----
-  const worktreesRoutes = new Hono<ProjectApiEnv>()
-    .get('/worktrees', async (c) => {
-      const { root: repoRoot, store } = c.get('project');
-      // The keep-limit the panel reports is the one the enforcer will actually
-      // apply — inherited from the workspace default when this repo sets none.
-      const keep = await resolveWorktreeRetention(repoRoot, deps.home);
-      const withWorktree = store.queries.listRunsWithWorktree();
-      // Listing is on-disk dirs only; parent liveness for #575 reads the store by id
-      // so a live `worktree: false` parent is not treated as gone (#570 honesty).
-      const runs = withWorktree.filter((r) => r.worktreePath && existsSync(r.worktreePath));
-      // The rows the enforcer would reclaim right now: reclaimable AND past the newest `keep`.
-      const getRun = memoizeRead((id) => store.getRun(id));
-      const workersOf = memoizeRead((id) => store.queries.listWorkersOf(id));
-      const pastKeep = new Set(selectReclaimableWorktrees(withWorktree, keep, getRun, workersOf));
-      const worktrees = await Promise.all(
-        runs.map(async (r) => ({
-          runId: r.id,
-          title: r.title ?? r.id,
-          status: r.status,
-          branch: r.branch ?? null,
-          // POSIX `du` — degrades to null (Windows / du missing / error); never blocks.
-          sizeBytes: await cachedWorktreeSizeBytes(r.worktreePath as string),
-          finishedAt: r.finishedAt ?? null,
-          reclaimable: isReclaimable(r, getRun, workersOf),
-          pastKeep: pastKeep.has(r.id),
-        })),
-      );
-      // Total is null when any size degraded, so the panel never shows a wrong sum.
-      const totalBytes = worktrees.some((w) => w.sizeBytes === null)
-        ? null
-        : worktrees.reduce((sum, w) => sum + (w.sizeBytes ?? 0), 0);
-      return c.json({ worktrees, totalBytes, keep });
-    })
+  const worktreesRoutes = createWorktreesRoutes({ home: deps.home, previewHost: deps.previewHost });
 
-    .post('/worktrees/reclaim', jsonZodValidator(() => reclaimBodySchema, { absent: ({}), message: 'invalid body' }), async (c) => {
-      const { root: repoRoot, store } = c.get('project');
-      // The body is validated (an empty or `{}` one is accepted) but carries nothing this
-      // handler reads; retention is best-effort, so 200 always.
-      const { manager } = c.get('project');
-      const reclaimed = await reclaimWorktrees(repoRoot, store, await resolveWorktreeRetention(repoRoot, deps.home), {
-        claim: (run) => manager.claimWorktreeReclaim(run.id),
-        previewHost: deps.previewHost,
-      });
-      if (reclaimed.length > 0) { forgetRepoBranches(repoRoot); forgetRepoRead(repoRoot); }
-      return c.json({ reclaimed });
-    })
+  const sseRoutes = createSseRoutes();
 
-    // One row's reclaim (issue 08 §B4): the DIRECTORY only, by retention's own rule and helper —
-    // the `cez/<id8>` branch is kept, which is what makes this safe to offer on every finished
-    // row. `/runs/:id/remove-worktree` (directory AND branch) stays the task screen's action.
-    .post('/worktrees/:runId/reclaim', paramZodValidator(reclaimRunParamsSchema), async (c) => {
-      const { root: repoRoot, store } = c.get('project');
-      const checkout = runCheckout(c.get('project'), c.req.valid('param').runId, 'remove', {
-        claim: 'reclaim', checksActive: false, deletion: 'inline',
-        nullClaimError: 'this worktree is in use or already reclaimed — only a finished task\'s worktree can be reclaimed',
-      });
-      if ('status' in checkout) return c.json(checkout.body, checkout.status);
-      const { run, release } = checkout;
-      const worktreeReclaimedAt = await reclaimWorktree(repoRoot, store, run, { previewHost: deps.previewHost }).finally(release);
-      if (!worktreeReclaimedAt) {
-        return c.json({ error: await reclaimCheckoutError(run) }, 409);
-      }
-      forgetRepoBranches(repoRoot); forgetRepoRead(repoRoot);
-      return c.json({ runId: run.id, worktreeReclaimedAt });
-    });
-
-  // ---- chained family: SSE streams (project-scoped) ----
-  const sseRoutes = new Hono<ProjectApiEnv>()
-    .get(
-      '/runs/:id/events',
-      paramZodValidator(runIdParamSchema),
-      queryZodValidator(runEventsQuerySchema),
-      async (c) => {
-      const { store, dataDir } = c.get('project');
-      const { id } = c.req.valid('param');
-      if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-      const query = c.req.valid('query');
-      if (query.cursor) {
-        try {
-          await validateLiveCursor(store.claims.sourceDataDir(id), id, query.cursor);
-        } catch (error) {
-          if (error instanceof HistoryCursorError) return c.json({ error: error.message }, error.status);
-          throw error;
-        }
-      }
-      const lastEventId = Number.parseInt(c.req.header('Last-Event-ID') ?? '', 10);
-      const requestedAfter = Math.max(
-        query.afterSeq ?? 0,
-        Number.isSafeInteger(lastEventId) && lastEventId >= 0 ? lastEventId : 0,
-      );
-      return streamSSENoBuffer(c, async (stream) => {
-        const controller = new AbortController();
-        const stop = () => controller.abort();
-        const onRun = (write: RunWrite) => {
-          if (write.run.id === id) void stream.writeSSE({ event: 'run', data: JSON.stringify(currentRecord(store, write)) });
-        };
-        const unsubscribe = store.lifecycle.subscribe({ 'run.created': onRun, 'run.updated': onRun });
-        stream.onAbort(() => { stop(); unsubscribe(); });
-        const feed = subscribeRunFeed({ store, dataDir }, {
-          projectId: c.get('project').id, runId: id, afterSeq: requestedAfter,
-          ...(query.cursor ? { cursor: query.cursor } : {}),
-        }, {
-          event: async event => {
-            await stream.writeSSE({ id: String(event.seq), event: isV2WireEventType(event.type) ? 'ui-event' : 'run-event', data: JSON.stringify(event) });
-          },
-          reset: () => { stop(); void stream.close(); },
-        // The legacy full-replay endpoint predates the finite batch limit. Preserve its
-        // ability to deliver a large persisted event; new multiplex clients rehydrate it.
-        }, controller.signal, Infinity);
-        const run = store.getRun(id);
-        if (run) await stream.writeSSE({ event: 'run', data: JSON.stringify(run) });
-        try {
-          while (!stream.aborted && !controller.signal.aborted) {
-            await stream.writeSSE({ event: 'ping', data: '' });
-            await stream.sleep(15_000);
-          }
-        } finally {
-          stop(); unsubscribe();
-          await feed;
-        }
-      });
-    },
-    )
-
-    // Global SSE: run-summary updates for the list view + inbox changes.
-    // Scoped `/p/:projectId/events` carries that project's stream in today's
-    // shape; the legacy unprefixed alias stays bound to the boot project ONLY
-    // (spec "Legacy aliases" — widening it would be a silent behavioral break;
-    // the all-project stream arrives as `/api/workspace/events` in step 2.8).
-    .get('/events', (c) => {
-      const { store } = c.get('project');
-      return streamSSENoBuffer(c, async (stream) => {
-        const onRun = (write: RunWrite) => void stream.writeSSE({ event: 'run', data: JSON.stringify(currentRecord(store, write)) });
-        const onDeleted = ({ runId: id }: { runId: string }) =>
-          void stream.writeSSE({
-            event: 'run-deleted',
-            data: JSON.stringify({ id }),
-          });
-        // Live resource telemetry (#348): the sampler ticks ~every 2 s only
-        // while some run has a registered process; each tick is relayed as one
-        // `usage` message (runId → {cpuPct, rssBytes, procCount}). Never
-        // persisted — the NDJSON transcripts stay usage-free. The sampler is
-        // module-global, so a snapshot carries EVERY project's runs — split it
-        // by ownership and relay only this project's rows, never a stamped
-        // whole (multi-project spec, step 2.4: filtered, not stamped).
-        const offUsage = onUsage((usage) => {
-          const owned: typeof usage = {};
-          for (const [runId, sample] of Object.entries(usage)) {
-            if (store.getRun(runId)) owned[runId] = sample;
-          }
-          void stream.writeSSE({ event: 'usage', data: JSON.stringify(owned) });
-        });
-        const unsubscribe = store.lifecycle.subscribe({ 'run.created': onRun, 'run.updated': onRun, 'run.deleted': onDeleted });
-        stream.onAbort(() => {
-          unsubscribe();
-          offUsage();
-        });
-        while (!stream.aborted) {
-          await stream.writeSSE({ event: 'ping', data: '' });
-          await stream.sleep(15_000);
-        }
-      });
-    });
-
-  // ---- chained family: workspace SSE stream (workspace-level) ----
-  const workspaceEventsRoutes = new Hono<ProjectApiEnv>()
-    // `?runs=summary` (hearsay-tools/cezarion#2730) carries list rows with a contiguous `seq`
-    // instead of full records; without it the stream stays byte-identical for older readers.
-    .get('/workspace/events', queryZodValidator(workspaceEventsQuerySchema), (c) => {
-      const mode = c.req.valid('query').runs === 'summary' ? 'summary' : 'full';
-      return streamSSENoBuffer(c, async (stream) => {
-        // The boot context never lives in the lazy map: the feed keeps it under its registry id
-        // (`resolveBootProject`, NOT `bootContext.id`, which may be the reserved alias when
-        // registration was suppressed).
-        const bootProject = await resolveBootProject();
-        // Attach, relay and `ready` happen in one synchronous block, so no frame can slip
-        // between the feed's `seq` and this connection's `ready`.
-        const detach = workspaceRunFeed.connect(bootProject, mode, (event, data) => void stream.writeSSE({ event, data }));
-
-        // Workspace-level events (project-added / project-removed / checkout-progress plus
-        // host-wide unstamped provider-status) — relayed verbatim under their own names. The
-        // feed detaches a removed project's store itself.
-        const offWorkspace = workspaceEvents.on((event, data) => {
-          void stream.writeSSE({ event, data: JSON.stringify(data) });
-        });
-
-        stream.onAbort(() => {
-          detach();
-          offWorkspace();
-        });
-
-        await stream.writeSSE({
-          event: 'ready',
-          data: JSON.stringify(mode === 'summary' ? { generation: serverGeneration, seq: workspaceRunFeed.seq() } : { generation: serverGeneration }),
-        });
-
-        while (!stream.aborted) {
-          await stream.writeSSE({ event: 'ping', data: '' });
-          await stream.sleep(15_000);
-        }
-      });
-    });
-
-  /** A ref-status list: `null` means malformed (the caller answers 400), `[]` means "not asked
-   *  for". Absent and empty are the same request — neither names a number. */
-  const parseRefNumbers = (raw: string | undefined): number[] | null => {
-    const parts = (raw ?? '').split(',').map((p) => p.trim()).filter(Boolean);
-    if (parts.length > GH_REF_STATUS_MAX) return null;
-    const numbers: number[] = [];
-    for (const part of parts) {
-      const n = Number(part);
-      if (!Number.isInteger(n) || n <= 0 || String(n) !== part) return null;
-      numbers.push(n);
-    }
-    return numbers;
-  };
-
-  const githubRoutes = new Hono<ProjectApiEnv>()
-    .get(
-      '/github',
-      // `limit` stays a bare string: the handler's `Number.parseInt`/`Number.isFinite` fallback to
-      // 30 already accepts `?limit=banana`, and a numeric schema would 400 it instead. The
-      // cursors and done flags page each side on its own (hearsay-tools/cezarion#1183); the
-      // schema refuses a done side that also carries its cursor, and both sides done.
-      queryZodValidator(githubListQuerySchema),
-      async (c) => {
-        const { root: repoRoot } = c.get('project');
-        const query = c.req.valid('query');
-        const limit = Number.parseInt(query.limit ?? '', 10);
-        return c.json(await resolveForgeRoot(repoRoot, deps.forgeFactory).list({
-          refresh: query.refresh === '1',
-          limit: Number.isFinite(limit) ? limit : 30,
-          issuesCursor: query.issuesCursor,
-          prsCursor: query.prsCursor,
-          issuesDone: query.issuesDone === '1',
-          prsDone: query.prsDone === '1',
-        }));
-      },
-    )
-    .get('/github/projects', queryZodValidator(githubProjectsQuerySchema), async (c) => {
-      return c.json(await resolveForgeRoot(c.get('project').root, deps.forgeFactory).projects(c.req.valid('query').generation));
-    })
-    .get('/github/comments/:kind/:number', queryZodValidator(refreshQuery), async (c) => {
-      const { root: repoRoot } = c.get('project');
-      const parsed = commentsParams.safeParse({
-        kind: c.req.param('kind'),
-        number: c.req.param('number'),
-      });
-      if (!parsed.success) return c.json({ error: 'invalid kind or number' }, 400);
-      return c.json(
-        await resolveForgeRoot(repoRoot, deps.forgeFactory).comments(parsed.data.kind, parsed.data.number, { refresh: c.req.valid('query').refresh === '1' }),
-      );
-    })
-    // One issue/PR by number, any state (#692) — the task page's item tabs. Same in-payload
-    // degrade as the siblings: `item: null` is "no such number", `available: false` is "could not
-    // ask"; never a 5xx.
-    .get(
-      '/github/items/:kind/:number',
-      paramZodValidator(githubItemParamsSchema, { message: 'invalid kind or number' }),
-      queryZodValidator(refreshQuery),
-      async (c) => {
-        const { root: repoRoot } = c.get('project');
-        const { kind, number } = c.req.valid('param');
-        return c.json(await resolveForgeRoot(repoRoot, deps.forgeFactory).item(kind, number, { refresh: c.req.valid('query').refresh === '1' }));
-      },
-    )
-    // Lazy checks glyphs for on-screen PR rows (#664). Additive sibling of /api/github — the list
-    // call dropped `statusCheckRollup` (the dominant cost), so the glyph is hydrated here per
-    // visible row. `prs` is a comma-separated list of positive integers, capped at GH_CHECKS_MAX;
-    // anything malformed is a 400. Same in-payload availability degrade as the list (never a 5xx).
-    // `prs` is the one genuinely REQUIRED query key on this server, so it is the one validated
-    // strictly — `.min(1)` because `?prs=` answered `missing prs query` before it answered
-    // `invalid prs query`, and both spellings must keep their own words.
-    .get('/github/checks', queryZodValidator(githubChecksQuerySchema, { message: 'missing prs query' }), async (c) => {
-      const { root: repoRoot } = c.get('project');
-      const raw = c.req.valid('query').prs;
-      const parts = raw.split(',').map((p) => p.trim()).filter(Boolean);
-      if (parts.length === 0 || parts.length > GH_CHECKS_MAX) return c.json({ error: 'invalid prs query' }, 400);
-      const numbers: number[] = [];
-      for (const part of parts) {
-        const n = Number(part);
-        if (!Number.isInteger(n) || n <= 0 || String(n) !== part) return c.json({ error: 'invalid prs query' }, 400);
-        numbers.push(n);
-      }
-      return c.json(await resolveForgeRoot(repoRoot, deps.forgeFactory).checks(numbers));
-    })
-
-    // Comment counts for loaded list rows (hearsay-tools/cezarion#1183). The list defers them
-    // (`commentsDeferred`) because they were ~0.4 s of every page; the cockpit asks here after
-    // paint. Same shape and in-payload degrade as /github/checks: at most 100 positive numbers,
-    // 400 on anything malformed, never a 5xx.
-    .get('/github/comment-counts', queryZodValidator(githubCommentCountsQuerySchema, { message: 'invalid comment-counts query' }), async (c) => {
-      const { kind, numbers, refresh } = c.req.valid('query');
-      return c.json(await resolveForgeRoot(c.get('project').root, deps.forgeFactory).commentCounts(kind, numbers.split(',').map(Number), { refresh: refresh === '1' }));
-    })
-
-    // Search across ALL states (#730). Additive sibling of `/github`, which lists the OPEN set
-    // only (`gh issue/pr list` defaults to `--state open`) — so the tab's in-memory filter can
-    // never match a closed or merged item, and this is the path it falls back to. Same in-payload
-    // availability degrade as the list (never a 5xx); malformed params are a 400. Deliberately
-    // uncached: it is typed-into, not polled, and the driver's own cap bounds the work.
-    .get(
-      '/github/search',
-      queryZodValidator(
-        githubSearchQuerySchema,
-        { message: 'invalid search query' },
-      ),
-      async (c) => {
-        const { root: repoRoot } = c.get('project');
-        const { kind, q, limit } = c.req.valid('query');
-        const forge = resolveForgeRoot(repoRoot, deps.forgeFactory);
-        if (!forge.searchItems) return c.json({ available: false, reason: 'GitHub is unavailable', items: [] });
-        return c.json(await forge.searchItems(kind, q, limit === undefined ? {} : { limit }));
-      },
-    )
-
-    // Batched status for the PR/issue chips a task table paints. Additive sibling of
-    // /github/checks and shaped like it: comma-separated positive integers, capped at
-    // GH_REF_STATUS_MAX per kind, malformed input is a 400, and an unreachable forge degrades in
-    // the payload. Unlike /github/checks BOTH keys are optional — a table may hold only issues —
-    // but at least one must name something, or the request asks for nothing.
-    .get(
-      '/github/ref-status',
-      queryZodValidator(githubRefsQuerySchema),
-      async (c) => {
-        const { root: repoRoot } = c.get('project');
-        const { prs, issues } = c.req.valid('query');
-        const parsedPrs = parseRefNumbers(prs);
-        const parsedIssues = parseRefNumbers(issues);
-        if (parsedPrs === null || parsedIssues === null) return c.json({ error: 'invalid ref-status query' }, 400);
-        if (parsedPrs.length === 0 && parsedIssues.length === 0) {
-          return c.json({ error: 'missing prs or issues query' }, 400);
-        }
-        return c.json(await resolveForgeRoot(repoRoot, deps.forgeFactory).refStatus({ prs: parsedPrs, issues: parsedIssues }));
-      },
-    )
-
-    .get(
-      '/github/prs/:number/merge-state',
-      paramZodValidator(mergeNumberParams, { message: 'invalid pull request number' }),
-      queryZodValidator(refreshQuery),
-      async (c) => {
-        const { root: repoRoot } = c.get('project');
-        const parsed = { data: c.req.valid('param') };
-        const forge = resolveProjectForge(await getRepoInfo(repoRoot));
-        if (!forge?.prMergeState) return c.json({ available: false, reason: 'GitHub merge state is unavailable' });
-        return c.json(await forge.prMergeState(parsed.data.number, { refresh: c.req.valid('query').refresh === '1' }));
-      },
-    )
-
-    .post(
-      '/github/prs/:number/merge',
-      paramZodValidator(mergeNumberParams, { message: 'invalid pull request number' }),
-      jsonZodValidator(() => mergeBodySchema, { message: 'invalid merge request' }),
-      async (c) => {
-        const { root: repoRoot } = c.get('project');
-        const parsedNumber = { data: c.req.valid('param') };
-        const body = { data: c.req.valid('json') };
-        const forge = resolveProjectForge(await getRepoInfo(repoRoot));
-        if (!forge?.mergePR) return c.json({ error: 'GitHub merge is unavailable' }, 409);
-        const result = await forge.mergePR(parsedNumber.data.number, body.data);
-        if (result.merged) {
-          return c.json(result);
-        }
-        return c.json(
-          {
-            error: result.error,
-            ...(result.code ? { code: result.code } : {}),
-            ...(result.current ? { current: result.current } : {}),
-          },
-          result.status,
-        );
-      },
-    )
-
-    .get(
-      '/github/prs/:number/changes',
-      // Split out of one `safeParse` over both inputs, because a path param and the query string
-      // are separate validation targets to Hono and only a split makes each visible to the route
-      // type. Both keep the single 400 sentence the combined parse answered. `refresh` stays
-      // STRICT here (`?refresh=true` is a 400 today, unlike everywhere else on this server).
-      paramZodValidator(prChangesParams, { message: 'invalid pull request number or refresh flag' }),
-      queryZodValidator(prChangesQuery, { message: 'invalid pull request number or refresh flag' }),
-      async (c) => {
-        const { root: repoRoot } = c.get('project');
-        const parsed = { data: c.req.valid('param') };
-        const forge = resolveForgeRoot(repoRoot, deps.forgeFactory);
-        if (!forge.prDiff) return c.json({ available: false, reason: 'GitHub is unavailable' });
-        try {
-          return c.json(
-            await forge.prDiff(parsed.data.number, { refresh: c.req.valid('query').refresh === '1' }),
-          );
-        } catch (err) {
-          if (err instanceof GithubPrNotFoundError) return c.json({ error: err.message }, 404);
-          throw err;
-        }
-      },
-    );
-
-  // The full comment thread for one issue/PR (#499). Additive sibling of /api/github — lazy
-  // (fetched only while a detail view is open), zod-validated params, 400 on garbage, and the
-  // same in-payload availability degrade (gh missing / offline / 404 all render as a hint).
-  const commentsParams = z.object({
-    kind: z.enum(['issue', 'pr']),
-    number: z.coerce.number().int().positive(),
+  const workspaceEventsRoutes = createWorkspaceEventsRoutes({
+    serverGeneration,
+    resolveBootProject,
+    workspaceRunFeed,
+    workspaceEvents,
   });
-  const branchForge = deps.branchForge ?? createGithubBranchForge({ forgeFactory: deps.forgeFactory });
-  const branchClassifyInput = (project: Omit<ClassifyProject, 'home'>) => classifyInputFor({ ...project, home: deps.home }, branchForge);
-  // ---- chained family: repo / git (project-scoped) ----
-  const repoRoutes = new Hono<ProjectApiEnv>()
-    .get('/repo', async (c) => {
-      const { root: repoRoot, store } = c.get('project');
-      const info = await getRepoInfo(repoRoot);
-      if (!info)
-        return c.json({
-          info: null,
-          status: [],
-          log: [],
-          branches: [],
-          baseBranch: null,
-          tracking: null,
-        });
 
-      // Status stays fresh for edits made outside Squawk; only ref-derived reads are cached.
-      const [status, config] = await Promise.all([
-        getStatus(info.root),
-        loadConfig(repoRoot, deps.home),
-      ]);
-      // The helper validates refs and branch-owner evidence before reusing log attribution.
-      const refs = await readRepoRefs(info, config.baseBranch, store.queries);
-      return c.json({
-        info,
-        status,
-        log: refs.log,
-        branches: refs.branches,
-        baseBranch: config.baseBranch ?? null,
-        tracking: refs.tracking,
-      });
-    })
+  const githubRoutes = createGithubRoutes({ forgeFactory: deps.forgeFactory, resolveProjectForge });
 
-    // Every local branch, classified (issue 08 §A/§B2) — cached on the refs state, so the
-    // sidebar's counts do not shell out on every render.
-    .get('/repo/branches', async (c) => {
-      const input = await branchClassifyInput(c.get('project'));
-      if (!input) return c.json({ base: '', prStateKnown: false, branches: [], counts: { notLanded: 0, cleanup: 0 } });
-      return c.json(await readRepoBranches(input));
-    })
+  const repoRoutes = createRepoRoutes({ home: deps.home, forgeFactory: deps.forgeFactory, branchForge: deps.branchForge });
 
-    // The same classification's counts alone (hearsay-tools/cezarion#2029): the always-mounted Git
-    // sidebar reads these, so it never pays for a diff stat per branch.
-    .get('/repo/branches/counts', async (c) => {
-      const input = await branchClassifyInput(c.get('project'));
-      if (!input) return c.json({ base: '', prStateKnown: false, counts: { notLanded: 0, cleanup: 0 }, allBranches: 0 });
-      return c.json(await readRepoBranchCounts(input));
-    })
-
-    // Delete local branches (issue 08 §B3). The server re-classifies and never trusts the
-    // client's class: nothing here can delete work that is not on the base without the typed
-    // confirmation, and nothing in use can be deleted at all.
-    .post('/repo/branches/delete', jsonZodValidator(deleteBranchesInputSchema), async (c) => {
-      const input = await branchClassifyInput(c.get('project'));
-      if (!input) return c.json({ error: 'not a git repository', refused: [] }, 409);
-      const body = c.req.valid('json');
-      // The cockpit's checkout switch and pull hold this, not the worktree lock: without it a switch
-      // could check a candidate out after the delete read the worktree list, and `update-ref` would
-      // delete the branch HEAD now names.
-      const release = claimRepoGitMutation(input.root);
-      if (!release) return c.json({ error: 'a branch switch or pull is running — try again when it finishes', refused: [] }, 409);
-      const result = await deleteBranches(input, body.names, body.confirm).finally(release);
-      forgetRepoRead(input.root);
-      if (result.deleted.length === 0) {
-        return c.json({ error: result.refused[0]?.reason ?? 'nothing was deleted', refused: result.refused }, 409);
-      }
-      return c.json(result, 200);
-    })
-
-    .get('/repo/diff', async (c) => {
-      const { root: repoRoot } = c.get('project');
-      const info = await getRepoInfo(repoRoot);
-      if (!info) return c.text('not a git repository');
-      return c.text(await getDiff(info.root));
-    })
-
-    // One commit's message + stat + patch — the Repo view expands it inline.
-    // `?structured=1` is the ADDITIVE sibling (R5 Step 1.7): the new repo view's commit-diff
-    // shape `{sha, subject, author, when, files, stat}` with 409 + reason on failure. The
-    // legacy text answer below is what the route returns without the flag, in-band failure
-    // sentences included.
-    //
-    // `Accept: application/json` reaches the same structured answer without the flag, and
-    // `Accept: text/plain` asks for the blob; the flag still wins whenever it is present, and a
-    // request with no opinion still gets the blob. See `negotiate`.
-    .get('/repo/commit/:sha', queryZodValidator(commitQuerySchema), async (c) => {
-      const { root: repoRoot } = c.get('project');
-      c.header('vary', 'Accept');
-      const { structured } = c.req.valid('query');
-      const wantsJson =
-        structured !== undefined
-          ? structured === '1'
-          : negotiate(c.req.header('accept'), COMMIT_FORMATS) === 'application/json';
-      const info = await getRepoInfo(repoRoot);
-      if (wantsJson) {
-        if (!info) return c.json({ error: 'not a git repository' }, 409);
-        const result = await collectCommitChanges(info.root, c.req.param('sha'));
-        if (!result.ok) return c.json({ error: result.error }, 409);
-        return c.json(result.commit);
-      }
-      if (!info) return c.text('not a git repository');
-      try {
-        return c.text(await getCommit(info.root, c.req.param('sha')));
-      } catch (err) {
-        return c.text(`(git show failed: ${err instanceof Error ? err.message : String(err)})`);
-      }
-    })
-
-    // Structured sibling of the text-blob /api/repo/diff above (protected
-    // surface, untouched): the same {files, stat} shape the session /changes
-    // route serves, here for the MAIN working tree's uncommitted changes vs
-    // HEAD (redesign R5 Step 1.3 — §"Git/session API additions").
-    .get('/repo/changes', async (c) => {
-      const { root: repoRoot } = c.get('project');
-      const info = await getRepoInfo(repoRoot);
-      if (!info) return c.json({ error: 'not a git repository' }, 409);
-      // The user's REAL working tree — never stage into their index (a GET must not write).
-      const result = await collectChanges(info.root, 'HEAD', {
-        intentToAdd: false,
-      });
-      if (!result.ok) return c.json({ error: result.error }, 409);
-      return c.json(result.changes);
-    })
-
-    .get('/repo/pull', async (c) => {
-      const { root } = c.get('project');
-      const result = await localPullBranches(root);
-      if ('error' in result) return c.json(result, 409);
-      return c.json(result);
-    })
-    .post('/repo/pull', jsonZodValidator(repoPullInputSchema), async (c) => {
-      const { root, store, manager } = c.get('project');
-      const info = await getRepoInfo(root);
-      if (!info) return c.json({ error: 'not a git repository' }, 409);
-      const config = await loadConfig(root, deps.home);
-      const result = await pullRepoCheckout(info.root, c.req.valid('json'), config.baseBranch,
-        // Every id, not the live set: the manager may still hold a run whose record already
-        // settled (a worker's execution winding down). Ids only, nothing decoded.
-        () => store.queries.listRunIds().some((id) => manager.isActive(id)));
-      forgetRepoRead(info.root);
-      if (!result.ok) return c.json(result.value, 409);
-      return c.json(result.value, 200);
-    })
-
-    .post('/repo/branch', jsonZodValidator(() => repoBranchSchema), async (c) => {
-      const { root: repoRoot } = c.get('project');
-      const info = await getRepoInfo(repoRoot);
-      if (!info) return c.json({ error: 'not a git repository' }, 409);
-      const release = claimRepoGitMutation(info.root);
-      if (!release) return c.json({ error: 'A Git operation is already in progress for this repository.' }, 409);
-      try {
-        const input = c.req.valid('json');
-        const result = await createOrSwitchBranch(info.root, input.name, input.from);
-        forgetRepoBranches(info.root); forgetRepoRead(info.root);
-        if (!result.ok) return c.json({ error: result.error }, 409);
-        return c.json({ branch: result.branch, created: result.created });
-      } finally {
-        release();
-      }
-    });
-
-  /** #917, hearsay-tools/squawk#914: setup and teardown commands run on the host. */
-  const WORKTREE_COMMANDS_HOSTED_ERROR = `Worktree setup and teardown commands are read-only on this remote cockpit. To allow remote edits, run \`${productIdentity().command} remote-settings enable\` on the machine running Squawk.`;
-
-  // The Settings → Agent defaults knobs in one read (R6 Step 1.5) — an ADDITIVE
-  // sibling of PUT /api/config below; /api/health keeps its protected shape.
-  const configAnswer = async (repoRoot: string, config: CezConfig): Promise<ConfigResponse> => {
-    const archive = resolveArchiveOnMerge(config, await loadWorkspaceConfig(deps.home.workspaceConfig));
-    const nativeModels = await readAgentModelDefaults(repoRoot);
-    const setup = reportWorktreeCommands(config.worktreeSetup);
-    const teardown = reportWorktreeCommands(config.worktreeTeardown);
-    const modelsLocked = agentModelsLocked(repoRoot, process.env, deps.home);
-    return {
-      archiveOnMerge: config.archiveOnMerge ?? null,
-      effectiveArchiveOnMerge: archive.enabled,
-      archiveOnMergeSource: archive.source,
-      baseBranch: config.baseBranch ?? null,
-      defaultRunner: config.defaultRunner,
-      systemPrompt: config.systemPrompt ?? null,
-      // Native defaults seed each runner independently. A Squawk preset remains
-      // selectable unless the operator opts into the fixed-model policy.
-      defaultModels: modelsLocked
-        ? nativeModels
-        : { ...nativeModels, ...config.defaultModels },
-      modelsLocked,
-      maxParallel: config.maxParallel,
-      memoryLimitMb: config.memoryLimitMb ?? null,
-      // Count-based worktree retention (#483): keep the last N finished worktrees
-      // on disk. 0 = unlimited. Always materialized (schema default 10).
-      worktreeRetention: config.worktreeRetention,
-      // Live title updates (task auto-naming spec): tri-state — null means "no
-      // config key, the CEZ_TITLE_UPDATES env default (ON) decides".
-      liveTitleUpdates: config.liveTitleUpdates ?? null,
-      // Optional review gate (#489): tri-state — null means "no config key, the
-      // CEZ_REVIEW_GATE env default (OFF) decides".
-      reviewGate: config.reviewGate ?? null,
-      // Worktree setup (#917) and teardown (hearsay-tools/squawk#914): an invalid value is reported.
-      worktreeSetup: setup.value, worktreeSetupIssue: setup.issue,
-      worktreeTeardown: teardown.value, worktreeTeardownIssue: teardown.issue,
-    };
-  };
-  // ---- chained family: per-repo config (project-scoped) ----
-  const configRoutes = new Hono<ProjectApiEnv>()
-    .get('/config', async (c) => {
-      const repoRoot = c.get('project').root;
-      return c.json(await configAnswer(repoRoot, await loadConfig(repoRoot, deps.home)));
-    })
-
-    .put('/config', jsonZodValidator(() => setConfigSchema, { runners: { ids: ['defaultRunner'], keys: ['defaultModels'] } }), async (c) => {
-      const { root: repoRoot, dataDir } = c.get('project');
-      const parsed = { data: c.req.valid('json') };
-      if (agentModelsLocked(repoRoot, process.env, deps.home) && parsed.data.defaultModels !== undefined) {
-        return c.json({ error: AGENT_MODELS_LOCKED_ERROR }, 409);
-      }
-      // Host commands need settings administration (hearsay-tools/cezarion#2428), checked before any write.
-      if ([parsed.data.worktreeSetup, parsed.data.worktreeTeardown].some((v) => v !== undefined) && !capabilities().settingsAdmin) {
-        return c.json({ error: WORKTREE_COMMANDS_HOSTED_ERROR }, 409);
-      }
-      const refused = await writeMergedConfig(dataDir, parsed.data).catch((err: unknown) => ({ failed: err instanceof Error ? err.message : String(err) }));
-      if (typeof refused === 'object') return c.json({ error: refused.failed }, 500);
-      if (refused !== undefined) return c.json({ error: refused }, 409);
-      if (parsed.data.archiveOnMerge !== undefined) deps.archiveOnMergeChanged?.();
-      // Pre-R6 answer shape ({baseBranch, defaultRunner}) + additive R6 fields.
-      return c.json(await configAnswer(repoRoot, await loadConfig(repoRoot, deps.home)));
-    });
-
-  // ---- chained family: agent-config (project-scoped) -----------------------
-  // Agent config is project-scoped (spec #404, adapted to the multi-project
-  // route seam from #521): handlers resolve the selected repo through the
-  // same ProjectContext as every other mirrored route. Chained (not statements)
-  // so `AppType` carries it — see `healthRoutes`.
-  const agentConfigRoutes = new Hono<ProjectApiEnv>()
-    .get('/agent-config', async (c) => {
-      const editable = capabilities().settingsAdmin;
-      return c.json(await listAgentConfig(c.get('project').root, process.env, editable));
-    })
-
-    .get('/agent-config/:id', async (c) => {
-      const id = c.req.param('id');
-      const def = findConfigFile(id);
-      if (!def) return c.json({ error: 'unknown config file' }, 404);
-      if (def.tracked === 'outside-repo' && !capabilities().settingsAdmin) {
-        const error = `this file lives in your home directory and is not served on a remote cockpit — run \`${productIdentity().command} remote-settings enable\` on the host to allow it`;
-        return c.json({ error }, 409);
-      }
-      const read = await readConfigFile(id, c.get('project').root);
-      if (read === null) return c.json({ error: 'unknown config file' }, 404);
-      if ('error' in read) return c.json({ error: read.error }, 500);
-      return c.json(read);
-    })
-
-    .put('/agent-config/:id', jsonZodValidator(setAgentConfigSchema), async (c) => {
-      // Hooks and MCP commands run on the host: writes need settings administration (ADR 0055),
-      // re-gated on every request.
-      if (!capabilities().settingsAdmin) {
-        return c.json(
-          {
-            error:
-              `editing agent config is disabled on this remote cockpit — run \`${productIdentity().command} remote-settings enable\` on the host to allow it`,
-          },
-          409,
-        );
-      }
-      const parsed = { data: c.req.valid('json') };
-      const out = await writeConfigFile(
-        c.req.param('id'),
-        parsed.data.content,
-        parsed.data.version,
-        c.get('project').root,
-      );
-      if (out === null) return c.json({ error: 'unknown config file' }, 404);
-      if (!out.ok) return c.json({ error: out.error }, out.status);
-      return c.json(out.read);
-    });
-
-  // ---- assemble the chained families --------------------------------------
-  // Every chained family is registered ONCE and mounted into the versioned table. There is no
-  // second, unversioned spelling: `/api/*` was removed once the whole API was reachable under
-  // `/api/v1`. One surface means one thing to keep working, and
-  // it is the one the typed client describes.
-  //
-  // MOUNT ORDER IS REGISTRATION ORDER. Hono matches in the order routes were added, so each
-  // family keeps its internal order and the families keep theirs relative to each other.
-  //
-  // Written as ONE chained expression because that is the only shape Hono can infer route types
-  // from — it is what puts these routes in `AppType`, and so in the typed client.
-  // ---- chained family: agent webhooks (hearsay-tools/cezarion#1576, project-scoped) ----
-  // What `cez webhook` calls from inside a task: list the webhooks the owner exposed to agents in
-  // this project, and send one report through one of them. A webhook closed to agents answers
-  // the same 404 as an unknown one, so this interface cannot even confirm it exists.
-  const agentWebhooksRoutes = new Hono<ProjectApiEnv>()
-    .get('/agent-webhooks', async (c) => {
-      const project = c.get('project');
-      const body: AgentWebhooksResponse = { webhooks: agentWebhooks(await registryEntry(project.id, project.root, deps.home).catch(() => undefined)) };
-      return c.json(body);
-    })
-
-    .post('/agent-webhooks/:webhook', paramZodValidator(agentWebhookParamsSchema.pick({ webhook: true })), jsonZodValidator(sendAgentReportInputSchema), async (c) => {
-      const project = c.get('project');
-      const { webhook: ref } = c.req.valid('param');
-      const entry = await registryEntry(project.id, project.root, deps.home).catch(() => undefined);
-      const webhook = agentWebhook(entry, ref);
-      if (!entry || !webhook) return c.json({ error: `no webhook named "${ref}" is open to agents in this project — run \`${productIdentity().command} webhook list\`` }, 404);
-      const outcome = await sendAgentReport({
-        projectId: entry.id,
-        webhook,
-        input: c.req.valid('json'),
-        store: project.store,
-        origin: taskWebhooks.currentOrigin(),
-        fetch: deps.taskWebhookFetch,
-      });
-      const body: SendAgentReportResponse = { ...outcome, webhook: { id: webhook.id, name: webhook.name } };
-      return c.json(body);
-    });
+  const configRoutes = createConfigRoutes({ home: deps.home, capabilities, archiveOnMergeChanged: deps.archiveOnMergeChanged });
+  const agentConfigRoutes = createAgentConfigRoutes(capabilities);
+  const agentWebhooksRoutes = createAgentWebhooksRoutes({ home: deps.home, taskWebhooks, taskWebhookFetch: deps.taskWebhookFetch });
 
   const v1 = new Hono<ProjectApiEnv>()
     .use('*', resolveProjectScope)
@@ -3119,173 +1819,16 @@ export function createApp(deps: ServerDeps) {
   projectRoutePaths = new Set(v1.routes.filter((route) => route.method !== 'ALL')
     .flatMap((route) => [V1_PREFIX, V1_SCOPED_PREFIX].map((prefix) => `${route.method} ${prefix}${route.path}`)));
 
-  // ---- chained family: the cross-project run index (workspace-level) -------
-  /**
-   * How many ARCHIVED root runs each project may contribute, newest first (#864). The index is a
-   * FINDER, not a listing: every unarchived ROOT run is in it (so a project's pills miss nothing
-   * live or unread), and older archived runs are reached through `GET /workspace/runs-search` and
-   * the project's own archived pages. Owned workers are never in it: the pills, ⌘K and the global
-   * Tasks page list no workers, and a parent's wait label comes from its own delegation. `truncated` names the projects this bit, so a consumer never
-   * has to pretend the list is complete.
-   */
-  const RUNS_INDEX_PER_PROJECT = ARCHIVED_WINDOW;
-
-  /**
-   * Every number a run MENTIONS — a superset of what its chip will show.
-   *
-   * Deliberately not `taskReference()`'s rule: which of a run's references is displayed is the
-   * cockpit's decision (#407, #526), and re-deriving it here would be a second rule that drifts
-   * from the first. This feeds a CACHE READ, which costs nothing per number, so asking about one
-   * the client will not paint is free and asking about one it will is the whole point.
-   */
-  const mentionedReferenceNumbers = (run: RunSummary): number[] => {
-    const numbers: number[] = (run.pullRequests ?? []).map(pr => pr.number);
-    for (const url of [run.pullRequestUrl, run.referencedPullRequestUrl, run.referencedIssueUrl]) {
-      const number = url ? refNumberFromUrl(url) : null;
-      if (number !== null) numbers.push(number);
-    }
-    for (const number of [run.prNumber, run.issueNumber, run.markerRefs?.pr, run.markerRefs?.issue]) {
-      if (typeof number === 'number' && Number.isInteger(number) && number > 0) numbers.push(number);
-    }
-    return numbers;
-  };
-
-  /**
-   * `GET /workspace/runs-index` — every registered project's recent tasks in one slim answer, so
-   * ⌘K can find a task without knowing which project it lives in.
-   *
-   * Workspace-level and single-mount for the obvious reason: a project-scoped spelling of "all
-   * projects" is a contradiction. The per-project source is chosen the same way the automation
-   * coordinator's boot fan-out chooses it (`bootContext` for the boot project, `contexts.peek`
-   * for anything this process already owns, disk otherwise) — and never `contexts.context()`,
-   * which would build a context, prune worktrees and `recover()` running agents. Typing in a
-   * search box must not resume work; see `runs/run-index.ts`.
-   */
-  const coldRepoHandles = new ColdRepoHandles(deps.forgeFactory);
-
-  /**
-   * Every registered project whose runs can be read, and its owned store when this process holds
-   * one (`bootContext` for the boot project, `contexts.peek` otherwise) — never a built context.
-   * Without a store, the caller reads the project cold from `dataDir` with `handle`. The source
-   * rule both workspace run routes share, so the index and the search can never disagree on it.
-   */
-  const projectRunSources = async (): Promise<Array<{
-    project: ProjectListEntry; store: RunStore | undefined; dataDir: string; handle: RepoHandle | null | undefined;
-  }>> => {
-    let projects: ProjectListEntry[] = [];
-    try {
-      projects = await workspaceProjects.listProjects();
-    } catch {
-      // unreadable workspace — no rows, never a 500. The palette degrades to the active
-      // project's own run list, which it holds either way.
-    }
-    const bootId = await resolveBootProject(projects);
-    coldRepoHandles.retainRoots(new Set(projects
-      .filter((project) => project.status !== 'missing' && project.id !== bootId && !contexts.peek(project.id))
-      .map((project) => project.root)));
-    // An unfinished migration finishes first. No folder or a fence: no runs. `not-git` still has an `.ai/cezar` worth indexing.
-    return (await prepareProjects(projects, { ownership: deps.ownership, homes: [deps.home] })).filter((project) => project.status !== 'missing' && !projectAdmissionRefusal(projectPaths(project.root).write)).map((project) => {
-      const owned = project.id === bootId ? bootContext : contexts.peek(project.id);
-      // A cold project's repository identity only: asking for an owned one starts a discovery
-      // nothing reads.
-      return { project, store: owned?.store, dataDir: projectPaths(project.root).write, handle: owned ? undefined : coldRepoHandles.get(project.root) };
-    });
-  };
-
-  /**
-   * One project's contribution to a workspace run route. An owned store throws what its database
-   * throws (busy, damaged); like a cold project that cannot be read, it then contributes nothing,
-   * so one project never fails every project's index or search (#864).
-   */
-  const readProjectRuns = (projectId: string, read: () => { runs: RunSummary[]; truncated: boolean }) => {
-    try {
-      return read();
-    } catch (error) {
-      console.warn(`[hsq] runs of project ${projectId} could not be read for the workspace run index: ${error instanceof Error ? error.message : String(error)}`);
-      return { runs: [], truncated: false };
-    }
-  };
-
-  const runsIndexRoutes = new Hono()
-    .get('/workspace/runs-index', async (c) => {
-      const runs: RunIndexEntry[] = [];
-      const truncated: string[] = [];
-      // Statuses the server already holds, shipped WITH the rows that carry the references. The
-      // cockpit would otherwise ask for them a beat after the table paints — one round trip per
-      // project, and a visible flash of un-coloured chips before it lands. Cache-only, so this
-      // never touches `gh` and never slows the index down; anything cold stays absent and the
-      // lazy `/github/ref-status` route fills it in.
-      const referenceStatuses: RunsIndexResponse['referenceStatuses'] = {};
-      const sources = await projectRunSources();
-      // Read after the last await and before the synchronous reads below: every frame at or below
-      // it is in this snapshot, and a frame above it is newer (hearsay-tools/cezarion#2730).
-      const eventSeq = workspaceRunFeed.seq();
-      for (const { project, store: owned, dataDir, handle } of sources) {
-        // Both sources answer the same window, newest first: every unarchived run, plus the
-        // newest archived roots (#864). An owned project lays its held records over its rows; a
-        // cold one reads its stored summaries, at most one archived root past the window.
-        //
-        // Archived runs are INCLUDED. The active project's rows reach the palette through
-        // `GET /run-summaries`, which carries them too, and excluding them here would mean a task
-        // is findable while you stand in its project and vanishes the moment you leave — the
-        // exact asymmetry a cross-project finder exists to remove.
-        const window = readProjectRuns(project.id, () => owned
-          ? owned.queries.listRunSummaries({ archivedWindow: RUNS_INDEX_PER_PROJECT, roots: true })
-          : readRunIndexFromDisk(dataDir, { handle, archivedWindow: RUNS_INDEX_PER_PROJECT, roots: true }));
-        if (window.truncated) truncated.push(project.id);
-        const recent = window.runs.map(withLiveUsage);
-        const mentioned: number[] = [];
-        for (const run of recent) {
-          runs.push({ projectId: project.id, ...run });
-          mentioned.push(...mentionedReferenceNumbers(run));
-        }
-        if (mentioned.length > 0) {
-          const cached = resolveForgeRoot(project.root, deps.forgeFactory).cachedRefStatuses(mentioned);
-          // Only when something was actually warm. A project key holding two empty maps is noise
-          // that every consumer would have to look past, and it would blur the one rule this
-          // payload has: absent means nothing is known.
-          if (Object.keys(cached.prs).length > 0 || Object.keys(cached.issues).length > 0) {
-            referenceStatuses[project.id] = cached;
-          }
-        }
-      }
-      runs.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-      const body: RunsIndexResponse = {
-        runs,
-        perProjectLimit: RUNS_INDEX_PER_PROJECT,
-        truncated,
-        referenceStatuses,
-        generation: serverGeneration,
-        eventSeq,
-      };
-      return c.json(body);
-    })
-    /**
-     * `GET /workspace/runs-search` (#864) — every registered project's ROOT runs, archived or not,
-     * that match `q`, newest first: what lets ⌘K find a run past a project's window. Same source
-     * rule and the same side-effect-free contract as the index above.
-     */
-    .get('/workspace/runs-search', queryZodValidator(runsSearchQuerySchema), async (c) => {
-      const { q, limit = RUNS_SEARCH_PER_PROJECT_MAX } = c.req.valid('query');
-      const runs: RunIndexEntry[] = [];
-      const truncated: string[] = [];
-      const tokens = searchTokens(q);
-      for (const { project, store: owned, dataDir, handle } of await projectRunSources()) {
-        // The palette filters its rows by project name too, so a token naming this project is
-        // already satisfied here: `shop database` searches shop for `database` (#864 review). A
-        // query that only names the project adds nothing past the index's rows for it.
-        const name = project.name.toLowerCase();
-        const rest = tokens.filter((token) => !name.includes(token));
-        if (rest.length === 0) continue;
-        const scoped = rest.join(' ');
-        const found = readProjectRuns(project.id, () => owned ? owned.queries.searchRunSummaries(scoped, limit) : searchRunIndexFromDisk(dataDir, scoped, { handle, limit }));
-        if (found.truncated) truncated.push(project.id);
-        for (const run of found.runs) runs.push({ projectId: project.id, ...withLiveUsage(run) });
-      }
-      runs.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-      const body: RunsSearchResponse = { runs, truncated };
-      return c.json(body);
-    });
+  const runsIndexRoutes = createRunsIndexRoutes({
+    loadPreparedProjects: (projects) => prepareProjects(projects, { ownership: deps.ownership, homes: [deps.home] }),
+    forgeFactory: deps.forgeFactory,
+    bootContext,
+    contexts,
+    workspaceProjects,
+    workspaceRunFeed,
+    serverGeneration,
+    withLiveUsage,
+  });
 
   // Workspace-level families answer for the whole workspace, so they are single-mount: never a
   // project-scoped spelling, which would be a second surface to protect with no consumer.
