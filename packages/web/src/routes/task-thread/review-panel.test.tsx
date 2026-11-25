@@ -173,6 +173,44 @@ describe('the review gate on the thread', () => {
     expect(body.querySelectorAll('[data-line="del"]')).toHaveLength(1)
   })
 
+  it('exposes the complete file path and rename path in Review diff card headers (hearsay-tools/squawk#3525)', async () => {
+    const longPath = 'packages/web/src/routes/task-thread/components/deeply/nested/very-long-review-header-file.tsx'
+    const oldPath = 'packages/web/src/routes/task-thread/components/legacy/old-very-long-review-header-file.tsx'
+    const longAndRenamedDiff = [
+      `diff --git a/${longPath} b/${longPath}`,
+      'index 1111111..2222222 100644',
+      `--- a/${longPath}`,
+      `+++ b/${longPath}`,
+      '@@ -1,1 +1,2 @@',
+      ' export {}',
+      '+export const a = 1',
+      `diff --git a/${oldPath} b/${longPath}.renamed`,
+      'similarity index 100%',
+      `rename from ${oldPath}`,
+      `rename to ${longPath}.renamed`,
+      '',
+    ].join('\n')
+    stubFetch({
+      'GET /api/v1/runs/r1/diff': () => new Response(longAndRenamedDiff, { status: 200 }),
+    })
+    renderWithProviders(<ReviewPanel run={run('review')} />)
+
+    await waitFor(() => {
+      expect(document.querySelectorAll('[data-slot="diff-file-path"]')).toHaveLength(2)
+    })
+    const paths = Array.from(document.querySelectorAll<HTMLElement>('[data-slot="diff-file-path"]'))
+    expect(paths[0]!.textContent).toBe(longPath)
+    expect(paths[0]!.getAttribute('title')).toBe(longPath)
+    expect(paths[0]!.className).toContain('wrap-anywhere')
+    expect(paths[0]!.className).not.toContain('truncate')
+
+    const renameLabel = `${oldPath} → ${longPath}.renamed`
+    expect(paths[1]!.textContent).toBe(renameLabel)
+    expect(paths[1]!.getAttribute('title')).toBe(renameLabel)
+    expect(paths[1]!.className).toContain('wrap-anywhere')
+    expect(paths[1]!.className).not.toContain('truncate')
+  })
+
   it('a non-diff server answer ("(no worktree — …)") renders as its own words', async () => {
     stubFetch({
       'GET /api/v1/runs/r1/diff': () =>

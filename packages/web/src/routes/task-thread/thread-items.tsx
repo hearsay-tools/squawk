@@ -1,4 +1,4 @@
-import { AnchorIcon, BrainIcon, FileTextIcon, FolderInputIcon, GlobeIcon, LoaderCircleIcon, MessageSquareIcon, SendIcon, SquarePenIcon, SquareTerminalIcon } from 'lucide-react'
+import { AnchorIcon, BrainIcon, FileTextIcon, FolderInputIcon, GlobeIcon, LoaderCircleIcon, MessageSquareIcon, SquarePenIcon, SquareTerminalIcon } from 'lucide-react'
 import { BotIcon, ChevronRightIcon, CopyIcon, ListTodoIcon, PaperclipIcon, SearchIcon, Trash2Icon, WrenchIcon } from '@/components/design-icons'
 import { useEffect, useId, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react'
 
@@ -20,7 +20,8 @@ import { splitToolTitle, streakLabel, type ContextGroupBlock } from './thread-gr
 import { useThreadCardCache } from './thread-open-cards'
 import { isNearBottom } from './thread-scroll'
 import { clockLabel, MessageTime } from './thread-time'
-import type { ThreadEntry, ThreadImage, ThreadNote, ThreadProviderAuthRequired } from './thread-state'
+import type { ThreadEntry, ThreadImage, ThreadProviderAuthRequired } from './thread-state'
+export { NoteLine } from './note-line'
 
 // The stick rule lives with the rest of the scroll math now; re-exported because this is
 // where the live tail below consumes it.
@@ -397,30 +398,6 @@ export function AssistantMessage({ text, ts, messageKey }: { text: string; ts?: 
   )
 }
 
-
-/** A dim (lifecycle/note) or danger (error) transcript line. */
-export function NoteLine({ note }: { note: ThreadNote }) {
-  if (note.icon === 'handoff') {
-    return (
-      <div data-slot="note-line" data-tone={note.tone} data-icon="handoff" className="flex items-start gap-2 px-0.5 text-xs text-muted-foreground">
-        <span aria-hidden="true" className="mt-[-1px] flex size-5 shrink-0 items-center justify-center rounded-full border border-border text-success">
-          <SendIcon className="size-3" />
-        </span>
-        <span className="min-w-0 break-words">{note.text}</span>
-      </div>
-    )
-  }
-  return (
-    <div
-      data-slot="note-line"
-      data-tone={note.tone}
-      className={cn('px-0.5 text-xs', note.tone === 'danger' ? 'text-danger [.light_&]:text-red-700' : 'text-soft-foreground')}
-    >
-      {note.tone === 'danger' ? '✗ ' : '· '}
-      {note.text}
-    </div>
-  )
-}
 
 /** Persisted recovery guidance for an authoritative runtime authentication rejection. It renders
  *  once the runners list has answered, so it names the runner. */

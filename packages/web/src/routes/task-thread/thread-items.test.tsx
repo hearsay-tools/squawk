@@ -25,6 +25,7 @@ import {
   ContextGroup,
   HookCard,
   hookDetail,
+  NoteLine,
   OUTPUT_CLAMP_LINES,
   AssistantMessage,
   ProviderAuthRequiredCard,
@@ -1170,5 +1171,39 @@ describe('conversation card delivery guidance', () => {
     expect(card.querySelector('[data-slot="conversation-delivery-explanation"]')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Details/ }))
     expect(card.textContent).toContain(delivery === 'consumed' ? 'Read' : 'Delivered')
+  })
+})
+
+describe('NoteLine — folded failure details (hearsay-tools/squawk#4018)', () => {
+  it('shows the full failure text once and expands folded sources on demand', () => {
+    const cause = '⚠ agent executor error: CLI Proxy 400 (invalid_request_error: bad parameter)'
+    render(
+      <NoteLine
+        note={{
+          kind: 'note',
+          id: 'v2:4',
+          text: cause,
+          tone: 'danger',
+          details: [
+            { source: 'step-end', text: `step task failed — ${cause}` },
+            { source: 'lifecycle', text: `run failed — step "task" failed: ${cause}` },
+          ],
+        }}
+      />,
+    )
+
+    const row = document.querySelector('[data-slot="note-line"]')!
+    expect(row.getAttribute('data-tone')).toBe('danger')
+    expect(row.textContent).toContain(cause)
+    expect(document.querySelector('[data-slot="note-details"]')).toBeNull()
+
+    const toggle = screen.getByRole('button', { name: 'Details' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+
+    const details = document.querySelector('[data-slot="note-details"]')!
+    expect(details.textContent).toContain(`Step status: step task failed — ${cause}`)
+    expect(details.textContent).toContain(`Run status: run failed — step "task" failed: ${cause}`)
   })
 })

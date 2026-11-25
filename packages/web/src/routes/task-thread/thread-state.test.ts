@@ -1569,3 +1569,175 @@ describe('reduceThread — preview servers (#781)', () => {
     ])).toMatchObject([{ state: 'registered' }])
   })
 })
+
+describe('reduceThread — folded provider failures (hearsay-tools/squawk#4018)', () => {
+  it('folds an Antigravity provider failure across agent text, error, session.error, step-end and lifecycle into one entry', () => {
+    const cause = '⚠ agent executor error: CLI Proxy 400'
+    const state = reduceThread([
+      line(1, 'lifecycle', { message: 'run started — workflow "quick-task" (runner: antigravity)' }),
+      line(2, 'turn.started', { turnId: 'acp-turn-1', stepId: 'task' }),
+      line(3, 'item.started', { item: { kind: 'message', id: 'msg_1', role: 'assistant', text: `\n${cause}\n` }, stepId: 'task' }),
+      line(4, 'item.completed', { item: { kind: 'message', id: 'msg_1', role: 'assistant', text: `\n${cause}\n` }, stepId: 'task' }),
+      line(5, 'text', { text: `\n${cause}\n`, stepId: 'task' }),
+      line(6, 'error', { message: cause, stepId: 'task' }),
+      line(7, 'session.error', { message: cause, fatal: true, stepId: 'task' }),
+      line(8, 'turn.completed', { turnId: 'acp-turn-1', stopReason: 'error', stepId: 'task' }),
+      line(9, 'session.error', { message: cause, fatal: true, stepId: 'task' }),
+      line(10, 'session.ended', { reason: 'error', message: cause, stepId: 'task' }),
+      line(11, 'step-end', { stepId: 'task', status: STEP_STATUS.failed, error: cause }),
+      line(12, 'lifecycle', { message: `run failed — step "task" failed: ${cause}` }),
+    ])
+
+    expect(state.sessionEnded).toEqual({ reason: 'error', message: cause })
+    const items = state.turns.flatMap((turn) => turn.items)
+    expect(items).toEqual([
+      { kind: 'note', id: 'v1:1', text: 'run started — workflow "quick-task" (runner: antigravity)', tone: 'dim' },
+      {
+        kind: 'note',
+        id: 'v1:6',
+        text: cause,
+        tone: 'danger',
+        details: [
+          { source: 'session.error', text: cause },
+          { source: 'step-end', text: `step task failed — ${cause}` },
+          { source: 'lifecycle', text: `run failed — step "task" failed: ${cause}` },
+          { source: 'assistant', text: cause },
+        ],
+      },
+    ])
+  })
+
+  it('folds a pi provider failure across non-fatal session.error, error, fatal session.error, step-end and lifecycle into one entry', () => {
+    const cause = 'pi: openai-codex/gpt-5.6-sol request failed: WebSocket error'
+    const state = reduceThread([
+      line(1, 'turn.started', { turnId: 'turn_1', stepId: 'task' }),
+      line(2, 'session.error', { message: cause, fatal: false, stepId: 'task' }),
+      line(3, 'error', { message: cause, stepId: 'task' }),
+      line(4, 'turn.completed', { turnId: 'turn_1', stopReason: 'error', stepId: 'task' }),
+      line(5, 'session.error', { message: cause, fatal: true, stepId: 'task' }),
+      line(6, 'session.ended', { reason: 'error', message: cause, stepId: 'task' }),
+      line(7, 'step-end', { stepId: 'task', status: STEP_STATUS.failed, error: cause }),
+      line(8, 'lifecycle', { message: `run failed — step "task" failed: ${cause}` }),
+    ])
+
+    const items = state.turns.flatMap((turn) => turn.items)
+    expect(items).toEqual([
+      {
+        kind: 'note',
+        id: 'v2:2',
+        text: cause,
+        tone: 'danger',
+        details: [
+          { source: 'error', text: cause },
+          { source: 'step-end', text: `step task failed — ${cause}` },
+          { source: 'lifecycle', text: `run failed — step "task" failed: ${cause}` },
+        ],
+      },
+    ])
+  })
+
+  it('folds a continuation failure including a step-end without an error string and the continue-failed lifecycle line', () => {
+    const cause = 'API Error: 500 Internal Server Error'
+    const state = reduceThread([
+      line(1, 'user-message', { text: 'try again', imageCount: 0 }),
+      line(2, 'turn.started', { turnId: 'turn_1', stepId: 'continue-1' }),
+      line(3, 'session.error', { message: cause, fatal: true, stepId: 'continue-1' }),
+      line(4, 'session.ended', { reason: 'error', message: cause, stepId: 'continue-1' }),
+      line(5, 'step-end', { stepId: 'continue-1', status: STEP_STATUS.failed }),
+      line(6, 'lifecycle', { message: `continue failed — ${cause}` }),
+    ])
+
+    expect(state.turns[0]!.items).toEqual([
+      {
+        kind: 'note',
+        id: 'v2:3',
+        text: cause,
+        tone: 'danger',
+        details: [
+          { source: 'step-end', text: 'step continue-1 failed' },
+          { source: 'lifecycle', text: `continue failed — ${cause}` },
+        ],
+      },
+    ])
+  })
+
+  it('keeps genuine earlier assistant prose while folding only the error-echo message', () => {
+    const cause = '⚠ agent executor error: CLI Proxy 400'
+    const state = reduceThread([
+      line(1, 'turn.started', { turnId: 'turn_1', stepId: 'task' }),
+      line(2, 'item.completed', { item: { kind: 'message', id: 'm1', role: 'assistant', text: 'Checking package.json first.' }, stepId: 'task' }),
+      line(3, 'item.completed', { item: { kind: 'message', id: 'm2', role: 'assistant', text: `\n${cause}\n` }, stepId: 'task' }),
+      line(4, 'session.error', { message: cause, fatal: true, stepId: 'task' }),
+      line(5, 'step-end', { stepId: 'task', status: STEP_STATUS.failed, error: cause }),
+    ])
+
+    expect(state.turns[0]!.items).toMatchObject([
+      { kind: 'message', id: 'm1', role: 'assistant', text: 'Checking package.json first.' },
+      {
+        kind: 'note',
+        id: 'v2:4',
+        text: cause,
+        tone: 'danger',
+        details: [
+          { source: 'step-end', text: `step task failed — ${cause}` },
+          { source: 'assistant', text: cause },
+        ],
+      },
+    ])
+  })
+
+  it('keeps distinct failures separate in the same turn and keeps separate turns independent', () => {
+    const state = reduceThread([
+      line(1, 'turn.started', { turnId: 'turn_1', stepId: 'task' }),
+      line(2, 'session.error', { message: 'rate limited, retrying', fatal: false, stepId: 'task' }),
+      line(3, 'session.error', { message: 'request timed out', fatal: true, stepId: 'task' }),
+      line(4, 'step-end', { stepId: 'task', status: STEP_STATUS.failed, error: 'request timed out' }),
+      line(5, 'user-message', { text: 'retry', imageCount: 0 }),
+      line(6, 'turn.started', { turnId: 'turn_2', stepId: 'continue-1' }),
+      line(7, 'session.error', { message: 'request timed out', fatal: true, stepId: 'continue-1' }),
+      line(8, 'lifecycle', { message: 'continue failed — request timed out' }),
+    ])
+
+    expect(state.turns).toHaveLength(2)
+    expect(state.turns[0]!.items).toEqual([
+      { kind: 'note', id: 'v2:2', text: 'rate limited, retrying', tone: 'danger' },
+      {
+        kind: 'note',
+        id: 'v2:3',
+        text: 'request timed out',
+        tone: 'danger',
+        details: [{ source: 'step-end', text: 'step task failed — request timed out' }],
+      },
+    ])
+    expect(state.turns[1]!.items).toEqual([
+      {
+        kind: 'note',
+        id: 'v2:7',
+        text: 'request timed out',
+        tone: 'danger',
+        details: [{ source: 'lifecycle', text: 'continue failed — request timed out' }],
+      },
+    ])
+  })
+
+  it('drops the duplicated error suffix from threadFooter when the latest turn already shows that failure', () => {
+    const cause = '⚠ agent executor error: CLI Proxy 400'
+    const thread = reduceThread([
+      line(1, 'turn.started', { turnId: 'turn_1', stepId: 'task' }),
+      line(2, 'session.error', { message: cause, fatal: true, stepId: 'task' }),
+      line(3, 'step-end', { stepId: 'task', status: STEP_STATUS.failed, error: cause }),
+      line(4, 'lifecycle', { message: `run failed — step "task" failed: ${cause}` }),
+    ])
+
+    expect(threadFooter(RUN_STATUS.failed, `step "task" failed: ${cause}`, thread)).toEqual({
+      state: 'closed',
+      tone: 'danger',
+      label: 'Session failed',
+    })
+    expect(threadFooter(RUN_STATUS.failed, 'unrelated failure', thread)).toEqual({
+      state: 'closed',
+      tone: 'danger',
+      label: 'Session failed — unrelated failure',
+    })
+  })
+})

@@ -13,13 +13,17 @@ import {
   clockTime,
   currentTurn,
   expirePermissions,
+  foldLifecycleFailure,
   isRecord,
   itemKey,
+  markTurnFailureFatal,
   newTurn,
   providerId,
   pushMeta,
+  recordFailure,
   stamp,
   str,
+  unwrapFailureCause,
   upsertConversation,
   upsertV2,
   type DraftEntry,
@@ -351,23 +355,52 @@ function reduceNote(fold: FoldState, event: RunEvent): void {
   // `tone: 'danger'` when it reports something the user actually lost, so
   // it does not render as the dimmest line in the thread (#936). Events
   // written before that field exists carry no `tone` and stay dim.
+  const text = str(event.message) ?? ''
+  if (event.type === 'lifecycle' && text !== '' && foldLifecycleFailure(fold, event, text)) return
   pushMessageNote(fold, event, `v1:${event.seq}`, event.tone === 'danger' ? 'danger' : 'dim')
 }
 
 function reduceError(fold: FoldState, event: RunEvent): void {
-  pushMessageNote(fold, event, `v1:${event.seq}`, 'danger')
+  const text = str(event.message) ?? ''
+  if (text === '') return
+  recordFailure(fold, event, {
+    id: `v1:${event.seq}`,
+    source: 'error',
+    text,
+    cause: unwrapFailureCause(text),
+    stepId: str(event.stepId),
+    fatal: false,
+  })
 }
 
 function reduceSessionError(fold: FoldState, event: RunEvent): void {
-  pushMessageNote(fold, event, `v2:${event.seq}`, 'danger')
+  const text = str(event.message) ?? ''
+  if (text === '') return
+  recordFailure(fold, event, {
+    id: `v2:${event.seq}`,
+    source: 'session.error',
+    text,
+    cause: unwrapFailureCause(text),
+    stepId: str(event.stepId),
+    fatal: event.fatal === true,
+  })
 }
 
 function reduceStepEnd(fold: FoldState, event: RunEvent): void {
   // Steps stay out of the thread (they are header material) except the one thing the
   // transcript must not hide: a step that failed — mirroring the legacy renderer.
   if (event.status !== 'failed') return
-  const suffix = str(event.error) ? ` — ${str(event.error)}` : ''
-  pushMeta(fold, { kind: 'note', id: `v1:${event.seq}`, text: `step ${str(event.stepId) ?? '?'} failed${suffix}`, tone: 'danger' })
+  const stepId = str(event.stepId)
+  const error = str(event.error)
+  const suffix = error ? ` — ${error}` : ''
+  recordFailure(fold, event, {
+    id: `v1:${event.seq}`,
+    source: 'step-end',
+    text: `step ${stepId ?? '?'} failed${suffix}`,
+    cause: error ? unwrapFailureCause(error) : '',
+    stepId,
+    fatal: true,
+  })
 }
 
 function reduceCheckOutput(fold: FoldState, event: RunEvent): void {
@@ -417,9 +450,11 @@ function reducePlanUpdated(fold: FoldState, event: RunEvent): void {
 
 function reduceSessionEnded(fold: FoldState, event: RunEvent): void {
   expirePermissions(fold)
+  const reason = (str(event.reason) ?? 'end_turn') as StopReason
   const message = str(event.message)
+  if (reason === 'error') markTurnFailureFatal(fold, event, message)
   fold.sessionEnded = {
-    reason: (str(event.reason) ?? 'end_turn') as StopReason,
+    reason,
     ...(message !== undefined ? { message } : {}),
   }
 }
