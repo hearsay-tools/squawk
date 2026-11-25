@@ -15,8 +15,8 @@ and add the prefix itself (reported by `npm prefix -g`) to `PATH`; npm puts
 Windows executables directly there. Set `PATH` before these commands.
 
 ```bash
-git clone https://github.com/hearsay-tools/cezarion.git
-cd cezarion
+git clone https://github.com/hearsay-tools/squawk.git
+cd squawk
 npm install --global pnpm@12.11.2
 pnpm install --frozen-lockfile
 ```

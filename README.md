@@ -227,7 +227,7 @@ npx -p @hearsay-tools/squawk@nightly hsq   # everything merged as of last night
 **Come build this with us.** Squawk is shaped by the people who run it on real
 repos: if you try a nightly and something feels wrong — a workflow that stalls, a
 diff that reads badly, a runner that should exist — [open an
-issue](https://github.com/hearsay-tools/cezarion/issues) and tell us. That feedback,
+issue](https://github.com/hearsay-tools/squawk/issues) and tell us. That feedback,
 early, is worth more than a bug report six weeks after a release, and it is how
 most of the features here got their final shape.
 
@@ -286,7 +286,7 @@ you to inspect.
         │  agent text · tool calls · tool results · tokens · cost
         ▼
    ┌─────────────┐   SSE (replay + live)   ┌──────────────────────────┐
-   │ .ai/cezar/  │ ──────────────────────► │  cockpit  localhost:4321 │
+   │ .ai/squawk/ │ ──────────────────────► │  cockpit  localhost:4321 │
    │SQLite·NDJSON│                         │  Tasks · Git · GitHub ·  │
    │ ·Markdown   │                         │  Skills · Workflows      │
    └─────────────┘                         └──────────────────────────┘
