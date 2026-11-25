@@ -39,7 +39,7 @@ adapter; the adapter never imports `definition.ts`, because the definition impor
 | `login`, `loadLogin()`, optional `loadBrowserSignIn()` | `login.ts`, `login-probe.ts`, `browser-sign-in.ts` | Status, native terminal login arguments, optional browser consent/replay flow, and account-home/hint metadata |
 | `accounts` | `accounts.ts`; `homeDir()` in `definition.ts` | The account folder layout, the profile markers and the home slot (its key in `AgentHomePaths`, which `agentHomePaths()` in `paths.ts` builds from the registered runners). `homeDir(env, userHome)` resolves the runner's default home |
 | `env` | `env.ts` | The environment allow-list prefixes |
-| `models` | `models.ts`; `loadSettings()` in `definition.ts` | `suggested` (picker presets), `known` (conflict check), `retired` and the `idMap`. `loadSettings()` reads the native default model; most built-in runners load it from `agent-config/model-settings/<id>.ts`, outside their folder |
+| `models` | `models.ts`; `loadSettings()` in `definition.ts` | `suggested` (picker presets), `known` (conflict check), `retired` and the `idMap`. `loadSettings()` reads the native default model; a built-in runner loads it from `runners/<id>/model-settings.ts` in its own folder, on the kit's shared helpers (`@hearsay-tools/squawk/plugin/model-settings`) |
 | `loadModelCatalog()`, optional `loadModelCatalogKey()` | `<id>-model-catalog.ts` | The host model discovery adapter, with optional native auth/build cache identity; requests can carry the selected account home |
 | `loadSkillCatalog()` | `<id>-skill-catalog.ts` | The native skill list adapter |
 | `configFiles` | `config-files.ts` | The native files that Settings → Agent config shows, and the runner's `agentConfig` pane. A file's readers are the registered runners that list it, so a shared file (`PROJECT_AGENTS_FILE`, `core/project-agents-file.ts`) names no runner |
@@ -149,12 +149,14 @@ definitions, provider requests and workspace config (`core/runner-fields.ts`,
   reads any other saved id as written, even if some definitions have registered already. A sealed
   empty registry treats every non-legacy id as unregistered.
 - The stored-config decoders (`config.ts`, `workspace/config.ts`,
-  `workspace/agent-accounts.ts`) check ids against the registry. A per-runner record keeps its own
-  handling of a key that no runner registered: `defaultModels` in `config.ts` drops it;
-  `agentDefaults.models` and the account selections (`registeredRunnerRecord`) keep it and ignore
-  it. A single id drops it: `agentDefaults.runner`, `disabledProviders` and an account row's
-  `provider`. The next write stores what the decoder read, so a runner that did not register
-  loses those settings.
+  `workspace/agent-accounts.ts`) keep a runner id that no runner registered, so a runner whose
+  plugin did not load keeps its settings. They check only the shared bound
+  (`storedRunnerIdSchema`, `core/runner-id-schema.ts`). `agentDefaults.runner`,
+  `disabledProviders`, the repo `defaultRunner` and `defaultModels`, `agentDefaults.models`, the
+  account selections and an account row's `provider` all keep the id; an account row checks
+  `supportsProfiles` only for a registered runner. The next write stores what the decoder read.
+  At run time an unregistered id is ignored or falls back to the default runner
+  (`resolveRunnerId`), and HTTP write routes still refuse it.
 
 ### How tests register runners
 
