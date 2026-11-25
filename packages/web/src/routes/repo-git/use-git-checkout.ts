@@ -7,6 +7,22 @@ import { workspaceQueryKeys } from '@/api/queries'
 import { toast } from '@/components/ui/toaster'
 
 /**
+ * Patch the cached workspace health snapshot after a branch switch, only when health describes
+ * this project scope. Health always describes the boot project (`bootProject`, also reached via
+ * the `'default'` alias), and hosted mode trims `health.repo.root` to a basename, so matching on
+ * project scope works in both local and hosted mode without comparing absolute host paths.
+ */
+export function patchHealthRepoBranch(
+  current: HealthResponse | undefined,
+  scope: string,
+  branch: string,
+): HealthResponse | undefined {
+  if (!current?.repo) return current
+  if (scope !== 'default' && scope !== current.bootProject) return current
+  return { ...current, repo: { ...current.repo, branch } }
+}
+
+/**
  * The checkout block's three actions (issue 06 §3): pull the checked-out branch (`POST
  * /repo/pull`, with its risk confirmation), switch or create a branch (`POST /repo/branch`) and
  * pick the agents' base branch (`PUT /config`). `scope` is EXPLICIT, the way the rest of the Git
@@ -63,9 +79,9 @@ export function useGitCheckout(scope: string, info: RepoInfo) {
       queryClient.setQueryData<RepoResponse>(repoKey, (current) =>
         current?.info ? { ...current, info: { ...current.info, branch: result.branch } } : current,
       )
-      // Health is workspace-level, so only patch it when it describes this repo.
+      // Health is workspace-level, so only patch it when it describes this project.
       queryClient.setQueryData<HealthResponse>(healthKey, (current) =>
-        current?.repo?.root === info.root ? { ...current, repo: { ...current.repo, branch: result.branch } } : current,
+        patchHealthRepoBranch(current, scope, result.branch),
       )
     },
     onError,

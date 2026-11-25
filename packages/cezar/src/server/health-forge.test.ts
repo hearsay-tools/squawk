@@ -3,7 +3,7 @@ import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -158,7 +158,12 @@ describe('GET /api/v1/health — forge + capabilities', () => {
     });
   });
 
-  it('hosted mode trims repoRoot to a basename — no absolute path/username leak (#431)', async () => {
+  it('hosted mode trims repoRoot and repo.root to basenames — no absolute path/username leak (#431, hearsay-tools/squawk#4229)', async () => {
+    initRepo('https://github.com/acme/demo.git');
+    const localBody = await health();
+    const realRoot = realpathSync(repoRoot);
+    expect((localBody.repo as { root: string }).root).toBe(realRoot);
+
     process.env.CEZ_REMOTE = '1';
     const body = await health();
     // The absolute checkout path (with the developer's username) must not be exposed to a
@@ -166,11 +171,20 @@ describe('GET /api/v1/health — forge + capabilities', () => {
     expect(body.repoRoot).toBe(basename(repoRoot));
     expect(body.repoRoot).not.toContain(sep);
     expect(body.repoRoot).not.toBe(repoRoot);
+    const repo = body.repo as { root: string; branch: string };
+    expect(repo.root).toBe(basename(realRoot));
+    expect(repo.root).not.toContain(sep);
+    expect(JSON.stringify(body)).not.toContain(repoRoot);
+    expect(JSON.stringify(body)).not.toContain(realRoot);
   });
 
-  it('hosted mode via a non-loopback bind host also trims repoRoot (#431)', async () => {
+  it('hosted mode via a non-loopback bind host also trims repoRoot and repo.root (#431, hearsay-tools/squawk#4229)', async () => {
+    initRepo('https://github.com/acme/demo.git');
     const body = await health({ bindHost: '0.0.0.0' });
     expect(body.repoRoot).toBe(basename(repoRoot));
+    const repo = body.repo as { root: string };
+    expect(repo.root).toBe(basename(realpathSync(repoRoot)));
+    expect(repo.root).not.toContain(sep);
   });
 
   it('hosted mode via a non-loopback bind host: localHandoff:false', async () => {

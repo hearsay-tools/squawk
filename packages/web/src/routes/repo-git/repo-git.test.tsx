@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ProjectScopeProvider } from '@/api/project-scope-context'
 import { createQueryClient } from '@/api/query-client'
 import { queryKeys } from '@/api/queries'
 import type { ChangesPayload, GithubData, HealthResponse, RepoBranchEntry, RepoBranchesResponse, RepoCommitPayload, RepoResponse } from '@open-mercato/cezar-api-client'
@@ -487,6 +488,63 @@ describe('the Git view All branches section', () => {
     await waitFor(() => expect(document.body.textContent).toContain('Switched to feature'))
     await waitFor(() => expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('8 branches · on feature'))
     await waitFor(() => expect(client.getQueryData<HealthResponse>(queryKeys.health)?.repo?.branch).toBe('feature'))
+  })
+
+  it('hosted mode: Switch still patches boot health when health.repo.root is trimmed to a basename (hearsay-tools/squawk#4229)', async () => {
+    const hostedHealth: HealthResponse = {
+      ...HEALTH,
+      bootProject: 'demo',
+      repoRoot: 'demo',
+      repo: { root: 'demo', branch: 'main', remote: 'git@github.com:acme/demo.git' },
+      capabilities: { ...HEALTH.capabilities, localHandoff: false },
+    }
+    stubFetch({
+      'GET /api/v1/repo': () => jsonResponse({ ...REPO, info: { ...REPO.info!, root: '/home/alice/demo' } }),
+      'GET /api/v1/health': () => jsonResponse(hostedHealth),
+      'POST /api/v1/repo/branch': () => jsonResponse({ branch: 'feature', created: false }),
+    })
+    const client = renderAt('/git/branches')
+    await waitFor(() => expect(document.querySelector('[data-action="switch-branch"]')).not.toBeNull())
+
+    fireEvent.click(document.querySelector('[data-action="switch-branch"]')!)
+    await waitFor(() => expect(document.body.textContent).toContain('Switched to feature'))
+    await waitFor(() => expect(client.getQueryData<HealthResponse>(queryKeys.health)?.repo?.branch).toBe('feature'))
+  })
+
+  it('hosted mode: Switch in a non-boot project does not patch boot health even when folder basenames match (hearsay-tools/squawk#4229)', async () => {
+    const hostedHealth: HealthResponse = {
+      ...HEALTH,
+      bootProject: 'boot',
+      repoRoot: 'demo',
+      repo: { root: 'demo', branch: 'main', remote: 'git@github.com:acme/demo.git' },
+      capabilities: { ...HEALTH.capabilities, localHandoff: false },
+    }
+    stubFetch({
+      'GET /api/v1/p/beta/repo': () => jsonResponse({ ...REPO, info: { ...REPO.info!, root: '/home/alice/other/demo' } }),
+      'GET /api/v1/p/beta/repo/branches': () => jsonResponse(BRANCHES),
+      'GET /api/v1/p/beta/github?limit=20': () => jsonResponse(GITHUB),
+      'GET /api/v1/health': () => jsonResponse(hostedHealth),
+      'POST /api/v1/p/beta/repo/branch': () => jsonResponse({ branch: 'feature', created: false }),
+    })
+    const client = createQueryClient()
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/p/beta/git/branches']}>
+          <ProjectScopeProvider projectId="beta">
+            <Routes>
+              <Route path="/p/beta/git/branches" element={<RepoGitRoute section="branches" />} />
+            </Routes>
+            <Toaster />
+          </ProjectScopeProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(document.querySelector('[data-action="switch-branch"]')).not.toBeNull())
+
+    fireEvent.click(document.querySelector('[data-action="switch-branch"]')!)
+    await waitFor(() => expect(document.body.textContent).toContain('Switched to feature'))
+    await waitFor(() => expect(client.getQueryData<RepoResponse>(['beta', 'repo'])?.info?.branch).toBe('feature'))
+    expect(client.getQueryData<HealthResponse>(['beta', 'health'])?.repo?.branch).toBe('main')
   })
 
   it('filters branch rows, and leaves the base-branch picker to the checkout block', async () => {

@@ -2,9 +2,10 @@ import '../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { testHome } from '../home/test-home.testkit.ts';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { healthResponseSchema } from '@open-mercato/cezar-contract/health';
 import { RunStore } from '../runs/store.ts';
@@ -81,25 +82,44 @@ describe('GET /api/v1/health — plugins', () => {
     expect(JSON.stringify(body.plugins)).not.toContain('sk-secret');
   });
 
+  const initRepo = () => {
+    execFileSync('git', ['init', '-q'], { cwd: repoRoot });
+    execFileSync('git', ['-c', 'user.email=t@test', '-c', 'user.name=t', 'commit', '--allow-empty', '-q', '-m', 'init'], { cwd: repoRoot });
+  };
+
   it('sends no host path from a snapshot cached before the cockpit became hosted', async () => {
+    initRepo();
+    const realRoot = realpathSync(repoRoot);
     report.current = loaded;
     const app = createApp({ home: testHome(), repoRoot, store, manager: {} as RunManager, version: '0.0.0-test', socketHub });
-    expect((await health(app)).plugins.loaded[0]!.path).toBe('/home/me/.config/squawk/plugins/good');
+    const localBody = await health(app);
+    expect(localBody.plugins.loaded[0]!.path).toBe('/home/me/.config/squawk/plugins/good');
+    expect(localBody.repo?.root).toBe(realRoot);
     vi.stubEnv('HSQ_REMOTE', '1');
     const body = await health(app);
     expect(body.capabilities.localHandoff).toBe(false);
     expect(body.repoRoot).toBe(basename(repoRoot));
+    expect(body.repo?.root).toBe(basename(realRoot));
+    expect(body.repo?.root).not.toContain(sep);
+    expect(JSON.stringify(body)).not.toContain(realRoot);
     expect(JSON.stringify(body.plugins)).not.toContain('/home/me');
+    // Returning to local mode within the cache TTL restores the full host repo root.
+    vi.stubEnv('HSQ_REMOTE', '');
+    expect((await health(app)).repo?.root).toBe(realRoot);
   });
 
   it('pushes no host path from a snapshot cached before the cockpit became hosted', async () => {
+    initRepo();
+    const realRoot = realpathSync(repoRoot);
     report.current = loaded;
     let settleDetection: (checks: Array<{ name: string; available: boolean }>) => void = () => {};
     const detectEnvironment = () => new Promise<Array<{ name: string; available: boolean }>>(resolve => { settleDetection = resolve; });
     let publisher: TopicPublisher | undefined;
     const hub = { ...socketHub, registerTopic: (name: string, topic: TopicPublisher) => { if (name === 'health') publisher = topic; } };
     const app = createApp({ home: testHome(), repoRoot, store, manager: {} as RunManager, version: '0.0.0-test', socketHub: hub, detectEnvironment });
-    expect((await health(app)).plugins.loaded[0]!.path).toBe('/home/me/.config/squawk/plugins/good');
+    const localBody = await health(app);
+    expect(localBody.plugins.loaded[0]!.path).toBe('/home/me/.config/squawk/plugins/good');
+    expect(localBody.repo?.root).toBe(realRoot);
     const pushed: unknown[] = [];
     const stop = publisher!.start(payload => pushed.push(payload));
     try {
@@ -112,6 +132,9 @@ describe('GET /api/v1/health — plugins', () => {
       expect(body.checks).toEqual([{ name: 'codex', available: true }]);
       expect(body.capabilities.localHandoff).toBe(false);
       expect(body.repoRoot).toBe(basename(repoRoot));
+      expect(body.repo?.root).toBe(basename(realRoot));
+      expect(body.repo?.root).not.toContain(sep);
+      expect(JSON.stringify(body)).not.toContain(realRoot);
       expect(JSON.stringify(body.plugins)).not.toContain('/home/me');
     } finally {
       stop();

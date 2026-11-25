@@ -112,7 +112,9 @@ export type PluginsHealth = z.infer<typeof pluginsHealthSchema>;
 export const healthResponseSchema = z.object({
   version: z.string(),
   latestVersion: z.string().optional(),
+  /** Boot root path in local mode; trimmed to a basename when `capabilities.localHandoff` is false. */
   repoRoot: z.string(),
+  /** Boot repository facts; `repo.root` is trimmed to a basename when `capabilities.localHandoff` is false. */
   repo: repoInfoSchema.nullable(),
   checks: z.array(backendCheckSchema),
   defaultRunner: runnerSchema,
