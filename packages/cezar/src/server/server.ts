@@ -187,7 +187,7 @@ import { isUntouchedCancelledRun } from '../workflows/run/run-guards.ts';
 import { worktreeDiff } from '../git-worktree.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { isReclaimable, reclaimWorktree, reclaimWorktrees, selectReclaimableWorktrees } from '../runs/retention.ts';
-import { getCommit, getDiff, getRepoInfo, getStatus } from './git.ts';
+import { getCommit, getDiff, getRepoInfo, getStatus, type RepoInfo } from './git.ts';
 import { createHealthCache, HEALTH_TTL_MS } from './health-cache.ts';
 import { COMMIT_FORMATS, FILE_FORMATS, negotiate } from './accept-negotiation.ts';
 import { authorityOfHost, authorityOfOrigin, hostnameOfHost, hostnameOfOrigin } from './host-authority.ts';
@@ -916,6 +916,9 @@ export function createApp(deps: ServerDeps) {
     stamp: environmentStamp,
     onChange: (checks) => { void healthCache.patch((payload) => ({ ...payload, checks })).catch(() => {}); },
   });
+  let bootRepoRoot: string | undefined;
+  const trimHealthRepo = (repo: RepoInfo | null, localHandoff: boolean, fullRoot?: string): RepoInfo | null =>
+    repo ? { ...repo, root: localHandoff ? (fullRoot ?? repo.root) : basename(repo.root) } : null;
   const healthSnapshot = async () => {
     const [checks, repo, config, workspace] = await Promise.all([
       backendChecks.read(),
@@ -923,6 +926,7 @@ export function createApp(deps: ServerDeps) {
       healthConfig(bootRoot, deps.home),
       workspaceSummary(),
     ]);
+    bootRepoRoot = repo?.root;
     // Callers outside the cockpit read this JSON.
     const forge = resolveProjectForge(repo);
     const caps = capabilities();
@@ -933,15 +937,11 @@ export function createApp(deps: ServerDeps) {
       // the key as always-present, which is a shape no client ever receives. The contract schema
       // says `.optional()`, and contract-parity.test.ts holds the two together.
       ...(update?.latest !== undefined ? { latestVersion: update.latest } : {}),
-      // Health is CORS-open and, in hosted mode, reachable off the loopback —
-      // so any site/host that reads it would learn the developer's absolute
-      // checkout path and username (#431). Local mode keeps the full path;
-      // hosted/remote mode trims it to a basename.
-      // The field is always present and a string, but under CEZ_REMOTE it is
-      // no longer an absolute path. A hosted cockpit's paths are on a machine
-      // the reader does not have anyway.
+      // Health is CORS-open and, in hosted mode, reachable off the loopback (#431). Local mode
+      // keeps full paths; hosted/remote mode trims repoRoot and repo.root to basenames so host
+      // checkout paths and usernames are never exposed.
       repoRoot: caps.localHandoff ? bootRoot : basename(bootRoot),
-      repo,
+      repo: trimHealthRepo(repo, caps.localHandoff),
       checks,
       defaultRunner: config.defaultRunner as string,
       // Non-blocking: cached availability or null-until-warm — health must never pay a `gh`
@@ -969,7 +969,7 @@ export function createApp(deps: ServerDeps) {
   const inCurrentMode = (payload: Awaited<ReturnType<typeof healthSnapshot>>) => {
     const caps = capabilities();
     const repoRoot = caps.localHandoff ? bootRoot : basename(bootRoot);
-    return { ...payload, capabilities: caps, repoRoot, plugins: pluginHealth(pluginLoadReport(), { hostPaths: caps.localHandoff }) };
+    return { ...payload, capabilities: caps, repoRoot, repo: trimHealthRepo(payload.repo, caps.localHandoff, bootRepoRoot), plugins: pluginHealth(pluginLoadReport(), { hostPaths: caps.localHandoff }) };
   };
   const healthCache = createHealthCache({
     snapshot: healthSnapshot,

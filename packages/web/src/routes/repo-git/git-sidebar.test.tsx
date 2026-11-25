@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
 import { workspaceQueryKeys } from '@/api/queries'
-import type { RepoBranchesResponse, RepoResponse, WorktreesResponse } from '@open-mercato/cezar-api-client'
+import type { HealthResponse, RepoBranchesResponse, RepoResponse, WorktreesResponse } from '@open-mercato/cezar-api-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 
 import { GitSidebar } from './git-sidebar'
@@ -378,6 +378,87 @@ describe('the checkout block', () => {
     fireEvent.click(await screen.findByRole('menuitemradio', { name: 'feature' }))
     await waitFor(() => expect(document.body.textContent).toContain('Switched to feature'))
     expect(client.getQueryState(workspaceQueryKeys.projects)?.isInvalidated).toBe(true)
+  })
+
+  it('hosted mode: checkout switch patches boot health when health.repo.root is a basename, and skips non-boot scopes (hearsay-tools/squawk#4229)', async () => {
+    const hostedHealth = {
+      version: 't',
+      projects: [],
+      bootProject: 'boot',
+      plugins: { loaded: [], failed: [] },
+      repoRoot: 'demo',
+      repo: { root: 'demo', branch: 'main', remote: 'git@github.com:acme/demo.git' },
+      checks: [],
+      defaultRunner: 'claude',
+      forge: null,
+      capabilities: { localHandoff: false, settingsAdmin: false, remoteSettingsAdmin: false, automations: true, preview: false, tokenMetrics: true, tokenUsageMetrics: true, costMetrics: true },
+    } satisfies HealthResponse
+
+    // Boot scope ('default') patches cached health even though repo.info.root is an absolute path.
+    stub({
+      'GET /api/v1/repo': () => json({ ...REPO, info: { ...REPO.info!, root: '/home/alice/demo' } }),
+      'POST /api/v1/repo/branch': () => json({ branch: 'feature', created: false }),
+    })
+    const bootClient = createQueryClient()
+    bootClient.setQueryData(['default', 'health'], hostedHealth)
+    const { unmount } = render(
+      <QueryClientProvider client={bootClient}>
+        <MemoryRouter initialEntries={['/git']}>
+          <GitSidebar scope="default" />
+          <Toaster />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(q('[data-slot="git-branch-menu"]')).not.toBeNull())
+    openMenu(q('[data-slot="git-branch-menu"]')!)
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'feature' }))
+    await waitFor(() => expect(document.body.textContent).toContain('Switched to feature'))
+    expect(bootClient.getQueryData<HealthResponse>(['default', 'health'])?.repo?.branch).toBe('feature')
+    unmount()
+
+    // Explicit bootProject slug scope ('boot') also patches cached health.
+    stub({
+      'GET /api/v1/p/boot/repo': () => json({ ...REPO, info: { ...REPO.info!, root: '/home/alice/demo' } }),
+      'POST /api/v1/p/boot/repo/branch': () => json({ branch: 'feature', created: false }),
+    })
+    const slugClient = createQueryClient()
+    slugClient.setQueryData(['boot', 'health'], hostedHealth)
+    const slugView = render(
+      <QueryClientProvider client={slugClient}>
+        <MemoryRouter initialEntries={['/p/boot/git']}>
+          <GitSidebar scope="boot" />
+          <Toaster />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(q('[data-slot="git-branch-menu"]')).not.toBeNull())
+    openMenu(q('[data-slot="git-branch-menu"]')!)
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'feature' }))
+    await waitFor(() => expect(document.body.textContent).toContain('Switched to feature'))
+    expect(slugClient.getQueryData<HealthResponse>(['boot', 'health'])?.repo?.branch).toBe('feature')
+    slugView.unmount()
+
+    // Non-boot scope ('beta') leaves cached boot health untouched even when folder basenames match.
+    stub({
+      'GET /api/v1/p/beta/repo': () => json({ ...REPO, info: { ...REPO.info!, root: '/home/alice/other/demo' } }),
+      'POST /api/v1/p/beta/repo/branch': () => json({ branch: 'feature', created: false }),
+    })
+    const betaClient = createQueryClient()
+    betaClient.setQueryData(['beta', 'health'], hostedHealth)
+    render(
+      <QueryClientProvider client={betaClient}>
+        <MemoryRouter initialEntries={['/p/beta/git']}>
+          <GitSidebar scope="beta" />
+          <Toaster />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(q('[data-slot="git-branch-menu"]')).not.toBeNull())
+    openMenu(q('[data-slot="git-branch-menu"]')!)
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'feature' }))
+    await waitFor(() => expect(document.body.textContent).toContain('Switched to feature'))
+    expect(betaClient.getQueryData<RepoResponse>(['beta', 'repo'])?.info?.branch).toBe('feature')
+    expect(betaClient.getQueryData<HealthResponse>(['beta', 'health'])?.repo?.branch).toBe('main')
   })
 
   it('the branch menu links to All branches to create one', async () => {

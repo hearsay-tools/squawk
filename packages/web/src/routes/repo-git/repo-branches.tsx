@@ -2,14 +2,16 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { GitBranchIcon, GitPullRequestIcon, PlusIcon, SearchIcon } from '@/components/design-icons'
 import { useState, type FormEvent } from 'react'
 
+import { queryScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { createRepoBranch } from '@/api/client'
-import { queryKeys, useGithub, useHealth, useRepoBranches } from '@/api/queries'
+import { useGithub, useHealth, useRepoBranches } from '@/api/queries'
 import type { BranchClass, GithubItem, HealthResponse, RepoBranchEntry, RepoInfo, RepoResponse } from '@open-mercato/cezar-api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toaster'
 import { Link } from '@/lib/project-router'
 import { BranchKeptReason } from './branch-kept-reason'
+import { patchHealthRepoBranch } from './use-git-checkout'
 import { cn, isHttpUrl } from '@/lib/utils'
 
 /**
@@ -28,6 +30,9 @@ import { cn, isHttpUrl } from '@/lib/utils'
  * `/api/github`) only behind it.
  */
 export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: RepoInfo }) {
+  const scope = queryScope()
+  const repoKey = [scope, 'repo'] as const
+  const healthKey = [scope, 'health'] as const
   const health = useHealth()
   const classified = useRepoBranches()
   const byName = new Map((classified.data?.branches ?? []).map((entry) => [entry.name, entry]))
@@ -35,23 +40,21 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
   const onError = (error: Error) => toast(error.message, { tone: 'danger' })
 
   const branchAction = useMutation({
-    mutationFn: (name: string) => createRepoBranch({ name }),
+    mutationFn: (name: string) => createRepoBranch({ name }, scope),
     onSuccess: async (result) => {
       toast(result.created ? `Created and switched to ${result.branch}` : `Switched to ${result.branch}`)
       // Refresh the rest of both payloads first, then preserve the mutation's authoritative
       // checkout result even if a read races and briefly returns the previous HEAD.
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.repo }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.health }),
+        queryClient.invalidateQueries({ queryKey: repoKey }),
+        queryClient.invalidateQueries({ queryKey: healthKey }),
       ])
-      queryClient.setQueryData<RepoResponse>(queryKeys.repo, (current) =>
+      queryClient.setQueryData<RepoResponse>(repoKey, (current) =>
         current?.info ? { ...current, info: { ...current.info, branch: result.branch } } : current,
       )
-      // Health is workspace-level, so only patch it when it describes this repo.
-      queryClient.setQueryData<HealthResponse>(queryKeys.health, (current) =>
-        current?.repo?.root === info.root
-          ? { ...current, repo: { ...current.repo, branch: result.branch } }
-          : current,
+      // Health is workspace-level, so only patch it when it describes this project.
+      queryClient.setQueryData<HealthResponse>(healthKey, (current) =>
+        patchHealthRepoBranch(current, scope, result.branch),
       )
     },
     onError,
