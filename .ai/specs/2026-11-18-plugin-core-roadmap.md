@@ -44,7 +44,7 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 
 ## Steps
 
-| Step | What | State on 2026-11-24 |
+| Step | What | State on 2026-11-25 |
 | --- | --- | --- |
 | 0 | Draw the line: define the core, add the layer map and `cez/layer-import` | Done: hearsay-tools/squawk#3706, ADR 0065 |
 | 1 | Runners become definitions that register themselves | Done: epic hearsay-tools/squawk#3824, [spec](2026-11-18-runner-definitions.md), [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md) |

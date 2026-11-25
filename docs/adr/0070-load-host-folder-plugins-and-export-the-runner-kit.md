@@ -98,7 +98,8 @@ plugin API types and the runner kit. Paths are under `packages/cezar/src/` unles
 
 ### 6. Cold CLI stays cold
 
-- `--help`, `--version` and every built-in command whose `runtimeMode` is false call
+- `--help`, `--version` and every built-in command whose `runtimeMode` is `'none'` (or a
+  predicate that returns `false` for the arguments) call
   `bootColdCli()` and load no plugin, runner or store.
 - A built-in runtime command and an unknown command name call `bootRuntime()`. A plugin's CLI
   command therefore registers before the CLI registry seals and dispatches like a built-in. A
