@@ -160,6 +160,54 @@ describe('guarded automatic archive', () => {
     const page = store.archive.listArchiveOnMergeCandidates(0, 1);
     expect(store.archive.listArchiveOnMergeCandidates(page[0]!.seq, 1)).toEqual([]);
   });
+
+  it('declines when another store adds a PR between validation and the archive write (hearsay-tools/squawk#4085)', () => {
+    const { store, id, dir } = setup();
+    const other = RunStore.open(dir, { keepLive: true }); stores.push(other);
+    const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
+    const secondPr = { number: 43, source: 'declared' as const };
+    let mutated = false;
+    const archived = store.archive.archiveAfterMerge(snapshot, observations(snapshot), repo, () => {
+      if (!mutated) {
+        mutated = true;
+        other.updateRun(id, { pullRequests: [pr, secondPr] });
+        other.persistence.flush();
+      }
+      return false;
+    });
+    expect(archived).toBe(false);
+    expect(store.getRun(id)).toMatchObject({ archived: false, pullRequests: [pr, secondPr] });
+    expect(readPersistedRuns(dir)[0]).toMatchObject({ archived: false, pullRequests: [pr, secondPr] });
+    expect(readPersistedRuns(dir)[0]).not.toHaveProperty('autoArchive');
+  });
+
+  it('declines when a worker PR set changes between validation and the archive write (hearsay-tools/squawk#4085)', () => {
+    const { store, id, dir } = setup();
+    store.updateRun(id, { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });
+    const workerId = randomUUID();
+    const worker = store.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', runner: 'claude', steps: [] }, id, randomUUID(), {
+      role: 'worker', permissions: [], parentRunId: id, workspace: { ownerRunId: workerId, resourceId: randomUUID(), kind: 'owned-isolated', path: join(dir, 'absent-worktree'), branch: `cez/${workerId.slice(0, 8)}`, baselineSha: 'a'.repeat(40) },
+    }, 'a'.repeat(64), spawnCapacityRefusal);
+    store.move(worker.id, 'stop-worker');
+    const proof = store.workerExecutions.readWorkerExecution(worker.id)!;
+    expect(store.workerExecutions.commitWorkerExecutionComplete(worker.id, proof.generation)).toBe(true);
+    store.persistence.flush();
+    const other = RunStore.open(dir, { keepLive: true }); stores.push(other);
+    const snapshot = store.archive.archiveOnMergeSnapshot(id, repo)!;
+    const workerPr = { number: 43, source: 'declared' as const };
+    const archived = store.archive.archiveAfterMerge(snapshot, observations(snapshot), repo, (memberId) => {
+      if (memberId === worker.id) {
+        other.updateRun(worker.id, { pullRequests: [workerPr] });
+        other.persistence.flush();
+      }
+      return false;
+    });
+    expect(archived).toBe(false);
+    const persisted = new Map(readPersistedRuns(dir).map((run: RunRecord) => [run.id, run]));
+    expect(persisted.get(id)).toMatchObject({ archived: false });
+    expect(persisted.get(id)).not.toHaveProperty('autoArchive');
+    expect(persisted.get(worker.id)).toMatchObject({ archived: false, pullRequests: [workerPr] });
+  });
 });
 
 it('manual archive overrides pending input while automatic archive exposes the blocking task', () => {

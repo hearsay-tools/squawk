@@ -293,13 +293,14 @@ function prepareCompletionActions(write: Writes['commit']): void {
   const { staged, hooks } = write;
   for (const [id, candidate] of [...staged]) {
     if (!candidate) continue;
-    const previous = hooks.peek(id);
+    const eligible = candidate.status === 'done' && !candidate.archived && (candidate.archiveWhenDone || candidate.autoMergePr);
+    const previous = eligible ? hooks.peek(id) : undefined;
     let next = candidate;
-    const changed = candidate.status === 'done' && !candidate.archived && (
+    const changed = eligible && (
       previous?.status !== 'done' ||
       Boolean(previous.archiveWhenDone) !== Boolean(candidate.archiveWhenDone) ||
       Boolean(previous.autoMergePr) !== Boolean(candidate.autoMergePr));
-    if (changed && (candidate.archiveWhenDone || candidate.autoMergePr)) {
+    if (changed) {
       next = { ...candidate, completionAction: { id: randomUUID(), phase: 'pending' } };
       staged.set(id, next);
       if (next.archiveWhenDone && !next.autoMergePr) {

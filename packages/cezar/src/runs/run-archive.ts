@@ -20,7 +20,8 @@ import { archivePullRequests, pullRequestKey } from './pull-requests.ts';
 import { stageArchiveFields } from './record-write-rules.ts';
 import type { RunExitId } from './run-exits.ts';
 import { familyKey, type ClaimOwner } from './run-claims.ts';
-import type { RunDatabase, RunRow } from './run-database.ts';
+import { RunWriteRefusedError } from './run-claims-topic.ts';
+import { RunConflictError, type RunDatabase, type RunRow } from './run-database.ts';
 import { isLiveStatus, type ListOrder } from './run-row.ts';
 import { parseStoredSummary } from './run-summary-page.ts';
 import { stampOf } from './transcript-facts.ts';
@@ -64,7 +65,7 @@ export interface ArchiveState {
   assertWritable(staged: ReadonlyMap<string, RunRecord | null>): void;
   decodeCold(row: RunRow): RunRecord | undefined;
   listOrder(run: RunRecord): ListOrder;
-  commitIndex(input: ReadonlyMap<string, RunRecord | null>, source?: undefined, write?: { exits?: ReadonlyMap<string, RunExitId | undefined> }): void;
+  commitIndex(input: ReadonlyMap<string, RunRecord | null>, source?: undefined, write?: { before?: ReadonlyMap<string, Readonly<RunRecord>>; exits?: ReadonlyMap<string, RunExitId | undefined> }): void;
   touch(run: RunRecord, before: Readonly<RunRecord> | undefined, exit?: RunExitId): void;
   readWorkerExecution(id: string): WorkerExecution | undefined;
 }
@@ -219,21 +220,71 @@ export class RunArchiveTopic implements RunArchive, RunCompletionActions {
     if (!family) return false;
     const current = this.archiveSnapshot(family, repoBase);
     if (!current || current.token !== snapshot.token || current.fingerprint !== snapshot.fingerprint) return false;
-    const parsed = observations.map(observation => mergedPullRequestSchema.safeParse(observation));
-    if (parsed.some(result => !result.success)) return false;
-    const merged = parsed.flatMap(result => result.success ? [result.data] : []);
-    const byKey = new Map(merged.map(pr => [pullRequestKey(pr), pr]));
-    if (byKey.size !== current.pullRequests.length || current.pullRequests.some(pr => !byKey.has(pullRequestKey(pr)))) return false;
+    const merged = this.parseMergeObservations(observations, current.pullRequests);
+    if (!merged) return false;
     const restoredAt = Math.max(0, ...family.map(run => run.manualUnarchivedAt ? Date.parse(run.manualUnarchivedAt) : 0));
     if (restoredAt && merged.every(pr => Date.parse(pr.mergedAt) <= restoredAt)) return false;
     const now = new Date().toISOString();
     if (merged.some(pr => Date.parse(pr.mergedAt) > Date.parse(now))) return false;
-    const staged = new Map<string, RunRecord | null>(), exits = new Map<string, RunExitId | undefined>();
-    this.stageArchive(staged, family[0]!, true, exits);
-    staged.get(snapshot.rootId)!.autoArchive = { reason: 'pull-requests-merged', archivedAt: now, fingerprint: current.fingerprint, pullRequests: merged };
-    this.state.commitIndex(staged, undefined, { exits });
+    const familyId = this.state.familyOf(snapshot.rootId);
+    if (this.state.db() && !this.state.claimFamilies([familyId]).has(familyId)) return false;
+    const currentWorkers = this.currentWorkerIds(snapshot.rootId);
+    if (currentWorkers.size !== family.length - 1 || family.slice(1).some(worker => !currentWorkers.has(worker.id))) return false;
+    const { staged, before, exits } = this.stageValidatedArchive(family, now, {
+      reason: 'pull-requests-merged', archivedAt: now, fingerprint: current.fingerprint, pullRequests: merged,
+    });
+    try {
+      this.state.commitIndex(staged, undefined, { before, exits });
+    } catch (error) {
+      if (error instanceof RunConflictError || error instanceof RunWriteRefusedError) return false;
+      throw error;
+    }
     for (const id of staged.keys()) this.compressor.enqueue(id);
     return true;
+  }
+
+  private parseMergeObservations(
+    observations: readonly MergedPullRequest[],
+    expected: readonly ArchivePullRequestIdentity[],
+  ): MergedPullRequest[] | undefined {
+    const parsed = observations.map(observation => mergedPullRequestSchema.safeParse(observation));
+    if (parsed.some(result => !result.success)) return undefined;
+    const merged = parsed.flatMap(result => result.success ? [result.data] : []);
+    const byKey = new Map(merged.map(pr => [pullRequestKey(pr), pr]));
+    if (byKey.size !== expected.length || expected.some(pr => !byKey.has(pullRequestKey(pr)))) return undefined;
+    return merged;
+  }
+
+  private currentWorkerIds(rootId: string): Set<string> {
+    const ids = new Set(this.state.db()?.listIdsByParent(rootId) ?? []);
+    for (const run of this.state.held.values()) {
+      if (run.delegation?.role === 'worker' && run.delegation.parentRunId === rootId) ids.add(run.id);
+    }
+    for (const id of this.state.deleted) ids.delete(id);
+    return ids;
+  }
+
+  private stageValidatedArchive(
+    family: readonly RunRecord[],
+    now: string,
+    autoArchive: NonNullable<RunRecord['autoArchive']>,
+  ): {
+    staged: Map<string, RunRecord | null>;
+    before: Map<string, Readonly<RunRecord>>;
+    exits: Map<string, RunExitId | undefined>;
+  } {
+    const staged = new Map<string, RunRecord | null>();
+    const before = new Map<string, Readonly<RunRecord>>();
+    const exits = new Map<string, RunExitId | undefined>();
+    for (const member of family) {
+      before.set(member.id, snapshotRun(member)!);
+      const next = { ...member, archiveBlocker: undefined };
+      const exit = archiveFields(next, true, now);
+      if (exit) exits.set(member.id, exit);
+      staged.set(member.id, next);
+    }
+    staged.get(family[0]!.id)!.autoArchive = autoArchive;
+    return { staged, before, exits };
   }
 
   setArchived(id: string, archived: boolean): RunRecord | undefined {
@@ -346,12 +397,15 @@ export class RunArchiveTopic implements RunArchive, RunCompletionActions {
     // A sweepable run is never a worker (`isSweepable`), so each is its own family.
     const writable = this.state.claimFamilies(picked.map(([run]) => run.id));
     const mine = this.state.sortNewestFirst(picked.filter(([run]) => writable.has(run.id)));
-    const ids = mine.map((run) => run.id);
-    const pinnedIds = mine.filter((run) => run.pinned).map((run) => run.id);
-    for (const id of ids) {
-      // Re-check: a prior cascade may already have archived this id.
-      const run = this.state.record(id);
-      if (!run || run.archived) continue;
+    const ids: string[] = [];
+    const pinnedIds: string[] = [];
+    for (const candidate of mine) {
+      // Re-check after claiming: another process may have pinned, resumed or archived it,
+      // or a prior cascade may already have archived this id.
+      const run = this.state.record(candidate.id);
+      if (!run || !SWEEPABLE_RUN_RULE.matches({ ...run, automationId: automationIdOf(run) }, scope, automation)) continue;
+      ids.push(run.id);
+      if (run.pinned) pinnedIds.push(run.id);
       archived += this.applyArchivedCascade(run, true);
     }
     return { archived, ids, pinnedIds };
