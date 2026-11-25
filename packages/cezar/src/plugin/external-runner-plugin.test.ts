@@ -37,8 +37,8 @@ function breakPlugin(): void {
 }
 
 function restorePlugin(): void {
-  rmSync(join(plugin, 'index.js'));
-  rmSync(join(plugin, 'package.json'));
+  rmSync(join(plugin, 'index.js'), { force: true });
+  rmSync(join(plugin, 'package.json'), { force: true });
   cpSync(join(fixture, 'index.mjs'), join(plugin, 'index.mjs'));
 }
 
@@ -59,7 +59,7 @@ interface CliResult { code: number; stdout: string; stderr: string }
 async function hsq(...args: string[]): Promise<CliResult> {
   const env: NodeJS.ProcessEnv = { ...process.env, HSQ_HOME: homeDir, CEZ_HOME: homeDir };
   for (const key of Object.keys(env)) {
-    if (/^(?:CEZ|HSQ)_(?:TOOL_|TASK_|DELEGATION_|HANDOFF_|ARTIFACTS_|PROJECT_|COCKPIT_|DRY_RUN|AGENT_MODELS_LOCKED|REVIEW_GATE)/.test(key)) delete env[key];
+    if (/^(?:CEZ|HSQ)_(?:TOOL_|TASK_|DELEGATION|HANDOFF_|ARTIFACTS_|PROJECT_|COCKPIT_|DRY_RUN|AGENT_MODELS_LOCKED|REVIEW_GATE|REMOTE)/.test(key) || key.startsWith('EXT_AGENT_')) delete env[key];
   }
   return new Promise(resolve => {
     execFile(process.execPath, ['--import', 'tsx', cli, ...args], { cwd: pkg, env, timeout: CLI_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) => {
@@ -101,7 +101,10 @@ async function bootInProcess() {
   };
 }
 
+/** `GET /api/v1/health` of a local cockpit, which names each plugin's folder. */
 async function health() {
+  vi.stubEnv('HSQ_REMOTE', '');
+  vi.stubEnv('CEZ_REMOTE', '');
   const { RunStore } = await import('../runs/store.ts');
   const { createApp } = await import('../server/server.ts');
   const { apiRequest } = await import('../server/loopback-request.testkit.ts');
@@ -114,6 +117,7 @@ async function health() {
   } finally {
     store.persistence.flush();
     store.close();
+    vi.unstubAllEnvs();
   }
 }
 
@@ -156,10 +160,11 @@ describe('an external plain-JS runner plugin in <config>/plugins/', { timeout: 2
     mkdirSync(home.plugins, { recursive: true });
     cpSync(fixture, plugin, { recursive: true });
     expect(relative(fileURLToPath(new URL('../../../..', import.meta.url)), plugin).startsWith('..')).toBe(true);
-    for (const file of ['index.mjs', 'adapter.mjs', 'agent.mjs']) {
-      const imports = [...readFileSync(join(plugin, file), 'utf8').matchAll(/^import .* from '([^']+)';$/gm)].map(match => match[1]);
-      expect(imports.every(specifier => specifier!.startsWith('node:') || specifier!.startsWith('./') || /^@hearsay-tools\/squawk\/plugin(?:\/runtime)?$/.test(specifier!)), `${file}: ${imports.join(', ')}`).toBe(true);
-    }
+    // Every specifier in the plugin: static and re-export `from`, bare `import '...'` and `import(...)`.
+    const specifiers = ['index.mjs', 'adapter.mjs', 'agent.mjs'].flatMap(file =>
+      [...readFileSync(join(plugin, file), 'utf8').matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)(['"`])([^'"`]+)\1/g)].map(match => match[2]!));
+    expect(specifiers).toEqual(expect.arrayContaining(['@hearsay-tools/squawk/plugin', '@hearsay-tools/squawk/plugin/runtime', './adapter.mjs']));
+    expect(specifiers.filter(specifier => !specifier.startsWith('node:') && !specifier.startsWith('./') && !/^@hearsay-tools\/squawk\/plugin(?:\/runtime)?$/.test(specifier))).toEqual([]);
 
     repo = join(root, 'repo');
     mkdirSync(repo);
@@ -251,13 +256,15 @@ describe('an external plain-JS runner plugin in <config>/plugins/', { timeout: 2
     // Unrelated writes to each store while the runner is unregistered.
     await booted.workspace.mergeWriteWorkspaceConfig(next => { next.resources.maxParallel = 3; }, home);
     await booted.accounts.mergeWriteAgentAccounts(store => { store.selections[other] = { claude: 'default' }; }, home);
+    const { writeMergedConfig } = await import('../server/config-merge.ts');
+    expect(await writeMergedConfig(projectPaths(repo).write, { worktreeRetention: 4 })).toBeUndefined();
 
     const after = storedSettings();
     expect(after.agentDefaults).toEqual(before.agentDefaults);
     expect(after.disabledProviders).toEqual(before.disabledProviders);
     expect(after.accounts).toEqual(before.accounts);
     expect(after.selections).toMatchObject(before.selections as object);
-    expect(after.repo).toEqual(before.repo);
+    expect(after.repo).toEqual({ ...before.repo, worktreeRetention: 4 });
     expect(readJson(home.workspaceConfig)).toMatchObject({ resources: { maxParallel: 3 } });
     expect((readJson(home.workspaceConfig).projects as { root: string }[]).map(project => project.root)).toContain(other);
   });
@@ -265,10 +272,13 @@ describe('an external plain-JS runner plugin in <config>/plugins/', { timeout: 2
   it('acts on the stored settings again once the plugin is restored', async () => {
     restorePlugin();
     const { report } = await plugins();
+    const registered = await bootInProcess();
+    // The disabled flag the previous case stored; set here too, so this case also runs alone.
+    await registered.workspace.mergeWriteWorkspaceConfig(next => { next.disabledProviders = ['codex', RUNNER]; }, home);
     expect(report.failed).toEqual([]);
     expect(report.loaded.map(entry => entry.name)).toContain(RUNNER);
 
-    const booted = await bootInProcess();
+    const booted = registered;
     expect(booted.warnings.join('')).toBe('');
     expect((await health()).plugins).toMatchObject({ failed: [], loaded: expect.arrayContaining([{ name: RUNNER, source: 'host', path: plugin }]) });
     const config = await booted.workspace.loadWorkspaceConfig(home.workspaceConfig);
