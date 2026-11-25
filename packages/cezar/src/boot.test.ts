@@ -218,3 +218,43 @@ it('fails boot, and every retry, when a bundled runner fails to load', async () 
   expect(load).toHaveBeenCalledOnce();
   expect((await import('./core/runner-registry.ts')).runnersSealed()).toBe(false);
 });
+
+it('boots with no bundled runner when bundledRunnersDir is empty and reuses that boot on later calls', async () => {
+  vi.resetModules();
+  const emptyBundled = mkdtempSync(join(tmpdir(), 'hsq-empty-bundled-'));
+  const hostDir = mkdtempSync(join(tmpdir(), 'hsq-host-runner-'));
+  mkdirSync(join(hostDir, 'claude'));
+  writeFileSync(join(hostDir, 'claude', 'index.mjs'), `export default function setup(api) {
+  api.registerRunner({ id: 'claude', display: { displayName: 'Host Claude' } });
+}
+`);
+  const loadBundled = vi.fn();
+  const loadFolder = vi.fn();
+  vi.doMock('./plugin/loader.ts', async (original) => {
+    const loader = await original<typeof import('./plugin/loader.ts')>();
+    return {
+      ...loader,
+      loadBundledRunners: (...args: Parameters<typeof loader.loadBundledRunners>) => { loadBundled(...args); return loader.loadBundledRunners(...args); },
+      loadPluginFolder: (...args: Parameters<typeof loader.loadPluginFolder>) => { loadFolder(...args); return loader.loadPluginFolder(...args); },
+    };
+  });
+  try {
+    const boot = await import('./boot.ts');
+    const first = boot.bootRuntime({ bundledRunnersDir: emptyBundled, pluginsDir: hostDir });
+    const second = boot.bootRuntime({ pluginsDir: hostDir });
+    expect(second).toBe(first);
+    await first;
+    await boot.bootRuntime();
+    expect(loadBundled).toHaveBeenCalledExactlyOnceWith(emptyBundled, { allowEmpty: true });
+    expect(loadFolder).toHaveBeenCalledTimes(1);
+    const runners = await import('./core/runner-registry.ts');
+    expect(runners.registeredRunners().map(runner => [runner.id, runner.display.displayName])).toEqual([['claude', 'Host Claude']]);
+    const report = (await import('./plugin/loader.ts')).pluginLoadReport();
+    expect(report.folders).toEqual([emptyBundled, hostDir]);
+    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([['claude', 'host']]);
+    expect(report.failed).toEqual([]);
+  } finally {
+    rmSync(emptyBundled, { recursive: true, force: true });
+    rmSync(hostDir, { recursive: true, force: true });
+  }
+});
