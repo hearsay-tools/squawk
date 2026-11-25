@@ -1,5 +1,4 @@
-import { defineRunner } from '../../core/runner-definition.ts';
-import { productEnv } from '../../core/product-env.ts';
+import { defineRunner, productEnv } from '@hearsay-tools/squawk/plugin';
 import { OMP_FACTS } from './facts.ts';
 import { OMP_MODELS } from './models.ts';
 import { OMP_AGENT_CONFIG, OMP_CONFIG_FILES } from './config-files.ts';

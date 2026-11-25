@@ -1,22 +1,23 @@
 #!/usr/bin/env node
 // Adds a sixth built-in runner to a scratch clone, only in the places a new built-in runner may
-// touch (hearsay-tools/squawk#3900): its folder `packages/cezar/src/runners/<id>/`, its mock script
-// and that script's data files in `packages/cezar/scripts/`, one line in
-// `packages/cezar/src/runners/built-in.ts` and its id in `packages/cezar/src/runners/ids.ts`.
-// The result is never committed. Two modes:
+// touch (hearsay-tools/squawk#3900): its folder `packages/cezar/src/runners/<id>/`, whose plugin
+// entry `index.ts` registers it and declares its display order, and its mock script and that
+// script's data files in `packages/cezar/scripts/`. Boot finds the folder through the plugin loader
+// (hearsay-tools/squawk#4209), so no roster file changes. The result is never committed. Two modes:
 //
 //   node .ai/scripts/simulate-sixth-runner.mjs <scratch clone>
 //   node .ai/scripts/simulate-sixth-runner.mjs --complete <scratch clone>
 //
-// The first mode (the four places) adds `sixth`: the test-only fixture runner (`runners/fixture/`)
-// under production names, with the mock script `mock-sixth-runner.mjs`; its `mock.testkit.ts`,
-// when the fixture has one, becomes `mock.ts`. It is an incomplete runner: the guard tests must
-// name each missing piece inside the four places.
+// The first mode (the two places) adds `sixth`: the test-only fixture runner (`runners/fixture/`)
+// under production names, with a plugin entry `index.ts` and the mock script
+// `mock-sixth-runner.mjs`; its `mock.testkit.ts`, when the fixture has one, becomes `mock.ts`. It
+// is an incomplete runner: the guard tests must name each missing piece inside the two places.
 //
 // `--complete` adds `hexacode`: a complete runner, every file of `runners/opencode/`, its mock
 // scripts `mock-opencode-*`, its shipped scripts `opencode-*` (the task-scope plugin) and its
 // skill data `mock-skill-data/opencode.mjs`, with each name
-// renamed (identifiers, ids, env variables, binary and file names). `hexacode` cannot collide: no
+// renamed (identifiers, ids, env variables, binary and file names), and its entry's display order
+// moved after the last bundled runner. `hexacode` cannot collide: no
 // file of the repository holds it, it holds no other runner's id, and it has the length of
 // `opencode`, so no line changes length. A relative path or an imported name that a copied file
 // takes from outside the copied files keeps its `opencode` spelling: the copy shares that module,
@@ -25,13 +26,13 @@
 // It refuses a path that shares this repository's git directory (the main checkout or one of its
 // worktrees) and a checkout with uncommitted changes. Make the clone with
 // `git clone <this repo> <dir> && git -C <dir> checkout <commit>`, then run this script on it.
-// It prints the roster-reading test files: every test file that imports `runners/ids.ts`,
-// `runners/built-in.ts` or `core/register-all-runners.testkit.ts`, the closure guards and the
-// new runner's own test files.
+// It prints the roster-reading test files: every test file that imports
+// `core/built-in-runner-ids.testkit.ts`, `core/bundled-runners.testkit.ts` or
+// `core/register-all-runners.testkit.ts`, the closure guards and the new runner's own test files.
 //
 // Exit check (the epic's criterion 7): in the clone, run `pnpm install --frozen-lockfile`, then
 // `npm run typecheck -w @wjarka/cezarion`, then the printed test files. The complete runner
-// passes them all; the four-places runner fails only by naming a missing piece. Run the files
+// passes them all; the two-places runner fails only by naming a missing piece. Run the files
 // through Squeal in the clone: `squeal start`, `squeal run tests <files> --wait 60000`, then
 // `squeal status --wait 60000 <files>` until it gives a verdict. That is how hearsay-tools/squawk#3900's D2a ran it. Without
 // Squeal, CI's command runs the same files: `npm test -- <files>`.
@@ -45,16 +46,15 @@ import { fileURLToPath } from 'node:url';
 const REPO = fileURLToPath(new URL('../..', import.meta.url));
 const SRC = 'packages/cezar/src';
 const SCRIPTS = 'packages/cezar/scripts';
-const REGISTRATION = [`${SRC}/runners/built-in.ts`, `${SRC}/runners/ids.ts`];
-/** The four places of the `sixth` runner, as path prefixes relative to the checkout. */
-export const FOUR_PLACES = [`${SRC}/runners/sixth/`, `${SCRIPTS}/mock-sixth-runner.mjs`, ...REGISTRATION];
+/** The two places of the `sixth` runner, as path prefixes relative to the checkout. */
+export const RUNNER_PLACES = [`${SRC}/runners/sixth/`, `${SCRIPTS}/mock-sixth-runner.mjs`];
 /** The runner that `--complete` copies, and the id of its copy. */
 export const COMPLETE_SOURCE = 'opencode';
 export const COMPLETE_ID = 'hexacode';
-/** The places of the complete runner: its folder, its mock and shipped scripts, its skill data and its registration. */
+/** The places of the complete runner: its folder, its mock and shipped scripts and its skill data. */
 export const COMPLETE_PLACES = [`${SRC}/runners/${COMPLETE_ID}/`, `${SCRIPTS}/mock-${COMPLETE_ID}-`, `${SCRIPTS}/${COMPLETE_ID}-`,
-  `${SCRIPTS}/mock-skill-data/${COMPLETE_ID}.mjs`, ...REGISTRATION];
-const ROSTER_MODULES = new Set(['runners/ids', 'runners/built-in', 'core/register-all-runners.testkit']);
+  `${SCRIPTS}/mock-skill-data/${COMPLETE_ID}.mjs`];
+const ROSTER_MODULES = new Set(['plugin/bundled-runners', 'core/built-in-runner-ids.testkit', 'core/bundled-runners.testkit', 'core/register-all-runners.testkit']);
 const GUARD_TESTS = [`${SRC}/runner-class-rule.test.ts`, `${SRC}/core/harness-parity-closure.test.ts`, `${SRC}/vitest-setup-closure.test.ts`];
 
 function git(cwd, args) {
@@ -115,7 +115,7 @@ const UNUSED_TEST_LINES = [
   "import { harnessAdapter } from '../../core/harness-parity-core.testkit.ts';\n",
   "import { RUNNER_FACTS } from '../../core/runner-facts.ts';\n",
   "import { setupMonitoringFixture, waitForProduct } from '../../workflows/run-fixture.testkit.ts';\n",
-  "import { BUILT_IN_RUNNER_IDS } from '../ids.ts';\n",
+  "import { BUILT_IN_RUNNER_IDS } from '../../core/built-in-runner-ids.testkit.ts';\n",
 ];
 
 /** The per-runner parity file the closure guard requires: the fixture test's baseline seam rows. */
@@ -129,7 +129,7 @@ function parityTestFile(fixtureTest) {
   return replaceOnce(rename(text), "'./definition.testkit.ts'", "'./definition.ts'");
 }
 
-/** Add the sixth runner to `target` in the four places. */
+/** Add the sixth runner to `target` in the two places. */
 export function addSixthRunner(target) {
   const read = (path) => readFileSync(join(target, path), 'utf8');
   const fixture = `${SRC}/runners/fixture`;
@@ -143,18 +143,34 @@ export function addSixthRunner(target) {
     ...(existsSync(join(target, fixture, 'mock.testkit.ts')) ? { 'mock.ts': rename(read(`${fixture}/mock.testkit.ts`)) } : {}),
   };
   for (const [name, text] of Object.entries(files)) writeFileSync(join(folder, name), text);
+  writeFileSync(join(folder, 'index.ts'), pluginEntry('sixth', nextDisplayOrder(target)));
   copyFileSync(join(target, SCRIPTS, 'mock-fixture-runner.mjs'), join(target, SCRIPTS, 'mock-sixth-runner.mjs'));
-  register(target, 'sixth');
 }
 
-/** Add runner `id` after the last built-in runner in `runners/built-in.ts` and `runners/ids.ts`. */
-function register(target, id) {
-  const read = (path) => readFileSync(join(target, path), 'utf8');
-  const [builtIn, ids] = REGISTRATION;
-  writeFileSync(join(target, builtIn), replaceOnce(replaceOnce(read(builtIn),
-    "import { ompRunner } from './omp/definition.ts';\n", `import { ompRunner } from './omp/definition.ts';\nimport { ${id}Runner } from './${id}/definition.ts';\n`),
-  '];', `, ${id}Runner];`));
-  writeFileSync(join(target, ids), replaceOnce(read(ids), '];', `, '${id}'];`));
+const DISPLAY_ORDER = /^export const displayOrder = (\d+);$/m;
+
+/** One more than the highest display order a bundled runner entry `runners/<id>/index.ts` declares, rounded to the next ten. */
+export function nextDisplayOrder(target) {
+  const runners = join(target, SRC, 'runners');
+  const orders = readdirSync(runners).map(name => join(runners, name, 'index.ts')).filter(existsSync)
+    .map(entry => Number(DISPLAY_ORDER.exec(readFileSync(entry, 'utf8'))?.[1] ?? 0));
+  return (Math.floor(Math.max(0, ...orders) / 10) + 1) * 10;
+}
+
+/** The plugin entry of runner `id`: it registers the runner's definition, as every bundled runner's `index.ts` does. */
+function pluginEntry(id, displayOrder) {
+  return `import type { SquawkPlugin } from '@hearsay-tools/squawk/plugin';
+import { ${id}Runner } from './definition.ts';
+
+/** Where the ${id} runner sits among the bundled runners: lower comes first. \`plugin/bundled-runners.ts\` reads this line as text. */
+export const displayOrder = ${displayOrder};
+
+/** The ${id} runner's plugin entry. Boot loads it through the plugin loader. */
+const plugin: SquawkPlugin = (api) => {
+  api.registerRunner(${id}Runner);
+};
+export default plugin;
+`;
 }
 
 const COMPLETE_SPELLINGS = [['opencode', 'hexacode'], ['Opencode', 'Hexacode'], ['OpenCode', 'HexaCode'], ['OPENCODE', 'HEXACODE'], ['openCode', 'hexaCode']];
@@ -178,16 +194,17 @@ const IMPORT_CLAUSE = /\b(?:import|export)\s+(?:type\s+)?([^;'"]*?)\s+from\s+['"
 const DYNAMIC_IMPORT = /import\(\s*['"]([^'"]+)['"]\s*\)\s*\)\s*\.([\w$]+)/g;
 const RELATIVE_STRING = /(['"`])(\.\.?\/[^'"`\s]*)\1/g;
 
-/** The spellings in `text` (the copied file `path`) that name something outside the copied files `copied`: relative paths, and the names imported from them. */
+/** The spellings in `text` (the copied file `path`) that name something outside the copied files `copied`: relative paths, and the names imported from outside modules or packages. */
 function outsideReferences(path, text, copied) {
-  const outside = (spec) => spec.startsWith('.') && !copied.has(posix.join(posix.dirname(path), spec));
+  const outsideRelative = (spec) => spec.startsWith('.') && !copied.has(posix.join(posix.dirname(path), spec));
+  const outsideImport = (spec) => !spec.startsWith('.') || !copied.has(posix.join(posix.dirname(path), spec));
   const kept = new Set();
-  for (const [, quote, spec] of text.matchAll(RELATIVE_STRING)) if (SOURCE_NAME.test(spec) && outside(spec)) kept.add(`${quote}${spec}${quote}`);
+  for (const [, quote, spec] of text.matchAll(RELATIVE_STRING)) if (SOURCE_NAME.test(spec) && outsideRelative(spec)) kept.add(`${quote}${spec}${quote}`);
   for (const [, clause, spec] of text.matchAll(IMPORT_CLAUSE)) {
-    if (!outside(spec)) continue;
+    if (!outsideImport(spec)) continue;
     for (const [name] of clause.matchAll(/[\w$]+/g)) if (SOURCE_NAME.test(name)) kept.add(name);
   }
-  for (const [, spec, name] of text.matchAll(DYNAMIC_IMPORT)) if (outside(spec) && SOURCE_NAME.test(name)) kept.add(name);
+  for (const [, spec, name] of text.matchAll(DYNAMIC_IMPORT)) if (outsideImport(spec) && SOURCE_NAME.test(name)) kept.add(name);
   return [...kept];
 }
 
@@ -219,12 +236,15 @@ export function addCompleteRunner(target) {
     chmodSync(destination, statSync(join(target, path)).mode);
     shared.push(...kept.map(word => `${path}: ${word}`));
   }
-  register(target, COMPLETE_ID);
+  // The copied entry still sits at the source runner's place; a new runner lists after the others.
+  const entry = join(target, SRC, 'runners', COMPLETE_ID, 'index.ts');
+  const order = nextDisplayOrder(target);
+  writeFileSync(entry, replaceOnce(readFileSync(entry, 'utf8'), DISPLAY_ORDER.exec(readFileSync(entry, 'utf8'))[0], `export const displayOrder = ${order};`));
   return shared;
 }
 
 /** The changed paths of `target` outside `places`; empty after `addSixthRunner` (or `addCompleteRunner` with `COMPLETE_PLACES`). */
-export function outsideFourPlaces(target, places = FOUR_PLACES) {
+export function outsideRunnerPlaces(target, places = RUNNER_PLACES) {
   return git(target, ['status', '--porcelain', '--untracked-files=all']).split('\n').filter(Boolean)
     .map(line => line.slice(3)).filter(path => !places.some(place => path === place || path.startsWith(place)));
 }
@@ -252,7 +272,7 @@ function main(argv) {
   const refused = refusal(target);
   if (refused) throw new Error(refused);
   const shared = complete ? addCompleteRunner(target) : (addSixthRunner(target), []);
-  const outside = outsideFourPlaces(target, complete ? COMPLETE_PLACES : FOUR_PLACES);
+  const outside = outsideRunnerPlaces(target, complete ? COMPLETE_PLACES : RUNNER_PLACES);
   if (outside.length) throw new Error(`changed outside the runner's places: ${outside.join(', ')}`);
   for (const line of shared) process.stderr.write(`shared with ${COMPLETE_SOURCE}: ${line}\n`);
   process.stdout.write(`${rosterTests(target, complete ? COMPLETE_ID : 'sixth').join('\n')}\n`);

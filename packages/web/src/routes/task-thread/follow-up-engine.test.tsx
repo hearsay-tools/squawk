@@ -55,6 +55,7 @@ const HEALTH_MULTI: HealthResponse = {
   version: '0.1.5',
   projects: [],
   bootProject: 'default',
+  plugins: { loaded: [], failed: [] },
   repoRoot: '/repo',
   repo: { root: '/repo', branch: 'main' },
   defaultRunner: 'claude',

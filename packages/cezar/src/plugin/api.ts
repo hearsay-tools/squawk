@@ -28,20 +28,6 @@ export interface SquawkPluginApi {
 /** A plugin module's default export. */
 export type SquawkPlugin = (api: SquawkPluginApi) => void | Promise<void>;
 
-/** The longest runner id a stored setting keeps (spec § 6, `storedRunnerIdSchema`). */
-const MAX_RUNNER_ID_LENGTH = 64;
-
-function isControlCharacter(character: string): boolean {
-  const code = character.codePointAt(0) ?? 0;
-  return code < 0x20 || (code >= 0x7f && code <= 0x9f);
-}
-
-function checkRunnerId(id: unknown): void {
-  if (typeof id !== 'string' || id.length === 0 || id !== id.trim() || id.length > MAX_RUNNER_ID_LENGTH || [...id].some(isControlCharacter)) {
-    throw new Error(`Invalid runner id ${JSON.stringify(id)}: use a trimmed, non-empty string of at most ${MAX_RUNNER_ID_LENGTH} characters with no control characters.`);
-  }
-}
-
 function checkKey(registry: string, key: unknown): void {
   if (typeof key !== 'string' || key.length === 0) throw new Error(`${registry}: invalid key ${JSON.stringify(key)}.`);
 }
@@ -56,8 +42,7 @@ interface KeyedTable<V> {
 }
 
 const runners: KeyedTable<RunnerDefinition> = {
-  name: 'Runner registry', key: value => value.id, shape: value => checkRunnerId(value.id),
-  check: checkRunnerRegistration, commit: registerRunner,
+  name: 'Runner registry', key: value => value.id, check: checkRunnerRegistration, commit: registerRunner,
 };
 const tools: KeyedTable<AgentToolDefinition> = {
   name: 'Agent tool registry', key: value => value.name, check: checkAgentToolRegistration, commit: registerAgentTool,
@@ -158,13 +143,36 @@ function stagingApi(staged: StagedPlugin, open: () => boolean): SquawkPluginApi 
   };
 }
 
+/** The keys one plugin committed, per registry, in call order, and its list registration counts. */
+export interface PluginContributions {
+  runners: string[];
+  agentTools: string[];
+  waitKinds: string[];
+  stepKinds: string[];
+  cliCommands: string[];
+  removalSlots: number;
+  runLifecycleListeners: number;
+}
+
+function contributions(staged: StagedPlugin): PluginContributions {
+  return {
+    runners: staged.runners.map(value => value.id),
+    agentTools: staged.tools.map(value => value.name),
+    waitKinds: staged.waitKinds.map(value => value.kind),
+    stepKinds: staged.stepKinds.map(value => value.kind),
+    cliCommands: staged.cliCommands.map(value => value.name),
+    removalSlots: staged.removalSlots.length,
+    runLifecycleListeners: staged.lifecycle.length,
+  };
+}
+
 /**
  * Run one plugin's setup and commit what it registered, all or nothing. A setup that throws or
  * rejects, or a staged entry that a live registry would refuse (a taken or reserved key, a
  * duplicate within the plugin, an invalid shape, a sealed registry), commits no entry anywhere and
- * rethrows that error. The api refuses calls once setup has ended.
+ * rethrows that error. The api refuses calls once setup has ended. Returns what it committed.
  */
-export async function runPluginSetup(plugin: SquawkPlugin): Promise<void> {
+export async function runPluginSetup(plugin: SquawkPlugin): Promise<PluginContributions> {
   const staged: StagedPlugin = { runners: [], tools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: [], lifecycle: [] };
   let open = true;
   try {
@@ -174,4 +182,5 @@ export async function runPluginSetup(plugin: SquawkPlugin): Promise<void> {
   }
   checkStaged(staged);
   commitStaged(staged);
+  return contributions(staged);
 }

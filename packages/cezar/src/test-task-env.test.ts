@@ -1,5 +1,5 @@
 import './core/register-all-runners.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from './runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './core/built-in-runner-ids.testkit.ts';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os'; // test-home-read: import for the annotated sandbox and refusal probes

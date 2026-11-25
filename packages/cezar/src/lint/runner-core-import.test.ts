@@ -37,7 +37,7 @@ describe('runner-core-import (hearsay-tools/squawk#4201)', () => {
     expect(runnerFolder('packages/cezar/src/runners/pi/pi-runner.ts')).toBe('packages/cezar/src/runners/pi/');
     expect(runnerFolder('packages/cezar/src/runners/antigravity/acp/session.ts')).toBe('packages/cezar/src/runners/antigravity/');
     expect(runnerFolder('packages/cezar/src/runners/fixture/fixture-adapter.ts')).toBeUndefined();
-    expect(runnerFolder('packages/cezar/src/runners/built-in.ts')).toBeUndefined();
+    expect(runnerFolder('packages/cezar/src/runners/beside.ts')).toBeUndefined();
     expect(runnerFolder('packages/cezar/src/core/agent-runner.ts')).toBeUndefined();
   });
 
@@ -47,6 +47,8 @@ describe('runner-core-import (hearsay-tools/squawk#4201)', () => {
     expect(outsideTarget(file, './pi-ui-mapper.ts')).toBeUndefined();
     expect(outsideTarget(file, './rpc/../pi-ui-mapper.ts')).toBeUndefined();
     expect(outsideTarget(file, '@hearsay-tools/squawk/plugin')).toBeUndefined();
+    expect(outsideTarget(file, '@hearsay-tools/squawk/plugin/runtime')).toBeUndefined();
+    expect(outsideTarget(file, '@open-mercato/cezar-contract/effort')).toBe('@open-mercato/cezar-contract/effort');
     expect(outsideTarget(file, undefined)).toBeUndefined();
   });
 
@@ -72,6 +74,8 @@ describe('runner-core-import (hearsay-tools/squawk#4201)', () => {
       "import env = require('../../core/product-env.ts');",
       "import { OmpRunner } from '../omp/omp-runner.ts';",
       "import { normalizedLines } from '../login-output.ts';",
+      "import { parseEffort } from '@open-mercato/cezar-contract/effort';",
+      "const load = () => import('@open-mercato/cezar-contract/effort');",
     ],
   });
 
@@ -83,7 +87,7 @@ describe('runner-core-import (hearsay-tools/squawk#4201)', () => {
       'packages/cezar/src/runners/pi/__fixtures__/rpc.ts',
       'packages/cezar/src/runners/pi/types.d.ts',
       'packages/cezar/src/runners/fixture/fixture-adapter.ts',
-      'packages/cezar/src/runners/built-in.ts',
+      'packages/cezar/src/runners/beside.ts',
       'packages/cezar/src/core/agent-runner.ts',
     ]) expect(runnerCoreImport.applies(path)).toBe(false);
   });
@@ -118,5 +122,6 @@ describe('runner-core-import (hearsay-tools/squawk#4201)', () => {
   it('keeps the checked-in baseline current: every entry matches its file', () => {
     expect(staleRunnerCoreImports()).toEqual([]);
     expect(runnerCoreImports(file, "import { x } from '../../core/x.ts';")).toEqual(['packages/cezar/src/core/x.ts']);
+    expect(runnerCoreImports(file, "// from '@open-mercato/cezar-contract/effort'\nconst load = () => import('@open-mercato/cezar-contract/effort');")).toEqual(['@open-mercato/cezar-contract/effort']);
   });
 });

@@ -24,27 +24,9 @@
  * the two id spaces then drift silently — updates land on the wrong row.
  */
 
-import type {
-  FileDiff,
-  PlanEntry,
-  PlanStatus,
-  StopReason,
-  TokenUsage,
-  ToolLocation,
-  HookEntryKind,
-  HookStatus,
-  UiEvent,
-  UiHookItem,
-  UiMessageItem,
-  UiReasoningItem,
-  UiSessionStartedEvent,
-  UiToolItem,
-  UiTurnCompletedEvent,
-  UiUsageUpdatedEvent,
-} from '../../core/ui-events.ts';
-import { hookEventName, isVisibleHookItem } from '../../core/hook-items.ts';
-import { editWriteKey } from '../../core/edit-write-key.ts';
-import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
+import type { FileDiff, PlanEntry, PlanStatus, StopReason, TokenUsage, ToolLocation, HookEntryKind, HookStatus, UiEvent, UiHookItem, UiMessageItem, UiReasoningItem, UiSessionStartedEvent, UiToolItem, UiTurnCompletedEvent, UiUsageUpdatedEvent } from '@hearsay-tools/squawk/plugin';
+import { hookEventName, isVisibleHookItem, editWriteKey } from '@hearsay-tools/squawk/plugin/runtime';
+import { toolDisplay } from '@hearsay-tools/squawk/plugin/runtime';
 import {
   adoptForkedCommand,
   completeForkedCommands,

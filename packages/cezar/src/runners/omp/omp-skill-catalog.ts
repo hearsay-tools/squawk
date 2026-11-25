@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import type { SkillCatalog } from '../../core/runner-skill-catalog.ts';
-import { skillOutput, skillProbe, type SkillDiscoveryOptions } from '../../core/skill-probe.ts';
+import type { SkillCatalog, SkillDiscoveryOptions } from '@hearsay-tools/squawk/plugin';
+import { skillOutput, skillProbe } from '@hearsay-tools/squawk/plugin/runtime';
 const listSchema = z.object({ skills: z.array(z.object({ name: z.string(), description: z.string().optional(),
   filePath: z.string(), source: z.string() })),
   warnings: z.array(z.object({ message: z.string(), skillPath: z.string().optional() })),

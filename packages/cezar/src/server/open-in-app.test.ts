@@ -1,7 +1,7 @@
 import { runnerDefinition } from '../core/runner-registry.ts';
 import '../core/register-all-runners.testkit.ts';
 import { registeredRunners } from '../core/runner-registry.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from '../core/built-in-runner-ids.testkit.ts';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

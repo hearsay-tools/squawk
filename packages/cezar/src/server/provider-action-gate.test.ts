@@ -9,9 +9,9 @@ import {
   providersRequiredByWorkflow,
   unavailableProviderMessage,
 } from './provider-action-gate.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerBundledRunners } from '../core/bundled-runners.testkit.ts';
 
-registerBuiltInRunners();
+await registerBundledRunners();
 sealTestRunners();
 
 const run = (overrides: Partial<RunRecord> = {}): RunRecord => ({

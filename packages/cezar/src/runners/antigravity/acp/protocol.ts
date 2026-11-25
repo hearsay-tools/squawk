@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { TokenUsage, UiAskRequestedEvent, UiToolItem } from '../../core/ui-events.ts';
+import type { TokenUsage, UiAskRequestedEvent, UiToolItem } from '@hearsay-tools/squawk/plugin';
 
 export const recordSchema = z.record(z.string(), z.unknown());
 export const initializeSchema = z.object({

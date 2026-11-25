@@ -1,43 +1,12 @@
-import { openingContent, skillOf, validSkillMessage } from '../../core/skill-trigger.ts';
-import { productEnv } from '../../core/product-env.ts';
+import { openingContent, skillOf, validSkillMessage, SessionEndedBeforeAcknowledgement, ompRequestedTools, ownLookup, signalSession, spawnSessionLeader, buildChildEnv, squawkToolNames, readNdjson, summarizeRunnerStderr, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from '@hearsay-tools/squawk/plugin/runtime';
+import { productEnv, type PiEndWatchdog, type PiTurnMessages, type PiSkillSubmission, type AgentEvent, type AgentRunResult, type AgentRunSpec, type InputDelivery, type AgentRunner, type AgentSession, type AgentToolCallRecord, type ContentBlock, type SessionOptions, type ToolGrant, type SkillInputIdentity, type UiEvent } from '@hearsay-tools/squawk/plugin';
+import { isRecord, parseRpcLine, ompRpcError as rpcError, string, toPiPrompt, truncate, waitForExit, adoptRpcSessionId, armEndWatchdog, dispatchPiTurnMessage, PiRpcInput, PiTextBlocks, settlePiFamilyExit } from '@hearsay-tools/squawk/plugin/pi-rpc';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseEffort } from '@open-mercato/cezar-contract/effort';
-import { isRecord, parseRpcLine, ompRpcError as rpcError, string, toPiPrompt, truncate, waitForExit } from '../../core/pi-rpc-wire.ts';
-import {
-  adoptRpcSessionId,
-  armEndWatchdog,
-  dispatchPiTurnMessage,
-  type PiEndWatchdog,
-  PiRpcInput,
-  PiTextBlocks,
-  type PiTurnMessages,
-  type PiSkillSubmission,
-  settlePiFamilyExit,
-} from '../../core/pi-rpc-turn.ts';
-import type {
-  AgentEvent,
-  AgentRunResult,
-  AgentRunSpec,
-  InputDelivery,
-  AgentRunner,
-  AgentSession,
-  AgentToolCallRecord,
-  ContentBlock,
-  SessionOptions,
-  ToolGrant,
-} from '../../core/agent-runner.js';
-import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner-values.ts';
+import { parseEffort } from '@hearsay-tools/squawk/plugin/runtime';
 import { OMP_FACTS } from './facts.js';
 import { OMP_SPEC_SUPPORT, OMP_MINIMAL_ARGS } from './spec-support.js';
-import { ompRequestedTools } from '../../core/runner-tool-grants.ts';
-import { ownLookup } from '../../core/own-lookup.ts';
-import { signalSession, spawnSessionLeader } from '../../core/session-process.js';
-import { buildChildEnv } from '../../core/agent-env.js';
-import type { SkillInputIdentity, UiEvent } from '../../core/ui-events.js';
-import { squawkToolNames } from '../../ci-wait/tool-names.js';
-import { readNdjson } from '../../core/ndjson.js';
 import {
   createOmpUiState,
   mapOmpRpcMessage,
@@ -46,8 +15,6 @@ import {
   ompProviderErrorMessage,
   ompTurnStarted,
 } from './omp-ui-mapper.js';
-import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
-import { boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from '../../core/runner-runtime.js';
 
 /**
  * OMP's built-in tool names at the pinned version (`src/tools/builtin-names.ts`, oh-my-pi

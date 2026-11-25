@@ -37,17 +37,20 @@ import { isAbsolute, join, relative, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { SquawkAskAnswer, SquawkCancelWaitAnswer, SquawkDoneAnswer, Wait } from '../../packages/contract/src/index.ts';
 import type { AgentEvent, AgentSession } from '../../packages/cezar/src/core/agent-runner.ts';
-import { CodexAppServerRunner } from '../../packages/cezar/src/runners/codex/codex-app-server-runner.ts';
-import { resolveCodexExecutable } from '../../packages/cezar/src/runners/codex/codex-app-server-transport.ts';
 import type { UiEvent } from '../../packages/cezar/src/core/ui-events.ts';
 import { CiToolController, type SquawkToolHandlers, type WaitRegistration } from '../../packages/cezar/src/ci-wait/controller.ts';
 import { agentHomeDir } from '../../packages/cezar/src/paths.ts';
-import { registerBuiltInRunners, sealBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
+import { installPluginResolveHook } from '../../packages/cezar/src/plugin/resolve-hook.ts';
 import { registerBuiltInTools, sealBuiltInTools } from '../../packages/cezar/src/built-in-tools.ts';
 
 // The Codex session's child env reads the runner registry; register the built-ins first.
-registerBuiltInRunners();
-sealBuiltInRunners();
+installPluginResolveHook();
+const { CodexAppServerRunner } = await import('../../packages/cezar/src/runners/codex/codex-app-server-runner.ts');
+const { resolveCodexExecutable } = await import('../../packages/cezar/src/runners/codex/codex-app-server-transport.ts');
+const { loadBundledRunners } = await import('../../packages/cezar/src/plugin/loader.ts');
+const { sealRunners } = await import('../../packages/cezar/src/core/runner-registry.ts');
+await loadBundledRunners();
+sealRunners();
 registerBuiltInWaitKinds();
 sealBuiltInWaitKinds();
 registerBuiltInTools();

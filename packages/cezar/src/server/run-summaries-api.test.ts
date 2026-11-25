@@ -1,5 +1,6 @@
 import '../built-in-wait-kinds.testkit.ts';
-import { registerBuiltInRunners, sealBuiltInRunners } from '../runners/built-in.ts';
+import { registerBundledRunners } from '../core/bundled-runners.testkit.ts';
+import { sealRunners } from '../core/runner-registry.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -21,9 +22,10 @@ import { createApp } from './server.ts';
  * read instead of every full record. Same runs, same order as `GET /runs`; none of the
  * detail-only fields.
  */
+await registerBundledRunners();
+sealRunners();
+
 describe('run summaries API', () => {
-  registerBuiltInRunners();
-  sealBuiltInRunners();
   const savedHome = process.env.CEZ_HOME;
   let home: string;
   let repoRoot: string;

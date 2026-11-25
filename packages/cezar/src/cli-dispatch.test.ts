@@ -1,6 +1,6 @@
 import './cli-boot.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
-import { defaultCliDeps, main, type CliDeps } from './cli-dispatch.ts';
+import { cliNeedsRuntime, defaultCliDeps, main, type CliDeps } from './cli-dispatch.ts';
 import { testHome } from './home/test-home.testkit.ts';
 import type { Home } from './home/home.ts';
 
@@ -223,5 +223,27 @@ describe('CLI metadata', () => {
       expect(f.deps.resolveCliHome).not.toHaveBeenCalled();
       expect(f.deps.getRepoInfo).not.toHaveBeenCalled();
     }
+  });
+});
+
+describe('boot choice', () => {
+  it.each([
+    [['--help'], false], [['-h'], false], [['--version'], false], [['-v'], false], [['run', '--help'], false],
+    [['job', 'start', 'x'], false], [['artifact', 'publish', 'f'], false], [['message', 'inbox'], false],
+    [['webhook'], false], [['automation', 'list'], false], [['backup', '--help'], false], [['remote-settings', '--help'], false],
+    [['worker', 'list'], false], [['worker', 'inspect', 'id'], false], [['worker', 'collect'], false], [['worker', 'wait'], false],
+    [['--no-such-flag'], false],
+    [[], true], [['--port', '5000'], true], [['run', 'task'], true], [['init'], true], [['discover'], true], [['task'], true],
+    [['plugins'], true], [['worker', 'spawn'], true], [['backup', 'list'], true],
+    [['my-plugin-command'], true], [['nope', '--flag'], true], [['--repo', '/r', 'nope'], true],
+  ] as const)('%j boots the runtime: %s', (argv, runtime) => {
+    expect(cliNeedsRuntime(argv)).toBe(runtime);
+  });
+
+  it('points help to hsq plugins', async () => {
+    const f = fixture(['--help']);
+    f.processStub.argv[1] = '/bin/hsq';
+    await f.run();
+    expect(f.deps.console.log.mock.calls[0]![0]).toContain('Plugins in <config>/plugins/ can add commands: run `hsq plugins` to list them.');
   });
 });

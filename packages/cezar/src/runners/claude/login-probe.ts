@@ -1,4 +1,4 @@
-import type { ProviderCommandResult, ProviderConnectionState } from '../../core/provider-auth.ts';
+import type { ProviderCommandResult, ProviderConnectionState } from '@hearsay-tools/squawk/plugin';
 
 /** Claude's auth-status parser, moved verbatim from `core/provider-auth.ts`. Loads only through
  *  the definition's `loadLogin()`. */

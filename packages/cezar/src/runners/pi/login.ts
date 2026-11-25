@@ -1,4 +1,4 @@
-import type { RunnerLoginData } from '../../core/runner-definition.ts';
+import type { RunnerLoginData } from '@hearsay-tools/squawk/plugin';
 
 /** Pi's login and auth-status data (the `login` part). Data only: the definition and
  *  `ProviderAuthService` read this value, so importing it loads no code. */

@@ -1,10 +1,12 @@
 # Plugin loader and runner kit
-Status: active
+Status: done
 
 Step 4 (first version) of [the plugin core roadmap](2026-11-18-plugin-core-roadmap.md), epic
 hearsay-tools/squawk#4188. Baseline: `main` at `a7b4165bf`. The owner settled all seven design,
 trust, live-runner, and execution decisions on 2026-11-24 (task `e0b9b34a`). The work lands in
-15 slices, one child issue each; see [the plan](2026-11-24-plugin-loader-and-runner-kit-plan.md).
+15 slices, one child issue each; the [implementation record](#implementation-record) lists them.
+[ADR 0070](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md) records the
+result.
 
 ## Goal
 
@@ -257,9 +259,11 @@ Cross-runner and shared `runners/` files:
   `join(config, 'plugins')`.
 - **Resolve hook (`packages/cezar/src/plugin/resolve-hook.ts`):**
   - Installs once via `registerHooks` from `node:module` before loading any plugin.
-  - Intercepts `'@hearsay-tools/squawk/plugin'` (and its package subpath if referenced) and
-    resolves it to the running Squawk copy's file URL (`new URL('./index.ts', import.meta.url)`
-    under source/tsx/vitest, `new URL('./index.js', import.meta.url)` under built `dist/`).
+  - Intercepts `'@hearsay-tools/squawk/plugin'` and resolves it to the running Squawk copy's file
+    URL (`new URL('./index.ts', import.meta.url)` under source/tsx/vitest,
+    `new URL('./index.js', import.meta.url)` under built `dist/`).
+  - Refuses every other specifier in `@hearsay-tools/squawk` (the root and any deeper subpath):
+    none has a running copy, and an installed copy would split process state.
 - **Discovery and order (`packages/cezar/src/plugin/loader.ts`):**
   - Reads `<config>/plugins/` (if present). Missing directory is a silent no-op (zero config).
   - Iterates direct child directories (and symlinks to directories) in deterministic,
@@ -274,8 +278,10 @@ Cross-runner and shared `runners/` files:
     adds a required `plugins: { loaded: PluginHealthEntry[], failed: FailedPluginHealthEntry[] }`
     field (always sent by the server, matching `contract-parity` rules; defaults to
     `{ loaded: [], failed: [] }` when no plugins loaded or failed). Each entry carries `name` and
-    `source` (`'bundled' | 'host'`); failed entries carry `error` (sanitized: host filesystem paths
-    omitted when `HSQ_REMOTE=1`).
+    `source` (`'bundled' | 'host'`), plus `path` on a local cockpit only; failed entries carry
+    `error`, the fixed text for the failure reason (missing entry, no setup function, import
+    failed, setup failed or refused), never the plugin's own message, which can name host paths
+    or carry a secret. `hsq plugins` on the host prints the full message.
   - Add `hsq plugins` (runtime CLI command) listing loaded and failed plugins so operators can
     inspect plugin status and plugin-registered CLI commands without slowing `hsq --help`.
 
@@ -347,7 +353,7 @@ Cross-runner and shared `runners/` files:
 | Plugin throws synchronously or rejects asynchronously after calling `api.register*()` | `bootRuntime()` | Staged entries rolled back; zero leaked registrations in any registry | Stderr warning naming folder + error; listed in `health.plugins.failed`; cockpit boots |
 | Plugin registers a key colliding with a built-in, legacy reserved key, or an earlier plugin | `bootRuntime()` | Entire plugin's staged batch rolled back (all-or-nothing); earlier registrations untouched | Stderr warning naming folder + conflicting key; listed in `health.plugins.failed`; cockpit boots |
 | Plugin imports `@hearsay-tools/squawk/plugin` from outside repo `node_modules` | `bootRuntime()` | `registerHooks` resolves specifier to running Squawk copy | Shares single process state (`session-process`, `tool-names`, `runtime-home`); zero duplicate module copies |
-| Hosted mode (`HSQ_REMOTE=1`) | `bootRuntime()` | Same host-folder loading; no cockpit install/remove routes | `GET /api/v1/health` omits host filesystem paths from plugin failure messages |
+| Hosted mode (`HSQ_REMOTE=1`) | `bootRuntime()` | Same host-folder loading; no cockpit install/remove routes | `GET /api/v1/health` sends no plugin `path`; a failure's `error` is a fixed reason text in every mode |
 
 ### Stored-config preservation cases
 
@@ -364,4 +370,67 @@ Cross-runner and shared `runners/` files:
 
 ## Implementation record
 
-*(Updated as each slice merges; finalized in slice E1.)*
+Epic hearsay-tools/squawk#4188. Every slice merged as one squash commit on `main`. The result is
+[ADR 0070](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md); ADR 0065
+rule 3 is amended per owner decision 1.
+
+| Slice | Issue | Pull request | Commit on `main` | Notes |
+| --- | --- | --- | --- | --- |
+| Wave 0 | hearsay-tools/squawk#4188 | hearsay-tools/squawk#4212 | `3454d14d6` | Spec, plan, roadmap link and the child issues |
+| A1 | hearsay-tools/squawk#4198 | hearsay-tools/squawk#4217 | `7924431b3` | `boot.ts`: one register-then-seal boundary, `bootColdCli()` and `bootRuntime()` |
+| A2 | hearsay-tools/squawk#4199 | hearsay-tools/squawk#4215 | `4f8fa0cc8` | `SquawkPluginApi`, transactional staging, run-lifecycle registry, `./plugin` export |
+| A3 | hearsay-tools/squawk#4200 | hearsay-tools/squawk#4218 | `961917bf3` | Stored runner settings survive an unregistered runner (`storedRunnerIdSchema`) |
+| D1 | hearsay-tools/squawk#4100 | hearsay-tools/squawk#4216 | `e83e89516` | `feature:runner-install` layer and per-runner manifest parser |
+| B1 | hearsay-tools/squawk#4201 | hearsay-tools/squawk#4219 | `5819d7516` | Runner kit, shared runner helpers in `core/`, `cez/runner-core-import` with its baseline |
+| C1 | hearsay-tools/squawk#4208 | hearsay-tools/squawk#4226 | `9ec69cbb3` | Host-folder loader, resolve hook, skip and report, health `plugins`, `hsq plugins` |
+| B2–B7 | hearsay-tools/squawk#4202 to hearsay-tools/squawk#4207 | hearsay-tools/squawk#4230 | `5521b441c` | All six built-in runners on the kit; `runner-core-import.baseline.json` at 0 entries |
+| C2 | hearsay-tools/squawk#4209 | hearsay-tools/squawk#4231 | `5e2881e32` | Bundled runners load through the plugin loader; `runners/built-in.ts` and `runners/ids.ts` removed |
+| D2 | hearsay-tools/squawk#4210 | hearsay-tools/squawk#4234 | `584679c16` | External plain-JS runner test and the live `pi` acceptance run |
+| E1 | hearsay-tools/squawk#4211 | This PR | Merged with E1 | ADR 0070, ADR 0065 rule 3, docs, final counts, close-out |
+
+### Live `pi` acceptance (D2, hearsay-tools/squawk#4234)
+
+- `pi 1.6.0` (`/home/agent/.local/bin/pi`), model `cliproxy-grok/grok-3-mini-fast`.
+- The built `dist/runners/pi/*.js` loaded as host plugin `pi-external` from a sandbox
+  `<config>/plugins/pi-external/`. `hsq plugins` reported host plugin `pi-external` with
+  `failed: []`.
+- `node packages/cezar/dist/hsq.js run ...` exited `0`, reached `status: review` on branch
+  `cez/2f0b3d3a`, and committed `HELLO.md` (`hello from pi-external`).
+
+### Final measurements
+
+Measured on `main` at `584679c16` (2026-11-25).
+
+- **Squeal selection (roadmap rule 5)**, `squeal status <path> --json`, `.selection`, complete
+  answer at revision 4:
+
+  | File | Before (`a7b4165bf`) | After (`584679c16`) |
+  | --- | ---: | ---: |
+  | `packages/cezar/src/core/registry.ts` | 1,152 | 1,177 |
+  | `packages/cezar/src/core/runner-registry.ts` | 1,266 | 1,288 |
+  | `packages/cezar/src/plugin/index.ts` | (no file) | 741 |
+
+- **Runtime import reach**, `node scripts/import-reach.mjs <module>`, test files that load the
+  module at runtime (98 of them browser `*.e2e.*` files for both registries):
+
+  | File | Before (`a7b4165bf`) | After (`584679c16`) |
+  | --- | ---: | ---: |
+  | `packages/cezar/src/core/registry.ts` | 1,142 | 1,165 |
+  | `packages/cezar/src/core/runner-registry.ts` | 1,122 | 1,145 |
+  | `packages/cezar/src/plugin/index.ts` | (no file) | 478 |
+
+  This step moves no feature behind a port, so the counts do not fall. They rise by about 2%
+  because the new boot, loader and plugin tests reach both registries.
+- **`runner-core-import.baseline.json`:** 0 entries (the rule landed with its baseline in B1 and
+  drained in B2–B7).
+- **`layer-import.baseline.json`:** 83 entries, as at `a7b4165bf`.
+- **Seal sites in production:** `boot.ts` only (`boot.test.ts`); it seals eight process-wide
+  registries, `runs/lifecycle-registry.ts` included.
+
+### Follow-up issues
+
+- hearsay-tools/squawk#4229: a hosted cockpit still sends `health.repo.root` in full.
+- hearsay-tools/squawk#4232: Pi extension scripts and the tool-bridge client path are not in the
+  runner kit.
+- hearsay-tools/squawk#4233: `registeredRunnerRecord` throws in a process whose runner registry is
+  not sealed.

@@ -1,5 +1,4 @@
-import { productEnv } from '../../core/product-env.ts';
-import type { RunnerDetection } from '../../core/runner-definition.ts';
+import { productEnv, type RunnerDetection } from '@hearsay-tools/squawk/plugin';
 import { cachedAntigravityOnPath, checkAntigravityCli, managedAntigravity } from './executable.ts';
 export const ANTIGRAVITY_DETECTION = {
   binary: 'agy', binOverride: () => productEnv('ANTIGRAVITY_BIN') || undefined, dryRun: 'unless-bin-override',

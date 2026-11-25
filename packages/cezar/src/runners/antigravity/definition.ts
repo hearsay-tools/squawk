@@ -1,6 +1,5 @@
 import { join } from 'node:path';
-import { defineRunner } from '../../core/runner-definition.ts';
-import { productEnv } from '../../core/product-env.ts';
+import { defineRunner, productEnv } from '@hearsay-tools/squawk/plugin';
 import { antigravityStatusExecutable } from './executable.ts';
 import { ANTIGRAVITY_FACTS } from './facts.ts';
 import { ANTIGRAVITY_SPEC_SUPPORT } from './spec-support.ts';

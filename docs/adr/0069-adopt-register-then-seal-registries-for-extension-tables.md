@@ -43,7 +43,7 @@ and `createSingleRegistry`. Every process-wide registry follows the same rules:
 
 | Registry | Path | Factory | Built-in registration |
 | --- | --- | --- | --- |
-| Runners | `core/runner-registry.ts` | `createKeyedRegistry` (reserved `claude-cli`) | `runners/built-in.ts` |
+| Runners | `core/runner-registry.ts` | `createKeyedRegistry` (reserved `claude-cli`) | `runners/<id>/index.ts`, loaded by `plugin/loader.ts` |
 | Removal slots | `runs/removal-slots.ts` | `createListRegistry` (gates, preparations, cleanups) | `built-in-run-slots.ts` |
 | Worker executions | `runs/worker-executions-registry.ts` | `createSingleRegistry` | `built-in-run-slots.ts` |
 | Agent tools | `ci-wait/tool-registry.ts` | `createKeyedRegistry` (reserved `ci-wait`) | `built-in-tools.ts` |

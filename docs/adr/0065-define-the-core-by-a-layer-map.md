@@ -25,8 +25,8 @@ layer calls.
 - A `core` file imports no `feature:<name>` file. Type-only imports count: a type still ties the
   two layers.
 - A `core` file imports no `runner` file. The core builds runners through the registry
-  (`core/runner-registry.ts`), which each process entry fills from `runners/built-in.ts`
-  (spec 2026-11-18-runner-definitions).
+  (`core/runner-registry.ts`), which boot fills by loading each runner folder's plugin entry
+  (spec 2026-11-18-runner-definitions; spec 2026-11-24-plugin-loader-and-runner-kit § 5).
 
 A source file with no layer fails `npm run lint`, so each new file gets a deliberate place. The
 imports that exist today are in `layer-import.baseline.json`, each with a reason. The list only
@@ -41,8 +41,14 @@ Three rules bind the later steps:
 2. **Zero config stays.** A plugin is discovered or ships enabled, as
    [AGENTS.md § Zero config](../../AGENTS.md#zero-config) says. No plugin needs a setting before
    it works.
-3. **The API promise starts when outside code can load.** Until a loader runs code from outside
-   this repository, the plugin API changes freely, under the repository's no-compatibility rule.
+3. **The API promise starts when Squawk installs plugin packages from npm or git.** Until then,
+   the plugin API and the runner kit (`@hearsay-tools/squawk/plugin` and its subpaths) are
+   unstable: they can change in any release, under the repository's no-compatibility rule. This
+   holds for the host-folder loader too, although it runs code from outside this repository.
+   (Amended 2026-11-24 by owner decision 1 of the
+   [plugin loader spec](../../.ai/specs/2026-11-24-plugin-loader-and-runner-kit.md);
+   [ADR 0070](0070-load-host-folder-plugins-and-export-the-runner-kit.md) records the loader.
+   The rule first started the promise when a loader ran outside code.)
 
 ## Consequences
 

@@ -1,5 +1,4 @@
-import type { ManagedCliManifest } from '../../core/managed-cli-source.ts';
-import type { RunnerCli } from '../../core/runner-definition.ts';
+import type { ManagedCliManifest, RunnerCli } from '@hearsay-tools/squawk/plugin';
 
 export function parseAntigravityManifest(raw: unknown): ManagedCliManifest {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {

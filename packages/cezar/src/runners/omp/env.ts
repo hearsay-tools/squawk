@@ -1,5 +1,4 @@
-import type { RunnerEnv } from '../../core/runner-definition.ts';
-import { MULTI_PROVIDER_PREFIXES } from '../../core/agent-env.ts';
+import { type RunnerEnv, MULTI_PROVIDER_PREFIXES } from '@hearsay-tools/squawk/plugin';
 
 /** OMP's env allow-list (the `env` part). Data only. */
 export const OMP_ENV = {

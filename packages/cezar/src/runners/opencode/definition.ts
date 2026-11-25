@@ -1,6 +1,5 @@
 import { join } from 'node:path';
-import { defineRunner } from '../../core/runner-definition.ts';
-import { productEnv } from '../../core/product-env.ts';
+import { defineRunner, productEnv } from '@hearsay-tools/squawk/plugin';
 import { OPENCODE_FACTS } from './facts.ts';
 import { OPENCODE_MODELS } from './models.ts';
 import { OPENCODE_AGENT_CONFIG, OPENCODE_CONFIG_FILES } from './config-files.ts';
@@ -24,7 +23,7 @@ export const opencodeRunner = defineRunner({
   loadAdapter: async () => new (await import('./opencode-server-runner.ts')).OpencodeServerRunner(),
   models: {
     ...OPENCODE_MODELS,
-    loadSettings: async () => (await import('../../agent-config/model-settings/opencode.ts')).opencodeModelSettingsStrategy,
+    loadSettings: async () => (await import('./model-settings.ts')).opencodeModelSettingsStrategy,
   },
   loadModelCatalog: async () => (await import('./opencode-model-catalog.ts')).discoverOpencodeModels,
   loadSkillCatalog: async () => (await import('./opencode-skill-catalog.ts')).discoverOpencodeSkills,

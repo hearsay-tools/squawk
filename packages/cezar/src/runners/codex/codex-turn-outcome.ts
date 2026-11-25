@@ -1,4 +1,4 @@
-import type { StopReason } from '../../core/ui-events.ts';
+import type { StopReason } from '@hearsay-tools/squawk/plugin';
 
 export const CODEX_TURN_STATUSES = ['interrupted', 'failed'] as const;
 export type CodexTurnStatus = (typeof CODEX_TURN_STATUSES)[number];

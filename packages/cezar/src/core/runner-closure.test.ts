@@ -1,9 +1,10 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
 import { runnerClassNames } from '../lint/owner-reader-rules.ts';
+import { PLUGIN_ENTRY_SUBPATHS } from '../plugin/resolve-hook.ts';
 // A test that drives one runner loads that runner's adapter and none of the other five, so an
 // edit to one adapter reruns only its own per-runner tests (hearsay-tools/cezarion#2939). The
 // closure is every module the file reaches through static and dynamic imports; esbuild reads a
@@ -31,11 +32,26 @@ function perRunnerFiles(): Array<{ file: string; runner: string }> {
   }));
 }
 
-/** Each entry's closure, as `src`-relative paths. */
+const PLUGIN_ENTRY_PATHS: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(PLUGIN_ENTRY_SUBPATHS).map(([specifier, stem]) => [specifier, join(src, 'plugin', `${stem}.ts`)]),
+);
+
+const pluginKitAlias = {
+  name: 'plugin-kit-alias',
+  setup(buildApi: { onResolve: (opts: { filter: RegExp }, cb: (args: { path: string }) => { path: string } | undefined) => void }) {
+    buildApi.onResolve({ filter: /^@hearsay-tools\/squawk\/plugin(?:\/[^/]+)?$/ }, (args) => {
+      const target = PLUGIN_ENTRY_PATHS[args.path];
+      return target ? { path: target } : undefined;
+    });
+  },
+};
+
+/** Each entry's closure, as `src`-relative paths (with `@hearsay-tools/squawk/plugin*` resolved). */
 async function closures(files: readonly string[]): Promise<Map<string, Set<string>>> {
   const result = await build({
     entryPoints: files.map(file => join(src, file)), absWorkingDir: src, bundle: true, write: false, metafile: true,
     platform: 'node', format: 'esm', packages: 'external', outdir: join(src, '.closure'), logLevel: 'silent',
+    plugins: [pluginKitAlias],
   });
   const byEntry = new Map<string, Set<string>>();
   for (const output of Object.values(result.metafile.outputs)) {
@@ -45,35 +61,34 @@ async function closures(files: readonly string[]): Promise<Map<string, Set<strin
   return byEntry;
 }
 
-/** Shared runner support (such as runners/acp/) is allowed. Adapters, definitions, per-runner
- * data modules (`facts.ts`, `extra-tools.ts`, `mock.ts`) and the built-in roster remain private
- * to each allowed runner, including transitive imports (hearsay-tools/squawk#4175). */
+/** Every non-testkit module inside another runner's folder (`runners/<other>/*`), its plugin entry
+ *  included, remains private to each allowed runner, including transitive imports
+ *  (hearsay-tools/squawk#4175). */
 function foreignRunnerModules(closure: Set<string>, allowed: ReadonlySet<string>): string[] {
   const others = BUILT_IN_RUNNER_IDS.filter(id => !allowed.has(id));
-  return [
-    ...others.filter(id => closure.has(ADAPTERS[id]!)),
-    ...others.filter(id => closure.has(`runners/${id}/definition.ts`)).map(id => `${id} definition`),
-    ...others.filter(id => closure.has(`runners/${id}/facts.ts`)).map(id => `${id} facts`),
-    ...others.filter(id => closure.has(`runners/${id}/extra-tools.ts`)).map(id => `${id} extra-tools`),
-    ...others.filter(id => closure.has(`runners/${id}/mock.ts`)).map(id => `${id} mock`),
-    ...(closure.has('runners/built-in.ts') ? ['built-in'] : []),
-  ];
+  return others.flatMap(id =>
+    [...closure]
+      .filter(file => file.startsWith(`runners/${id}/`) && !file.endsWith('.testkit.ts'))
+      .sort(),
+  );
 }
 
 describe('per-runner test closures', () => {
-  it.each([false, true])('allows a runner-shaped ACP consumer and refuses a foreign adapter: %s', async foreign => {
+  it('refuses any import from a foreign runner folder, including antigravity/acp', async () => {
     const result = await build({
-      stdin: { contents: `import { AcpSession } from './runners/acp/session.ts';
-        ${foreign ? "import { PiRunner } from './runners/pi/pi-runner.ts';" : ''}
-        export class FixtureRunner { session = AcpSession; ${foreign ? 'foreign = PiRunner;' : ''} }`, resolveDir: src },
+      stdin: { contents: `import { AcpSession } from './runners/antigravity/acp/session.ts';
+        import { PiRunner } from './runners/pi/pi-runner.ts';
+        export class FixtureRunner { session = AcpSession; foreign = PiRunner; }`, resolveDir: src },
       absWorkingDir: src, bundle: true, write: false, metafile: true, platform: 'node', format: 'esm', packages: 'external', logLevel: 'silent',
+      plugins: [pluginKitAlias],
     });
     const closure = new Set(Object.keys(result.metafile.inputs));
-    expect(closure.has('runners/acp/session.ts')).toBe(true);
-    expect(foreignRunnerModules(closure, new Set(['fixture']))).toEqual(foreign ? ['pi', 'pi facts'] : []);
+    const foreign = foreignRunnerModules(closure, new Set(['fixture']));
+    expect(foreign).toContain('runners/antigravity/acp/session.ts');
+    expect(foreign).toContain('runners/pi/pi-runner.ts');
   });
 
-  it('hold their own adapter, no other runner adapter or definition but the wait kit\'s Claude workers and R14\'s second runner, and not the built-in runner list', async () => {
+  it('hold their own adapter, no other runner adapter or definition but the wait kit\'s Claude workers and R14\'s second runner, and no other runner\'s plugin entry', async () => {
     const files = perRunnerFiles();
     expect(new Set(files.map(entry => entry.runner))).toEqual(new Set(BUILT_IN_RUNNER_IDS));
     const byEntry = await closures(files.map(entry => entry.file));
@@ -105,21 +120,26 @@ describe('per-runner test closures', () => {
   it('keep the global test setup off every runner definition and adapter (hearsay-tools/squawk#3936 review E1)', async () => {
     // The setup file rides along with EVERY server test, so a runner definition in its closure
     // would put that runner's adapter in every test's environment: any adapter edit would then
-    // invalidate every server test. The setup reads the id list from `runners/ids.ts`, a data-only
-    // module, never from `runners/built-in.ts`.
+    // invalidate every server test. The setup reads the id list from the bundled runner folders
+    // (`core/built-in-runner-ids.testkit.ts`), never from a plugin entry.
     const closure = (await closures(['../vitest.setup.ts'])).get('../vitest.setup.ts') ?? new Set();
-    const banned = [
-      ...BUILT_IN_RUNNER_IDS.flatMap(id => [`runners/${id}/definition.ts`, ADAPTERS[id]!]),
-      'runners/built-in.ts',
-    ].filter(path => closure.has(path));
-    expect(banned).toEqual([]);
+    expect(closure.has('core/built-in-runner-ids.testkit.ts')).toBe(true);
+    expect([...closure].filter(path => path.startsWith('runners/'))).toEqual([]);
   }, 60_000);
 
-  it('keep the oxlint plugin off every runner module but runners/ids.ts', async () => {
+  it('keep the bundled runner discovery and the plugin loader off every runner module', async () => {
+    // Boot finds the bundled runners by reading folders; the loader imports each entry by URL at
+    // run time, so no runner is in either module's static closure.
+    const byEntry = await closures(['plugin/bundled-runners.ts', 'plugin/loader.ts', 'core/built-in-runner-ids.testkit.ts']);
+    for (const [entry, closure] of byEntry) expect([...closure].filter(path => path.startsWith('runners/')), entry).toEqual([]);
+    expect(byEntry.size).toBe(3);
+  }, 60_000);
+
+  it('keep the oxlint plugin off every runner module', async () => {
     // Squeal relints the whole project when a file in the plugin's import closure changes. A
     // runner module in that closure would make every runner edit a full-project lint.
     const closure = (await closures(['lint/plugin.ts'])).get('lint/plugin.ts') ?? new Set();
     expect(closure.has('lint/plugin.ts')).toBe(true);
-    expect([...closure].filter(path => path.startsWith('runners/') && path !== 'runners/ids.ts')).toEqual([]);
+    expect([...closure].filter(path => path.startsWith('runners/'))).toEqual([]);
   }, 60_000);
 });

@@ -1,6 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import type { AgentEvent, AgentRunResult, AgentRunSpec, AgentRunner, AgentSession, SessionOptions } from '../../core/agent-runner.ts';
-import { productEnv } from '../../core/product-env.ts';
+import { type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentSession, type SessionOptions, productEnv } from '@hearsay-tools/squawk/plugin';
 import { ANTIGRAVITY_FACTS } from './facts.ts';
 import { ANTIGRAVITY_SPEC_SUPPORT } from './spec-support.ts';
 import { AntigravitySession } from './antigravity-session.ts';

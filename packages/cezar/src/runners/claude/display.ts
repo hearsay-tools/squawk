@@ -1,4 +1,4 @@
-import type { RunnerDisplay } from '../../core/runner-definition.ts';
+import type { RunnerDisplay } from '@hearsay-tools/squawk/plugin';
 
 /** How the cockpit and server messages name the Claude runner (its `display` part). */
 export const CLAUDE_DISPLAY = {

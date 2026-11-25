@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { ruleCases } from './ast-rule.testkit.ts';
 import { childKilledRead } from './child-killed-read.ts';
 import { runStoreTestkitImport } from './run-store-testkit-import.ts';
-import { runnerIdsImport } from './runner-ids-import.ts';
 
 /** Each AST rule's cases, carried over from its former YAML rule-tests file (hearsay-tools/squawk#3774). */
 
@@ -57,48 +56,6 @@ ruleCases(runStoreTestkitImport, {
   ],
 });
 
-ruleCases(runnerIdsImport, {
-  file: 'packages/cezar/src/core/runner-registry.ts',
-  valid: [
-    "import { registeredRunners } from './runner-registry.ts'",
-    "import { BUILT_IN_RUNNERS } from '../runners/built-in.ts'",
-    "import { LEGACY_RUNNER_IDS } from './runner-ids.ts'",
-    "import { ids } from './ids.ts'",
-    "import { ids } from '../runners/claude/ids.ts'",
-    "const note = '../runners/ids.ts'",
-    "const note = `../runners/ids.ts`",
-    "const kit = await import(`../runners/${'ids'}.ts`)",
-  ],
-  invalid: [
-    "import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts'",
-    "import { BUILT_IN_RUNNER_IDS } from '../runners/ids.js'",
-    "import { BUILT_IN_RUNNER_IDS } from '../runners/ids'",
-    "import type { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts'",
-    "export { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts'",
-    "export * from '../runners/ids.ts'",
-    "const kit = await import('../runners/ids.ts')",
-    "const kit = await import(`../runners/ids.ts`)",
-    "const kit = require(`../runners/ids`)",
-    "type Ids = typeof import('../runners/ids.ts')",
-    "type Ids = import('../runners/ids.ts').BuiltInIds",
-    "const kit = require('../runners/ids.ts')",
-    "import ids = require('../runners/ids.ts')",
-    "import { BUILT_IN_RUNNER_IDS } from '../../src/runners/ids.ts'",
-  ],
-});
-
-ruleCases(runnerIdsImport, {
-  file: 'packages/cezar/src/runners/claude/definition.ts',
-  valid: ["import { claudeDisplay } from './display.ts'", "import { ids } from './ids.ts'"],
-  invalid: ["import { BUILT_IN_RUNNER_IDS } from '../ids.ts'"],
-});
-
-ruleCases(runnerIdsImport, {
-  file: 'packages/cezar/src/runners/built-in.ts',
-  valid: ["import { claudeRunner } from './claude/definition.ts'"],
-  invalid: ["import { BUILT_IN_RUNNER_IDS } from './ids.ts'"],
-});
-
 describe('AST rule scopes', () => {
   it.each([
     ['packages/cezar/src/core/watchdog.ts', true],
@@ -109,21 +66,5 @@ describe('AST rule scopes', () => {
   ])('child-killed-read and run-store-testkit-import read %s: %s', (file, applies) => {
     expect(childKilledRead.applies(file)).toBe(applies);
     expect(runStoreTestkitImport.applies(file)).toBe(applies);
-  });
-  it.each([
-    ['packages/cezar/src/core/runner-registry.ts', true],
-    ['packages/cezar/src/server/server.ts', true],
-    ['packages/cezar/src/runners/claude/definition.ts', true],
-    ['packages/cezar/src/runners/built-in.ts', true],
-    ['packages/cezar/src/lint/runner-ids-import.ts', true],
-    ['packages/cezar/src/lint/runner-roster-literal.ts', false],
-    ['packages/cezar/src/lint/runner-id-branch.ts', false],
-    ['packages/cezar/src/lint/mock-scenario-boundary.ts', false],
-    ['packages/cezar/src/core/runner-registry.test.ts', false],
-    ['packages/cezar/src/core/register-all-runners.testkit.ts', false],
-    ['packages/cezar/vitest.setup.ts', false],
-    ['packages/web/src/runner.ts', false],
-  ])('runner-ids-import reads %s: %s', (file, applies) => {
-    expect(runnerIdsImport.applies(file)).toBe(applies);
   });
 });

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { AcpHooks } from '../acp/protocol.ts';
+import type { AcpHooks } from './acp/protocol.ts';
 import { antigravityTool } from './tool-normalization.ts';
 
 const textSchema = z.object({ text: z.string() });

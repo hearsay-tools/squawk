@@ -2,9 +2,9 @@ import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { defaultWorkspaceConfig } from '../workspace/config.ts';
 import { applyWorkspaceConfigPatch } from './workspace-config-patch.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerBundledRunners } from '../core/bundled-runners.testkit.ts';
 
-registerBuiltInRunners();
+await registerBundledRunners();
 sealTestRunners();
 
 /**

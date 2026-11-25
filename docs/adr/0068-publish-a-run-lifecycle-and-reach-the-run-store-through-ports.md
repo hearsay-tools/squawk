@@ -42,7 +42,7 @@ deletion gate `refuse(runId, kind, dataDir)`, a reclaim preparation
 `prepare(run, { repoRoot, store })` and a removal cleanup `removed(runId, dataDir)`. Each slot gets
 what it needs as a parameter; nothing is bound in hiding. The kinds are `history`, `worktree`,
 `archive-tmp` and `scratch`. `registerBuiltInRunSlots()` (`built-in-run-slots.ts`, a `shell`
-file) fills and seals the registry. Each process entry calls it beside `registerBuiltInRunners()`.
+file) fills and seals the registry. Each process entry calls it beside the bundled runner load.
 
 - Fail closed: deletion, reclaim, family archive, worker family end, the terminal scratch reap and
   the startup orphan sweep each throw before their first side effect in a process that never

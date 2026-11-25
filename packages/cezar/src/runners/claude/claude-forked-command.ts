@@ -7,7 +7,7 @@
  * before its children run.
  */
 
-import type { UiEvent, UiToolItem } from '../../core/ui-events.ts';
+import type { UiEvent, UiToolItem } from '@hearsay-tools/squawk/plugin';
 
 const FORKED_COMMAND_PREFIX = 'forked-command-';
 

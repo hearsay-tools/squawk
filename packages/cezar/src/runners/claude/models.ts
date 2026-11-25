@@ -1,4 +1,4 @@
-import type { RunnerModelData } from '../../core/runner-definition.ts';
+import type { RunnerModelData } from '@hearsay-tools/squawk/plugin';
 
 /** The Claude runner's model data. Data only: importing it loads no adapter. */
 export const CLAUDE_MODELS: RunnerModelData = {

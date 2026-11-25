@@ -65,7 +65,6 @@
     "cez/subagent-children-outside-dock": "error",
     "cez/test-enum-literal": "error",
     "cez/run-store-testkit-import": "error",
-    "cez/runner-ids-import": "error",
     "cez/runner-core-import": "error",
     "cez/probe-release-port": "error",
     "cez/stubborn-test-child": "error",

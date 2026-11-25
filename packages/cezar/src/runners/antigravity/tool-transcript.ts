@@ -3,8 +3,8 @@ import { open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
-import { hookEventName, isVisibleHookItem } from '../../core/hook-items.ts';
-import type { HookStatus, UiHookItem, UiToolItem } from '../../core/ui-events.ts';
+import { hookEventName, isVisibleHookItem } from '@hearsay-tools/squawk/plugin/runtime';
+import type { HookStatus, UiHookItem, UiToolItem } from '@hearsay-tools/squawk/plugin';
 import { ANTIGRAVITY_APP_DATA_DIR } from './launch-args.ts';
 
 /**

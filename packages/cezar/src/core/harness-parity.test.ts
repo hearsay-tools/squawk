@@ -1,7 +1,7 @@
 import '../runners/fixture/register-fixture-runner.testkit.ts';
 import '../ci-wait/tools.testkit.ts';
 import './every-runner.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { describeHarnessParity, HARNESS_PARITY_GROUPS, harnessParityFile, harnessParityRegistrations, type HarnessParityPart } from './harness-parity-cells.testkit.ts';

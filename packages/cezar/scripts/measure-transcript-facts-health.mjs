@@ -30,11 +30,14 @@ try {
   const { projectPaths } = await import(new URL('project-paths.js', runtime.url));
   dataDir = projectPaths(join(root, 'cold-project')).write;
   const { startServer } = await import(new URL('server/start-server.js', runtime.url));
-  const { registerBuiltInRunners, sealBuiltInRunners } = await import(new URL('runners/built-in.js', runtime.url));
+  const { installPluginResolveHook } = await import(new URL('plugin/resolve-hook.js', runtime.url));
+  installPluginResolveHook();
+  const { loadBundledRunners } = await import(new URL('plugin/loader.js', runtime.url));
+  const { sealRunners } = await import(new URL('core/runner-registry.js', runtime.url));
   // This measurement is a process entry like index.ts: the server reads every registered runner,
   // and a reclaim or a deletion asks the removal slots.
-  registerBuiltInRunners();
-  sealBuiltInRunners();
+  await loadBundledRunners();
+  sealRunners();
   const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await import(new URL('built-in-run-slots.js', runtime.url));
   registerBuiltInRunSlots();
   sealBuiltInRunSlots();

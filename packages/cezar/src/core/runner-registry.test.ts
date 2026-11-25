@@ -1,5 +1,5 @@
-import { BUILT_IN_RUNNERS, registerBuiltInRunners } from '../runners/built-in.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { bundledRunnerDefinitions, registerBundledRunners } from './bundled-runners.testkit.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { ClaudeCliRunner } from '../runners/claude/claude-cli-runner.ts';
 import { defineRunner } from './runner-definition.ts';
@@ -9,17 +9,18 @@ import { DEFAULT_RUNNER_ID, LEGACY_RUNNER_IDS } from './runner-ids.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 
-describe('registerRunner', () => {
-  registerBuiltInRunners();
-  sealRunners();
+const BUILT_IN_RUNNERS = await bundledRunnerDefinitions();
+await registerBundledRunners();
+sealRunners();
 
-  it('keeps the built-in definitions and the data-only id list aligned (runners/ids.ts)', () => {
+describe('registerRunner', () => {
+  it('registers one definition from each bundled runner folder, in display order', () => {
     expect(BUILT_IN_RUNNERS.map(definition => definition.id)).toEqual([...BUILT_IN_RUNNER_IDS]);
   });
 
-  it('ignores the same definition registered again', () => {
+  it('ignores the same definition registered again', async () => {
     registerRunner(codexRunner);
-    registerBuiltInRunners();
+    await registerBundledRunners();
     expect(registeredRunners()).toEqual(BUILT_IN_RUNNERS);
   });
 
@@ -35,8 +36,6 @@ describe('registerRunner', () => {
     expect(isRegisteredRunner('claude-cli')).toBe(false);
   });
 });
-
-registerBuiltInRunners();
 
 // The production factory the entry points inject (hearsay-tools/cezarion#2939).
 describe('createRunner', () => {

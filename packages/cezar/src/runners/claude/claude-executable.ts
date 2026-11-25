@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve as resolvePath } from 'node:path';
-import { productEnv } from '../../core/product-env.ts';
+import { productEnv } from '@hearsay-tools/squawk/plugin';
 
 /** Resolve discovery and execution through the same binary and dry-run precedence. */
 export function resolveClaudeExecutable(override?: string): string {

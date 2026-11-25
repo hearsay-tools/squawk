@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { claudeRunner } from '../runners/claude/definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';
 
@@ -16,7 +17,7 @@ it.each([false, true])('fails closed on all normal unsealed reads (registered: %
     () => registry.resolveRunnerId(undefined), () => registry.resolveRunnerId('claude-cli'),
     () => registry.resolveRunnerId('unknown'),
   ];
-  for (const read of reads) expect(read).toThrow(/Runner registry is unsealed: call registerBuiltInRunners\(\) then sealBuiltInRunners\(\)/);
+  for (const read of reads) expect(read).toThrow(/Runner registry is unsealed: call bootRuntime\(\) at the process entry/);
   await expect(registry.createRunner(undefined)).rejects.toThrow(/Runner registry is unsealed/);
 });
 
@@ -68,11 +69,11 @@ it('rejects an id the stored bound would drop, and accepts one at the bound', ()
   expect(registry.knownRunnerIds()).toEqual([id]);
 });
 
-it('registers built-ins without sealing, so boot can add another definition', async () => {
-  const builtIn = await import('../runners/built-in.ts');
-  builtIn.registerBuiltInRunners();
+it('loads the bundled runners without sealing, so boot can add another definition', async () => {
+  const { loadBundledRunners } = await import('../plugin/loader.ts');
+  await loadBundledRunners();
   expect(registry.runnersSealed()).toBe(false);
   registry.registerRunner({ ...codexRunner, id: 'custom' });
-  builtIn.sealBuiltInRunners();
-  expect(registry.knownRunnerIds()).toEqual([...builtIn.BUILT_IN_RUNNERS.map(row => row.id), 'custom']);
+  registry.sealRunners();
+  expect(registry.knownRunnerIds()).toEqual([...BUILT_IN_RUNNER_IDS, 'custom']);
 });

@@ -1,4 +1,4 @@
-import type { RunnerDisplay } from '../../core/runner-definition.ts';
+import type { RunnerDisplay } from '@hearsay-tools/squawk/plugin';
 
 /** How the cockpit and server messages name the OpenCode runner (its `display` part). */
 export const OPENCODE_DISPLAY = {

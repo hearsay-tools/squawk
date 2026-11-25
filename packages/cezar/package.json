@@ -13,6 +13,10 @@
     ".": "./dist/index.js",
     "./app-type": "./dist/server/app-type.js",
     "./plugin": "./dist/plugin/index.js",
+    "./plugin/runtime": "./dist/plugin/runtime.js",
+    "./plugin/model-settings": "./dist/plugin/model-settings.js",
+    "./plugin/managed-cli": "./dist/plugin/managed-cli.js",
+    "./plugin/pi-rpc": "./dist/plugin/pi-rpc.js",
     "./package.json": "./package.json"
   },
   "files": [

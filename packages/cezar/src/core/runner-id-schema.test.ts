@@ -1,7 +1,7 @@
 import './register-all-runners.testkit.ts';
 import { z } from 'zod';
 import { describe, expect, it, vi } from 'vitest';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { registeredRunnerIdSchema, storedRunnerIdSchema } from './runner-id-schema.ts';
 import { defineRunner } from './runner-definition.ts';
 import { codexRunner } from '../runners/codex/definition.ts';

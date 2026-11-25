@@ -33,6 +33,7 @@ const HEALTH: HealthResponse = {
   version: '0.1.3',
   projects: [],
   bootProject: 'default',
+  plugins: { loaded: [], failed: [] },
   repoRoot: '/home/me/cezar',
   repo: { root: '/home/me/cezar', branch: 'main' },
   defaultRunner: 'claude',

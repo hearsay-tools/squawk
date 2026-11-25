@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import type { AstRule, EsNode, Report, Visitors } from './ast-rule.ts';
-import { IMPORT_NODE_TYPES, importSpecifier, relativeSpecifiers } from './layer-import.ts';
+import { IMPORT_NODE_TYPES, importSpecifier, literalSpecifiers } from './layer-import.ts';
 import { repoRoot } from './source-rule.ts';
 
 /**
@@ -35,10 +35,14 @@ export function runnerFolder(file: string): string | undefined {
 const applies = (file: string): boolean =>
   runnerFolder(file) !== undefined && file.endsWith('.ts') && !/\.(?:test|testkit|d)\.ts$/.test(file) && !/(?:^|\/)__fixtures__\//.test(file);
 
-/** The repository path that `specifier`, written in `file`, names when it leaves the runner folder. */
+const PRIVATE_CONTRACT = /^@open-mercato\/cezar-contract(?:\/|$)/;
+
+/** The repository path (or private workspace contract specifier) that `specifier`, written in `file`, names when it leaves the runner folder. */
 export function outsideTarget(file: string, specifier: string | undefined): string | undefined {
   const folder = runnerFolder(file);
-  if (!folder || !specifier?.startsWith('.')) return undefined;
+  if (!folder || !specifier) return undefined;
+  if (PRIVATE_CONTRACT.test(specifier)) return specifier;
+  if (!specifier.startsWith('.')) return undefined;
   const target = posix.join(posix.dirname(file), specifier).replace(/\.js$/, '.ts');
   return target.startsWith(folder) ? undefined : target;
 }
@@ -46,7 +50,8 @@ export function outsideTarget(file: string, specifier: string | undefined): stri
 /** The outside targets of `file`, one per import, in source order. */
 export function runnerCoreImports(file: string, source: string): string[] {
   if (!applies(file)) return [];
-  return relativeSpecifiers(source).flatMap(({ specifier }) => outsideTarget(file, specifier) ?? []);
+  if (!/['"](?:\.\.?\/|@open-mercato\/cezar-contract)/.test(source)) return [];
+  return literalSpecifiers(source).flatMap(({ specifier }) => outsideTarget(file, specifier) ?? []);
 }
 
 /** Outside imports the rule lets pass `count` times from `file` to `target`, both repository paths. */

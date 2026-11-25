@@ -39,7 +39,7 @@ adapter; the adapter never imports `definition.ts`, because the definition impor
 | `login`, `loadLogin()`, optional `loadBrowserSignIn()` | `login.ts`, `login-probe.ts`, `browser-sign-in.ts` | Status, native terminal login arguments, optional browser consent/replay flow, and account-home/hint metadata |
 | `accounts` | `accounts.ts`; `homeDir()` in `definition.ts` | The account folder layout, the profile markers and the home slot (its key in `AgentHomePaths`, which `agentHomePaths()` in `paths.ts` builds from the registered runners). `homeDir(env, userHome)` resolves the runner's default home |
 | `env` | `env.ts` | The environment allow-list prefixes |
-| `models` | `models.ts`; `loadSettings()` in `definition.ts` | `suggested` (picker presets), `known` (conflict check), `retired` and the `idMap`. `loadSettings()` reads the native default model; most built-in runners load it from `agent-config/model-settings/<id>.ts`, outside their folder |
+| `models` | `models.ts`; `loadSettings()` in `definition.ts` | `suggested` (picker presets), `known` (conflict check), `retired` and the `idMap`. `loadSettings()` reads the native default model; a built-in runner that has one (all but `omp`) loads it from `runners/<id>/model-settings.ts` in its own folder, most on the kit's shared helpers (`@hearsay-tools/squawk/plugin/model-settings`) |
 | `loadModelCatalog()`, optional `loadModelCatalogKey()` | `<id>-model-catalog.ts` | The host model discovery adapter, with optional native auth/build cache identity; requests can carry the selected account home |
 | `loadSkillCatalog()` | `<id>-skill-catalog.ts` | The native skill list adapter |
 | `configFiles` | `config-files.ts` | The native files that Settings → Agent config shows, and the runner's `agentConfig` pane. A file's readers are the registered runners that list it, so a shared file (`PROJECT_AGENTS_FILE`, `core/project-agents-file.ts`) names no runner |
@@ -52,7 +52,7 @@ The folder also holds the runner's test data: `session-wire.testkit.ts` (how the
 wire shows a session, its prompts, steers, system prompt and skill triggers), `ui-mapper-row.testkit.ts` (its row of the mapper robustness test)
 and `__fixtures__/golden.json` (values that tests outside the runner pin). `runnerDataRows`
 (`core/runner-data-rows.testkit.ts`) imports a per-runner data module, `runners/<id>/<file>`,
-for each id in `runners/ids.ts`: facts, extra tools, the mock part, the session wire and the
+for each bundled runner id (`core/built-in-runner-ids.testkit.ts`): facts, extra tools, the mock part, the session wire and the
 mapper rows. `runnerGolden` (`core/runner-golden.testkit.ts`) reads one runner's
 `__fixtures__/golden.json` as a file. The session-wire and golden readers name the missing file
 when a runner has none.
@@ -74,26 +74,35 @@ The definition has no tool-injection part. OpenCode's tool server setup is OpenC
 - `createRunner(id)` is async. It maps a legacy id, gives the default runner (`claude`) to an id
   that no runner registered, and awaits the definition's `loadAdapter()`. After the await, a
   caller checks stop and cancel again before it changes state.
-- `prepareCommandRuntime()` lazily calls `registerBuiltInRunners()` then `sealBuiltInRunners()`
-  (`runners/built-in.ts`) before a command reads config or runs a task. Registration itself never
-  seals, so boot can add other definitions first. `index-runners.test.ts` pins it. A script under
-  `packages/cezar/scripts/` that reads runner data calls it too.
-- `BUILT_IN_RUNNERS` (`runners/built-in.ts`) is the only list of built-in definitions.
-  `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`) repeats the ids as plain data for tests, testkits,
-  `vitest.setup.ts` and dev scripts. `core/runner-registry.test.ts` holds the two lists equal, and
-  `cez/runner-ids-import` fails a production file that names `runners/ids.ts` with a literal path
-  (a static import or export, a literal `import()` or `require()`, a type import); a path built from pieces, such as a template literal with a substitution, is outside its static scope. The lint rules
-  `cez/runner-id-branch`, `cez/runner-roster-literal` and `cez/parity-runner-subset` read the ids from
-  `runners/ids.ts`. No lint rule imports `runners/built-in.ts` or a runner definition: Squeal relints
-  the whole project when the lint plugin's import closure changes (`core/runner-closure.test.ts`).
+- `bootRuntime()` (`boot.ts`) loads the bundled runners through the plugin loader
+  (`loadBundledRunners` in `plugin/loader.ts`) before the host plugins and before it seals. A
+  bundled runner is a folder `runners/<id>/` whose plugin entry `index.ts` (`index.js` in `dist/`)
+  registers its definition and declares `export const displayOrder = <integer>;`; they load and
+  list in that order and report as `bundled` in `hsq plugins` and health. A bundled runner that
+  fails to load stops boot. A script that reads runner data calls `loadBundledRunners()` and then
+  `sealRunners()`.
+- There is no list of built-in definitions. `plugin/bundled-runners.ts` reads the bundled runner
+  folders and their display order as files and imports no runner code, so `vitest.setup.ts`, the
+  lint rules (`cez/runner-id-branch`, `cez/runner-roster-literal`, `cez/parity-runner-subset`,
+  `cez/mock-scenario-boundary`) and scripts read the ids without loading a runner; tests read them
+  as `BUILT_IN_RUNNER_IDS` (`core/built-in-runner-ids.testkit.ts`). No lint rule imports a runner
+  definition: Squeal relints the whole project when the lint plugin's import closure changes
+  (`core/runner-closure.test.ts`).
 - No core file imports a runner file (`cez/layer-import`). A runner class is built only inside its
   own folder (`runner-class-outside-factory`).
 - A runner folder reads core code only through the runner kit, `@hearsay-tools/squawk/plugin`
   (`plugin/runner-kit.ts`), and never imports another runner's folder. Code that several runners
   share, such as the Pi-family RPC wire (`core/pi-rpc-wire.ts`, `core/pi-rpc-turn.ts`), lives in
-  `core/` and the kit re-exports it. `cez/runner-core-import` fails a new relative import out of a
-  runner folder; `runner-core-import.baseline.json` lists the ones that remain until each runner
-  moves onto the kit (hearsay-tools/squawk#4201).
+  `core/` and the kit re-exports it. `cez/runner-core-import` fails a relative import out of a
+  runner folder; `runner-core-import.baseline.json` holds 0 entries and only shrinks. Heavy helpers
+  live on the kit's subpaths (`/runtime`, `/model-settings`, `/managed-cli`, `/pi-rpc`), so a
+  `definition.ts` that imports the main entry keeps `bootRuntime()` light
+  ([ADR 0070](../adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md)).
+- A runner outside the repository is a host plugin in `<config>/plugins/<name>/`: a plain-JS
+  `index.mjs` or `index.js` whose setup calls `api.registerRunner(...)` and which imports Squawk
+  only from the kit. It loads after the bundled runners, runs with all of Squawk's permissions,
+  and is skipped, not fatal, when it fails. The kit is unstable until Squawk installs plugins from
+  npm or git. [Plugins](../plugins.md) is the user guide.
 
 ### Managed CLI installation
 
@@ -140,12 +149,15 @@ definitions, provider requests and workspace config (`core/runner-fields.ts`,
   reads any other saved id as written, even if some definitions have registered already. A sealed
   empty registry treats every non-legacy id as unregistered.
 - The stored-config decoders (`config.ts`, `workspace/config.ts`,
-  `workspace/agent-accounts.ts`) check ids against the registry. A per-runner record keeps its own
-  handling of a key that no runner registered: `defaultModels` in `config.ts` drops it;
-  `agentDefaults.models` and the account selections (`registeredRunnerRecord`) keep it and ignore
-  it. A single id drops it: `agentDefaults.runner`, `disabledProviders` and an account row's
-  `provider`. The next write stores what the decoder read, so a runner that did not register
-  loses those settings.
+  `workspace/agent-accounts.ts`) keep a runner id that no runner registered, so a runner whose
+  plugin did not load keeps its settings. `agentDefaults.runner`, `disabledProviders`, the repo
+  `defaultRunner` and `defaultModels` and an account row's `provider` check only the shared bound
+  (`storedRunnerIdSchema`, `core/runner-id-schema.ts`); an account row checks `supportsProfiles`
+  only for a registered runner. `agentDefaults.models` and the account selections
+  (`registeredRunnerRecord`) keep every unregistered key as stored and validate only the values of
+  registered runners. The next write stores what the decoder read.
+  At run time an unregistered id is ignored or falls back to the default runner
+  (`resolveRunnerId`), and HTTP write routes still refuse it.
 
 ### How tests register runners
 
@@ -155,7 +167,7 @@ default runner testkit seals after adding all its own definitions; default testk
 without sealing. Dynamic registrations use `vi.resetModules()` and seal the fresh module graph
 before reads. A test that needs every built-in runner (it enumerates
 `runnersWhere` or `registeredRunners`) imports `core/register-all-runners.testkit.ts`, which registers and seals that complete roster. A test that
-needs only the ids reads `runners/ids.ts`, which loads no definition. A static test table that
+needs only the ids reads `core/built-in-runner-ids.testkit.ts`, which loads no definition. A static test table that
 crosses runners reads the runner folders' data files, never a hand list:
 `core/runner-fact-rows.testkit.ts` for facts and extra tools, `runnerDataRows` for the others.
 The lint rule's runner classes and the closure guard's adapter paths come from the folders too. `runners/fixture/` is a runner that
@@ -183,7 +195,7 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   unit tests that drive shared code with it, in `FACT_VALUE_TESTS`. A fix whose
   behavior depends on such a value adds or extends one of those unit tests.
 - **A new runner** adds what `AGENT_PROTOCOL.md` §10 lists: its folder, its scripts in
-  `packages/cezar/scripts/`, one line in `runners/built-in.ts` and its id in `runners/ids.ts`. [Runner definitions](#runner-definitions)
+  `packages/cezar/scripts/`, and its plugin entry `index.ts` in the folder. [Runner definitions](#runner-definitions)
   names the file of each part. `display.icon` is a key of the cockpit's icon set (`OPEN_IN_ICONS`
   in `components/open-in-menu.tsx`, keyed by icon key, not by runner id); the generic runner icon
   is `bot`. A runner's `login.installHint` (the server's message) and `display.installHint` (the
@@ -252,11 +264,12 @@ which makes `createRunner` the factory at the same point of the import order, so
 registered, so a test that starts a runner it did not register runs it on Claude without an error:
 register every runner a test starts. A file that needs every built-in runner registered (it
 enumerates `runnersWhere` or `registeredRunners` and expects all of them) imports
-`core/register-all-runners.testkit.ts`, the one test module that calls `registerBuiltInRunners()`;
+`core/register-all-runners.testkit.ts`, which registers every bundled runner's plugin entry
+(`core/bundled-runners.testkit.ts`) and seals;
 `core/every-runner.testkit.ts` is that module plus `created-runners.testkit.ts`. A test that
-needs only the ids reads `BUILT_IN_RUNNER_IDS` from `runners/ids.ts`, which loads no definition;
-production code never imports it (`cez/runner-ids-import`, for literal paths). The
-testkits it reaches import a kit's `-core` file, never `runners/built-in.ts`, another runner's
+needs only the ids reads `BUILT_IN_RUNNER_IDS` from `core/built-in-runner-ids.testkit.ts`, which
+loads no definition. The
+testkits it reaches import a kit's `-core` file, never another runner's plugin entry or
 definition or a kit's plain name (`fixture-cleanup`, `worker-wait`, `harness-parity`,
 `workflow-parity`), which chooses every adapter. A wait parity file runs its workers on the fixture
 runner, so built-in wait files load no other built-in runner adapter; an owned-workflows file loads

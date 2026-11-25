@@ -1,18 +1,20 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
-import { addCompleteRunner, addSixthRunner, COMPLETE_PLACES, outsideFourPlaces, refusal, rosterTests } from '../.ai/scripts/simulate-sixth-runner.mjs';
+import { addCompleteRunner, addSixthRunner, COMPLETE_PLACES, nextDisplayOrder, outsideRunnerPlaces, refusal, rosterTests } from '../.ai/scripts/simulate-sixth-runner.mjs';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 const SRC = 'packages/cezar/src';
 // The files the simulation reads, copied from this checkout into a small repository of its own.
 const SCRIPTS = 'packages/cezar/scripts';
-const INPUTS = [`${SRC}/runners/fixture`, `${SCRIPTS}/mock-fixture-runner.mjs`, `${SRC}/runners/built-in.ts`, `${SRC}/runners/ids.ts`,
+// Each bundled runner's plugin entry: the new runner's display order comes after theirs.
+const ENTRIES = readdirSync(join(REPO, SRC, 'runners')).map(name => `${SRC}/runners/${name}/index.ts`).filter(path => existsSync(join(REPO, path)));
+const INPUTS = [`${SRC}/runners/fixture`, `${SCRIPTS}/mock-fixture-runner.mjs`, ...ENTRIES,
   `${SRC}/runners/opencode`, `${SCRIPTS}/mock-skill-data/opencode.mjs`,
   ...readdirSync(join(REPO, SCRIPTS)).filter(file => /^(?:mock-)?opencode-/.test(file)).map(file => `${SCRIPTS}/${file}`)];
 const ROSTER_TEST = `${SRC}/core/roster-reader.test.ts`;
@@ -31,8 +33,8 @@ function scratch(t, edit = () => {}) {
     cpSync(join(REPO, path), join(root, path), { recursive: true });
   }
   mkdirSync(join(root, SRC, 'core'), { recursive: true });
-  writeFileSync(join(root, ROSTER_TEST), "import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';\n");
-  writeFileSync(join(root, OTHER_TEST), "import { x } from './ids.ts';\n");
+  writeFileSync(join(root, ROSTER_TEST), "import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';\n");
+  writeFileSync(join(root, OTHER_TEST), "import { x } from '../runners/built-in-runner-ids.testkit.ts';\n");
   edit(root);
   git(root, 'init', '-q');
   git(root, 'add', '-A');
@@ -52,27 +54,31 @@ test('refuses a checkout with uncommitted changes, and a path that is no checkou
   assert.match(refusal(join(root, 'missing')), /does not exist/);
 });
 
-test('adds the sixth runner in the four places only and lists the roster-reading tests', (t) => {
+test('adds the sixth runner in its folder and its mock script only, and lists the roster-reading tests', (t) => {
   const root = scratch(t);
+  const order = nextDisplayOrder(root);
   addSixthRunner(root);
-  assert.deepEqual(outsideFourPlaces(root), []);
+  assert.deepEqual(outsideRunnerPlaces(root), []);
   const runner = join(root, SRC, 'runners/sixth');
   assert.match(readFileSync(join(runner, 'definition.ts'), 'utf8'), /new \(await import\('\.\/sixth-runner\.ts'\)\)\.SixthRunner\(\)/);
   assert.match(readFileSync(join(runner, 'sixth-runner.ts'), 'utf8'), /class SixthRunner implements AgentRunner/);
   assert.match(readFileSync(join(runner, 'facts.ts'), 'utf8'), /^export const SIXTH_FACTS = /m);
-  assert.match(readFileSync(join(root, SRC, 'runners/ids.ts'), 'utf8'), /'antigravity', 'sixth'\]/);
-  assert.match(readFileSync(join(root, SRC, 'runners/built-in.ts'), 'utf8'), /antigravityRunner, sixthRunner\]/);
+  const entry = readFileSync(join(runner, 'index.ts'), 'utf8');
+  assert.match(entry, /^import \{ sixthRunner \} from '\.\/definition\.ts';$/m);
+  assert.match(entry, /^  api\.registerRunner\(sixthRunner\);$/m);
+  assert.match(entry, new RegExp(`^export const displayOrder = ${order};$`, 'm'));
+  assert.ok(order > 60, `${order} lists after every bundled runner`);
   const tests = rosterTests(root);
   assert.ok(tests.includes(ROSTER_TEST));
   assert.ok(tests.includes(`${SRC}/runners/sixth/harness-sixth-startup-parity.test.ts`));
   assert.ok(!tests.includes(OTHER_TEST));
 });
 
-test('reports a change outside the four places', (t) => {
+test('reports a change outside the runner\'s places', (t) => {
   const root = scratch(t);
   addSixthRunner(root);
   writeFileSync(join(root, OTHER_TEST), 'changed\n');
-  assert.deepEqual(outsideFourPlaces(root), [OTHER_TEST]);
+  assert.deepEqual(outsideRunnerPlaces(root), [OTHER_TEST]);
 });
 
 test('turns the fixture\'s mock.testkit.ts, when it has one, into mock.ts', (t) => {
@@ -83,7 +89,7 @@ test('turns the fixture\'s mock.testkit.ts, when it has one, into mock.ts', (t) 
       `${readFileSync(join(dir, fixture, 'definition.testkit.ts'), 'utf8')}import { FIXTURE_MOCK_PART } from './mock.testkit.ts';\n`);
   });
   addSixthRunner(root);
-  assert.deepEqual(outsideFourPlaces(root), []);
+  assert.deepEqual(outsideRunnerPlaces(root), []);
   const runner = join(root, SRC, 'runners/sixth');
   assert.equal(readFileSync(join(runner, 'mock.ts'), 'utf8'), "export const SIXTH_MOCK_PART = 'sixth';\n");
   assert.match(readFileSync(join(runner, 'definition.ts'), 'utf8'), /import \{ SIXTH_MOCK_PART \} from '\.\/mock\.ts';/);
@@ -96,8 +102,9 @@ function filesUnder(dir) {
 
 test('--complete copies the opencode runner as hexacode in its places only, with every name renamed', (t) => {
   const root = scratch(t);
+  const order = nextDisplayOrder(root);
   const shared = addCompleteRunner(root);
-  assert.deepEqual(outsideFourPlaces(root, COMPLETE_PLACES), []);
+  assert.deepEqual(outsideRunnerPlaces(root, COMPLETE_PLACES), []);
   const runner = join(root, SRC, 'runners/hexacode');
   assert.deepEqual(filesUnder(runner).sort(), filesUnder(join(root, SRC, 'runners/opencode')).map(file => file.replaceAll('opencode', 'hexacode')).sort());
   const definition = readFileSync(join(runner, 'definition.ts'), 'utf8');
@@ -113,10 +120,14 @@ test('--complete copies the opencode runner as hexacode in its places only, with
   assert.ok(statSync(join(root, SCRIPTS, 'hexacode-task-scope.d.mts')).isFile());
   assert.match(readFileSync(join(runner, 'hexacode-task-scope.ts'), 'utf8'), /'\.\.\/\.\.\/\.\.\/scripts\/hexacode-task-scope\.mjs'/);
   assert.ok(!shared.some(line => line.includes('task-scope')));
-  assert.match(readFileSync(join(root, SRC, 'runners/ids.ts'), 'utf8'), /'antigravity', 'hexacode'\]/);
-  assert.match(readFileSync(join(root, SRC, 'runners/built-in.ts'), 'utf8'), /import \{ hexacodeRunner \} from '\.\/hexacode\/definition\.ts';\n[^]*antigravityRunner, hexacodeRunner\]/);
+  const entry = readFileSync(join(runner, 'index.ts'), 'utf8');
+  assert.match(entry, /^import \{ hexacodeRunner \} from '\.\/definition\.ts';$/m);
+  assert.match(entry, /^  api\.registerRunner\(hexacodeRunner\);$/m);
+  // The copy lists after every bundled runner, not at the copied runner's place.
+  assert.match(entry, new RegExp(`^export const displayOrder = ${order};$`, 'm'));
   // Only what the copy takes from outside the copied files keeps the old spelling, and each one is reported.
-  assert.ok(shared.includes(`${SRC}/runners/opencode/definition.ts: '../../agent-config/model-settings/opencode.ts'`));
+  assert.ok(shared.includes(`${SRC}/runners/opencode/opencode-minimal.ts: opencodeToolGrantFields`));
+  assert.match(definition, /\(await import\('\.\/model-settings\.ts'\)\)\.hexacodeModelSettingsStrategy/);
   const keptBy = (path) => shared.filter(line => line.startsWith(`${path}: `)).map(line => line.slice(path.length + 2));
   for (const file of filesUnder(runner)) {
     const kept = keptBy(`${SRC}/runners/opencode/${file.replaceAll('hexacode', 'opencode')}`);

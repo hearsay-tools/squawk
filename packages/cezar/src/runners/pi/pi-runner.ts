@@ -1,42 +1,13 @@
 import { piBaseArgs } from './pi-args.ts';
-import { openingContent, validSkillMessage } from '../../core/skill-trigger.ts';
-import { productEnv } from '../../core/product-env.ts';
+import { adoptRpcSessionId, armEndWatchdog, dispatchPiTurnMessage, isRecord, number, parseRpcLine, piRpcError as rpcError, PiRpcInput, PiTextBlocks, settlePiFamilyExit, string, toPiPrompt, truncate, waitForExit } from '@hearsay-tools/squawk/plugin/pi-rpc';
+import { boundOutputDrainAfterExit, buildChildEnv, DEFAULT_RUNNER_TIMINGS, openingContent, readNdjson, SessionEndedBeforeAcknowledgement, signalSession, spawnSessionLeader, squawkToolNames, summarizeRunnerStderr, unknownToolGrant, validSkillMessage, waitForEofExit } from '@hearsay-tools/squawk/plugin/runtime';
+import { productEnv, type AgentEvent, type AgentRunner, type AgentRunResult, type AgentRunSpec, type AgentSession, type AgentToolCallRecord, type ContentBlock, type InputDelivery, type PiEndWatchdog, type PiTurnMessages, type SessionOptions, type ToolGrant } from '@hearsay-tools/squawk/plugin';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseEffort } from '@open-mercato/cezar-contract/effort';
-import { isRecord, number, parseRpcLine, piRpcError as rpcError, string, toPiPrompt, truncate, waitForExit } from '../../core/pi-rpc-wire.ts';
-import {
-  adoptRpcSessionId,
-  armEndWatchdog,
-  dispatchPiTurnMessage,
-  type PiEndWatchdog,
-  PiRpcInput,
-  PiTextBlocks,
-  type PiTurnMessages,
-  settlePiFamilyExit,
-} from '../../core/pi-rpc-turn.ts';
-import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
-import type {
-  AgentEvent,
-  AgentRunResult,
-  AgentRunSpec,
-  InputDelivery,
-  AgentRunner,
-  AgentSession,
-  AgentToolCallRecord,
-  ContentBlock,
-  SessionOptions,
-  ToolGrant,
-} from '../../core/agent-runner.js';
+import { parseEffort } from '@hearsay-tools/squawk/plugin/runtime';
 import { PI_FACTS } from './facts.js';
 import { PI_SPEC_SUPPORT, PI_MINIMAL_ARGS } from './spec-support.js';
-import { SessionEndedBeforeAcknowledgement, unknownToolGrant } from '../../core/agent-runner-values.ts';
-import { signalSession, spawnSessionLeader, waitForEofExit } from '../../core/session-process.js';
-import { buildChildEnv } from '../../core/agent-env.js';
-import { squawkToolNames } from '../../ci-wait/tool-names.js';
-import { readNdjson } from '../../core/ndjson.js';
 import { createPiUiState, mapPiRpcMessage, piFlushProviderError, piProviderErrorMessage, piTurnStarted } from './pi-ui-mapper.js';
-import { boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from '../../core/runner-runtime.js';
 
 export interface PiRunnerOptions {
   /** Override the binary name/path; defaults to `pi` on PATH (`CEZ_PI_BIN`). */

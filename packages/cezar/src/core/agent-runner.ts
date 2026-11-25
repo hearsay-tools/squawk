@@ -2,7 +2,7 @@
  * Backend-neutral logical sessions for task execution, follow-ups, waiting, interrupt and
  * resume. Adapters own native process lifetimes and emit normalized events behind this seam.
  * A runner id is an open string (spec 2026-11-18-runner-definitions, decision 5): the registry
- * (`core/runner-registry.ts`) resolves it, and `runners/built-in.ts` is the one roster.
+ * (`core/runner-registry.ts`) resolves it, and boot fills it from the bundled runner folders and the plugins.
  */
 
 import type { UiEvent } from './ui-events.ts';

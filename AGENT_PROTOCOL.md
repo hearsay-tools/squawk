@@ -340,18 +340,17 @@ A runner is one definition in its own folder, which one call registers
 changes these places and no other file, with one exception at the end of this section (a new
 turn-path fact value also adds a shared unit test):
 
-- **Its folder**, `packages/cezar/src/runners/<id>/`: the definition and its data files, the
-  adapter, the mapper, the catalogs, the test data files, the fixtures and every test of the
-  runner, parity files included. No backend-specific type leaves it.
+- **Its folder**, `packages/cezar/src/runners/<id>/`: the plugin entry `index.ts`, the definition
+  and its data files, the adapter, the mapper, the catalogs, the test data files, the fixtures and
+  every test of the runner, parity files included. No backend-specific type leaves it. The entry
+  default-exports a setup that calls `api.registerRunner(<id>Runner)` and declares
+  `export const displayOrder = <integer>;` on one line; boot loads every folder with an entry
+  through the plugin loader in that order (`plugin/bundled-runners.ts`), so no roster file
+  changes.
 - **Its scripts** in `packages/cezar/scripts/`: the mock script, its data files (the skill
   captures in `mock-skill-data/<id>.mjs` when it lists skills) and any helper the runner ships.
   They stay there because the packaged CLI tests and the mocks start them by path; the
   definition's `mock` part names the mock script.
-- **One line** in `BUILT_IN_RUNNERS` (`runners/built-in.ts`), in display order.
-- **Its id** in `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`). `core/runner-registry.test.ts` fails
-  when the two lists differ. Only tests, testkits, dev scripts and lint rules read `runners/ids.ts`.
-  `cez/runner-ids-import` fails a production file that names it with a literal path (a static
-  import or export, a literal `import()` or `require()`, a type import); a path built from pieces, such as a template literal with a substitution, is outside its static scope.
 
 What a new runner's folder holds:
 
@@ -382,7 +381,12 @@ places: the typecheck passes, and the printed test files fail only by naming a m
 the runner's folder, plus `FACT_VALUE_TESTS` for a new turn-path fact value. `--complete` copies a
 real runner's folder and scripts under a new id: the typecheck passes and every printed test file
 passes. An outside runner
-(roadmap step 4) only calls `registerRunner`. `runners/fixture/` is the smallest example: its
+is a host plugin in `<config>/plugins/<name>/`: a plain-JS `index.mjs` or `index.js` whose setup
+calls `api.registerRunner(...)` and which imports Squawk only from `@hearsay-tools/squawk/plugin`
+and its subpaths. It runs in-process with all of Squawk's permissions and logins, and the kit is
+unstable until Squawk installs plugins from npm or git
+([ADR 0070](docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md),
+[Plugins](docs/plugins.md)); `plugin/__fixtures__/external-runner/` is the example. `runners/fixture/` is the smallest example: its
 test registers it, runs a task and runs the parity kit on it. The items below say what goes in
 the folder, and the rules that the guards do not force, or force only in part. The item numbers
 are stable.
@@ -439,7 +443,7 @@ are stable.
     `core/model-identity.test.ts` holds the rules of the id map.
 11. **Host model discovery** — ships in the runner's PR: `<id>-model-catalog.ts` exports
     `discover<Id>Models`, and `loadModelCatalog()` imports it. `model-discovery-guard.test.ts`
-    forces the module, the export and the catalog entry for every id in `runners/ids.ts`, or an
+    forces the module, the export and the catalog entry for every bundled runner id, or an
     exemption with the wire reason. It does not force these rules. The adapter calls the CLI's own model-listing surface under the runner's child
     environment, with bounds, and throws when it cannot read the model list. It never reads
     the CLI's config or cache files and never runs a model turn. `server/models-api.test.ts`
