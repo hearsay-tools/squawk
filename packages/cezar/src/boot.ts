@@ -29,6 +29,13 @@ export interface BootRuntimeOptions {
    * Absent: no host plugin loads, so a test boot never reads the operator's folder.
    */
   pluginsDir?: string | undefined;
+  /**
+   * Test-only override for the bundled runners folder.
+   * Absent: reads this Squawk copy's `runners/` folder and fails closed when it is empty.
+   * Present: reads that folder instead and allows it to be empty so tests can boot with host
+   * plugins only.
+   */
+  bundledRunnersDir?: string | undefined;
   /** Runs once, after registration and before the first full seal. A later boot skips it. */
   beforeSeal?: () => void | Promise<void>;
 }
@@ -54,7 +61,7 @@ export function bootRuntime(options?: BootRuntimeOptions): Promise<void> {
   return runtimeBoot;
 }
 
-async function sealRuntime({ pluginsDir, beforeSeal }: BootRuntimeOptions): Promise<void> {
+async function sealRuntime({ pluginsDir, bundledRunnersDir, beforeSeal }: BootRuntimeOptions): Promise<void> {
   // Built-in runners and host plugins import `@hearsay-tools/squawk/plugin`; map it before either loads.
   installPluginResolveHook();
   // A test may seal a custom command table before dispatch asks for a full boot.
@@ -70,7 +77,9 @@ async function sealRuntime({ pluginsDir, beforeSeal }: BootRuntimeOptions): Prom
   registerBuiltInStepKinds();
   registerBuiltInTools();
   registerBuiltInWaitKinds();
-  await (bundledRunnersLoad ??= loader.loadBundledRunners());
+  await (bundledRunnersLoad ??= bundledRunnersDir === undefined
+    ? loader.loadBundledRunners()
+    : loader.loadBundledRunners(bundledRunnersDir, { allowEmpty: true }));
   if (pluginsDir !== undefined && !hostPluginsLoaded) {
     hostPluginsLoaded = true;
     await loader.loadPluginFolder({ dir: pluginsDir, source: 'host' });
