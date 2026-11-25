@@ -23,9 +23,13 @@ node .github/scripts/friction-inbox.cjs post finding.md
 
 The command posts the file as a comment on today's inbox issue and prints the
 comment URL. The inbox issue is `Friction inbox YYYY-MM-DD` (the UTC date),
-labeled `friction-inbox`. The first finding of the day creates it. When two
-agents create it at the same time, both post to the lower number and the
-command closes the other copy.
+labeled `friction-inbox`. The first finding of the day creates it. GitHub's
+issue list shows a new issue only after a few seconds, so after it creates the
+issue the command reads the list again, for up to about 20 seconds, until the
+new issue shows. If it never shows, the command fails and posts nothing: run it
+again. When two agents create the issue at the same time, every post goes to
+the lowest number and closes each open higher-numbered copy. A closed copy
+keeps its findings, because the digest reviews inbox issues in any state.
 
 Use this format. The command refuses a file without a known `Destination`:
 
