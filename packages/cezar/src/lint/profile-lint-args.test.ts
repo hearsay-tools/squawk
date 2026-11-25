@@ -32,3 +32,8 @@ it('refuses --compare or --runs without a value', () => {
   expect(() => profileArgs(['--compare', '--runs', '3'])).toThrow('--compare needs a value');
   expect(() => profileArgs(['--runs'])).toThrow('--runs needs a value');
 });
+
+// With no round, the report would print statistics of nothing and exit 0.
+it.each(['0', '-1', '2.5', 'abc'])('refuses --runs %s', value => {
+  expect(() => profileArgs(['--compare', 'origin/main', '--runs', value])).toThrow(`--runs needs a positive integer, not ${value}`);
+});

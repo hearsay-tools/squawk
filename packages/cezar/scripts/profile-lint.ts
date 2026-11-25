@@ -10,6 +10,7 @@ import { PROCESS_OWNER_RULES } from '../src/lint/owner-process-rules.ts';
 import { STATE_OWNER_RULES } from '../src/lint/owner-state-rules.ts';
 import { READER_OWNER_RULES } from '../src/lint/owner-reader-rules.ts';
 import { activeRunWriteRules } from '../src/lint/active-run-write.ts';
+import { gitEnv, gitSync } from '../src/git-command.ts';
 import { type CompareRound, compareReport, lintedFiles, rootRelativePaths, ruleTimings } from './profile-lint-compare.ts';
 
 /**
@@ -51,6 +52,13 @@ function flagValue(args: readonly string[], flag: string): string | undefined {
   return value;
 }
 
+/** `--runs N`: a positive integer, or the statistics describe no run at all. */
+function roundCount(value: string): number {
+  const count = Number(value);
+  if (!/^\d+$/.test(value) || count < 1) throw new Error(`--runs needs a positive integer, not ${value}`);
+  return count;
+}
+
 /** The command line: flags, `--runs N`, `--compare <ref|config>`, and the paths to lint (default `packages`). */
 export function profileArgs(args: readonly string[]): ProfileOptions {
   const runs = flagValue(args, '--runs');
@@ -59,7 +67,7 @@ export function profileArgs(args: readonly string[]): ProfileOptions {
   const paths = args.filter((arg, index) => !arg.startsWith('--') && !values.has(index));
   return {
     paths: paths.length > 0 ? paths : ['packages'],
-    runs: runs === undefined ? (compare === undefined ? 1 : 5) : Number(runs),
+    runs: runs === undefined ? (compare === undefined ? 1 : 5) : roundCount(runs),
     alone: args.includes('--alone'),
     families: args.includes('--families'),
     ...(compare === undefined ? {} : { compare }),
@@ -166,15 +174,19 @@ interface Side { config: string; cwd: string }
 function baseSide(arg: string): { side: Side; describe: string } {
   const file = resolve(arg);
   if (existsSync(file)) return { side: { config: file, cwd: repoRoot }, describe: `config ${arg}` };
-  const commit = spawnSync('git', ['rev-parse', '--verify', '--quiet', `${arg}^{commit}`], { cwd: repoRoot, encoding: 'utf8' });
-  if (commit.status !== 0) throw new Error(`--compare ${arg}: not a file and not a commit`);
-  const sha = commit.stdout.trim();
+  // The git helpers drop inherited `GIT_DIR`-style variables (a hook, `rebase --exec`), so git acts on `cwd`.
+  let sha: string;
+  try {
+    sha = gitSync(['rev-parse', '--verify', '--quiet', `${arg}^{commit}`], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    throw new Error(`--compare ${arg}: not a file and not a commit`);
+  }
   const tree = join(scratch, 'base');
   mkdirSync(tree);
-  execFileSync('/bin/sh', ['-c', 'git archive "$1" | tar -x -C "$2"', 'sh', sha, tree], { cwd: repoRoot });
+  execFileSync('/bin/sh', ['-c', 'git archive "$1" | tar -x -C "$2"', 'sh', sha, tree], { cwd: repoRoot, env: gitEnv() });
   // Oxlint applies the `.gitignore` of an enclosing repository. A temp directory inside an ignored
   // path (a task's TMPDIR) would hide every file, so the tree gets a repository boundary of its own.
-  execFileSync('git', ['init', '--quiet', tree]);
+  gitSync(['init', '--quiet', tree]);
   for (const dir of ['.', ...readdirSync(join(repoRoot, 'packages')).map(name => join('packages', name))]) {
     const modules = join(repoRoot, dir, 'node_modules');
     if (existsSync(modules) && existsSync(join(tree, dir)) && !existsSync(join(tree, dir, 'node_modules'))) symlinkSync(modules, join(tree, dir, 'node_modules'), 'dir');
