@@ -177,8 +177,13 @@ export class RunClaimsTopic implements RunAccess, RunClaims {
     // Serialized, so a key set to `undefined` reads as the absent key it is once written.
     const before = JSON.stringify(run);
     const wasCancelled = run.status === 'cancelled';
-    if (opts.settle) settleOrphanedRun(run, { stop: opts.stop });
-    else reconcileLoadedRun(run, opts);
+    const rev = String(row.revision);
+    const healOpts = {
+      skipPrReferenceHeal: this.db?.getMeta(`pr-reference-heal:${row.id}`) === rev,
+      skipIssueAttributionHeal: this.db?.getMeta(`issue-attribution:${row.id}`) === rev,
+    };
+    if (opts.settle) settleOrphanedRun(run, { stop: opts.stop, ...healOpts });
+    else reconcileLoadedRun(run, { ...opts, ...healOpts });
     const changed = upgraded === true || JSON.stringify(run) !== before || parseStoredSummary(row.summary) === undefined;
     if (opts.onlyIfChanged && !changed) return;
     this.state.held.set(run.id, run);

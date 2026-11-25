@@ -248,6 +248,7 @@ function runStoreStep(journal: ProjectMigrationJournal, fault: MigrationFault): 
       // Paths change, run ids do not: the row keeps the index rows it has.
       upserts.push({ ...input, worktreePath: column.worktree_path, data: serializeLike(row.data, data), summary: serializeLike(row.summary, summary),
         issueAttributionCurrent: db.getMeta(`issue-attribution:${id}`) === String(revision),
+        prReferenceCurrent: db.getMeta(`pr-reference-heal:${id}`) === String(revision),
         conversationMembers: db.indexRows(CONVERSATION_MEMBERS_INDEX, id)?.map(([member]) => member!) ?? null, automationRuns: db.indexRows(AUTOMATION_RUNS_INDEX, id) });
     }
     if (upserts.length > 0) db.transaction({ upserts, deletes: [], beforeCommit: () => { fault('run-store:commit'); } });

@@ -8,7 +8,14 @@ import { applyExit } from './run-exits.ts';
 import { restoreLostReferencedPullRequest } from './loaded-run-healing.ts';
 import { stageLoaded } from './record-write-rules.ts';
 import { referencedPrDeclaration, resolveReferencedRef, restoreOriginatingIssue } from './run-references.ts';
-import type { RunRecord } from './store.ts';
+import type { RepoHandle, RunRecord } from './store.ts';
+
+export interface ReconcileLoadedOptions {
+  keepLive?: boolean | undefined;
+  repoHandle?: RepoHandle | null | undefined;
+  skipPrReferenceHeal?: boolean | undefined;
+  skipIssueAttributionHeal?: boolean | undefined;
+}
 
 export function settleLoadedStop(run: RunRecord): void {
   // An accepted Stop is durable intent, never an interrupted run to auto-resume. It can meet a run
@@ -23,7 +30,7 @@ export function restoreLoadedUsageLimitHold(run: RunRecord): void {
   if (run.status === 'failed' && run.autoResumeAt !== undefined) Object.assign(run, applyExit(run, 'hold'));
 }
 
-export function failLoadedInterruptedRun(run: RunRecord, opts?: { keepLive?: boolean }): void {
+export function failLoadedInterruptedRun(run: RunRecord, opts?: { keepLive?: boolean | undefined }): void {
   // A run that was live when the previous process exited can never finish —
   // surface that instead of a forever-"running" ghost. `review` survives
   // restarts on purpose: the gate is pure data (worktree + branch + record)
@@ -48,13 +55,16 @@ export function failLoadedInterruptedRun(run: RunRecord, opts?: { keepLive?: boo
  * paths that never recover, and the index reader, which has no manager at all — live-looking runs
  * are marked failed so no ghost stays behind.
  */
-export function reconcileLoadedRun(run: RunRecord, opts?: { keepLive?: boolean }): RunRecord {
+export function reconcileLoadedRun(run: RunRecord, opts?: ReconcileLoadedOptions): RunRecord {
   settleLoadedStop(run);
   restoreLoadedUsageLimitHold(run);
   failLoadedInterruptedRun(run, opts);
   clearLoadedStaleResume(run);
-  restoreLostReferencedPullRequest(run, referencedPrDeclaration, resolveReferencedRef);
-  restoreOriginatingIssue(run);
+  if (!opts?.skipPrReferenceHeal) {
+    restoreLostReferencedPullRequest(run, referencedPrDeclaration, (candidates, task, declared) =>
+      resolveReferencedRef(candidates, task, declared, opts?.repoHandle));
+  }
+  if (!opts?.skipIssueAttributionHeal) restoreOriginatingIssue(run, opts?.repoHandle);
   // Repository scoping follows reconciliation: stores arm a handle asynchronously, while
   // the read-only index applies its cached handle to these fresh records (#97). This ordering
   // also scopes any referenced PR restored above without filtering candidate evidence first.
@@ -70,11 +80,14 @@ function clearLoadedStaleResume(run: RunRecord): void {
  * Settle an adopted dead owner’s live run without starting work. Untouched runs cancel; started
  * runs become interrupted. Stop explicitly cancels its target. Mutates run.
  */
-export function settleOrphanedRun(run: RunRecord, opts: { stop?: boolean | undefined } = {}): RunRecord {
+export function settleOrphanedRun(
+  run: RunRecord,
+  opts: Omit<ReconcileLoadedOptions, 'keepLive'> & { stop?: boolean | undefined } = {},
+): RunRecord {
   if (opts.stop && (run.status === 'queued' || run.status === 'running' || run.status === 'waiting')) run.stopping = true;
   if (run.status === 'queued' && !run.startedAt && run.workflowDef !== undefined &&
     run.steps.every((step) => step.status === 'pending' && !step.startedAt && !step.sessionId)) {
     Object.assign(run, applyExit(run, 'cancel'));
   }
-  return reconcileLoadedRun(run, { keepLive: false });
+  return reconcileLoadedRun(run, { ...opts, keepLive: false });
 }

@@ -48,6 +48,8 @@ export interface RunRowInput {
   baseBranch?: string | null;
   /** Whether originating-issue attribution was verified for this write. */
   issueAttributionCurrent?: boolean;
+  /** Whether referenced-PR restoration was verified for this write. */
+  prReferenceCurrent?: boolean;
   /** The complete record, serialized. */
   data: string;
   /** The record's summary projection, serialized. */
@@ -701,6 +703,7 @@ export class RunDatabase {
           this.reports.deleteRun(id);
           this.statements.delete.run(id);
           this.statements.deleteMeta.run(`issue-attribution:${id}`);
+          this.statements.deleteMeta.run(`pr-reference-heal:${id}`);
           this.derived.deleteRun(id);
         }
         this.derived.writeArchive(changes.conversationArchive);
@@ -712,6 +715,8 @@ export class RunDatabase {
           // Revision binding makes an older writer invalidate this optional repair cache.
           if (row.issueAttributionCurrent) this.statements.setMeta.run(`issue-attribution:${row.id}`, String(revision));
           else this.statements.deleteMeta.run(`issue-attribution:${row.id}`);
+          if (row.prReferenceCurrent) this.statements.setMeta.run(`pr-reference-heal:${row.id}`, String(revision));
+          else this.statements.deleteMeta.run(`pr-reference-heal:${row.id}`);
           revisions.set(row.id, revision);
           seqs.set(row.id, inserted!.seq as number);
         }

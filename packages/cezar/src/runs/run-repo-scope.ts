@@ -4,24 +4,27 @@
  */
 import { isDeepStrictEqual } from 'node:util';
 import { REFERENCED_RUN_RULE } from '@open-mercato/cezar-contract/run-predicates';
+import { projectWriteRefused } from '../server/cockpit-ownership.ts';
 import { guardedJsonSql } from './guarded-json-sql.ts';
 import { snapshotRun } from './lifecycle.ts';
 import type { RunRepoHandle } from './ports.ts';
-import { rowFamily } from './run-claims.ts';
+import { familyKey, rowFamily } from './run-claims.ts';
 import type { RunClaimsTopic } from './run-claims-topic.ts';
 import type { RunColdReadsTopic } from './run-cold-reads.ts';
 import type { RunDatabase, RunRow } from './run-database.ts';
 import type { RunPersistenceTopic } from './run-persistence.ts';
-import { namesForeignReference, rescopeRun } from './run-references.ts';
+import { isOriginatingIssueCurrent, isPrReferenceCurrent, namesForeignReference, rescopeRun } from './run-references.ts';
 import { parseStoredSummary } from './run-summary-page.ts';
 import { repoScopeStamp, saveHealMeta } from './store-open.ts';
 import type { RepoHandle, RunRecord } from './store.ts';
 
 /** What the topic asks of the store; no import of `store.ts` values. */
 export interface RepoScopeState {
+  readonly dataDir: string;
   /** The open database; null for an unavailable or closed store. */
   db(): RunDatabase | null;
   readonly held: Map<string, RunRecord>;
+  readonly dirty: ReadonlySet<string>;
   readonly deleted: Set<string>;
   readonly claims: Pick<RunClaimsTopic, 'claimFamilies'>;
   readonly persistence: Pick<RunPersistenceTopic, 'touch' | 'flush'>;
@@ -66,6 +69,8 @@ export class RunRepoScopeTopic implements RunRepoHandle {
       if (rescopeRun(run, this.repoHandle)) {
         this.persistence.touch(run, before);
         healed = true;
+      } else {
+        this.stampHeldVerification(run, handle, verified);
       }
     }
     // Only rows this store may write: another process's runs heal when their owner arms its handle.
@@ -86,8 +91,24 @@ export class RunRepoScopeTopic implements RunRepoHandle {
     }
     // Discovery may finish after headless shutdown's final flush. Persist repairs now: the
     // debounced save is unref'd, so it cannot keep the CLI alive once the lookup completes.
-    if (this.db) saveHealMeta(this.db, verified);
+    if (this.db && !projectWriteRefused(this.state.dataDir)) saveHealMeta(this.db, verified);
     if (healed) this.persistence.flush();
+  }
+
+  /** Record scoped verification stamps for an already-clean held row written before the handle arrived. */
+  private stampHeldVerification(run: RunRecord, handle: RepoHandle, verified: Record<string, string>): void {
+    if (!this.db || this.state.dirty.has(run.id) || this.db.familyHasFallback(familyKey(run))) return;
+    const revision = this.db.revisionOf(run.id);
+    if (revision === undefined) return;
+    const rev = String(revision);
+    if (run.markerRefs?.pr !== undefined && isPrReferenceCurrent(run, handle) &&
+      this.db.getMeta(`pr-reference-heal:${run.id}`) !== rev) {
+      verified[`pr-reference-heal:${run.id}`] = rev;
+    }
+    if (run.markerRefs?.issue !== undefined && isOriginatingIssueCurrent(run, handle) &&
+      this.db.getMeta(`issue-attribution:${run.id}`) !== rev) {
+      verified[`issue-attribution:${run.id}`] = rev;
+    }
   }
 
   /** Whether the stored summary still names a reference the scoped record no longer has. */
