@@ -29,6 +29,7 @@ import {
 } from '@/lib/prompt-templates'
 import { isProjectSkill, searchSkillsForDisplay, skillKeywords, skillKey } from '@/lib/skills'
 import { cn } from '@/lib/utils'
+import { useUnsentDraft } from '@/lib/version-reload'
 
 /**
  * Settings → Prompt templates (#413): "add the settings pane for editing these prompt templates
@@ -87,6 +88,8 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
   })
 
   const dirty = JSON.stringify(templates) !== JSON.stringify(initial)
+  const hasNewDraft = newLabel.trim() !== '' || newText.trim() !== ''
+  useUnsentDraft(dirty || hasNewDraft)
   const invalid = templates.some((t) => t.label.trim() === '' || t.text.trim() === '')
 
   const updateTemplate = (id: string, patch: Partial<Pick<PromptTemplate, 'label' | 'text'>>) =>
@@ -125,6 +128,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
   return (
     <div
       data-slot="prompt-templates-section"
+      data-reports-dirty=""
       className="mx-auto flex w-full max-w-2xl flex-col gap-7 p-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-6 md:pb-6"
     >
       <Field

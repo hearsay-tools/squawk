@@ -53,6 +53,19 @@ export function createBody(draft: WebhookDraft): CreateProjectWebhookInput {
   }
 }
 
+/** True when a new-webhook draft departs from `EMPTY_DRAFT`. */
+export function hasDraftChanges(draft: WebhookDraft): boolean {
+  return (
+    draft.name.trim() !== '' ||
+    draft.description.trim() !== '' ||
+    draft.url.trim() !== '' ||
+    draft.token !== '' ||
+    draft.tasks !== EMPTY_DRAFT.tasks ||
+    draft.agent !== EMPTY_DRAFT.agent ||
+    !sameTriggers(draft.triggers, EMPTY_DRAFT.triggers)
+  )
+}
+
 /** The edit body: only the keys the form changed. Empty when nothing changed. */
 export function updateBody(draft: WebhookDraft, stored: ProjectWebhook): UpdateProjectWebhookInput {
   const body: UpdateProjectWebhookInput = {}

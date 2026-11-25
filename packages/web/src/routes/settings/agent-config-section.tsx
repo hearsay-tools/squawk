@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { availableRunners } from '@/routes/new-task-form'
 import { cn } from '@/lib/utils'
+import { useUnsentDraft } from '@/lib/version-reload'
 import { agentDescriptors, type AgentDescriptor } from './agent-descriptors'
 import { useQueryClient } from '@tanstack/react-query'
 import { REMOTE_SETTINGS_ENABLE_COMMAND, RemoteSettingsNotice, useSettingsAdminRefresh } from './remote-settings-notice'
@@ -275,6 +276,8 @@ export function FileEditor({ file }: { file: AgentConfigFile }) {
   const content = draft ?? fileQuery.data?.content ?? ''
   const dirty = fileQuery.data ? content !== fileQuery.data.content : false
   const canWrite = file.writable
+  const isMcp = file.kind === 'mcp' || file.holdsMcp
+  useUnsentDraft(canWrite && dirty)
 
   const { save, isSaving } = useFileSave({
     file,
@@ -295,7 +298,7 @@ export function FileEditor({ file }: { file: AgentConfigFile }) {
   }, [fileQuery.data?.version, fileQuery.data])
 
   return (
-    <div data-slot="settings-config-editor" className="flex flex-col gap-3">
+    <div data-slot="settings-config-editor" data-reports-dirty="" className="flex flex-col gap-3">
       <h3 className="text-sm">Configuration file</h3>
       <p data-slot="agent-config-scope" title={file.path} className="text-[12px] text-muted-foreground break-words">{file.scope.charAt(0).toUpperCase() + file.scope.slice(1)} scope · {file.path}</p>
       <div className="settings-readout flex flex-wrap items-center gap-2">
@@ -314,8 +317,8 @@ export function FileEditor({ file }: { file: AgentConfigFile }) {
       </div>
 
       <div className="settings-config-content-heading">
-        <h3>{file.kind === 'mcp' || file.holdsMcp ? 'MCP configuration' : 'File contents'}</h3>
-        {(file.kind === 'mcp' || file.holdsMcp) && <p>Review server commands before saving. MCP servers execute locally.</p>}
+        <h3>{isMcp ? 'MCP configuration' : 'File contents'}</h3>
+        {isMcp && <p>Review server commands before saving. MCP servers execute locally.</p>}
       </div>
 
       {fileQuery.isPending ? (

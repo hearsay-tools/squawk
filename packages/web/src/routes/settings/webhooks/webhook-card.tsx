@@ -12,8 +12,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { toast } from '@/components/ui/toaster'
+import { useUnsentDraft } from '@/lib/version-reload'
 import { webhookLabel } from '@/lib/webhook'
-import { createBody, draftFrom, EMPTY_DRAFT, updateBody, type WebhookDraft } from './webhook-draft'
+import { createBody, draftFrom, EMPTY_DRAFT, hasDraftChanges, updateBody, type WebhookDraft } from './webhook-draft'
 import { WebhookFields } from './webhook-fields'
 
 type Feedback = { tone: 'ok' | 'danger' | 'alert'; text: string }
@@ -72,6 +73,7 @@ export function WebhookCard({
 
   const body = updateBody(draft, webhook)
   const dirty = Object.keys(body).length > 0
+  useUnsentDraft(dirty)
   const complete = draft.name.trim() !== '' && draft.url.trim() !== ''
   const busy = update.isPending || remove.isPending || test.isPending
   const ids = { projectId, webhookId: webhook.id }
@@ -122,7 +124,7 @@ export function WebhookCard({
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <form data-slot="webhook-form" className={formClass} onSubmit={onSubmit}>
+          <form data-slot="webhook-form" data-reports-dirty="" className={formClass} onSubmit={onSubmit}>
             <WebhookFields
               draft={draft}
               tokenSet={webhook.tokenSet}
@@ -209,6 +211,7 @@ export function NewWebhookCard({
   const [draft, setDraft] = useState<WebhookDraft>(EMPTY_DRAFT)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const complete = draft.name.trim() !== '' && draft.url.trim() !== ''
+  useUnsentDraft(hasDraftChanges(draft))
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault()
@@ -229,7 +232,7 @@ export function NewWebhookCard({
   return (
     <li data-slot="webhook-card" data-draft="" className={cardClass}>
       <p className="p-3 text-[13px] font-medium">New webhook</p>
-      <form data-slot="webhook-form" aria-label="New webhook" className={formClass} onSubmit={onSubmit}>
+      <form data-slot="webhook-form" data-reports-dirty="" aria-label="New webhook" className={formClass} onSubmit={onSubmit}>
         <WebhookFields draft={draft} tokenSet={false} onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))} />
         <div className="flex flex-wrap items-center gap-2">
           <Button type="submit" size="sm" className={button} data-action="webhook-create" disabled={create.isPending || !complete}>

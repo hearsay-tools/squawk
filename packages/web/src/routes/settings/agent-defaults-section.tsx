@@ -24,6 +24,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { providerStatusFor } from '@/lib/provider-status'
+import { useUnsentDraft } from '@/lib/version-reload'
 import {
   agentPickerRows,
   hasAgentAccounts,
@@ -115,6 +116,7 @@ function AgentsForm({
   const trimmedPrompt = prompt.trim()
   const promptSaved = trimmedPrompt === (config.systemPrompt ?? '')
   const promptOverLimit = trimmedPrompt.length > SYSTEM_PROMPT_MAX
+  useUnsentDraft(!promptSaved)
   const savePrompt = () =>
     save.mutate(
       { systemPrompt: trimmedPrompt === '' ? null : trimmedPrompt },
@@ -206,6 +208,7 @@ function AgentsForm({
       <Field
         title="System prompt"
         hint="Extra instructions for every run in this project."
+        reportsDirty
       >
         <Textarea
           aria-label="System prompt"
@@ -413,9 +416,9 @@ function DefaultAgentField({
 }
 
 /** The Appearance section's field chassis — same rhythm, so Settings reads as one surface. */
-function Field({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
+function Field({ title, hint, reportsDirty, children }: { title: string; hint: string; reportsDirty?: boolean; children: ReactNode }) {
   return (
-    <section className="settings-field flex flex-col gap-2">
+    <section data-reports-dirty={reportsDirty ? '' : undefined} className="settings-field flex flex-col gap-2">
       <div>
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>
         <p className="text-[13px] text-muted-foreground">{hint}</p>

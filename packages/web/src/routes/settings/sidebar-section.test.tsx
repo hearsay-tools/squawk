@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, expect, it, vi } from 'vitest'
 import { createQueryClient } from '@/api/query-client'
 import { ProjectScopeProvider } from '@/api/project-scope-context'
+import { hasUnsentInput, trackTyping } from '@/lib/version-reload'
 import { SETTINGS_SECTIONS } from './registry'
 
 const Section = () => {
@@ -183,4 +184,31 @@ it('keeps a pending draft while a refresh completes, then adopts the successful 
   await act(async () => { result.client.setQueryData(['shop', 'ui-state'], { sidebarLimits: { overall: 5 } }) })
   await waitFor(() => expect(overall().value).toBe('5'))
   expect(save().disabled).toBe(true)
+})
+
+it('reports dirty state to the reload guard across edit, Save, and typing the old limit back', async () => {
+  const stop = trackTyping()
+  try {
+    setup()
+    await waitFor(() => expect(overall().value).toBe('10'))
+    expect(hasUnsentInput()).toBe(false)
+
+    overall().dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    fireEvent.change(overall(), { target: { value: '4' } })
+    overall().dispatchEvent(new Event('input', { bubbles: true }))
+    expect(hasUnsentInput()).toBe(true)
+
+    fireEvent.click(save())
+    await screen.findByText('Sidebar limits saved.')
+    expect(hasUnsentInput()).toBe(false)
+
+    fireEvent.change(overall(), { target: { value: '10' } })
+    overall().dispatchEvent(new Event('input', { bubbles: true }))
+    expect(hasUnsentInput()).toBe(true)
+
+    fireEvent.change(overall(), { target: { value: '4' } })
+    expect(hasUnsentInput()).toBe(false)
+  } finally {
+    stop()
+  }
 })

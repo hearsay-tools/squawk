@@ -8,6 +8,7 @@ import type { ConfigResponse, SetConfigInput } from '@open-mercato/cezar-api-cli
 import { CenteredState } from '@/components/centered-state'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
+import { useUnsentDraft } from '@/lib/version-reload'
 import { SettingsField } from './settings-field'
 import { WORKTREE_COMMANDS_COPY, WorktreeCommandsField } from './worktree-commands-field'
 import { ChevronRightIcon } from '@/components/design-icons'
@@ -72,6 +73,7 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
     retentionNum < WORKTREE_RETENTION_MIN ||
     retentionNum > WORKTREE_RETENTION_MAX
   const retentionSaved = config.worktreeRetention === (retentionInvalid ? -1 : retentionNum)
+  useUnsentDraft(!retentionSaved)
   const saveRetention = () =>
     save.mutate(
       { worktreeRetention: retentionNum },
@@ -97,7 +99,7 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
         title="Keep N finished worktrees"
         hint="Older finished worktrees are reclaimed to free disk; their branch is kept so the work stays recoverable. 0 = unlimited. In-review and running tasks are never reclaimed, so the count on disk can exceed this."
       >
-        <div className="flex items-center gap-2">
+        <div data-reports-dirty="" className="flex items-center gap-2">
           <input
             type="number"
             inputMode="numeric"

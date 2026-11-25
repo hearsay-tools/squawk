@@ -11,6 +11,7 @@ import { CenteredState } from '@/components/centered-state'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
+import { useUnsentDraft } from '@/lib/version-reload'
 import { SettingsField } from './settings-field'
 
 /**
@@ -295,12 +296,13 @@ function WakeField({
   saveWake: () => void
   saveIsPending: boolean
 }) {
+  useUnsentDraft(!wakeSaved)
   return (
     <SettingsField
       title="Monitoring wake-up"
       hint="Wake monitoring sessions periodically."
     >
-      <div className="settings-resource-controls flex flex-wrap items-center gap-2">
+      <div data-reports-dirty="" className="settings-resource-controls flex flex-wrap items-center gap-2">
         <Switch
           aria-label="Monitoring wake-up"
           data-slot="resources-monitoring-wake-mode"
@@ -353,12 +355,13 @@ function MemoryField({
   saveMemory: () => void
   saveIsPending: boolean
 }) {
+  useUnsentDraft(!memorySaved)
   return (
     <SettingsField
       title="Per-task memory limit"
       hint="Leave blank for no limit."
     >
-      <div className="settings-resource-controls flex flex-wrap items-center gap-2">
+      <div data-reports-dirty="" className="settings-resource-controls flex flex-wrap items-center gap-2">
         <input
           type="number"
           inputMode="numeric"

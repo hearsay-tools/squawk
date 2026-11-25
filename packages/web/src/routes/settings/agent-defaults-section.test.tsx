@@ -14,7 +14,10 @@ import type {
 } from '@open-mercato/cezar-api-client'
 import { RUNNER_IDS, seedRunners } from '@/test/runners.testkit'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
+import { VersionReloadNotice } from '@/components/version-reload-notice'
+import { hasUnsentInput } from '@/lib/version-reload'
 import { AppRoutes } from '@/routes'
+import { AgentDefaultsSection } from './agent-defaults-section'
 
 /**
  * Settings → Agent defaults (R6 Step 1.5): the form round-trip against a stateful `/api/v1/config` stub
@@ -252,7 +255,9 @@ const form = () => document.querySelector('[data-slot="agent-defaults-section"]'
 afterEach(() => {
   act(() => resetToasts())
   cleanup()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
+  sessionStorage.clear()
 })
 
 describe('the agent defaults form', () => {
@@ -531,6 +536,58 @@ describe('the agent defaults form', () => {
     fireEvent.click(saveButton())
     await waitFor(() => expect(puts()).toHaveLength(2))
     expect(puts()[1]?.body).toEqual({ systemPrompt: null })
+  })
+
+  // hearsay-tools/squawk#4096 (review finding C6 on hearsay-tools/squawk#4095)
+  it('holds a version reload while the system prompt is dirty, releases after Save, and catches typing the old text back', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    serve({ config: { systemPrompt: 'Be brief.' } })
+    const client = gateSeededClient()
+    client.setQueryData(queryKeys.health, { bootProject: 'boot', version: '1.0.0' })
+    const reload = vi.fn()
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <VersionReloadNotice reload={reload} />
+          <AgentDefaultsSection />
+          <Toaster />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(form()).not.toBeNull())
+
+    const box = screen.getByLabelText<HTMLTextAreaElement>('System prompt')
+    const saveButton = () => document.querySelector<HTMLButtonElement>('[data-action="agents-save-prompt"]')!
+    const typeInto = (value: string) => {
+      fireEvent.change(box, { target: { value } })
+      box.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+
+    expect(hasUnsentInput()).toBe(false)
+    box.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    typeInto('Be thorough.')
+    expect(hasUnsentInput()).toBe(true)
+
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(saveButton().disabled).toBe(true))
+    expect(hasUnsentInput()).toBe(false)
+
+    // C6: type the first-focus text back without saving; the reload guard must still wait.
+    typeInto('Be brief.')
+    expect(hasUnsentInput()).toBe(true)
+
+    await act(async () => {
+      client.setQueryData(queryKeys.health, { bootProject: 'boot', version: '1.1.0' })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(reload).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-slot="version-reload"]')?.getAttribute('data-phase')).toBe('waiting-for-input')
+
+    // Reverting back to the saved prompt lets the waiting reload proceed.
+    typeInto('Be thorough.')
+    expect(hasUnsentInput()).toBe(false)
+    act(() => { vi.advanceTimersByTime(2000) })
+    expect(reload).toHaveBeenCalledTimes(1)
   })
 
   it('an over-limit prompt disables Save with the reason — no request leaves', async () => {

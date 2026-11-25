@@ -11,6 +11,7 @@ import {
 } from '@open-mercato/cezar-api-client/contract/workspace'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
+import { useUnsentDraft } from '@/lib/version-reload'
 import { WorktreeCommandsStatus } from './worktree-commands-status'
 import { parseWorktreeSetupInput } from './worktree-setup-input'
 import { SettingsField } from './settings-field'
@@ -96,12 +97,13 @@ export function WorktreeCommandsField({ config, copy }: { config: ConfigResponse
   const [timeoutText, setTimeoutText] = useState(String(savedTimeout))
 
   const { commands, timeoutSeconds, invalid } = parseWorktreeSetupInput(text, timeoutText)
-  // An invalid value on disk is a change to make even when the box matches "nothing saved".
-  const unchanged =
-    issue === null &&
+  const matchesSaved =
     commands.length === savedCommands.length &&
     commands.every((command, index) => command === savedCommands[index]) &&
     (commands.length === 0 || timeoutSeconds === savedTimeout)
+  // An invalid value on disk is a change to make even when the box matches "nothing saved".
+  const unchanged = issue === null && matchesSaved
+  useUnsentDraft(editable && !matchesSaved)
 
   const save = useMutation({
     mutationFn: (patch: SetConfigInput) => putConfig(patch),
@@ -147,6 +149,7 @@ export function WorktreeCommandsField({ config, copy }: { config: ConfigResponse
       >
         <textarea
           data-slot={`${copy.slot}-commands`}
+          data-reports-dirty=""
           aria-label={copy.label}
           rows={4}
           spellCheck={false}
@@ -171,6 +174,7 @@ export function WorktreeCommandsField({ config, copy }: { config: ConfigResponse
               max={WORKTREE_SETUP_MAX_TIMEOUT_SECONDS}
               step={1}
               data-slot={`${copy.slot}-timeout`}
+              data-reports-dirty=""
               value={timeoutText}
               readOnly={!editable}
               disabled={save.isPending}
