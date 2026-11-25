@@ -132,11 +132,39 @@ function names(lines, pattern) {
   return [...new Set(lines.flatMap((l) => l.match(pattern) ?? []))]
 }
 
-// A changed ratchet baseline that only lowered or dropped entries: nothing grew and its $comment stayed.
+// A key that names a file (`files: { "src/a.ts": 1200 }`) is an entry a lowering may drop. Any other
+// key is a field the ratchet reads, such as `limit` or a site's `count`.
+const ENTRY_KEY = /[./]/
+
+// The fields every object at a location carries. Arrays share one location; entry keys share `*`.
+function fieldsAt(value, at = '$', out = new Map()) {
+  if (Array.isArray(value)) for (const item of value) fieldsAt(item, `${at}[]`, out)
+  else if (value !== null && typeof value === 'object') {
+    const fields = Object.keys(value).filter((key) => !ENTRY_KEY.test(key))
+    out.set(at, out.has(at) ? out.get(at).filter((key) => fields.includes(key)) : fields)
+    for (const [key, item] of Object.entries(value)) fieldsAt(item, ENTRY_KEY.test(key) ? `${at}.*` : `${at}.${key}`, out)
+  }
+  return out
+}
+
+// Whether every object in `after` keeps the fields its location carried in `before`.
+function keepsFields(before, after) {
+  const required = fieldsAt(before)
+  const keeps = (value, at) => {
+    if (Array.isArray(value)) return value.every((item) => keeps(item, `${at}[]`))
+    if (value === null || typeof value !== 'object') return true
+    return (required.get(at) ?? []).every((key) => Object.hasOwn(value, key))
+      && Object.entries(value).every(([key, item]) => keeps(item, ENTRY_KEY.test(key) ? `${at}.*` : `${at}.${key}`))
+  }
+  return keeps(after, '$')
+}
+
+// A changed ratchet baseline that only lowered or dropped entries: nothing grew, no field went
+// missing and its $comment stayed.
 function onlyLowers(base, head, path) {
   try {
     const [before, after] = [base, head].map((rev) => JSON.parse(git('show', `${rev}:${path}`)))
-    return before?.$comment === after?.$comment && compareBaseline(before, after).length === 0
+    return before?.$comment === after?.$comment && keepsFields(before, after) && compareBaseline(before, after).length === 0
   } catch {
     return false
   }

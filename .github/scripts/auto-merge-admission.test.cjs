@@ -113,6 +113,9 @@ for (const [label, before, after] of [
   ['raising a pin', pins('Pins.', { 'a.ts': 1200 }), pins('Pins.', { 'a.ts': 1201 })],
   ['adding a pin', pins('Pins.', { 'a.ts': 1200 }), pins('Pins.', { 'a.ts': 1200, 'b.ts': 1001 })],
   ['lowering a pin and changing the comment', pins('Pins.', { 'a.ts': 1200 }), pins('Pins may grow.', { 'a.ts': 1100 })],
+  ['dropping the limit', pins('Pins.', { 'a.ts': 1200 }), '{ "$comment": "Pins.", "files": { "a.ts": 1200 } }\n'],
+  ['dropping a field from a site', '{ "$comment": "Pins.", "sites": [{ "file": "a.ts", "count": 2 }] }\n',
+    '{ "$comment": "Pins.", "sites": [{ "file": "a.ts" }] }\n'],
 ]) test(`a ratchet baseline change ${label} requires owner review`, t => {
   const relative = 'packages/cezar/src/file-length.baseline.json';
   const result = checkChange(t, relative, before, after);
