@@ -576,12 +576,11 @@ describe('the agent defaults form', () => {
     typeInto('Be brief.')
     expect(hasUnsentInput()).toBe(true)
 
-    await act(async () => {
-      client.setQueryData(queryKeys.health, { bootProject: 'boot', version: '1.1.0' })
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+    act(() => { client.setQueryData(queryKeys.health, { bootProject: 'boot', version: '1.1.0' }) })
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="version-reload"]')?.getAttribute('data-phase')).toBe('waiting-for-input'),
+    )
     expect(reload).not.toHaveBeenCalled()
-    expect(document.querySelector('[data-slot="version-reload"]')?.getAttribute('data-phase')).toBe('waiting-for-input')
 
     // Reverting back to the saved prompt lets the waiting reload proceed.
     typeInto('Be thorough.')
