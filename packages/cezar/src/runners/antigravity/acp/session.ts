@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Readable, Writable } from 'node:stream';
-import { z } from 'zod';
-import type { StopReason, TokenUsage } from '@hearsay-tools/squawk/plugin';
+import { z, type StopReason, type TokenUsage } from '@hearsay-tools/squawk/plugin';
 import { AcpEvents, type AcpEventSink } from './events.ts';
 import { AcpRpcError, AcpTransport } from './transport.ts';
 import { addUsage } from './usage.ts';
