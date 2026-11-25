@@ -477,9 +477,18 @@ its static scope before implementing its scanner.
    `// oxlint-disable-next-line cez/<rule> -- <reason>`; add no baseline.
 5. Put a whole-repository check (a baseline, a stale entry) in `run.ts`, never in a rule: oxlint
    runs rules per file, in parallel.
-6. Check what the rule costs: `node packages/cezar/scripts/profile-lint.ts --alone` prints the user
-   CPU of oxlint with each rule alone, next to built-ins only, the plugin with no visitor, and
-   no-op visitors on every file, and then oxlint's own JS time per rule (`--debug timings`).
+6. Check what the rule costs before you open its pull request:
+   `node packages/cezar/scripts/profile-lint.ts --compare origin/main` lints `origin/main`'s tree
+   with its own config, then the working tree, in 5 alternating rounds (`--runs N` changes the
+   count). A base that names an existing file is an oxlint config over the working tree. It prints
+   each side's user-CPU median and range, the sum of oxlint's JS time per rule
+   (`--debug timings`), each rule's change, and the 1-minute load against the core count. Put
+   that report in the pull request; a CPU claim about lint needs it.
+   User CPU is evidence only when the median 1-minute load is below half the core count. Above
+   that ceiling the report says so: then report the `--debug timings` sums, which host load does
+   not move. [Performance measurements](../performance/README.md#method-rules) holds the method
+   rules. `--alone` and `--families` print the user CPU of oxlint with each rule or family alone,
+   next to built-ins only, the plugin with no visitor, and no-op visitors on every file.
    Every rule's JS runs on one thread. Keep per-file work in one pass: no walk of the whole tree
    on top of oxlint's own, no list built per node, and a per-node cache under a symbol key on the
    node: oxlint replaces `WeakMap` with a slower wrapper (hearsay-tools/squawk#3774).

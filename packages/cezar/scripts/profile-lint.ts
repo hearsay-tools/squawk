@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { availableParallelism, loadavg as osLoadavg, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { oxlintBin } from '../src/lint/run.ts';
@@ -10,12 +10,14 @@ import { PROCESS_OWNER_RULES } from '../src/lint/owner-process-rules.ts';
 import { STATE_OWNER_RULES } from '../src/lint/owner-state-rules.ts';
 import { READER_OWNER_RULES } from '../src/lint/owner-reader-rules.ts';
 import { activeRunWriteRules } from '../src/lint/active-run-write.ts';
+import { type CompareRound, compareReport, ruleTimings } from './profile-lint-compare.ts';
 
 /**
  * Measures what the `cez` oxlint plugin costs (hearsay-tools/squawk#3774). A developer tool, not a
  * test: its numbers depend on the host and its load, so it prints `/proc/loadavg` beside each run.
  *
  *   node packages/cezar/scripts/profile-lint.ts [--alone] [--families] [--runs N] [path...]
+ *   node packages/cezar/scripts/profile-lint.ts --compare <ref|config> [--runs N] [path...]
  *
  * It runs `oxlint -c <config> <path...>` (default path `packages`) from the repository root with
  * these configs, each written to a scratch directory:
@@ -28,32 +30,51 @@ import { activeRunWriteRules } from '../src/lint/active-run-write.ts';
  * rule or family. Each run's user and system CPU come from the shell's `times` for its child.
  * Last, it runs the full config once with `--debug timings` and lists oxlint's own JS time per rule
  * (visitor and `create` time only; tree transfer, walking and garbage collection are not in it).
+ *
+ * `--compare` measures a base against the working tree in N alternating rounds (default 5); see
+ * `profile-lint-compare.ts` for the report. A base that names an existing file is an oxlint config,
+ * linted over the working tree. Any other base is a commit: its tree is extracted with `git archive`
+ * and linted with its own `.oxlintrc.json`, because the rules locate files relative to their own
+ * repository root. Both sides use the working tree's oxlint binary.
  */
 
 interface Measure { label: string; user: number; sys: number; wall: number; load: string }
 
-export interface ProfileOptions { paths: string[]; runs: number; alone: boolean; families: boolean }
+export interface ProfileOptions { paths: string[]; runs: number; alone: boolean; families: boolean; compare?: string }
 
-/** The command line: flags, `--runs N`, and the paths to lint (default `packages`). */
+/** The value after `flag`, or undefined without the flag; a flag with no value throws. */
+function flagValue(args: readonly string[], flag: string): string | undefined {
+  const index = args.indexOf(flag);
+  if (index < 0) return undefined;
+  const value = args[index + 1];
+  if (value === undefined || value.startsWith('--')) throw new Error(`${flag} needs a value`);
+  return value;
+}
+
+/** The command line: flags, `--runs N`, `--compare <ref|config>`, and the paths to lint (default `packages`). */
 export function profileArgs(args: readonly string[]): ProfileOptions {
-  const runsIndex = args.indexOf('--runs');
-  const paths = args.filter((arg, index) => !arg.startsWith('--') && (runsIndex < 0 || index !== runsIndex + 1));
+  const runs = flagValue(args, '--runs');
+  const compare = flagValue(args, '--compare');
+  const values = new Set(['--runs', '--compare'].map(flag => args.indexOf(flag) + 1).filter(index => index > 0));
+  const paths = args.filter((arg, index) => !arg.startsWith('--') && !values.has(index));
   return {
     paths: paths.length > 0 ? paths : ['packages'],
-    runs: runsIndex >= 0 ? Number(args[runsIndex + 1]) : 1,
+    runs: runs === undefined ? (compare === undefined ? 1 : 5) : Number(runs),
     alone: args.includes('--alone'),
     families: args.includes('--families'),
+    ...(compare === undefined ? {} : { compare }),
   };
 }
 
-const { paths, runs, alone, families: byFamily } = profileArgs(process.argv.slice(2));
+// The test imports `profileArgs`; only a direct run reads the command line.
+const { paths, runs, alone, families: byFamily, compare } = profileArgs(import.meta.main ? process.argv.slice(2) : []);
 
 const base = JSON.parse(readFileSync(join(repoRoot, '.oxlintrc.json'), 'utf8')) as { jsPlugins?: string[]; rules: Record<string, unknown> };
 const pluginPath = resolve(repoRoot, base.jsPlugins?.[0] ?? 'packages/cezar/src/lint/plugin.ts');
 const builtinRules = Object.fromEntries(Object.entries(base.rules).filter(([name]) => !name.startsWith('cez/')));
 let scratch = '';
 
-const loadavg = () => (existsSync('/proc/loadavg') ? readFileSync('/proc/loadavg', 'utf8').split(' ').slice(0, 3).join(' ') : 'n/a');
+const loadavg = () => osLoadavg().map(value => value.toFixed(2)).join(' ');
 const seconds = (text: string) => {
   const match = /^(\d+)m([\d.]+)s$/.exec(text);
   return match ? Number(match[1]) * 60 + Number(match[2]) : Number.NaN;
@@ -77,10 +98,10 @@ function noopPlugin(name: string, visitors: string[]): string {
 }
 
 /** One oxlint run; `times` in a POSIX shell reports the CPU its children used. */
-function measure(label: string, config: string): Measure {
+function measure(label: string, config: string, cwd = repoRoot): Measure {
   const load = loadavg();
   const started = performance.now();
-  const shell = spawnSync('/bin/sh', ['-c', '"$@" >/dev/null 2>&1; times', 'sh', process.execPath, oxlintBin(), '-c', config, ...paths], { cwd: repoRoot, encoding: 'utf8' });
+  const shell = spawnSync('/bin/sh', ['-c', '"$@" >/dev/null 2>&1; times', 'sh', process.execPath, oxlintBin(), '-c', config, ...paths], { cwd, encoding: 'utf8' });
   const wall = (performance.now() - started) / 1000;
   const [user = '', sys = ''] = (shell.stdout.trim().split('\n').at(-1) ?? '').split(/\s+/);
   return { label, user: seconds(user), sys: seconds(sys), wall, load };
@@ -113,8 +134,7 @@ function main(): void {
   console.log(`Command: oxlint -c <config> ${paths.join(' ')} (cwd ${repoRoot}); best of ${runs}; CPU in seconds.\n`);
   console.log('| Config | User | Sys | Wall | Load (1/5/15 min) |\n| --- | ---: | ---: | ---: | --- |');
   for (const m of results) console.log(row(m));
-  const timings = execFileSync(process.execPath, [oxlintBin(), '-c', '.oxlintrc.json', '-f', 'default', '--debug', 'timings', ...paths], { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  const lines = timings.split('\n').filter(line => line.startsWith('cez/'));
+  const lines = timingsOutput('.oxlintrc.json').split('\n').filter(line => line.startsWith('cez/'));
   console.log(`\nOxlint's JS time per rule (\`--debug timings\`, load ${loadavg()}):\n\n| Rule | ms | Calls |\n| --- | ---: | ---: |`);
   for (const line of lines) {
     const [name, ms, , calls] = line.split(/\s+/);
@@ -122,10 +142,67 @@ function main(): void {
   }
 }
 
+/** Oxlint's `--debug timings` output for one run; lint findings make it exit 1, which is not a failure here. */
+function timingsOutput(config: string, cwd = repoRoot): string {
+  const run = spawnSync(process.execPath, [oxlintBin(), '-c', config, '-f', 'default', '--debug', 'timings', ...paths], { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (run.status !== 0 && run.status !== 1) throw new Error(`oxlint --debug timings exited ${run.status}: ${run.stderr}`);
+  return run.stdout;
+}
+
+interface Side { config: string; cwd: string }
+
+/** The base side: an existing file is a config over the working tree; anything else is a commit's own tree. */
+function baseSide(arg: string): { side: Side; describe: string } {
+  const file = resolve(arg);
+  if (existsSync(file)) return { side: { config: file, cwd: repoRoot }, describe: `config ${arg}` };
+  const commit = spawnSync('git', ['rev-parse', '--verify', '--quiet', `${arg}^{commit}`], { cwd: repoRoot, encoding: 'utf8' });
+  if (commit.status !== 0) throw new Error(`--compare ${arg}: not a file and not a commit`);
+  const sha = commit.stdout.trim();
+  const tree = join(scratch, 'base');
+  mkdirSync(tree);
+  execFileSync('/bin/sh', ['-c', 'git archive "$1" | tar -x -C "$2"', 'sh', sha, tree], { cwd: repoRoot });
+  // Oxlint applies the `.gitignore` of an enclosing repository. A temp directory inside an ignored
+  // path (a task's TMPDIR) would hide every file, so the tree gets a repository boundary of its own.
+  execFileSync('git', ['init', '--quiet', tree]);
+  for (const dir of ['.', ...readdirSync(join(repoRoot, 'packages')).map(name => join('packages', name))]) {
+    const modules = join(repoRoot, dir, 'node_modules');
+    if (existsSync(modules) && existsSync(join(tree, dir)) && !existsSync(join(tree, dir, 'node_modules'))) symlinkSync(modules, join(tree, dir, 'node_modules'), 'dir');
+  }
+  return { side: { config: join(tree, '.oxlintrc.json'), cwd: tree }, describe: `commit ${arg} (${sha.slice(0, 9)})` };
+}
+
+/** One side's per-rule JS time; no `cez/*` row means oxlint linted no files, and a CPU time from that run measures nothing. */
+function sideTimings(label: string, side: Side): Record<string, number> {
+  const timings = ruleTimings(timingsOutput(side.config, side.cwd));
+  if (Object.keys(timings).length === 0) throw new Error(`${label}: oxlint ran no cez rule on ${paths.join(' ')} in ${side.cwd}`);
+  return timings;
+}
+
+function compareMain(arg: string): void {
+  const { side: base, describe } = baseSide(arg);
+  const candidate: Side = { config: join(repoRoot, '.oxlintrc.json'), cwd: repoRoot };
+  const rounds: CompareRound[] = [];
+  for (let round = 1; round <= runs; round++) {
+    const loads = [osLoadavg()[0]];
+    const baseRun = measure('base', base.config, base.cwd);
+    loads.push(osLoadavg()[0]);
+    const candidateRun = measure('candidate', candidate.config, candidate.cwd);
+    const baseTimings = sideTimings('base', base);
+    const candidateTimings = sideTimings('candidate', candidate);
+    rounds.push({ loads, base: baseRun, candidate: candidateRun, baseTimings, candidateTimings });
+    console.error(`round ${round}/${runs}: base ${baseRun.user.toFixed(2)} s, candidate ${candidateRun.user.toFixed(2)} s user, load ${loadavg()}`);
+  }
+  console.log(compareReport({ base: describe, command: `oxlint -c <config> ${paths.join(' ')}`, rounds, cores: availableParallelism() }));
+}
+
 if (import.meta.main) {
   scratch = mkdtempSync(join(tmpdir(), 'cez-profile-lint-'));
   try {
-    main();
+    if (compare === undefined) main();
+    else compareMain(compare);
+  } catch (error) {
+    console.error(`profile-lint: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 2;
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
