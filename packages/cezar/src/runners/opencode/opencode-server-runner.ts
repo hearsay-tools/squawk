@@ -1,5 +1,5 @@
-import { opencodeHttp } from './opencode-http.ts';
-import { AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS, InputSubmissions, SessionEndedBeforeAcknowledgement, V1TextCoalescer, boundOutputDrainAfterExit, formatModelIdentity, isAbortError, isSignalTerminationExit, openingInput, parseModelIdentity, prependSystemPrompt, signalSession, skillOf, spawnSessionLeader, summarizeRunnerStderr, trackChildExit, uiAskQuestions, validSkillMessage } from '@hearsay-tools/squawk/plugin/runtime';
+import { opencodeHttp, wrapOpenCodeSpawnError as wrapSpawnError } from './opencode-http.ts';
+import { AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS, InputSubmissions, SessionEndedBeforeAcknowledgement, V1TextCoalescer, boundOutputDrainAfterExit, formatModelIdentity, isAbortError, isSignalTerminationExit, markGracefulEnd, openingInput, parseModelIdentity, prependSystemPrompt, signalSession, skillOf, spawnSessionLeader, summarizeRunnerStderr, trackChildExit, uiAskQuestions, validSkillMessage } from '@hearsay-tools/squawk/plugin/runtime';
 import { productEnv, type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentSession, type AgentToolCallRecord, type AskQuestion, type ContentBlock, type InputDelivery, type SessionOptions } from '@hearsay-tools/squawk/plugin';
 import { opencodeSkillWarning, sessionErrorDetail, sessionErrorText } from './opencode-session-error.ts';
 import { finished } from 'node:stream/promises';
@@ -531,6 +531,7 @@ class OpencodeSession implements AgentSession {
     this.agentRequest?.abort();
     this.expirePermissions('session ended');
     this.sse.abort();
+    markGracefulEnd(this.serve.child);
     this.terminate();
   }
 
@@ -1628,14 +1629,4 @@ function describeExit(serve: ServeProcess): string {
 function describeEarlyExit(serve: ServeProcess): string {
   const detail = summarizeRunnerStderr(serve.stderrChunks.join(''));
   return `${describeExit(serve)}${detail ? ` — ${detail}` : ''}`;
-}
-
-function wrapSpawnError(err: unknown, bin: string): Error {
-  const code = (err as NodeJS.ErrnoException | undefined)?.code;
-  if (code === 'ENOENT') {
-    return new Error(
-      `\`${bin}\` not found on PATH — install OpenCode (https://opencode.ai) and run \`opencode\` once to configure a provider`,
-    );
-  }
-  return err instanceof Error ? err : new Error(String(err));
 }

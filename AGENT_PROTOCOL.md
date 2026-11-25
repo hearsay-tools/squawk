@@ -177,10 +177,13 @@ holds for every runner, or carries a `PARITY_EXEMPTIONS` entry whose reason name
 limitation. A row that tests Squawk's shared logic above the seam runs on one runner,
 `SCENARIO_RUNNER`, instead (docs/adr/0063-one-scenario-runner.md).
 
-Shutdown rows S27/S28/S30 retain process-group cleanup for every runner. A runner declaring
-`facts.shutdownDescendants = observed-tree` must also reap the observed detached command;
-`process-group` retains the detached-survivor assertion. Abrupt-exit row S31 makes no
-snapshot assumption and retains its original checks.
+Shutdown rows S27/S28/S30 retain process-group cleanup for every runner. On contained hosts
+(Linux delegated cgroup v2, Windows Job Objects; hearsay-tools/squawk#1345), abnormal exits
+(Stop S27, forced `end()` escalation S28, outside `SIGKILL` S31, startup failures) also reap
+detached descendants while normal `end()` (S30) keeps detached daemons alive (except
+`observed-tree` runners such as Antigravity). On non-contained hosts, `process-group` retains
+the detached-survivor checks and `observed-tree` still reaps observed detached children on
+S27/S28/S30 without an S31 snapshot guarantee.
 
 Print every row with its exemptions:
 

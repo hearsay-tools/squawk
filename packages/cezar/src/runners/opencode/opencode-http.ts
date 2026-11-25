@@ -21,3 +21,13 @@ export async function opencodeHttp(
     return {};
   }
 }
+
+export function wrapOpenCodeSpawnError(err: unknown, bin: string): Error {
+  const code = (err as NodeJS.ErrnoException | undefined)?.code;
+  if (code === 'ENOENT') {
+    return new Error(
+      `\`${bin}\` not found on PATH — install OpenCode (https://opencode.ai) and run \`opencode\` once to configure a provider`,
+    );
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}

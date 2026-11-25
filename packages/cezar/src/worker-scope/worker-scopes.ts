@@ -70,27 +70,44 @@ export class WorkerScopes {
   /** The scope every process of `workerId` starts in. The record names a cgroup before the cgroup
    * exists and before anything enters it, so a crash at any point leaves nothing unrecorded. */
   spawnScope(workerId: string): SpawnScope {
+    const assertNotDestroying = (): void => {
+      const run = this.store.getRun(workerId);
+      if (run?.delegation?.role === 'worker' && run.delegation.destroy) throw new Error('Worker destruction has begun; nothing new starts in its scope');
+    };
+    const prepareCgroup = (base: string): string => {
+      const path = workerCgroupPath(base, workerId);
+      this.update(workerId, record => {
+        if (record.cgroups.includes(path)) return record;
+        if (record.cgroups.length >= SCOPE_CGROUP_CAP) throw new Error(`worker ${workerId} already spans ${SCOPE_CGROUP_CAP} cgroups`);
+        return { ...record, cgroups: [...record.cgroups, path] };
+      });
+      return ensureCgroup(base, workerId);
+    };
+    const prepareJob = (): string => {
+      const job = workerJobName(workerId);
+      this.update(workerId, record => record.jobs.includes(job) ? record : { ...record, jobs: [job] });
+      this.keeper(workerId, job);
+      return job;
+    };
     return {
+      cgroupDir: () => {
+        assertNotDestroying();
+        const host = this.hostOf();
+        return host.backend === 'cgroup' ? prepareCgroup(host.base) : undefined;
+      },
+      jobName: () => {
+        assertNotDestroying();
+        const host = this.hostOf();
+        return host.backend === 'job' ? prepareJob() : undefined;
+      },
       command: (file, args) => {
-        const run = this.store.getRun(workerId);
-        if (run?.delegation?.role === 'worker' && run.delegation.destroy) throw new Error('Worker destruction has begun; nothing new starts in its scope');
+        assertNotDestroying();
         const host = this.hostOf();
         // Refused before anything runs: a full group record never has to end a started process.
         if (host.backend === 'groups' && liveGroups(this.read(workerId).groups).length >= SCOPE_GROUP_CAP) throw capacityError(workerId);
-        if (host.backend === 'job') {
-          const job = workerJobName(workerId);
-          this.update(workerId, record => record.jobs.includes(job) ? record : { ...record, jobs: [job] });
-          this.keeper(workerId, job);
-          return jobCommand(job, file, args);
-        }
+        if (host.backend === 'job') return jobCommand(prepareJob(), file, args);
         if (host.backend !== 'cgroup') return [file, [...args]];
-        const path = workerCgroupPath(host.base, workerId);
-        this.update(workerId, record => {
-          if (record.cgroups.includes(path)) return record;
-          if (record.cgroups.length >= SCOPE_CGROUP_CAP) throw new Error(`worker ${workerId} already spans ${SCOPE_CGROUP_CAP} cgroups`);
-          return { ...record, cgroups: [...record.cgroups, path] };
-        });
-        return cgroupCommand(ensureCgroup(host.base, workerId), file, args);
+        return cgroupCommand(prepareCgroup(host.base), file, args);
       },
       started: pid => {
         if (this.hostOf().backend !== 'groups' || process.platform === 'win32') return;

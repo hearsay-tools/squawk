@@ -1,10 +1,14 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { constants, tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { JOB_EXIT_SUFFIX, JOB_NAME, JOB_RECORD_SUFFIX } from '../process-wait/job-exit-file.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { processPredatesCurrentBoot } from '../delegation/process-liveness.ts';
+import { ownCgroup } from '../core/os-cgroup.ts';
+import { startBreakawayProcess } from '../core/os-win-job.ts';
+import { SESSION_CGROUP_PREFIX } from '../core/session-containment.ts';
 import { recordedProcessLive } from '../core/process-stat.ts';
 import { pidExists } from '../core/process-stat.ts';
 import { processGroupAlive } from '../core/session-process.ts';
@@ -194,12 +198,77 @@ export function claimJob(paths: JobPaths, record: JobRecord): ClaimAnswer {
 export interface StartOptions { name: string; dir: string; command: string[]; cwd?: string; env?: NodeJS.ProcessEnv }
 export interface StartedJob { name: string; pid: number; log: string; exitFile: string; replaced: boolean }
 
+/** Move the supervisor out of any per-session cgroup (`squawk-session-*`) into its parent cgroup
+ * (controller base for root tasks, or `squawk-worker-*` for workers) so the job survives a
+ * crashed agent session while still ending on worker destroy (hearsay-tools/squawk#1345). */
+export function escapeSessionCgroup(readOwn: () => string | undefined = ownCgroup, writeProcs: (path: string, pid: string) => void = writeFileSync): void {
+  if (process.platform !== 'linux' && readOwn === ownCgroup) return;
+  let current = readOwn();
+  while (current && basename(current).startsWith(SESSION_CGROUP_PREFIX)) {
+    const parent = dirname(current);
+    if (parent === current) break;
+    try { writeProcs(join(parent, 'cgroup.procs'), '0'); } catch { break; }
+    const next = readOwn();
+    if (!next || next === current) break;
+    current = next;
+  }
+}
+
+/** Write the supervisor's claim answer atomically to a file (used by Windows breakaway starts). */
+export async function tellAnswerFile(path: string, answer: ClaimAnswer): Promise<void> {
+  try { writeAtomic(path, JSON.stringify(answer)); } catch { /* starter gave up */ }
+}
+
+/** Poll for a breakaway supervisor's answer file until it lands or the supervisor exits. */
+async function waitForAnswerFile(path: string, pid: number): Promise<ClaimAnswer> {
+  const deadline = Date.now() + READY_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (existsSync(path)) {
+      const text = readFileSync(path, 'utf8');
+      rmSync(path, { force: true });
+      return JSON.parse(text) as ClaimAnswer;
+    }
+    if (!pidExists(pid)) throw new JobError('The job supervisor ended before it started the command.');
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
+  rmSync(path, { force: true });
+  throw new JobError('The job supervisor did not start.');
+}
+
+async function startJobWithBreakaway(options: StartOptions): Promise<StartedJob | undefined> {
+  const { name, dir, command } = options;
+  const [bin, ...prefix] = ownCommand();
+  const answerFile = join(dir, `${name}.${randomUUID()}.answer.tmp`);
+  let pid: number;
+  try {
+    pid = startBreakawayProcess(
+      bin!,
+      [...prefix, 'job', SUPERVISE, dir, name, '--answer-file', answerFile, '--', ...command],
+      options.cwd ?? process.cwd(),
+      options.env ?? process.env,
+    );
+  } catch {
+    rmSync(answerFile, { force: true });
+    return undefined;
+  }
+  const answer = await waitForAnswerFile(answerFile, pid);
+  if (!answer.claimed) {
+    throw new JobError('pid' in answer ? `Job ${JSON.stringify(name)} is already running as PID ${answer.pid}. Wait for that PID, or choose another name.` : answer.error);
+  }
+  return { name, pid, log: answer.log, exitFile: answer.exitFile, replaced: answer.replaced };
+}
+
 /** Starts the supervisor and answers once it holds the name. Refuses while the name runs. */
 export async function startJob(options: StartOptions): Promise<StartedJob> {
   const { name, dir, command } = options;
   if (command.length === 0) throw new JobError('Give the command to run after "--".');
   mkdirSync(dir, { recursive: true });
   jobPaths(dir, name);
+  if (process.platform === 'win32') {
+    const started = await startJobWithBreakaway(options);
+    if (started) return started;
+  }
   const [bin, ...prefix] = ownCommand();
   const { child } = await startOwnedGroup(bin!, [...prefix, 'job', SUPERVISE, dir, name, '--', ...command], {
     cwd: options.cwd ?? process.cwd(), env: options.env ?? process.env, stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
@@ -250,6 +319,7 @@ export function tellStarter(answer: ClaimAnswer): Promise<void> {
  * command, and the exit file still records how it ended.
  */
 export async function superviseJob(dir: string, name: string, command: string[], tell: (answer: ClaimAnswer) => Promise<void> = async () => {}): Promise<number> {
+  escapeSessionCgroup();
   const paths = jobPaths(dir, name);
   const start = processStartToken(process.pid);
   const startedAt = new Date();

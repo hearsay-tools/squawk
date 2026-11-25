@@ -49,6 +49,7 @@ import type { AgentEvent, AgentSession } from './agent-runner.js';
 import { createRunner } from './runner-registry.js';
 import { RUNNER_FACTS } from './runner-facts.js';
 import { HARNESS_ADAPTERS, SHUTDOWN_CRITERIA, promptFor } from './harness-parity-core.testkit.js';
+import { isSessionContained } from './session-containment.ts';
 import { killFromPidFile, readPid, requirePid } from '../pid-file.testkit.js';
 
 /** The runners whose EOF cleanup cells (the `eof-` families) run. */
@@ -251,8 +252,8 @@ function processGroups(backend: string, it: typeof registerTest = registerTest):
         await settled;
         // bound: wait for process-group cleanup and reaping on a loaded host.
         await vi.waitFor(() => expect(alive(group)).toBe(false), { timeout: 10_000 });
-        if (RUNNER_FACTS[backend]!.shutdownDescendants === 'observed-tree') {
-          // bound: observed detached children have a separate TERM/KILL escalation after leader exit.
+        if (RUNNER_FACTS[backend]!.shutdownDescendants === 'observed-tree' || isSessionContained()) {
+          // bound: observed detached children or contained-host session reaps escalate after leader exit.
           await vi.waitFor(() => expect(alive(setsid)).toBe(false), { timeout: 10_000 });
         } else expect(alive(setsid)).toBe(true);
       }, 'no-progress-leftover');
@@ -268,8 +269,8 @@ function processGroups(backend: string, it: typeof registerTest = registerTest):
         await settled;
         // bound: wait for process-group cleanup and reaping on a loaded host.
         await vi.waitFor(() => expect(alive(group)).toBe(false), { timeout: 10_000 });
-        if (RUNNER_FACTS[backend]!.shutdownDescendants === 'observed-tree') {
-          // bound: observed detached children have a separate TERM/KILL escalation after leader exit.
+        if (RUNNER_FACTS[backend]!.shutdownDescendants === 'observed-tree' || isSessionContained()) {
+          // bound: observed detached children or contained-host session reaps escalate after leader exit.
           await vi.waitFor(() => expect(alive(setsid)).toBe(false), { timeout: 10_000 });
         } else expect(alive(setsid)).toBe(true);
       }, 'no-progress-leftover');
@@ -313,8 +314,14 @@ function exitReaping(backend: string, it: typeof registerTest = registerTest): v
           // bound: the exit drain, the grace, then signal delivery and reaping by the subreaper.
           await vi.waitFor(() => expect(alive(group)).toBe(false), { timeout: 10_000 });
           expect(alive(sentinel.pid!)).toBe(true);
-          // Abrupt exit before capture makes no detached-child guarantee for observed-tree.
-          if (RUNNER_FACTS[backend]!.shutdownDescendants === 'process-group') expect(alive(setsid)).toBe(true);
+          // hearsay-tools/squawk#1345: contained hosts reap detached leftovers on outside SIGKILL.
+          // Non-contained hosts retain the process-group detached-survivor rule.
+          if (isSessionContained()) {
+            // bound: exit drain, SIGTERM grace, then cgroup.kill and reaping.
+            await vi.waitFor(() => expect(alive(setsid)).toBe(false), { timeout: 10_000 });
+          } else if (RUNNER_FACTS[backend]!.shutdownDescendants === 'process-group') {
+            expect(alive(setsid)).toBe(true);
+          }
         } finally {
           sentinel.kill('SIGKILL');
         }
