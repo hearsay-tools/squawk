@@ -149,8 +149,11 @@ test('PR jobs use reviewed merge inputs from the trusted target workflow', () =>
   const ci = workflow();
   for (const name of ['typecheck', 'unit-tests', 'build-and-package', 'vitest', 'cockpit-browser']) {
     const checkout = ci.jobs[name].steps.find((step) => step.uses?.startsWith('actions/checkout@'));
-    if (['vitest', 'cockpit-browser'].includes(name)) {
+    if (name === 'vitest') {
       assert.match(checkout.with.ref, /needs\.pr-test-input\.outputs\.sha/);
+    } else if (name === 'cockpit-browser') {
+      assert.match(checkout.with.ref, /format\('refs\/pull\/\{0\}\/merge', inputs\.pr_number\)/);
+      assert.doesNotMatch(checkout.with.ref, /needs\.pr-test-input\.outputs\.sha/);
     } else {
       assert.match(checkout.with.ref, /format\('refs\/pull\/\{0\}\/merge', github\.event\.pull_request\.number \|\| inputs\.pr_number\)/);
     }
@@ -411,7 +414,7 @@ test('test jobs require full-matrix classification without losing the bot bump s
   }
 });
 
-test('verify requires the classifier and permits skipped tests only for docs-only, infra-only, or bump PRs', () => {
+test('verify requires the classifier and permits skipped tests only for docs-only, infra-only, bump PRs, or PR browser shards', () => {
   const verify = workflow().jobs.verify;
   assert.ok(verify.needs.includes('change-surface'));
   assert.equal(verify.if, 'always()');
@@ -426,12 +429,17 @@ test('verify requires the classifier and permits skipped tests only for docs-onl
     { name: 'infra-only successful tests', surface: 'infra-only', bump: 'false', vitest: 'success', cockpit: 'success', status: 0 },
     { name: 'infra-only failed tests', surface: 'infra-only', bump: 'false', vitest: 'failed', cockpit: 'skipped', status: 1 },
     { name: 'unknown surface skipped tests', surface: 'weird-surface', bump: 'false', vitest: 'skipped', cockpit: 'skipped', status: 1 },
-    { name: 'full-matrix skipped tests', surface: 'full-matrix', bump: 'false', vitest: 'skipped', cockpit: 'skipped', status: 1 },
+    { name: 'full-matrix PR skipped Vitest', surface: 'full-matrix', bump: 'false', vitest: 'skipped', cockpit: 'skipped', status: 1 },
+    { name: 'full-matrix PR skipped browser shards', surface: 'full-matrix', bump: 'false', vitest: 'success', cockpit: 'skipped', status: 0 },
+    { name: 'full-matrix PR failed browser shards', surface: 'full-matrix', bump: 'false', vitest: 'success', cockpit: 'failure', status: 1 },
+    { name: 'full-matrix merge_group skipped browser shards', event: 'merge_group', surface: 'full-matrix', bump: 'false', vitest: 'success', cockpit: 'skipped', status: 1 },
+    { name: 'full-matrix workflow_dispatch skipped browser shards', event: 'workflow_dispatch', surface: 'full-matrix', bump: 'false', vitest: 'success', cockpit: 'skipped', status: 1 },
     { name: 'full-matrix successful tests', surface: 'full-matrix', bump: 'false', vitest: 'success', cockpit: 'success', status: 0 },
     { name: 'release bump skipped tests', surface: 'full-matrix', bump: 'true', vitest: 'skipped', cockpit: 'skipped', status: 0 },
   ];
   for (const scenario of cases) {
     const result = runShell(gate.run, {
+      ...(scenario.event ? { EVENT_NAME: scenario.event } : {}),
       UNIT_TESTS_RESULT: 'success', BUILD_AND_PACKAGE_RESULT: 'success',
       CHANGE_SURFACE: scenario.surface,
       BUMP_PR: scenario.bump,
@@ -457,7 +465,7 @@ test('bot-authored release/v* PRs skip Vitest and cockpit E2E via classify-pr fi
   assert.equal(classifyStep.env.PR_AUTHOR, '${{ github.event.pull_request.user.login }}');
   assert.equal(classifyStep.env.EXPECTED_HEAD_SHA, '${{ github.event.pull_request.head.sha || github.sha }}');
   assert.deepEqual(ci.jobs.vitest.needs, ['queue-proof', 'change-surface', 'classify-pr', 'pr-test-input']);
-  assert.deepEqual(ci.jobs['cockpit-browser'].needs, ['queue-proof', 'change-surface', 'classify-pr', 'pr-test-input']);
+  assert.deepEqual(ci.jobs['cockpit-browser'].needs, ['queue-proof', 'change-surface', 'classify-pr']);
   assert.ok(ci.jobs.verify.needs.includes('classify-pr'));
   const verifyEnv = ci.jobs.verify.steps.find((step) => step.name === 'Require every verification job').env;
   assert.equal(verifyEnv.BUMP_PR, '${{ needs.classify-pr.outputs.bump_pr }}');
@@ -675,7 +683,7 @@ test('PR dispatch and event share concurrency while native suites pin immutable 
   for (const name of ['typecheck', 'unit-tests', 'build-and-package', 'vitest', 'cockpit-browser']) {
     const ref = config.jobs[name].steps.find(s => s.uses?.startsWith('actions/checkout@')).with.ref;
     assert.equal(evaluate(ref, context(undefined, '42')), 'refs/pull/42/merge');
-    assert.equal(evaluate(ref, context(42, '')), ['vitest', 'cockpit-browser'].includes(name) ? 'pinned-merge-sha' : 'refs/pull/42/merge');
+    assert.equal(evaluate(ref, context(42, '')), name === 'vitest' ? 'pinned-merge-sha' : name === 'cockpit-browser' ? HEAD : 'refs/pull/42/merge');
     assert.equal(evaluate(ref, context(undefined, '')), HEAD);
     assert.equal(evaluate(ref, context(undefined, '42', '')), HEAD);
   }

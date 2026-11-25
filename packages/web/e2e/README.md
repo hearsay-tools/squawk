@@ -377,73 +377,14 @@ before boot; unset or empty values use the defaults. The watcher reads them once
 boots, so a run with different values does not reuse the running server: it boots a new one
 under the new values. The watcher logs why it stopped a server to `.ai/qa/test-env-watch.log`.
 
-## Choosing specs for a change
+## When browser specs run in CI
 
-PR CI uses `scripts/e2e-affected.mjs --ci --base=origin/<PR base branch>` with `--shard=N/8`,
-after it fetches that branch's current tip. It resolves the complete selection before sharding,
-prints each changed file with its spec count and reason, and runs specs only when the selection is
-shorter than the full set. Such a selection permits empty shard partitions and
-requires a passed browser marker. A selection of every spec, an empty selection,
-a missing map, a missing merge-base or a selector error runs no spec: the log states the reason and
-the step prints `TEST_E2E_STATUS=not-selected`, which only a `pull_request_target` run accepts.
-Merge-group jobs always run the full suite and retain their whole-shard rerun
-and flake reports. See
+Pull request CI (`pull_request_target`) skips the eight cockpit browser E2E shards
+(`hearsay-tools/squawk#3728`). Merge-group jobs, `main` pushes without queue proof,
+and manual dispatches run all eight full shards and require `TEST_E2E_STATUS=passed`,
+retaining the merge-group whole-shard rerun and flake reports. For local iteration on
+specific specs, run `squeal run browser <spec paths> --wait 60000`. See
 [Selected PR tests](../../../docs/sdlc/ci.md#selected-pr-tests).
-
-`npm run test:e2e:affected` runs only the specs that a change reaches
-(hearsay-tools/cezarion#1816). `--plan` prints the choice and runs nothing. Other arguments go
-to `npm run test:e2e`.
-
-```bash
-npm run test:e2e:affected -- --plan
-npm run test:e2e:affected -- --force-rebuild
-npm run test:e2e:affected -- --plan --map=<file>   # a map you built or downloaded
-npm run test:e2e:affected -- --plan --base=<ref>   # changes since the merge-base with <ref>
-```
-
-The `E2E spec map` workflow records which specs run cockpit code, server functions and
-`packages/cezar/scripts/mock-*.mjs` functions. Coverage hooks run only in that workflow.
-The shared server reports precise V8 coverage between specs. Its boot is kept apart: the map (version 2)
-marks each function the boot ran `startup` and credits it to no spec. Mock coverage stays with the
-spec and task that started the process, even when that process survives into another spec.
-The source-map build must match the served browser JavaScript byte for byte.
-A task without a known creating spec makes Node evidence incomplete.
-Every other process writes `NODE_V8_COVERAGE` and a log of the modules it loads into `logs/loaded/`, and the map lists the code files
-they loaded as `nodeLoaded`, but only when every such process left its coverage or its load log and every generated
-file they loaded has a source map (the contract bundle counts as every contract source).
-Failed specs and specs without complete evidence stay incomplete and always run for mapped edits.
-
-The selector downloads, with `gh`, the newest successful map from `main` whose commit is the
-branch's fork point or one of its ancestors, into `.ai/qa/e2e-spec-map/`. A newer map would count
-`main`'s later merges as drift, and its line numbers would not match the branch. Without a
-download it uses the newest such cached map. Without a usable map it
-runs every spec. The changed files are the branch's own: the diff from its merge-base with `--base`
-(default `origin/main`, then `main`) to the working tree, untracked files included. Merges on `main`
-after the map's commit do not count (hearsay-tools/squawk#3728). Changed lines in mapped
-functions are diffed against the map's commit, where the map's line numbers hold. When the branch
-touches mapped code, the mapped files `main` changed between the map's commit and the fork point
-add their specs too: `main` may have added a call or import that runs the branch's code from
-another spec. Specs and spec helpers `main` changed since the map add the specs that load them,
-and every spec the map does not list runs. The log lists these files as `changed on main after the map`.
-
-| Change | Specs |
-| --- | --- |
-| Cockpit or api-client source | Specs that ran the file, loaded its top-level effects, or reached its exported values, plus incomplete specs |
-| Server source or `mock-*.mjs` with function evidence | Specs that ran the innermost functions containing the changed lines, plus specs that load the file and incomplete specs. A line in a function the shared server's boot ran, in the module's top-level code or outside every recorded function: the boot spec and every spec that ran a function of the file |
-| Spec, helper or fixture | Specs that load it; every spec if suite setup loads it or no spec names the helper |
-| Documentation, unit tests, `spec-map/`, `.github/` outside suite setup | None |
-| A reviewed path no spec reads (`NO_SPEC` in the selector, each with its reason): lint rules and configs, `packages/cezar/src/lint/`, repository skills, benchmarks no spec imports, `AGENT_PROTOCOL.md`, `.env.example`, `squeal.config.json` | None, unless suite setup or a spec loads it |
-| The measured durations (`.github/test-durations.json`, `.github/cockpit-test-durations.json`), which only order and shard the specs | None |
-| Code the suite setup loads, outside the Vitest config's own imports | The boot spec and the file's own answer; every spec when that answer is every spec |
-| Code under `packages/cezar/{src,scripts}`, `packages/contract/src`, `packages/web/e2e`, `.ai/scripts` or `scripts/` that existed at the map's commit and that no process the suite started loaded (the map's `nodeLoaded`), unless the Vitest config imports it (Vite bundles those) | Specs that load it now and incomplete specs; none when there are none |
-| Server/CLI paths without function evidence; the contract; styles; build configuration; test environment; dependencies; any other unknown path | Every spec |
-
-The boot spec is the shortest spec with complete evidence, by `.github/cockpit-test-durations.json`;
-every spec boots the shared server, so it shows the server still starts. Without one, an edit to
-code the boot runs selects every spec. Insertions at function boundaries
-include both neighbouring lines. Cockpit coverage stays per file. A selected pass is iteration
-feedback. PR CI uses the same map rules, but runs specs only for a selection shorter than
-the full set. Merge-group jobs run every spec.
 
 ## The project the shared env serves
 

@@ -291,30 +291,20 @@ jobs upload no coverage. A failing selected test fails its job;
 it never triggers a full-suite retry. The base fetch is bounded to 100 commits.
 A missing merge-base costs a full run instead of silently skipping tests.
 
-Browser jobs fetch the PR base branch's current tip and call
-`scripts/e2e-affected.mjs --ci --base=origin/<base branch>`; the event's base SHA can be older
-than the tested merge's base parent. The selector reads the newest successful `e2e-spec-map.yml`
-map on `main` and selects from the PR's own changes, from the merge-base with that tip. Merges
-after the map's commit do not count, except that mapped files they changed add their specs
-when the PR touches mapped code. Its log prints each changed file with its spec count and
-reason. A PR runs browser specs only
-when the selector returns a list shorter than the full set. When the selector
-chooses every spec, chooses no spec or fails, the PR runs no browser spec: the log
-and the job summary state the reason, and the step prints
-`TEST_E2E_STATUS=not-selected`. `require-e2e-passed.cjs` accepts that marker only
-when `GITHUB_EVENT_NAME` is `pull_request_target`, so the browser jobs and `verify`
-stay green on the PR and every other event still requires `passed`. The merge queue runs every spec on every full-matrix entry, so a
-browser failure the PR run does not see fails the queue entry instead. A shorter
-selection still requires `TEST_E2E_STATUS=passed`; missing browsers fail
-verification. The token used to download the map has read-only Actions and
-repository scopes.
+Pull request runs skip the eight cockpit browser E2E shards (`hearsay-tools/squawk#3728`).
+Measured over 50 full-matrix PR runs, the spec map produced 0 genuine browser-relevant short
+selections while costing about 750 job-minutes per day on `main` pushes, so `e2e-spec-map.yml`
+was removed. `verify` accepts a skipped `cockpit-browser` result on `pull_request_target`
+(never a failed or cancelled one), while merge groups, `main` pushes without queue proof,
+and manual dispatches still run all eight browser shards and require `TEST_E2E_STATUS=passed`.
+A browser failure surfaces in the merge queue before merge.
 
 Docs-only, infra-only and verified release-stamp skips remain as before. Merge
 groups and manual dispatches run full suites. Main pushes reuse eligible exact-SHA
 queue proof or run full CI as a fallback. Merge groups retain the whole-shard
-rerun, trusted flake reports and Squeal recording. The local selectors
-without `--ci` retain their iteration behavior, including an error on unmatched
-unit changes and a skip when no browser spec reaches a change.
+rerun, trusted flake reports and Squeal recording. The local unit selector
+without `--ci` retains its iteration behavior, including an error on unmatched
+unit changes.
 
 ### CI verification
 

@@ -39,7 +39,7 @@ export const NEVER = [
     // The lint rule cez/stubborn-test-child exempts the helper and its cockpit copy (hearsay-tools/squawk#3941).
     'packages/web/src/test/stubborn-child.ts',
   ] },
-  { why: 'gate or test harness', source: true, globs: ['packages/web/e2e/*.{ts,mjs}', 'packages/web/e2e/spec-map/**'] },
+  { why: 'gate or test harness', source: true, globs: ['packages/web/e2e/*.{ts,mjs}'] },
   { why: 'lint gate', source: true, except: [LINT_CASES], globs: [
     'packages/cezar/src/lint/**', '.oxlintrc.json',
     'packages/cezar/src/{file-length,test-wait-discipline,test-wait-discipline-polls}.baseline.json',

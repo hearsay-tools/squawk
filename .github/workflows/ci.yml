@@ -1562,14 +1562,14 @@ jobs:
   # Skip is a failure here: a machine that cannot drive the cockpit must not
   # green the required aggregate. This job opts into skip-exit-0 with
   # --allow-skip, then checks the marker through require-e2e-passed.cjs.
-  # On a PR, a selection that is not shorter than the full set runs no spec and
-  # passes with TEST_E2E_STATUS=not-selected; the merge queue runs every spec.
+  # PRs skip browser shards (hearsay-tools/squawk#3728); merge groups, main
+  # pushes without queue proof, and manual dispatches run all eight shards.
   cockpit-browser:
     name: Cockpit browser E2E shard ${{ matrix.shard }}/8
-    # Same docs-only, infra-only, and verified bump-PR skips as Vitest.
-    needs: [ queue-proof, change-surface, classify-pr, pr-test-input ]
+    # Same docs-only, infra-only, and verified bump-PR skips as Vitest, plus pull requests.
+    needs: [ queue-proof, change-surface, classify-pr ]
     if: >-
-      !cancelled() && (needs.queue-proof.result != 'success' || needs.queue-proof.outputs.verified != 'true') && needs.change-surface.outputs.surface == 'full-matrix' && needs.classify-pr.outputs.bump_pr != 'true' && (github.event_name != 'pull_request_target' || needs.pr-test-input.result == 'success')
+      !cancelled() && github.event_name != 'pull_request_target' && (needs.queue-proof.result != 'success' || needs.queue-proof.outputs.verified != 'true') && needs.change-surface.outputs.surface == 'full-matrix' && needs.classify-pr.outputs.bump_pr != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -1579,7 +1579,6 @@ jobs:
     timeout-minutes: ${{ github.event_name == 'merge_group' && 40 || 30 }}
 
     permissions:
-      actions: read
       contents: read
       pull-requests: read
 
@@ -1588,19 +1587,10 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.pr-test-input.outputs.sha || (steps['resolve-dispatch'].outputs.valid == 'true' && format('refs/pull/{0}/merge', inputs.pr_number)) || github.sha }}
+          ref: ${{ (steps['resolve-dispatch'].outputs.valid == 'true' && format('refs/pull/{0}/merge', inputs.pr_number)) || github.sha }}
           allow-unsafe-pr-checkout: true
           persist-credentials: false
           fetch-depth: 100
-
-      # The selector reads the PR's own changes from the base branch's current tip
-      # (hearsay-tools/squawk#3728). The event's base.sha can be older than the tested merge's
-      # base parent, and then main's later commits would count as PR changes.
-      - name: Fetch PR selection base
-        if: github.event_name == 'pull_request_target'
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: git fetch --no-tags --depth=100 origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF" || echo "Selection base unavailable; the selector runs every spec."
 
       - name: Set up pnpm
         if: (hashFiles('pnpm-lock.yaml') != '')
@@ -1634,22 +1624,8 @@ jobs:
           cache: ${{ hashFiles('pnpm-lock.yaml') != '' && 'pnpm' || 'npm' }}
           cache-dependency-path: ${{ hashFiles('pnpm-lock.yaml') != '' && 'pnpm-lock.yaml' || 'package-lock.json' }}
 
-      - name: Run selected PR browser specs
-        id: e2e-pr
-        if: github.event_name == 'pull_request_target'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: |
-          set -o pipefail
-          node scripts/e2e-affected.mjs --ci --base="origin/$BASE_REF" --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee "$RUNNER_TEMP/e2e.log"
-          # A full, empty or failed selection runs no spec here: the merge queue runs every spec.
-          grep -h '^\[e2e:affected\] PR CI runs no browser spec' "$RUNNER_TEMP/e2e.log" >> "$GITHUB_STEP_SUMMARY" || true
-          node .github/scripts/require-e2e-passed.cjs < "$RUNNER_TEMP/e2e.log"
-
       - name: Run cockpit browser E2E
         id: e2e
-        if: github.event_name != 'pull_request_target'
         # In a merge group a failed first run does not fail the job: the rerun below decides.
         continue-on-error: ${{ github.event_name == 'merge_group' }}
         run: &browser-shard |
@@ -1805,9 +1781,13 @@ jobs:
           test "$UNIT_TESTS_RESULT" = success
           test "$BUILD_AND_PACKAGE_RESULT" = success
           # A merge group classifies its own diff, so it takes the docs/infra-only skip;
-          # the bump-PR skip stays PR and dispatch only.
+          # the bump-PR skip stays PR and dispatch only. PR runs skip browser shards
+          # (hearsay-tools/squawk#3728); merge groups, main pushes and dispatches run them.
           if [ "$CHANGE_SURFACE" = docs-only ] || [ "$CHANGE_SURFACE" = infra-only ] || { [ "$EVENT_NAME" != merge_group ] && [ "$BUMP_PR" = true ]; }; then
             test "$VITEST_RESULT" = success -o "$VITEST_RESULT" = skipped
+            test "$COCKPIT_BROWSER_RESULT" = success -o "$COCKPIT_BROWSER_RESULT" = skipped
+          elif [ "$EVENT_NAME" = pull_request_target ]; then
+            test "$VITEST_RESULT" = success
             test "$COCKPIT_BROWSER_RESULT" = success -o "$COCKPIT_BROWSER_RESULT" = skipped
           else
             test "$VITEST_RESULT" = success
