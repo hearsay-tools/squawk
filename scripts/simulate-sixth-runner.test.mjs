@@ -115,10 +115,10 @@ test('--complete copies the opencode runner as hexacode in its places only, with
   assert.equal(statSync(mock).mode, statSync(join(root, SCRIPTS, 'mock-opencode-serve.mjs')).mode);
   assert.match(readFileSync(mock, 'utf8'), /from '\.\/mock-hexacode-questions\.mjs'/);
   assert.ok(statSync(join(root, SCRIPTS, 'mock-skill-data/hexacode.mjs')).isFile());
-  // The shipped task-scope plugin is the runner's own script: copied, and the copy's paths name it.
-  assert.match(readFileSync(join(root, SCRIPTS, 'hexacode-task-scope.mjs'), 'utf8'), /^\/\/ HexaCode plugin that Squawk loads/);
-  assert.ok(statSync(join(root, SCRIPTS, 'hexacode-task-scope.d.mts')).isFile());
-  assert.match(readFileSync(join(runner, 'hexacode-task-scope.ts'), 'utf8'), /'\.\.\/\.\.\/\.\.\/scripts\/hexacode-task-scope\.mjs'/);
+  // The shipped task-scope plugin lives in the runner folder: copied, and the copy's paths name it.
+  assert.match(readFileSync(join(runner, 'hexacode-task-scope.mjs'), 'utf8'), /^\/\/ HexaCode plugin that Squawk loads/);
+  assert.ok(statSync(join(runner, 'hexacode-task-scope.d.mts')).isFile());
+  assert.match(readFileSync(join(runner, 'hexacode-task-scope.ts'), 'utf8'), /'\.\/hexacode-task-scope\.mjs'/);
   assert.ok(!shared.some(line => line.includes('task-scope')));
   const entry = readFileSync(join(runner, 'index.ts'), 'utf8');
   assert.match(entry, /^import \{ hexacodeRunner \} from '\.\/definition\.ts';$/m);

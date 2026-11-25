@@ -2,7 +2,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { suppliedOpenCodeConfig } from './opencode-runtime-config.ts';
 
 /** The plugin that keeps a governed session's `task` calls inside its own session tree. */
-export const OPENCODE_TASK_SCOPE_PLUGIN = fileURLToPath(new URL('../../../scripts/opencode-task-scope.mjs', import.meta.url));
+export const OPENCODE_TASK_SCOPE_PLUGIN = fileURLToPath(new URL('./opencode-task-scope.mjs', import.meta.url));
 
 /**
  * Adds the task-scope plugin to the runtime config of a governed OpenCode session
