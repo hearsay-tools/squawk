@@ -229,6 +229,13 @@ describe('loadBundledRunners', () => {
     expect(loader.pluginLoadReport().folders).toEqual([]);
   });
 
+  it('loads no bundled runner when allowEmpty is set for a test override', async () => {
+    const loader = await import('./loader.ts');
+    const report = await loader.loadBundledRunners(dir, { allowEmpty: true });
+    expect(report).toEqual({ folders: [dir], loaded: [], failed: [] });
+    expect(loader.pluginLoadReport()).toBe(report);
+  });
+
   it('throws when an entry has no default-exported setup', async () => {
     plugin('one', 'export const displayOrder = 10;\n');
     const loader = await import('./loader.ts');

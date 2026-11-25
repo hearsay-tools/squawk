@@ -31,6 +31,30 @@ describe('native skill references', () => {
   it('never substitutes a copy for a missing selected path', () => {
     expect(resolveRunnerSkill([skill('/task/new')], { id: 'review', path: 'old' }, context).error).toContain('/task/old');
   });
+  it('falls back to D8 id resolution when fallbackToId is set and the selected path moved', () => {
+    const moved = skill('/plugins/new/review/SKILL.md', 'user');
+    expect(resolveRunnerSkill([moved], { id: 'review', path: '/plugins/old/review/SKILL.md' }, context, { fallbackToId: true }))
+      .toEqual({ skill: moved, movedFromPath: '/plugins/old/review/SKILL.md' });
+
+    const repo = skill('/task/.agents/skills/review/SKILL.md', 'repo');
+    expect(resolveRunnerSkill([moved, repo], { id: 'review', path: '/plugins/old/review/SKILL.md' }, context, { fallbackToId: true }))
+      .toEqual({ skill: repo, movedFromPath: '/plugins/old/review/SKILL.md' });
+  });
+  it('keeps an exact path match without movedFromPath when fallbackToId is set', () => {
+    const entry = skill('/task/.agents/skills/review/SKILL.md');
+    expect(resolveRunnerSkill([entry], { id: 'review', path: '.agents/skills/review/SKILL.md' }, context, { fallbackToId: true }))
+      .toEqual({ skill: entry });
+  });
+  it('fails fallbackToId when the skill id is removed or remains ambiguous under D8', () => {
+    const missing = resolveRunnerSkill([{ id: 'other', name: 'Other', path: '/task/other', scope: 'repo' }], { id: 'review', path: '/plugins/old/review/SKILL.md' }, context, { fallbackToId: true });
+    expect(missing.error).toContain('missing');
+    const ambiguous = resolveRunnerSkill([skill('/one'), skill('/two')], { id: 'review', path: '/plugins/old/review/SKILL.md' }, context, { fallbackToId: true });
+    expect(ambiguous.error).toContain('ambiguous');
+    expect(ambiguous.error).toContain('/one');
+    expect(ambiguous.error).toContain('/two');
+    const otherScope = resolveRunnerSkill([skill('/one', 'repo'), skill('/admin', 'other')], { id: 'review', path: '/plugins/old/review/SKILL.md' }, context, { fallbackToId: true });
+    expect(otherScope.error).toContain('ambiguous');
+  });
   it('names close ids and listed paths for a missing id', () => {
     expect(resolveRunnerSkill([skill('/task/review')], { id: 'rev' }, context).error).toContain('review (/task/review)');
   });
