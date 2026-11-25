@@ -1,6 +1,7 @@
-import { fileURLToPath } from 'node:url';
 import { type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentSession, type SessionOptions, productEnv } from '@hearsay-tools/squawk/plugin';
+import { nativeMockPath } from '@hearsay-tools/squawk/plugin/runtime';
 import { ANTIGRAVITY_FACTS } from './facts.ts';
+import { ANTIGRAVITY_MOCK } from './mock.ts';
 import { ANTIGRAVITY_SPEC_SUPPORT } from './spec-support.ts';
 import { AntigravitySession } from './antigravity-session.ts';
 export class AntigravityRunner implements AgentRunner {
@@ -18,7 +19,7 @@ export class AntigravityRunner implements AgentRunner {
   startSession(spec: AgentRunSpec, onEvent?: (event: AgentEvent) => void, options: SessionOptions = {}): AgentSession {
     // Unset: the session leases the managed install, else finds the CLI on PATH.
     const bin = this.options.bin || productEnv('ANTIGRAVITY_BIN') || (productEnv('DRY_RUN') === '1'
-      ? fileURLToPath(new URL('../../../scripts/mock-acp.mjs', import.meta.url)) : undefined);
+      ? nativeMockPath(ANTIGRAVITY_MOCK) : undefined);
     return this.lastSession = new AntigravitySession(bin, spec, onEvent, options, this.options.timeoutMs);
   }
 }
