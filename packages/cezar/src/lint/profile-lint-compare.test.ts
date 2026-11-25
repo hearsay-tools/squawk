@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { type CompareRound, compareReport, median, ruleTimings } from '../../scripts/profile-lint-compare.ts';
+import { type CompareRound, compareReport, lintedFiles, median, rootRelativePaths, ruleTimings } from '../../scripts/profile-lint-compare.ts';
 
 // The `profile-lint.ts --compare` report (hearsay-tools/squawk#4238).
 
@@ -60,4 +60,19 @@ it.each([
 ])('with median load %d on 16 cores, warns that user CPU is not evidence: %s', (load, warns) => {
   const report = compareReport({ base: 'config base.json', command: 'oxlint', rounds: [round(load, 15, 16, 500, 520)], cores: 16 });
   expect(report.includes('Load above ceiling: user CPU is not evidence; report the `--debug timings` sums.')).toBe(warns);
+});
+
+// A side that lints no files measures nothing; a side with no `cez/*` rule is a valid base.
+it('reads the linted file count from the Finished line', () => {
+  expect(lintedFiles('Found 0 warnings and 0 errors.\nFinished in 773ms on 128 files with 155 rules using 16 threads.')).toBe(128);
+  expect(lintedFiles('No files found to lint.\nFinished in 255ms on 0 files with 155 rules using 16 threads.')).toBe(0);
+  expect(lintedFiles('Finished in 10ms on 1 file with 3 rules using 1 thread.')).toBe(1);
+  expect(lintedFiles('cez/a 1.0 1% 3 js-plugin')).toBeUndefined();
+});
+
+// An absolute path would make the extracted base tree lint the working tree's files.
+it('makes lint paths relative to the repository root and refuses paths outside it', () => {
+  expect(rootRelativePaths(['packages/web', '/repo/packages/cezar', '/repo'], '/repo')).toEqual(['packages/web', 'packages/cezar', '.']);
+  expect(() => rootRelativePaths(['/other/packages'], '/repo')).toThrow('/other/packages is outside /repo');
+  expect(() => rootRelativePaths(['/repository'], '/repo')).toThrow('outside');
 });

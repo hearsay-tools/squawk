@@ -3,6 +3,8 @@
  * rounds that the script measured, so a test can pin the format without running oxlint.
  */
 
+import { isAbsolute, relative, sep } from 'node:path';
+
 export interface CompareMeasure { user: number; sys: number }
 
 /** One alternating round: base, then candidate, each with its user-CPU run and its `--debug timings` run. */
@@ -32,6 +34,25 @@ export function ruleTimings(output: string): Record<string, number> {
     if (name?.startsWith('cez/') && Number.isFinite(Number(ms))) timings[name] = Number(ms);
   }
   return timings;
+}
+
+/** The file count of oxlint's `Finished in … on N files` line, or undefined when the line is missing. */
+export function lintedFiles(output: string): number | undefined {
+  const match = /^Finished in .* on (\d+) files?\b/m.exec(output);
+  return match ? Number(match[1]) : undefined;
+}
+
+/**
+ * Lint paths relative to the repository root, so each side lints its own tree: an absolute path would
+ * make an extracted base tree lint the working tree's files. A path outside the root is refused.
+ */
+export function rootRelativePaths(paths: readonly string[], root: string): string[] {
+  return paths.map(path => {
+    if (!isAbsolute(path)) return path;
+    const inside = relative(root, path);
+    if (inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)) throw new Error(`${path} is outside ${root}`);
+    return inside === '' ? '.' : inside;
+  });
 }
 
 const sum = (timings: Record<string, number>) => Object.values(timings).reduce((total, ms) => total + ms, 0);

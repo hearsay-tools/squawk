@@ -10,7 +10,7 @@ import { PROCESS_OWNER_RULES } from '../src/lint/owner-process-rules.ts';
 import { STATE_OWNER_RULES } from '../src/lint/owner-state-rules.ts';
 import { READER_OWNER_RULES } from '../src/lint/owner-reader-rules.ts';
 import { activeRunWriteRules } from '../src/lint/active-run-write.ts';
-import { type CompareRound, compareReport, ruleTimings } from './profile-lint-compare.ts';
+import { type CompareRound, compareReport, lintedFiles, rootRelativePaths, ruleTimings } from './profile-lint-compare.ts';
 
 /**
  * Measures what the `cez` oxlint plugin costs (hearsay-tools/squawk#3774). A developer tool, not a
@@ -66,8 +66,18 @@ export function profileArgs(args: readonly string[]): ProfileOptions {
   };
 }
 
-// The test imports `profileArgs`; only a direct run reads the command line.
-const { paths, runs, alone, families: byFamily, compare } = profileArgs(import.meta.main ? process.argv.slice(2) : []);
+// The test imports `profileArgs`; only a direct run reads the command line, inside its error handler.
+let paths: string[] = [];
+let runs = 1;
+let alone = false;
+let byFamily = false;
+let compare: string | undefined;
+
+function readCommandLine(): void {
+  const options = profileArgs(process.argv.slice(2));
+  paths = rootRelativePaths(options.paths, repoRoot);
+  ({ runs, alone, families: byFamily, compare } = options);
+}
 
 const base = JSON.parse(readFileSync(join(repoRoot, '.oxlintrc.json'), 'utf8')) as { jsPlugins?: string[]; rules: Record<string, unknown> };
 const pluginPath = resolve(repoRoot, base.jsPlugins?.[0] ?? 'packages/cezar/src/lint/plugin.ts');
@@ -172,11 +182,11 @@ function baseSide(arg: string): { side: Side; describe: string } {
   return { side: { config: join(tree, '.oxlintrc.json'), cwd: tree }, describe: `commit ${arg} (${sha.slice(0, 9)})` };
 }
 
-/** One side's per-rule JS time; no `cez/*` row means oxlint linted no files, and a CPU time from that run measures nothing. */
+/** One side's per-rule JS time. A side that lints no files fails: a CPU time from that run measures nothing. */
 function sideTimings(label: string, side: Side): Record<string, number> {
-  const timings = ruleTimings(timingsOutput(side.config, side.cwd));
-  if (Object.keys(timings).length === 0) throw new Error(`${label}: oxlint ran no cez rule on ${paths.join(' ')} in ${side.cwd}`);
-  return timings;
+  const output = timingsOutput(side.config, side.cwd);
+  if (!lintedFiles(output)) throw new Error(`${label}: oxlint linted no files for ${paths.join(' ')} in ${side.cwd}`);
+  return ruleTimings(output);
 }
 
 function compareMain(arg: string): void {
@@ -199,6 +209,7 @@ function compareMain(arg: string): void {
 if (import.meta.main) {
   scratch = mkdtempSync(join(tmpdir(), 'cez-profile-lint-'));
   try {
+    readCommandLine();
     if (compare === undefined) main();
     else compareMain(compare);
   } catch (error) {
