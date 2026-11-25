@@ -137,8 +137,10 @@ describe('session containment (hearsay-tools/squawk#1345)', () => {
       writeFileSync(localBin, '#!/bin/sh\n'); chmodSync(localBin, 0o755);
       writeFileSync(subBin, '#!/bin/sh\n'); chmodSync(subBin, 0o755);
       expect(executableReachable('rel-tool', dir, { PATH: '.' })).toBe(true);
+      expect(executableReachable('rel-tool', dir, { PATH: '' })).toBe(true);
       expect(executableReachable('rel-tool', dir, { PATH: `${delimiter}/usr/bin` })).toBe(true);
       expect(executableReachable('sub-tool', dir, { PATH: './sub' })).toBe(true);
+      expect(executableReachable('rel-tool', dir, {})).toBe(false);
     }
   });
 

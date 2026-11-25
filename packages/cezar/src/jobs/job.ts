@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { constants, tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { join, posix, resolve } from 'node:path';
 import { JOB_EXIT_SUFFIX, JOB_NAME, JOB_RECORD_SUFFIX } from '../process-wait/job-exit-file.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { processPredatesCurrentBoot } from '../delegation/process-liveness.ts';
@@ -204,10 +204,10 @@ export interface StartedJob { name: string; pid: number; log: string; exitFile: 
 export function escapeSessionCgroup(readOwn: () => string | undefined = ownCgroup, writeProcs: (path: string, pid: string) => void = writeFileSync): void {
   if (process.platform !== 'linux' && readOwn === ownCgroup) return;
   let current = readOwn();
-  while (current && basename(current).startsWith(SESSION_CGROUP_PREFIX)) {
-    const parent = dirname(current);
+  while (current && posix.basename(current).startsWith(SESSION_CGROUP_PREFIX)) {
+    const parent = posix.dirname(current);
     if (parent === current) break;
-    try { writeProcs(join(parent, 'cgroup.procs'), '0'); } catch { break; }
+    try { writeProcs(posix.join(parent, 'cgroup.procs'), '0'); } catch { break; }
     const next = readOwn();
     if (!next || next === current) break;
     current = next;

@@ -145,8 +145,8 @@ export function executableReachable(bin: string, cwd: string, env: NodeJS.Proces
     return pathEnv.split(delimiter).some(dir => isWindowsExecutable(resolve(cwd, dir || '.', bin), exts));
   }
   if (bin.includes('/')) return isExecutableFile(resolve(cwd, bin));
-  const pathEnv = env.PATH ?? process.env.PATH ?? '';
-  if (!pathEnv) return false;
+  // Match POSIX execvp: empty PATH (`""`) searches cwd; unset PATH searches `/bin:/usr/bin`.
+  const pathEnv = env.PATH ?? '/bin:/usr/bin';
   return pathEnv.split(delimiter).some(dir => isExecutableFile(resolve(cwd, dir || '.', bin)));
 }
 
