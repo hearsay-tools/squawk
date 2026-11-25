@@ -3,7 +3,9 @@
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { lstatSync, mkdirSync, readdirSync, readFileSync, rmdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { posix } from 'node:path';
+
+const { join } = posix;
 
 const CGROUP_ROOT = '/sys/fs/cgroup';
 const SHELL = '/bin/sh';

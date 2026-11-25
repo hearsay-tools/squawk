@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { CgroupFs } from './os-cgroup.ts';
 import { probeJobs, realJobHelper, startBreakawayProcess, terminateJob, type JobHelper } from './os-win-job.ts';
 import {
@@ -16,6 +16,7 @@ import {
   SESSION_CGROUP_PREFIX,
   SESSION_JOB_PREFIX,
   setSessionContainment,
+  waitForSessionKeepers,
 } from './session-containment.ts';
 import { isNormalSessionExit, spawnSessionLeader } from './session-process.ts';
 
@@ -115,7 +116,7 @@ describe('session containment (hearsay-tools/squawk#1345)', () => {
     expect(isNormalSessionExit(null, 'SIGTERM', { gracefulEnd: true, forcedKill: true })).toBe(false);
   });
 
-  it('executableReachable finds real executables and rejects missing or non-executable binaries', () => {
+  it('executableReachable finds real executables, resolves relative/empty PATH entries against cwd, and rejects missing binaries', () => {
     const dir = mkdtempSync(join(tmpdir(), 'cez-exec-check-'));
     dirs.push(dir);
     expect(executableReachable(process.execPath, dir, process.env)).toBe(true);
@@ -128,6 +129,16 @@ describe('session containment (hearsay-tools/squawk#1345)', () => {
       expect(executableReachable(plain, dir, process.env)).toBe(false);
       chmodSync(plain, 0o755);
       expect(executableReachable(plain, dir, process.env)).toBe(true);
+      // Relative PATH segments (`.` / `./sub`) and empty segments (`:`) resolve against child cwd.
+      const sub = join(dir, 'sub');
+      mkdirSync(sub);
+      const localBin = join(dir, 'rel-tool');
+      const subBin = join(sub, 'sub-tool');
+      writeFileSync(localBin, '#!/bin/sh\n'); chmodSync(localBin, 0o755);
+      writeFileSync(subBin, '#!/bin/sh\n'); chmodSync(subBin, 0o755);
+      expect(executableReachable('rel-tool', dir, { PATH: '.' })).toBe(true);
+      expect(executableReachable('rel-tool', dir, { PATH: `${delimiter}/usr/bin` })).toBe(true);
+      expect(executableReachable('sub-tool', dir, { PATH: './sub' })).toBe(true);
     }
   });
 
@@ -248,7 +259,7 @@ describe('session containment (hearsay-tools/squawk#1345)', () => {
 // Native Windows Job Object verification (run by worker-scope-native.yml).
 describe.runIf(process.platform === 'win32')('session containment on Windows', { timeout: 240_000 }, () => {
   const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
-  const exited = (child: ReturnType<typeof spawnSessionLeader>) => new Promise<void>(resolve => {
+  const exited = (child: { exitCode: number | null; signalCode: NodeJS.Signals | null; once: (ev: 'exit', cb: () => void) => unknown }) => new Promise<void>(resolve => {
     if (child.exitCode !== null || child.signalCode !== null) resolve();
     else child.once('exit', () => resolve());
   });
@@ -256,6 +267,9 @@ describe.runIf(process.platform === 'win32')('session containment on Windows', {
     setSessionContainment(undefined);
     expect(probeJobs()).toEqual({ ok: true });
   }, 240_000);
+  afterAll(async () => {
+    await waitForSessionKeepers(15_000);
+  }, 30_000);
 
   it('windows-native: abnormal exit ends a detached descendant while clean exit 0 keeps it alive', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cez-win-session-'));
@@ -292,7 +306,12 @@ describe.runIf(process.platform === 'win32')('session containment on Windows', {
       cleanPid = Number(readFileSync(cleanPidFile, 'utf8'));
       expect(alive(cleanPid)).toBe(true);
     } finally {
-      if (cleanPid) try { process.kill(cleanPid, 'SIGKILL'); } catch { /* gone */ }
+      if (cleanPid) {
+        try { process.kill(cleanPid, 'SIGKILL'); } catch { /* gone */ }
+        // bound: wait for Windows TerminateProcess to release cwd handle before rmSync.
+        await vi.waitFor(() => expect(alive(cleanPid)).toBe(false), { timeout: 15_000 });
+      }
+      await waitForSessionKeepers(15_000);
       rmSync(dir, { recursive: true, force: true });
     }
   });
@@ -304,6 +323,7 @@ describe.runIf(process.platform === 'win32')('session containment on Windows', {
     const workerJob = `Local\\squawk-worker-${randomUUID()}`;
     const keeper = realJobHelper.keep(workerJob, 'keep');
     const osWinJobUrl = pathToFileURL(join(import.meta.dirname, 'os-win-job.ts')).href;
+    const tsxUrl = import.meta.resolve('tsx');
     let jobPid = 0;
     try {
       const scope = {
@@ -311,7 +331,7 @@ describe.runIf(process.platform === 'win32')('session containment on Windows', {
         started: () => undefined,
         jobName: () => workerJob,
       };
-      const leader = spawnSessionLeader(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', `
+      const leader = spawnSessionLeader(process.execPath, ['--import', tsxUrl, '--input-type=module', '-e', `
         import { spawn } from 'node:child_process';
         import { writeFileSync } from 'node:fs';
         const { startBreakawayProcess } = await import(${JSON.stringify(osWinJobUrl)});
@@ -322,11 +342,14 @@ describe.runIf(process.platform === 'win32')('session containment on Windows', {
         writeFileSync(${JSON.stringify(jobPidFile)}, String(bPid));
         process.exit(1);
       `], { cwd: dir, env: process.env, timings: { killGraceMs: 2_000 }, scope });
+      let stderr = '';
+      leader.stderr.setEncoding('utf8');
+      leader.stderr.on('data', (chunk: string) => { stderr += chunk; });
       await exited(leader);
       // bound: nested job startup and PID publication.
       await vi.waitFor(() => {
-        expect(existsSync(mcpPidFile)).toBe(true);
-        expect(existsSync(jobPidFile)).toBe(true);
+        expect(existsSync(mcpPidFile), `mcpPidFile missing; stderr: ${stderr}`).toBe(true);
+        expect(existsSync(jobPidFile), `jobPidFile missing; stderr: ${stderr}`).toBe(true);
       }, { timeout: 60_000 });
       const mcpPid = Number(readFileSync(mcpPidFile, 'utf8'));
       jobPid = Number(readFileSync(jobPidFile, 'utf8'));
@@ -341,7 +364,13 @@ describe.runIf(process.platform === 'win32')('session containment on Windows', {
     } finally {
       try { terminateJob(workerJob, 5_000); } catch { /* gone */ }
       try { keeper.stdin?.end(); } catch { /* gone */ }
-      if (jobPid) try { process.kill(jobPid, 'SIGKILL'); } catch { /* gone */ }
+      await Promise.race([exited(keeper), new Promise(resolve => setTimeout(resolve, 15_000).unref?.())]);
+      if (jobPid && alive(jobPid)) {
+        try { process.kill(jobPid, 'SIGKILL'); } catch { /* gone */ }
+        // bound: wait for Windows TerminateProcess to release cwd handle before rmSync.
+        await vi.waitFor(() => expect(alive(jobPid)).toBe(false), { timeout: 15_000 });
+      }
+      await waitForSessionKeepers(15_000);
       rmSync(dir, { recursive: true, force: true });
     }
   });

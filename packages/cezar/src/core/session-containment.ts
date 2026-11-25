@@ -17,7 +17,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { accessSync, constants, existsSync, statSync } from 'node:fs';
-import { delimiter, extname, join, resolve } from 'node:path';
+import { delimiter, extname, resolve } from 'node:path';
 import {
   cgroupCommand,
   cgroupPids,
@@ -55,6 +55,26 @@ const CONTAINER_POLL_MS = 50;
 const REMOVE_TIMEOUT_MS = 5_000;
 
 let cachedHost: SessionContainmentHost | undefined;
+/** Live Windows session job keepers, so callers/tests can wait for them to release helper DLLs. */
+const activeKeepers = new Set<ChildProcess>();
+
+function trackKeeper(keeper: ChildProcess): void {
+  activeKeepers.add(keeper);
+  keeper.once('exit', () => { activeKeepers.delete(keeper); });
+}
+
+/** Wait until every tracked Windows session keeper has exited, bounded by `timeoutMs`. */
+export async function waitForSessionKeepers(timeoutMs = 10_000): Promise<void> {
+  const pending = [...activeKeepers].filter(k => k.exitCode === null && k.signalCode === null);
+  if (pending.length === 0) return;
+  await Promise.race([
+    Promise.all(pending.map(k => new Promise<void>(done => {
+      if (k.exitCode !== null || k.signalCode !== null) done();
+      else k.once('exit', () => done());
+    }))),
+    new Promise<void>(done => setTimeout(done, timeoutMs).unref?.()),
+  ]);
+}
 
 /** Detect once per controller whether this host supports OS session containment. */
 export function sessionContainment(
@@ -111,19 +131,23 @@ function isWindowsExecutable(path: string, exts: readonly string[]): boolean {
   });
 }
 
-/** Whether `bin` resolves to an executable file on this host. Missing binaries bypass container
- * wrappers so `spawn` emits native `ENOENT`/`EACCES` directly. */
+/** Whether `bin` resolves to an executable file on this host. Relative and empty PATH segments
+ * resolve against the child `cwd` to match native `execvp` / Windows lookup. Missing binaries
+ * bypass container wrappers so `spawn` emits native `ENOENT`/`EACCES` directly. */
 export function executableReachable(bin: string, cwd: string, env: NodeJS.ProcessEnv): boolean {
   if (!bin) return false;
   if (process.platform === 'win32') {
     const exts = windowsPathExts(env);
     if (bin.includes('/') || bin.includes('\\')) return isWindowsExecutable(resolve(cwd, bin), exts);
+    if (isWindowsExecutable(resolve(cwd, bin), exts)) return true;
     const pathEnv = env.PATH ?? env.Path ?? process.env.PATH ?? '';
-    return pathEnv.split(delimiter).filter(Boolean).some(dir => isWindowsExecutable(join(dir, bin), exts));
+    if (!pathEnv) return false;
+    return pathEnv.split(delimiter).some(dir => isWindowsExecutable(resolve(cwd, dir || '.', bin), exts));
   }
   if (bin.includes('/')) return isExecutableFile(resolve(cwd, bin));
   const pathEnv = env.PATH ?? process.env.PATH ?? '';
-  return pathEnv.split(delimiter).filter(Boolean).some(dir => isExecutableFile(join(dir, bin)));
+  if (!pathEnv) return false;
+  return pathEnv.split(delimiter).some(dir => isExecutableFile(resolve(cwd, dir || '.', bin)));
 }
 
 export interface PrepareContainerOptions {
@@ -165,6 +189,7 @@ export function prepareSessionContainer(
     let keeper: ChildProcess | undefined;
     try {
       keeper = helper.keep(name, 'keep-session');
+      trackKeeper(keeper);
       const jobs = options.parentJob ? [options.parentJob, name] : name;
       const [file, argv] = jobCommand(jobs, bin, args);
       return { file, argv, container: { kind: 'job', name, keeper, helper } };

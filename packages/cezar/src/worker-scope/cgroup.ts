@@ -1,12 +1,14 @@
 /** The Linux `cgroup` backend: one private cgroup v2 child per worker, under the controller's own
  * cgroup. A process places itself before its command runs, so every descendant inherits the
  * group, detached ones too, and `cgroup.kill` ends them all (ADR 0032). */
-import { join } from 'node:path';
+import { posix } from 'node:path';
 import {
   ensureNamedCgroup,
   realCgroupFs,
   type CgroupFs,
 } from '../core/os-cgroup.ts';
+
+const { join } = posix;
 
 export {
   cgroupCommand,
