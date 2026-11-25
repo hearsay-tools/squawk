@@ -963,13 +963,17 @@ describe('RunDatabase', () => {
   });
 });
 
-it('binds issue repair verification to the written revision and removes it on replacement or deletion', () => {
+it('binds issue and PR repair verification to the written revision and removes it on replacement or deletion', () => {
   const db = openDb();
-  db.transaction({ upserts: [row('issue', { issueAttributionCurrent: true })], deletes: [] });
-  expect(db.getMeta('issue-attribution:issue')).toBe(String(db.get('issue')!.revision));
+  db.transaction({ upserts: [row('issue', { issueAttributionCurrent: true, prReferenceCurrent: true })], deletes: [] });
+  const rev = String(db.get('issue')!.revision);
+  expect(db.getMeta('issue-attribution:issue')).toBe(rev);
+  expect(db.getMeta('pr-reference-heal:issue')).toBe(rev);
   db.transaction({ upserts: [row('issue')], deletes: [] });
   expect(db.getMeta('issue-attribution:issue')).toBeUndefined();
-  db.transaction({ upserts: [row('issue', { issueAttributionCurrent: true })], deletes: [] });
+  expect(db.getMeta('pr-reference-heal:issue')).toBeUndefined();
+  db.transaction({ upserts: [row('issue', { issueAttributionCurrent: true, prReferenceCurrent: true })], deletes: [] });
   db.transaction({ upserts: [], deletes: ['issue'] });
   expect(db.getMeta('issue-attribution:issue')).toBeUndefined();
+  expect(db.getMeta('pr-reference-heal:issue')).toBeUndefined();
 });

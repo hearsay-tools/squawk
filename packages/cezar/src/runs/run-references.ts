@@ -78,17 +78,47 @@ export function referencedPrDeclaration(run: RunRecord): number | undefined {
   return declared === refUrlNumber(run.pullRequestUrl) ? undefined : declared;
 }
 
-/** Prompt attribution survives declarations of follow-up issues. Bare hashes become issues
- * only after an issue signal; explicit PR prompts never acquire an invented issue identity. */
+const POLITENESS_PREFIX_RE = /^(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+|i\s+(?:want|would\s+like)\s+you\s+to\s+)/i;
+const SUBJECT_ACTION_RE = /^(?:please\s+)?(?:fix|resolve|address|implement|investigate|review|work(?:\s+on)?|handle|triage|repair|plan|refine|reproduce|debug|diagnose|check|process|follow\s+up(?:\s+on)?)\s+/i;
+const ISSUE_SUBJECT_REF_RE = /(https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/\d+|(?:[\w.-]+\/[\w.-]+)?#\d+|\d+)\b/i;
+const ACTION_SUBJECT_RE = new RegExp(`^((?:[a-z][a-z-]*\\s+){0,5}|(?:[a-z][a-z-]*\\s+){0,4}issue)${ISSUE_SUBJECT_REF_RE.source}`, 'i');
+const DIRECT_SUBJECT_RE = new RegExp(`^((?:the\\s+)?(?:(?:github|fork|upstream)\\s+)?issue\\s*|(?:fork|upstream)\\s+)?${ISSUE_SUBJECT_REF_RE.source}`, 'i');
+const NON_SUBJECT_WORDS = new Set([
+  'pr', 'pull', 'pull-request', 'against', 'like', 'unlike', 'versus', 'vs', 'instead',
+  'see', 'from', 'after', 'before', 'while', 'for', 'with', 'without', 'about', 'into',
+  'onto', 'over', 'under', 'between', 'than', 'that', 'which', 'why', 'how', 'when',
+  'where', 'if', 'whether', 'and', 'or', 'but', 'not', 'no', 'related', 'similar',
+  'based', 'mentioned', 'referenced', 'linked', 'per',
+]);
+
+/** Extract the leading subject issue ref from a prompt, rejecting PR prompts and background mentions. */
+function promptSubjectIssue(task: string): { ref: string; explicitIssue: boolean } | undefined {
+  const stripped = task.trimStart().replace(POLITENESS_PREFIX_RE, '');
+  const action = SUBJECT_ACTION_RE.exec(stripped);
+  const match = action ? ACTION_SUBJECT_RE.exec(stripped.slice(action[0].length)) : DIRECT_SUBJECT_RE.exec(stripped);
+  if (!match) return undefined;
+  const words = (match[1] ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (action && words.some((word) => NON_SUBJECT_WORDS.has(word))) return undefined;
+  const ref = match[2]!;
+  const explicitIssue = words.at(-1) === 'issue';
+  // Bare unhashed digits ("Fix 2 bugs", "438 things") are only an issue ref after the word "issue"
+  // or when the entire prompt is a bare numeric skill input ("438").
+  if (/^\d+$/.test(ref) && !explicitIssue && stripped.trim() !== ref) return undefined;
+  return { ref, explicitIssue };
+}
+
+/** Prompt attribution survives declarations of follow-up issues. An issue automation's own
+ * subject URL or an issue-led prompt stays primary; bare hashes become issues only after an
+ * issue signal, and explicit PR prompts or background mentions never lock in. */
 export function originatingIssue(run: RunRecord): number | undefined {
-  // Only an issue-led subject is stable attribution. Mentions inside comparisons or
-  // background instructions remain evidence, but an agent declaration may supersede them.
-  const prompt = run.task.trimStart()
-    .replace(/^(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+|i\s+(?:want|would\s+like)\s+you\s+to\s+)/i, '')
-    .replace(/^(?:please\s+)?(?:fix|resolve|address|implement|investigate|review|work(?:\s+on)?)\s+/i, '');
-  const subject = /^(?:(?:the\s+)?(?:(?:github|fork|upstream)\s+)?issue\s*|(?:fork|upstream)\s+)?(?:https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/\d+|(?:[\w.-]+\/[\w.-]+)?#?\d+)\b/i.exec(prompt);
+  if (run.automation?.event.startsWith('issue.')) {
+    const automated = extractTaskRefs(run.automation.githubUrl).issueNumber;
+    if (automated !== undefined) return automated;
+  }
+  const subject = promptSubjectIssue(run.task);
   if (!subject) return undefined;
-  const refs = extractTaskRefs(subject[0]);
+  const refs = extractTaskRefs(subject.explicitIssue ? `issue ${subject.ref}` : subject.ref);
+  if (subject.explicitIssue) return refs.issueNumber ?? refs.ambiguousNumber;
   return refs.issueNumber ?? ((run.issueNumber !== undefined || run.markerRefs?.issue !== undefined)
     ? refs.ambiguousNumber : undefined);
 }
@@ -112,24 +142,38 @@ export function resolveIssueReference(run: RunRecord, handle?: RepoHandle | null
   return resolveReferencedRef(candidates, run.task, declared, handle);
 }
 
+/** Write or delete `referencedIssueUrl` so an absent URL leaves no own `undefined` key. */
+export function setReferencedIssueUrl(run: RunRecord, url: string | undefined): void {
+  if (url === undefined) delete run.referencedIssueUrl;
+  else run.referencedIssueUrl = url;
+}
+
 /** Check only the fields restoration writes, without copying or walking the run record. */
-export function isOriginatingIssueCurrent(run: RunRecord): boolean {
+export function isOriginatingIssueCurrent(run: RunRecord, handle?: RepoHandle | null): boolean {
   const origin = originatingIssue(run);
   if (origin === undefined || run.markerRefs?.issue === undefined) return true;
   if (run.issueNumber !== origin || Object.hasOwn(run, 'referencedIssueNumberSeeded')) return false;
   if (run.referencedIssueCandidates === undefined && refUrlNumber(run.referencedIssueUrl) === origin) return true;
-  const url = resolveIssueReference(run);
-  return Object.hasOwn(run, 'referencedIssueUrl') && run.referencedIssueUrl === url;
+  const url = resolveIssueReference(run, handle);
+  return url === undefined ? !Object.hasOwn(run, 'referencedIssueUrl') : run.referencedIssueUrl === url;
 }
 
-export function restoreOriginatingIssue(run: RunRecord): void {
+export function restoreOriginatingIssue(run: RunRecord, handle?: RepoHandle | null): void {
   const origin = originatingIssue(run);
   if (origin === undefined || run.markerRefs?.issue === undefined) return;
   run.issueNumber = origin;
   delete run.referencedIssueNumberSeeded;
   if (run.referencedIssueCandidates !== undefined || refUrlNumber(run.referencedIssueUrl) !== origin) {
-    run.referencedIssueUrl = resolveIssueReference(run);
+    setReferencedIssueUrl(run, resolveIssueReference(run, handle));
   }
+}
+
+/** Whether `restoreLostReferencedPullRequest` would leave `run` unchanged (for `handle`). */
+export function isPrReferenceCurrent(run: RunRecord, handle?: RepoHandle | null): boolean {
+  if (run.referencedPullRequestUrl !== undefined || run.markerRefs?.pr === undefined || referencedPrDeclaration(run) !== undefined) {
+    return true;
+  }
+  return resolveReferencedRef(run.referencedPrCandidates ?? [], run.task, undefined, handle) === undefined;
 }
 
 /** Whether a stored summary names a referenced PR or issue, or a declared PR, outside `handle`'s
@@ -163,22 +207,22 @@ export function rescopeRun(run: RunRecord, handle?: RepoHandle | null): boolean 
     run.referencedPullRequestUrl &&
     !isRepoScopedRef(run.referencedPullRequestUrl, run.task, handle)
   ) {
-    run.referencedPullRequestUrl = undefined;
+    delete run.referencedPullRequestUrl;
     changed = true;
   }
   if (
     run.referencedIssueUrl &&
     !isRepoScopedRef(run.referencedIssueUrl, run.task, handle)
   ) {
-    run.referencedIssueUrl = undefined;
+    delete run.referencedIssueUrl;
     changed = true;
     // Take back the number this janitor seeded from that very URL — the same revoke
     // `trackReferencedIssues` performs when ambiguity clears a resolution. A `prNumber`-style
     // number the prompt, namer or a marker owns is NOT ours to touch, which is exactly what
     // `referencedIssueNumberSeeded` records.
     if (run.referencedIssueNumberSeeded) {
-      run.issueNumber = undefined;
-      run.referencedIssueNumberSeeded = undefined;
+      delete run.issueNumber;
+      delete run.referencedIssueNumberSeeded;
     }
   }
   return changed;
@@ -230,7 +274,7 @@ export function trackReferencedIssues(
   const candidatesChanged = seen.size !== before;
   if (candidatesChanged) run.referencedIssueCandidates = [...seen];
   const prev = run.referencedIssueUrl;
-  run.referencedIssueUrl = resolveIssueReference(run, handle);
+  setReferencedIssueUrl(run, resolveIssueReference(run, handle));
   let numberChanged = false;
   if (run.markerRefs?.issue === undefined && ISSUE_URL_RE.test(seedHaystack)) {
     if (run.referencedIssueUrl && run.issueNumber === undefined) {

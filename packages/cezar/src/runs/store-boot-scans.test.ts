@@ -137,3 +137,91 @@ it('writes no heal stamps at close once a migration fence refuses project writes
   expect(meta(AUTOMATION_ORIGIN_HEAL_COMPLETE_KEY)).toBeUndefined();
   expect(meta('pr-reference-heal:fenced')).toBeUndefined();
 });
+
+it('keeps link repairs on held runs across restarts without touching clean runs (hearsay-tools/squawk#3652)', () => {
+  const handle = { owner: 'local', name: 'repo' };
+  const foreignPr = 'https://github.com/other/repo/pull/5';
+  const foreignIssue = 'https://github.com/other/repo/issues/12';
+  const localPr = 'https://github.com/local/repo/pull/99';
+  const localIssue = 'https://github.com/local/repo/issues/44';
+  const prHeld = record('pr-held', {
+    status: RUN_STATUS.running,
+    pullRequestUrl: localPr,
+    markerRefs: { pr: 99 },
+    referencedPullRequestUrl: foreignPr,
+    referencedPrCandidates: [foreignPr],
+  });
+  const issueHeld = record('issue-held', {
+    status: RUN_STATUS.running,
+    task: 'Fix issue #12',
+    issueNumber: 12,
+    markerRefs: { issue: 12 },
+    referencedIssueUrl: foreignIssue,
+    referencedIssueCandidates: [foreignIssue],
+  });
+  const plainHeld = record('plain-held', {
+    status: RUN_STATUS.running,
+    referencedPullRequestUrl: foreignPr,
+    referencedPrCandidates: [foreignPr],
+    pullRequests: [{ number: 5, url: foreignPr, source: 'declared' }],
+  });
+  const cleanHeld = record('clean-held', {
+    status: RUN_STATUS.running,
+    task: 'Fix issue #44',
+    issueNumber: 44,
+    pullRequestUrl: localPr,
+    markerRefs: { pr: 99, issue: 44 },
+    referencedIssueUrl: localIssue,
+    referencedIssueCandidates: [localIssue],
+  });
+  seedRuns(dir, [prHeld, issueHeld, plainHeld, cleanHeld]);
+  const cleanInitialRev = database(db => db.get(cleanHeld.id)!.revision);
+
+  const first = RunStore.open(dir, { keepLive: true });
+  const firstUpdated: string[] = [];
+  first.lifecycle.subscribe({ 'run.updated': ({ run }) => { firstUpdated.push(run.id); } });
+  first.repoScope.setRepoHandle(handle);
+  first.persistence.flush();
+  first.close();
+
+  expect(firstUpdated.sort()).toEqual([issueHeld.id, plainHeld.id, prHeld.id]);
+  expect(database(db => db.get(cleanHeld.id)!.revision)).toBe(cleanInitialRev);
+  const revisionsAfterFirst = Object.fromEntries(
+    [prHeld, issueHeld, plainHeld, cleanHeld].map((r) => [r.id, database(db => db.get(r.id)!.revision)]),
+  );
+
+  const second = RunStore.open(dir, { keepLive: true });
+  const secondUpdated: string[] = [];
+  second.lifecycle.subscribe({ 'run.updated': ({ run }) => { secondUpdated.push(run.id); } });
+  second.repoScope.setRepoHandle(handle);
+  second.persistence.flush();
+  expect(secondUpdated).toEqual([]);
+  expect(second.getRun(prHeld.id)?.referencedPullRequestUrl).toBeUndefined();
+  expect(second.getRun(issueHeld.id)?.referencedIssueUrl).toBeUndefined();
+  expect(second.getRun(plainHeld.id)?.referencedPullRequestUrl).toBeUndefined();
+  expect(second.getRun(plainHeld.id)?.pullRequests).toEqual([{ number: 5, source: 'declared' }]);
+  expect(second.getRun(cleanHeld.id)?.referencedIssueUrl).toBe(localIssue);
+  for (const r of [prHeld, issueHeld, plainHeld, cleanHeld]) {
+    expect(database(db => db.get(r.id)!.revision)).toBe(revisionsAfterFirst[r.id]);
+  }
+  second.close();
+
+  // Even when a pre-handle write (such as startup recovery) advances a repaired row's revision
+  // before `setRepoHandle` arrives, arming the handle re-stamps it so the next start stays quiet.
+  const third = RunStore.open(dir, { keepLive: true });
+  third.updateRun(prHeld.id, { title: 'recovered-pr' });
+  third.updateRun(issueHeld.id, { title: 'recovered-issue' });
+  third.persistence.flush();
+  third.repoScope.setRepoHandle(handle);
+  third.close();
+
+  const fourth = RunStore.open(dir, { keepLive: true });
+  const fourthUpdated: string[] = [];
+  fourth.lifecycle.subscribe({ 'run.updated': ({ run }) => { fourthUpdated.push(run.id); } });
+  fourth.repoScope.setRepoHandle(handle);
+  fourth.persistence.flush();
+  expect(fourthUpdated).toEqual([]);
+  expect(fourth.getRun(prHeld.id)?.referencedPullRequestUrl).toBeUndefined();
+  expect(fourth.getRun(issueHeld.id)?.referencedIssueUrl).toBeUndefined();
+  fourth.close();
+});

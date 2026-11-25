@@ -13,7 +13,7 @@ import { snapshotRun, type RunLifecycle } from './lifecycle.ts';
 import type { RunEventLog, RunMarkerRefs } from './ports.ts';
 import { stagePullRequests } from './record-write-rules.ts';
 import type { RunRedaction } from './run-redaction.ts';
-import { originatingIssue, refUrlNumber, referencedPrDeclaration, resolveIssueReference, resolveReferencedRef, scanEventReferences } from './run-references.ts';
+import { originatingIssue, refUrlNumber, referencedPrDeclaration, resolveIssueReference, resolveReferencedRef, scanEventReferences, setReferencedIssueUrl } from './run-references.ts';
 import type { RepoHandle, RunEvent, RunRecord } from './store.ts';
 import { isRepoScopedRef, promptNamesRepo } from './task-refs.ts';
 import type { RunTranscriptFacts } from './transcript-facts-topic.ts';
@@ -136,7 +136,7 @@ export class RunEventLogTopic implements RunEventLog, RunMarkerRefs {
         );
       }
       if (run.markerRefs.issue !== undefined) {
-        run.referencedIssueUrl = resolveIssueReference(run, repoHandle);
+        setReferencedIssueUrl(run, resolveIssueReference(run, repoHandle));
       }
     });
   }

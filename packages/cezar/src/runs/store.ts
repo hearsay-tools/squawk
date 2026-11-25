@@ -261,7 +261,7 @@ export class RunStore {
     });
     this.queries = new RunQueriesTopic({ dataDir, db: () => this.db, held: this.held, pins: this.pins, deleted: this.deleted, unreadable: this.rows.unreadable,
       base: this.base, coldReads: this.rows.coldReads, rows: this.rows, getRun: (id) => this.getRun(id) });
-    this.repoScope = new RunRepoScopeTopic({ db: () => this.db, held: this.held, deleted: this.deleted, claims: this.claims, persistence: this.persistence, rows: this.rows });
+    this.repoScope = new RunRepoScopeTopic({ dataDir, db: () => this.db, held: this.held, dirty: this.dirty, deleted: this.deleted, claims: this.claims, persistence: this.persistence, rows: this.rows });
   }
   /**
    * Open the project's run store. See `reconcileLoadedRun` for what `keepLive` (#367) decides
