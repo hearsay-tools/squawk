@@ -85,15 +85,15 @@ describe('CI tool injection', () => {
     expect(args[args.indexOf('--allowedTools') + 1]).toBe('Read,mcp__cezar_ci_test__cezar_wait,mcp__cezar_ci_test__cezar_ask,mcp__cezar_ci_test__cezar_cancel_wait,mcp__cezar_ci_test__cezar_done,mcp__cezar_ci_test__cezar_schedule_task,mcp__cezar_ci_test__cezar_automation,mcp__cezar_ci_test__cezar_scheduled_tasks');
     expect(args).not.toContain('--strict-mcp-config');
   });
-  it('Pi preserves discovered extensions, retry and project-skills extensions and selected tools', () => {
+  it('Pi preserves discovered extensions, retry, runaway-reply and project-skills extensions and selected tools', () => {
     const args = buildPiArgs({ ...spec, toolGrant: { kind: 'explicit', tools: ['Read'] } });
-    expect(args.filter(value => value === '--extension')).toHaveLength(3);
+    expect(args.filter(value => value === '--extension')).toHaveLength(4);
     expect(args).not.toContain('--no-extensions');
     expect(args[args.indexOf('--tools') + 1]).toBe('read,cezar_wait,cezar_ask,cezar_cancel_wait,cezar_done,cezar_schedule_task,cezar_automation,cezar_scheduled_tasks');
   });
   it('Pi keeps the CI extension tools active on the default list by sending no allowlist (hearsay-tools/cezarion#1305)', () => {
     const args = buildPiArgs({ ...spec, toolGrant: { kind: 'step-default', tools: allowedToolsForStep(undefined, 'pi') } });
-    expect(args.filter(value => value === '--extension')).toHaveLength(4);
+    expect(args.filter(value => value === '--extension')).toHaveLength(5);
     expect(args).not.toContain('--no-extensions');
     expect(args).not.toContain('--tools');
     expect(args).toContain('--no-builtin-tools');
@@ -135,7 +135,7 @@ describe('CI tool injection', () => {
         expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
         const rows = readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line));
         if (backend === 'claude') expect(rows[0]).toContain('--mcp-config');
-        if (backend === 'pi') expect(rows[0].filter((item: string) => item === '--extension')).toHaveLength(3);
+        if (backend === 'pi') expect(rows[0].filter((item: string) => item === '--extension')).toHaveLength(4);
         if (backend === 'omp') expect(rows[0].filter((item: string) => item === '--extension')).toHaveLength(1);
         if (backend === 'codex') {
           const config = rows.find(row => row.method === (resume ? 'thread/resume' : 'thread/start')).params.config;
