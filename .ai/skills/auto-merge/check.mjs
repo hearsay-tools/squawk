@@ -96,7 +96,7 @@ export const NEVER = [
 export const TEST_FILE = /\.(test|spec|e2e|testkit)\.[cm]?[jt]sx?$/
 const isSource = (path) => /^packages\/[^/]+\/src\//.test(path) && !TEST_FILE.test(path) && !path.includes('__fixtures__')
 // Mock-only variables (CEZ_MOCK_*) configure offline test runners, not Squawk.
-const ENV_NAME = /CEZ_(?!MOCK_)[A-Z0-9_]+/g
+const ENV_NAME = /(?:HSQ_|CEZ_(?!MOCK_))[A-Z0-9_]+/g
 const MARKER = /CEZ:[A-Z_]+/g
 
 // Content rules: each takes the parsed diff and returns a reason, or nothing.
@@ -108,10 +108,10 @@ const CONTENT = [
     const edited = d.files.filter((f) => matchesGlob(f.path, '**/__fixtures__/**/*.expected.*') && f.status !== 'A')
     return edited.length > 0 && `changes a golden fixture's expected output: ${edited.map((f) => f.path).join(', ')}`
   },
-  (d) => d.changed((f) => f.path === '.env.example', ENV_NAME) && 'changes a CEZ_* entry in .env.example',
+  (d) => d.changed((f) => f.path === '.env.example', ENV_NAME) && 'changes an HSQ_* or CEZ_* entry in .env.example',
   (d) => {
     const changed = d.newOrGone(ENV_NAME)
-    return changed.length > 0 && `adds or removes a CEZ_* variable: ${changed.join(', ')}`
+    return changed.length > 0 && `adds or removes an HSQ_* or CEZ_* variable: ${changed.join(', ')}`
   },
   (d) => d.changed((f) => f.path === 'packages/cezar/src/server/server.ts', /app\.use\(\s*['"]\/api\/\*|isLoopbackHostHeader|cors\(|localHandoff/) && 'changes the request-origin guard in server.ts',
   (d) => d.changed((f) => f.path.startsWith('packages/cezar/src/runs/') && isSource(f.path), /user_version|SCHEMA_VERSION/) && 'changes a schema version',
