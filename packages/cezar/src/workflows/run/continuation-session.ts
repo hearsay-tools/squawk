@@ -7,8 +7,9 @@ import { continuationNextStep, waitingWorkflowStepIndex, ciWorkflowResumeStepInd
 import type { QueuedInput } from './queued-input.ts';
 import type { WorkerQuestions } from './worker-questions.ts';
 import { join } from 'node:path';
-import type { ContentBlock } from '../../core/agent-runner.ts';
+import type { ContentBlock, SkillTrigger } from '../../core/agent-runner.ts';
 import { inputDeliveryOf } from '../../core/agent-runner-values.ts';
+import { portableRunnerSkillPath, resolveRunnerSkill } from '../../core/runner-skill-reference.ts';
 import { startManagedSession } from '../../core/managed-session.ts';
 import { pastedAttachmentsText, type PastedContent, type PersistedAttachment } from '../pasted-content.ts';
 import type { AutosaveReason } from '../../autosave-commit.ts';
@@ -414,8 +415,7 @@ export class ContinuationSession {
       acknowledge: () => this.acknowledgeOpeningTurn(runId, state, answer),
     });
 
-    const skills: ContinuationSkills = { fallback: this.runSkills.selectedSkill(state, settings.toolsStep?.skill,
-      settings.owningStep?.skillPath, '') };
+    const skills: ContinuationSkills = { fallback: this.continuationFallbackSkill(runId, stepId, state, settings) };
     const native = await this.runSkills.openingInput(runId, state, [{ type: 'text', text: prompt }]);
     if (native[0]?.type === 'skill') { skills.trigger = native[0]; prompt = ''; }
     state.liveSession.selectStep(stepId);
@@ -443,6 +443,46 @@ export class ContinuationSession {
       stepId, sessionId, prompt, setupNote, opening, skills, settings, delegation, webhooksPart, ciTools,
     }, onEvent, turn, sink);
     return this.awaitContinuationSession(runId, state, session, { stepId, sink, turn, delegation, ciTools });
+  }
+
+  /** Resolve the Continue step's fallback skill. When a recorded `skillPath` disappeared from the
+   *  runner's list (for example after a plugin moved), fall back to D8 id resolution, update
+   *  `skillPath` on the Continue step and owning step, and log a note naming old and new paths. */
+  private continuationFallbackSkill(
+    runId: string,
+    stepId: string,
+    state: ActiveRun,
+    settings: ContinuationSettings,
+  ): SkillTrigger | undefined {
+    const id = settings.toolsStep?.skill;
+    if (!id) return undefined;
+    const recordedPath = settings.owningStep?.skillPath;
+    const query = state.skills.query;
+    if (!recordedPath || !query || state.skills.unavailableReason) {
+      return this.runSkills.selectedSkill(state, id, recordedPath, '');
+    }
+    const result = resolveRunnerSkill(
+      this.runSkills.enabledSkills(state),
+      { id, path: recordedPath },
+      { ...query, account: state.skills.account },
+      { fallbackToId: true },
+    );
+    if (result.error !== undefined) throw new Error(result.error);
+    if (result.movedFromPath !== undefined) {
+      const nextSkillPath = result.skill.path
+        ? portableRunnerSkillPath(result.skill.path, state.liveSession.cwd)
+        : undefined;
+      this.context.store.updateStep(runId, stepId, { skillPath: nextSkillPath });
+      if (settings.owningStep && settings.owningStep.id !== stepId) {
+        this.context.store.updateStep(runId, settings.owningStep.id, { skillPath: nextSkillPath });
+      }
+      this.context.store.eventLog.appendEvent(runId, {
+        type: 'note',
+        stepId,
+        message: `Skill "${result.skill.id}" moved from ${result.movedFromPath} to ${result.skill.path ?? '(path not reported)'}. Updated step skillPath.`,
+      });
+    }
+    return { id: result.skill.id, ...(result.skill.path ? { path: result.skill.path } : {}), args: '' };
   }
 
   /** Start a Continue's session, resuming its own session when it has one. A throw revokes the

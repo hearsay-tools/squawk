@@ -56,7 +56,13 @@ its arguments. Each adapter owns the trigger and the placement of opening contex
 ([AGENT_PROTOCOL.md §6](../../AGENT_PROTOCOL.md#6-backend-parity--the-hard-rule-packagescezarsrccoreui-paritytestts)).
 A resumed Continue sends no trigger. Pass the checked step trigger as `resumeFallbackSkill`
 so an adapter that opens a fresh session triggers it with the Continue message as arguments.
-The `session` event's `resumed` value records what happened.
+The `session` event's `resumed` value records what happened. When Continue finds that the
+owning step's recorded `skillPath` disappeared from the runner's list, it falls back to
+resolving the skill id under D8 scope precedence instead of failing immediately. If the id
+resolves uniquely, Continue updates `skillPath` on the Continue step and owning step to the
+newly resolved portable path and emits a note naming the old and new paths. Continue still
+fails before any model call when the id is missing or remains ambiguous under D8. Step open
+keeps strict `skillPath` matching.
 
 ## Typed names and session visibility
 
