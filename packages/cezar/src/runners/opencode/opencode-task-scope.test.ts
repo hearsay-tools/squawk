@@ -1,7 +1,8 @@
+import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OPENCODE_TASK_SCOPE_PLUGIN, opencodeTaskScopeEnv } from './opencode-task-scope.ts';
-import { SquawkTaskScope } from '../../../scripts/opencode-task-scope.mjs';
+import { SquawkTaskScope } from './opencode-task-scope.mjs';
 
 type Sessions = Record<string, string | null>;
 
@@ -60,6 +61,10 @@ describe('opencode-task-scope plugin (hearsay-tools/cezarion#2279)', () => {
 describe('opencodeTaskScopeEnv', () => {
   const entry = pathToFileURL(OPENCODE_TASK_SCOPE_PLUGIN).href;
   afterEach(() => { vi.unstubAllEnvs(); });
+
+  it('points to the sibling opencode-task-scope.mjs inside the runner folder', () => {
+    expect(existsSync(OPENCODE_TASK_SCOPE_PLUGIN)).toBe(true);
+  });
 
   it('leaves an ungoverned session\'s env untouched', () => {
     const env = { A: '1' };

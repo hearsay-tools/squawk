@@ -1,6 +1,5 @@
-import { z } from 'zod';
 import { skillLines, skillPathPlugin, skillPathScope, skillProbe } from '@hearsay-tools/squawk/plugin/runtime';
-import type { SkillCatalog, SkillDiscoveryOptions } from '@hearsay-tools/squawk/plugin';
+import { z, type SkillCatalog, type SkillDiscoveryOptions } from '@hearsay-tools/squawk/plugin';
 const listSchema = z.array(z.object({ name: z.string(), description: z.string().nullable().optional(), location: z.string() }));
 export function parseOpencodeSkills(value: unknown, cwd: string, userHome = ''): SkillCatalog {
   return { skills: listSchema.parse(value).filter(s => !s.location.split(/[\\/]/).includes('.trash')).map(s => ({

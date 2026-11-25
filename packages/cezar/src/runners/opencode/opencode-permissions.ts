@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { z } from 'zod';
-import type { PermissionOption, UiPermissionRequestedEvent } from '@hearsay-tools/squawk/plugin';
+import { z, type PermissionOption, type UiPermissionRequestedEvent } from '@hearsay-tools/squawk/plugin';
 
 /**
  * The permissions behind OpenCode's own built-in asks (hearsay-tools/cezarion#1266). The 1.18.35
