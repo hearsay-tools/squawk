@@ -1,89 +1,44 @@
 import type { RunnerSkillCatalog } from '../core/runner-skill-catalog.ts';
-import { runCheckout, preparePublishCheckout } from './run-checkout.ts';
-import { adoptFallbackControl, protectFallbackRun, runArtifactDirectory } from './project-run-files.ts';
-import { projectPaths, fallbackProjectWriteError } from '../project-paths.ts';
+import { projectPaths } from '../project-paths.ts';
 import { reportsRoutes } from './reports-api.ts';
-import { queuedMessagePatchSchema, continueSchema, archiveSchema, openInSchema } from '@open-mercato/cezar-contract/run-requests';
-import { worktreeFilesQuerySchema } from '@open-mercato/cezar-contract/query-requests';
-import { gitCommitSchema } from '@open-mercato/cezar-contract/repo-requests';
-import { patchRunInputSchema as patchRunSchema, messageInputSchema as messageSchema } from '@open-mercato/cezar-contract/runs';
-import { imageMimeType } from '@open-mercato/cezar-contract/image-path';
-import { providerForActiveRun } from '@open-mercato/cezar-contract/active-provider';
-import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 export type { WorkspaceConfigResponse } from '@open-mercato/cezar-contract';
-import { permissionDecisionSchema } from '@open-mercato/cezar-contract/permissions';
-import { runIdParamSchema as permissionRunIdParamSchema } from '@open-mercato/cezar-contract/events';
 import { CheckoutProgressCache } from './checkout-progress.ts';
 import { createWorkspaceLiveRoutes } from './workspace-live-routes.ts';
 import { createActivityRoutes, type ActivityServerDeps } from './activity-routes.ts';
 import { createRunnersRoutes } from './runners-routes.ts';
 import type { Home } from '../home/home.ts';
 import { createWorkspaceProjects, createWorkspaceProjectContexts, createTaskWebhooks, type WorkspaceProjects } from './workspace-projects.ts';
-import type { ApiRun, ArchivedRunsResponse, RunSummary } from '@open-mercato/cezar-contract';
-import { latestSession } from '@open-mercato/cezar-contract/run-predicates';
-import { ARCHIVED_RUNS_PAGE_DEFAULT } from '@open-mercato/cezar-contract/run-limits';
-import { archivedRunsQuerySchema, createRunInputSchema, runSummariesQuerySchema } from '@open-mercato/cezar-contract/runs';
-import { DelegationService, type WorkerCleanupFactory } from '../delegation/service.ts';
-import { runRelationships } from './run-relationships.ts';
+import { type WorkerCleanupFactory } from '../delegation/service.ts';
 import type { DelegationController } from '../delegation/provision.ts';
-import { delegationFailure } from '../delegation/routes.ts';
-import { workerDestroyRequestSchema, workerEmptyRequestSchema, runRelationshipsSchema } from '@open-mercato/cezar-contract/delegation';
 import { randomUUID } from 'node:crypto';
 import { AutomationStore } from '../automations/store.ts';
 import type { IncomingMessage } from 'node:http';
-import { readFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Hono, type Context, type Next } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { matchedRoutes } from 'hono/route';
-import { jsonZodValidator, paramZodValidator, queryZodValidator } from './validators.ts';
 import { TaskWebhooks } from '../runs/webhook.ts';
-import { pinRunInputSchema, archiveFinishedRequestSchema, markAllReadRequestSchema, notifyRunInputSchema } from '@open-mercato/cezar-contract/runs';
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
-import { registeredRunnerId, registeredRunners, resolveRunnerId, runnerDefinition } from '../core/runner-registry.ts';
-import {
-  attachmentFileParamSchema,
-} from '@open-mercato/cezar-contract/runs';
-import { taskWebhooks as taskWebhookList } from '../workspace/webhooks.ts';
+import { registeredRunners } from '../core/runner-registry.ts';
 import { environmentStamp, type detectEnvironment } from '../core/backend-detect.ts';
-import type { ContentBlock } from '../core/agent-runner.ts';
-import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { createModelsRoutes } from './models-routes.ts';
 import { createProviderSignInRoutes } from './provider-sign-in-routes.ts';
-import { allUsage, currentUsage, onUsage } from '../core/process-usage.ts';
-import { readHandoff, renderHandoffRecords } from '../handoff.ts';
-import type { RunRecord, RunStore } from '../runs/store.ts';
-import { HistoryCursorError, deriveRunContextEvents, readRunHistoryPage } from '../runs/event-history.ts';
-import { ARCHIVED_WINDOW } from '../runs/run-index.ts';
-import { ownPullRequestNumbers } from '../runs/pull-requests.ts';
-import { runHistoryQuerySchema, runIdParamSchema } from '@open-mercato/cezar-contract/events';
-import { resolveAttachmentPathAsync } from '../workflows/attachment-path.ts';
-import { artifactParamsSchema, fileLinkQuerySchema } from '@open-mercato/cezar-contract/artifacts';
-import { listArtifacts, readArtifact, readArtifactMetadata } from '../artifacts/store.ts';
-import { artifactPreview, loadFileLink, rasterMime } from '../artifacts/resolve.ts';
-import { toPastedContent, type PastedContent } from '../workflows/pasted-content.ts';
-import { isUntouchedCancelledRun } from '../workflows/run/run-guards.ts';
-import { worktreeDiff } from '../git-worktree.ts';
-import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
+import { allUsage, onUsage } from '../core/process-usage.ts';
+import type { RunStore } from '../runs/store.ts';
 import { getRepoInfo, type RepoInfo } from './git.ts';
 import { createHealthCache, HEALTH_TTL_MS } from './health-cache.ts';
-import { FILE_FORMATS, negotiate } from './accept-negotiation.ts';
 import { authorityOfHost, authorityOfOrigin, hostnameOfHost, hostnameOfOrigin } from './host-authority.ts';
 import { pluginHealth, pluginLoadReport } from '../plugin/loader.ts';
 import { createBackendChecks } from './backend-checks.ts';
 import { type BranchForge } from './repo-branches.ts';
-import { collectChanges, collectCommitChanges, collectRunCommits, commitAll, pushCurrentBranch, readWorktreePath } from './git-changes.ts';
-import { healthConfig, loadConfig } from '../config.ts';
+import { healthConfig } from '../config.ts';
 import { defaultWorkspaceConfig, loadWorkspaceConfig, mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { DEFAULT_AGENT_ACCOUNT_ID, defaultAgentAccountStore, loadAgentAccounts, type AgentAccount } from '../workspace/agent-accounts.ts';
 import { defaultAgentProfile, listAgentProfiles, resolveStoredProfile, type ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
-import { profileEnv } from '../core/agent-profiles.ts';
-import { shellQuote, withEnvPrefix } from '../core/shell-env.ts';
-import { resumeCommand } from '../core/runner-cli.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { type CloneRunner } from './checkout.ts';
 import { type CommandRunner } from './create-project.ts';
@@ -93,27 +48,13 @@ import { ProjectContexts, type ProjectContext, type ProjectRunManager, type RunM
 import { isLoopbackHostHeader, resolveCapabilities } from './capabilities.ts';
 import type { SocketHub, WsUpgradeVerdict } from './ws.ts';
 import type { PreviewHost } from '../preview/host.ts';
-import { resolveForge, forgeWebRoot, resolveForgeRoot, type ForgeFactory } from './forge/index.ts';
+import { resolveForge, type ForgeFactory } from './forge/index.ts';
 import { withProjectAdmission, type CockpitOwnership } from './cockpit-ownership.ts';
 import { prepareProjects } from '../project-migration/auto.ts';
 import { openInTerminal } from './open-in-terminal.ts';
-import { freshCliHandoff, openRunApp, openRunCli, openRunDefaultApp } from './open-in-targets.ts';
-import { agentCliRunner, openFileInDefaultApp, openInApp } from './open-in-app.ts';
+import { openFileInDefaultApp, openInApp } from './open-in-app.ts';
 import { ProviderRuntimeAuthObserver } from './provider-auth-runtime.ts';
-import { continueRunProviders } from './provider-action-gate.ts';
 import { attachProjectWebhooks, createBootContext, createProviderStatus, resolveServerDeps, watchProviderRuntimeAuth } from './server-deps.ts';
-import {
-  NO_WEBHOOK_ERROR,
-  agentProfileRefusal,
-  clientRequestOf,
-  launchRun,
-  modelLockRefusal,
-  notifyRefusal,
-  providerGateRefusal,
-  replayedRun,
-  resolveStartWorkflow,
-  startRunInput,
-} from './start-run-options.ts';
 import {
   ASSET_CACHE_CONTROL,
   BUILD_HINT_HTML,
@@ -131,6 +72,7 @@ import { createGithubRoutes } from './github-routes.ts';
 import { createOpenTargetsRoutes, createRepoRoutes, createWorktreesRoutes } from './repo-routes.ts';
 import { createFsBrowseRoutes, createRunsIndexRoutes, createWorkspaceConfigRoutes, createWorkspaceEventsRoutes } from './workspace-routes.ts';
 import { createAgentConfigRoutes, createAgentWebhooksRoutes, createConfigRoutes, createPlanRoutes, createSkillsRoutes, createSseRoutes, createUiStateRoutes, createWorkflowsRoutes } from './project-settings-routes.ts';
+import { createRunsRoutes, withLiveUsage } from './runs-routes.ts';
 export interface ServerDeps extends ActivityServerDeps {
   home: Home;
   /** Per-repository forge injection for embedded servers and tests. */
@@ -285,34 +227,11 @@ export function projectRouteManifest(app: Hono): ProjectRouteInfo[] {
   return manifest;
 }
 
-/** 409 body for every automations route while GitHub automations are off (#801). */
-
-/** 404 body for a run whose row is in runs.db but whose record this Squawk cannot decode (#779). */
-const UNREADABLE_RUN_ERROR = `this run could not be read by this Squawk: its record in runs.db does not fit this version (a newer Squawk may have written it). It is left in the database untouched.`;
-
 // These response shapes belong to the contract; keep the server's existing type exports.
 export type { ProjectsResponse, RegisterProjectResponse, RemoveProjectResponse, UpdateProjectResponse } from '@open-mercato/cezar-contract';
 
 // ---- workspace SSE (multi-project spec, step 2.8) --------------------------
 
-
-// Queued prompt stack bounds (#472). The per-message bounds mirror `messageSchema`
-// above; the one that actually matters is the FOLDED total, because 20 messages of
-// 100 000 chars each would otherwise compose a ~2 M-character {{task}}.
-const MAX_QUEUED_MESSAGES = 20;
-const MAX_QUEUED_ATTACHMENTS = 8;
-const MAX_FOLDED_TASK_CHARS = 200_000;
-
-/** Length of the prompt a run would execute with — `task` plus its whole stack,
- *  composed exactly as `hydrateQueuedInput` composes it. Checked against the
- *  PROSPECTIVE state so the user is stopped at the write, not at dequeue where
- *  there would be no one left to tell. */
-function foldedLength(task: string, stack: Array<{ text: string }>): number {
-  return [task, ...stack.map((m) => m.text)]
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
-    .join('\n\n').length;
-}
 
 // Request-body size guards (#429). A generous global cap keeps a single
 // localhost request from being unbounded (the largest legit body is 4 pasted
@@ -790,43 +709,6 @@ export function createApp(deps: ServerDeps) {
     return { profile: resolveStoredProfile(stored) };
   };
 
-  const openHandoffCheckout = (c: Context<ProjectApiEnv>, suffix = '') => {
-    const checkout = runCheckout(c.get('project'), c.req.param('id')!, 'open');
-    if ('status' in checkout) return checkout;
-    // Hosted mode: there is no "my machine" to open a terminal on. The UI
-    // hides the button when localHandoff is false — this is defense in depth.
-    return !capabilities().localHandoff
-      ? { status: 409 as const, body: { error: `local handoff is disabled — this cockpit runs in hosted mode (CEZ_REMOTE)${suffix}` } }
-      : checkout;
-  };
-
-  /**
-   * The environment a terminal handoff must carry so the CLI lands on the right account.
-   *
-   * `profileId` is the one RECORDED on the step that owns the session, never the project's
-   * current selection: `claude --resume <id>` reads `<configDir>/sessions`, so a handoff for a
-   * run started on the work account and resumed after the project was switched back would find
-   * nothing and silently open a fresh conversation.
-   */
-  const handoffEnv = async (
-    provider: ProviderId,
-    profileId: string | undefined,
-  ): Promise<{ env: Record<string, string> } | { error: string }> => {
-    const resolved = await resolveWorkspaceProfile(provider, profileId);
-    if ('error' in resolved) {
-      return { error: `this session belongs to an account that no longer exists (${profileId})` };
-    }
-    const { profile } = resolved;
-    return { env: profile.isDefault ? {} : profileEnv(provider, profile.path) };
-  };
-
-  /** The copy-paste fallback shown when no terminal could be opened — same account, spelled for
-   *  this platform's shell. `null` when the account environment cannot be embedded safely. */
-  const handoffFallbackCommand = (cwd: string, command: string, env: Record<string, string>): string | null => {
-    const prefixed = withEnvPrefix(command, env, process.platform);
-    return prefixed === null ? null : `cd ${shellQuote(cwd)} && ${prefixed}`;
-  };
-
   /** A registered project's realpath'd root, or null when the id is unknown. */
   const projectRootFor = async (projectId: string): Promise<string | null> => {
     try {
@@ -918,27 +800,6 @@ export function createApp(deps: ServerDeps) {
     resolveProjectForge,
   });
 
-  // ---- runs ----------------------------------------------------------------
-
-  // Additive `usage` field (#348): the latest CPU/RSS/proc-count sample of the
-  // run's live process tree — absent for finished runs and when `ps` yields
-  // nothing. The stored record itself is never touched.
-  const withUsage = (run: RunRecord, finishBlocked?: string | null): ApiRun => {
-    const usage = currentUsage(run.id);
-    const { sessionId, backend } = latestSession(run);
-    const command = sessionId ? resumeCommand(resolveRunnerId(backend), sessionId) : null;
-    return { ...run, ...(usage ? { usage } : {}), ...(command ? { cliResumeCommand: command } : {}),
-      ...(runnerDefinition(resolveRunnerId(backend)).cli.interactive === false ? { cliHandoff: false as const } : {}),
-      ...(finishBlocked !== undefined ? { finishBlocked } : {}) };
-  };
-
-  // A list row (#817) with the same live `usage` sample `withUsage` attaches. The sampler is
-  // process-wide, so a workspace-level answer can carry it for every project's runs at once — a
-  // cold project's stored summaries included. Appended last, exactly where `toRunSummary` puts it.
-  const withLiveUsage = (summary: RunSummary): RunSummary => {
-    const usage = currentUsage(summary.id);
-    return usage ? { ...summary, usage } : summary;
-  };
 
   // One run feed for every workspace stream connection (hearsay-tools/cezarion#2730): one store
   // subscription per project, one process-wide `seq`, each frame built once per mode.
@@ -947,838 +808,26 @@ export function createApp(deps: ServerDeps) {
     onUsage, allUsage, withLiveUsage,
   });
 
-  /**
-   * Gate every run control by family ownership: refuse foreign or quarantined writers with 409;
-   * adopt proven dead owners without resuming agents. Reads remain available. Stop carries its
-   * cancellation through adoption. `adoptFallbackControl` runs first for a `.ai/squawk/` family.
-   */
-  const requireRunControl = async (c: Context<ProjectApiEnv>, next: Next) => {
-    const id = c.req.param('id');
-    if (c.req.method === 'GET' || c.req.method === 'HEAD' || id === undefined) return next();
-    const { store, manager } = c.get('project');
-    if (store.claims.runOwnership(id) === 'orphaned') {
-      const stop = c.req.method === 'POST' && c.req.path.endsWith('/cancel');
-      if (await manager.adoptOrphanedRun(id, { stop }) && stop && store.getRun(id)?.status === 'cancelled') c.set('stoppedOnAdoption', true);
-    }
-    const refusal = store.claims.writeRefusal(id);
-    if (!refusal) return next();
-    // The delegation route in this family answers in the delegation error shape it always uses.
-    return c.req.path.endsWith('/worker-destroy')
-      ? c.json({ code: 'incompatible_state' as const, error: refusal }, 409)
-      : c.json({ error: refusal }, 409);
-  };
-
-  // ---- chained family: runs lifecycle + artifacts (project-scoped) ----
-  const delegationService = deps.delegation?.service ?? new DelegationService(deps.workerCleanup);
-  delegationService.setDiscovery({ models: modelCatalog, providers: providerStatus });
-  const runsRoutes = new Hono<ProjectApiEnv>()
-    .use('/runs/:id', adoptFallbackControl, requireRunControl)
-    .use('/runs/:id/*', adoptFallbackControl, requireRunControl)
-    // Legacy (older clients): every full record. The cockpit and `cez task` read `/run-summaries`.
-    .get('/runs', (c) => c.json(c.get('project').store.queries.listAllRunsForLegacyRoute().map(run => withUsage(run))))
-    // The slim list (#817): the same runs in the same order as `GET /runs`, from the stored
-    // `toRunSummary` column with memory laid over it (#779), so the list decodes no record.
-    // `?archived=recent` (#864) is the window the cockpit reads: every unarchived run plus the newest
-    // `ARCHIVED_WINDOW` archived roots. The default stays every run, for clients that list them all.
-    .get('/run-summaries', queryZodValidator(runSummariesQuerySchema), (c) => {
-      const archivedWindow = c.req.valid('query').archived === 'recent' ? ARCHIVED_WINDOW : undefined;
-      return c.json(c.get('project').store.queries.listRunSummaries({ archivedWindow }).runs.map(withLiveUsage));
-    })
-    // The archived roots past that window, a page at a time, newest first (#864).
-    .get('/run-summaries/archived', queryZodValidator(archivedRunsQuerySchema), (c) => {
-      const { before, limit, q } = c.req.valid('query');
-      const project = c.get('project');
-      // The page shows each task's origin line, so `q` matches what it names: the automation's
-      // name, or its recorded id while automations are off, as the cockpit's filter does (#1616).
-      const automationNames = new Map(capabilities().automations
-        ? project.automationStore.list().map((automation) => [automation.id, automation.name] as const) : []);
-      const page = project.store.queries.listArchivedRuns({
-        limit: limit ?? ARCHIVED_RUNS_PAGE_DEFAULT,
-        automationNames,
-        ...(before !== undefined ? { before } : {}),
-        ...(q !== undefined ? { q } : {}),
-      });
-      if ('error' in page) return c.json({ error: page.error }, 400);
-      const body: ArchivedRunsResponse = { ...page, runs: page.runs.map(withLiveUsage) };
-      return c.json(body);
-    })
-    .get('/runs/:id/relationships', paramZodValidator(runIdParamSchema), queryZodValidator(workerEmptyRequestSchema), (c) => {
-      const { store } = c.get('project');
-      const run = store.getRun(c.req.valid('param').id);
-      if (!run) return c.json({ error: 'not found' }, 404);
-      return c.json(runRelationshipsSchema.parse(runRelationships(store, run)));
-    })
-    .post('/runs/:id/worker-destroy', queryZodValidator(workerEmptyRequestSchema, { code: 'invalid_input', message: 'Invalid cleanup query' }), paramZodValidator(runIdParamSchema, { code: 'invalid_input', message: 'Invalid worker ID' }), jsonZodValidator(workerDestroyRequestSchema, { absent: {}, malformed: null, code: 'invalid_input', message: 'Invalid cleanup input' }), async c => {
-      const project = c.get('project');
-      delegationService.registerProject(project);
-      try {
-        const result = await delegationService.destroyForHuman(project.id, c.req.valid('param').id, c.req.valid('json'));
-        return result.state === 'incomplete' ? c.json(result, 409) : c.json(result, 200);
-      } catch (error) { const failure = delegationFailure(error); return c.json(failure.body, failure.status); }
-    })
-    // Registered before the `/:id/...` routes so "archive-finished" and "read-all"
-    // never match as a run id.
-    .post('/runs/archive-finished', jsonZodValidator(archiveFinishedRequestSchema, { absent: {}, malformed: null }), (c) =>
-      c.json(c.get('project').store.archive.archiveFinished(c.req.valid('json').scope, c.req.valid('json').automation)))
-    // The read-receipt sweep (#unread-done-items) — the mark-read twin of the archive
-    // sweep above, and under the same registration-order guard.
-    .post('/runs/read-all', jsonZodValidator(markAllReadRequestSchema, { absent: {}, malformed: null }), (c) =>
-      c.json({ read: c.get('project').store.readFlags.markAllRead(c.req.valid('json').automation) }))
-    .post('/runs/:id/archive', jsonZodValidator(archiveSchema, { absent: ({}) }), async (c) => {
-      const { store } = c.get('project');
-      const id = c.req.param('id');
-      // An empty/absent body archives (the common case); a malformed body degrades
-      // to `{}` just as before, but a wrong-typed `archived` is now a 400 (#429).
-      // Archiving also retires any pending usage-limit resume, but that rule belongs to
-      // `setArchived` itself — the bulk sweep must obey it too (spec
-      // 2026-08-03-auto-resume-after-usage-limit).
-      const parsed = { data: c.req.valid('json') };
-      const run = store.archive.setArchived(id, parsed.data.archived !== false);
-      return run ? c.json(run) : c.json({ error: 'not found' }, 404);
-    })
-    // Pin one task to the top of this project's list, or unpin it (#935). The archive route's
-    // twin in every respect: an absent body pins (the common case), the answer is the updated
-    // record, and the change rides the existing `run` SSE because `setPinned` touches. No new
-    // event and no new response shape.
-    .post('/runs/:id/pin', paramZodValidator(runIdParamSchema), jsonZodValidator(pinRunInputSchema, { absent: {}, malformed: null }), (c) => {
-      const { store } = c.get('project');
-      const run = store.readFlags.setPinned(c.req.valid('param').id, c.req.valid('json').pinned !== false);
-      return run ? c.json(run) : c.json({ error: 'not found' }, 404);
-    })
-    // Task webhook opt-in for one run (#589), valid in every state — handing a finished task to a
-    // bot for follow-up is a real case. Turning it on sends one `task.subscribed` delivery with
-    // the note; the note never reaches the agent session. Either direction leaves a durable
-    // `handoff` event so the thread shows when and why. Idempotent: repeating `true` with a
-    // new note is how "Send a note…" works.
-    .post('/runs/:id/notify', paramZodValidator(runIdParamSchema), jsonZodValidator(notifyRunInputSchema), async (c) => {
-      const project = c.get('project');
-      const { id } = c.req.valid('param');
-      const { notify, message } = c.req.valid('json');
-      if (!project.store.getRun(id)) return c.json({ error: 'not found' }, 404);
-      if (notify) {
-        const entry = await projectRegistryEntry(project.id).catch(() => undefined);
-        if (taskWebhookList(entry).length === 0) return c.json({ error: NO_WEBHOOK_ERROR }, 400);
-      }
-      const run = project.store.updateRun(id, { notify: notify ? true : undefined });
-      if (!run) return c.json({ error: 'not found' }, 404);
-      project.store.eventLog.appendEvent(id, {
-        type: 'handoff',
-        notify,
-        ...(message === undefined ? {} : { message }),
-      });
-      if (notify) taskWebhooks.attach(project).subscribed(id, message);
-      return c.json(run);
-    })
-    // The per-task off switch for that resume (the workspace setting is Settings → Resources).
-    // Idempotent: a run with nothing pending answers 200 too, because "this task will not
-    // resume itself" is equally true either way.
-    .delete('/runs/:id/auto-resume', (c) => {
-      const { store, manager } = c.get('project');
-      const id = c.req.param('id');
-      if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-      manager.cancelAutoResume(id);
-      return c.json({ cancelled: true as const });
-    })
-    .post('/runs/:id/read', (c) => {
-      // No body: opening a thread marks it read, full stop. Stamps `seenAt = now` and
-      // returns the updated record (which also rides the `run` SSE via `touch`).
-      const run = c.get('project').store.readFlags.setRead(c.req.param('id'));
-      return run ? c.json(run) : c.json({ error: 'not found' }, 404);
-    })
-    .post('/runs/:id/unread', (c) => {
-      // The mark-unread twin (#775) — bodyless like its read counterpart: clearing the
-      // receipt is the whole action, so there is nothing to say about it. Sits under
-      // `/runs/:id/`, so the `read-all` registration-order caveat above does not apply.
-      const run = c.get('project').store.readFlags.setUnread(c.req.param('id'));
-      return run ? c.json(run) : c.json({ error: 'not found' }, 404);
-    })
-
-    .post('/runs', jsonZodValidator(createRunInputSchema, { runners: { ids: ['runner', 'steps.*.runner'] } }), async (c) => {
-      const { id: projectId, root: repoRoot, manager, store } = c.get('project');
-      const body = c.req.valid('json');
-      const clientRequest = clientRequestOf(body);
-      if (clientRequest) {
-        const replay = replayedRun(store.queries, clientRequest);
-        if (replay && 'error' in replay) return c.json({ error: replay.error }, replay.status);
-        if (replay) return c.json(replay.run, 200 as const);
-      }
-      const locked = modelLockRefusal(repoRoot, body, deps.home);
-      if (locked) return c.json({ error: locked.error }, locked.status);
-      const resolved = await resolveStartWorkflow(repoRoot, body);
-      if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
-      const { workflow } = resolved;
-      const runner = body.runner === undefined ? (await loadConfig(repoRoot, deps.home)).defaultRunner : registeredRunnerId(body.runner);
-      const blocked = await providerGateRefusal(providerActionError, workflow, runner, { repoRoot, picks: { [runner]: body.agentProfile } });
-      if (blocked) return c.json({ error: blocked.error }, blocked.status);
-      const badProfile = await agentProfileRefusal(resolveWorkspaceProfile, runner, body.agentProfile);
-      if (badProfile) return c.json({ error: badProfile.error }, badProfile.status);
-      const noWebhook = await notifyRefusal(body.notify, projectId, projectRegistryEntry);
-      if (noWebhook) return c.json({ error: noWebhook.error }, noWebhook.status);
-      const started = launchRun(manager, workflow, startRunInput(body), clientRequest);
-      if ('error' in started) return c.json({ error: started.error }, started.status);
-      return c.json(started.run, started.status);
-    })
-
-    .get('/runs/:id', (c) => {
-      const { store, manager } = c.get('project');
-      const id = c.req.param('id');
-      const run = store.getRun(id);
-      if (run) return c.json(withUsage(run, manager.finishBlockedReason(run.id) ?? null));
-      // A row in runs.db this version cannot decode (#779): listed until read, so say why it will not open.
-      return c.json({ error: store.isUnreadable(id) ? UNREADABLE_RUN_ERROR : 'not found' }, 404);
-    })
-
-    .get(
-      '/runs/:id/history',
-      paramZodValidator(runIdParamSchema),
-      queryZodValidator(runHistoryQuerySchema),
-      async (c) => {
-        const { store } = c.get('project');
-        const { id } = c.req.valid('param');
-        if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-        try {
-          return c.json(
-            await readRunHistoryPage(store.claims.sourceDataDir(id), id, c.req.valid('query').cursor),
-          );
-        } catch (error) {
-          if (error instanceof HistoryCursorError) return c.json({ error: error.message }, error.status);
-          throw error;
-        }
-      },
-    )
-
-    .get(
-      '/runs/:id/history-context',
-      paramZodValidator(runIdParamSchema),
-      async (c) => {
-        const { store } = c.get('project');
-        const { id } = c.req.valid('param');
-        if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-        return c.json(await deriveRunContextEvents(store.claims.sourceDataDir(id), id));
-      },
-    )
-
-    // Editable titles (#389). The UI displays `titleSummary ?? title`, so a
-    // user edit sets BOTH: `title` (the record's own name — the raw task stops
-    // being it the moment the user renames the run) and `titleSummary` (what
-    // actually displays). The auto-summarizer only ever fills an *unset*
-    // titleSummary (TurnBookkeeper.recordTurnEnd), so an edit wins over any past or
-    // future auto-summary. Answers the updated record.
-    .patch('/runs/:id', jsonZodValidator(patchRunSchema), async (c) => {
-      const { store, manager } = c.get('project');
-      const id = c.req.param('id');
-      if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-      const parsed = { data: c.req.valid('json') };
-      // The prompt is editable only while the run is still queued (#472). Checked
-      // BEFORE the title write so a rejected PATCH is a no-op rather than a partial
-      // one. `title` itself keeps working on any status — no regression to #389.
-      if (parsed.data.task !== undefined) {
-        const foldedChars = foldedLength(parsed.data.task, store.getRun(id)?.queuedMessages ?? []);
-        if (foldedChars > MAX_FOLDED_TASK_CHARS) {
-          return c.json(
-            {
-              error: `prompt too long — ${MAX_FOLDED_TASK_CHARS} character limit across the task and its queued messages (would be ${foldedChars})`,
-            },
-            400,
-          );
-        }
-        if (!manager.editTask(id, parsed.data.task)) {
-          return c.json({ error: 'run already started' }, 409);
-        }
-      }
-      if (parsed.data.title !== undefined) {
-        // titleOrigin 'user' permanently stops the namer's live updates for this run
-        // (spec 2026-07-17-task-auto-naming).
-        store.updateRun(id, {
-          title: parsed.data.title,
-          titleSummary: parsed.data.title,
-          titleOrigin: 'user',
-        });
-      }
-      // Completion controls and task access (hearsay-tools/cezarion#2784) change at any status.
-      const { title: _title, task: _task, ...options } = parsed.data;
-      if (Object.values(options).some(value => value !== undefined)) store.updateRun(id, options);
-      return c.json(store.getRun(id));
-    })
-
-    .post('/runs/:id/cancel', (c) => {
-      const { store, manager } = c.get('project');
-      const id = c.req.param('id');
-      if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-      // Still asked of the manager after an adoption stopped the run: a worker's stop bookkeeping is its.
-      const cancelled = manager.cancel(id) || c.get('stoppedOnAdoption') === true;
-      return c.json({ cancelled });
-    })
-
-    // Live-session participation (spec 002): deliver a user message (text +
-    // pasted screenshots) into the run's open claude session.
-    .post('/runs/:id/permissions', paramZodValidator(permissionRunIdParamSchema), jsonZodValidator(permissionDecisionSchema), (c) => {
-      const { store, manager } = c.get('project');
-      const { id } = c.req.valid('param');
-      if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-      const { requestId, optionId } = c.req.valid('json');
-      if (!manager.respondPermission(id, requestId, optionId)) {
-        return c.json({ error: 'permission request is no longer available or option is invalid' }, 409);
-      }
-      return c.json({ delivered: true as const });
-    })
-
-    .post('/runs/:id/messages', jsonZodValidator(messageSchema), async (c) => {
-      const { store, manager } = c.get('project');
-      const id = c.req.param('id');
-      const run = store.getRun(id);
-      if (!run) return c.json({ error: 'not found' }, 404);
-      const parsed = { data: c.req.valid('json') };
-      // Stacking onto a queued prompt mutates an existing task and invokes no provider.
-      // Provider availability still gates live delivery after the record leaves `queued`, but
-      // must not strand prompt authoring just because an unrelated fallback provider is
-      // disconnected (provider-auth spec: disabling never blocks existing-task mutations).
-      // In the dequeue race, the ladder below safely turns this into a starting-state buffer.
-      if (run.status !== 'queued') {
-        const blocked = await providerActionError([resolveRunnerId(providerForActiveRun(run))], { repoRoot: c.get('project').root, run, live: true });
-        if (blocked) return c.json({ error: blocked }, 409);
-      }
-      const content: PastedContent[] = [
-        ...parsed.data.images.map(toPastedContent),
-        ...(parsed.data.text.trim() ? [{ type: 'text', text: parsed.data.text } satisfies ContentBlock] : []),
-      ];
-      // Three-rung delivery ladder (#472). Branch on the ENGINE's answer rather
-      // than a status read here: the handler cannot observe the dequeue safely
-      // (the record is written a tick later), the engine can.
-      //   live session → delivered · still queued → folded into the prompt
-      //   starting up  → buffered  · anything else → 409, exactly as before
-      if (manager.sendMessage(id, content)) return c.json({ delivered: true });
-
-      const currentRun = store.getRun(id);
-      const stack = currentRun?.queuedMessages ?? [];
-      // Bounds apply only to a message that is actually about to be stacked. Without this
-      // gate an over-long message posted to a *finished* run would answer `400 prompt too
-      // long` when the truthful answer is `409 session closed`. The status read is safe
-      // here because it only decides whether to reject EARLY — `enqueueMessage` still
-      // re-checks against the engine's own queue before writing anything.
-      if (currentRun?.status === 'queued') {
-        if (stack.length >= MAX_QUEUED_MESSAGES) {
-          return c.json({ error: `too many queued messages — ${MAX_QUEUED_MESSAGES} message limit` }, 400);
-        }
-        const stackedImages = stack.reduce((n, m) => n + (m.images?.length ?? 0), 0);
-        if (stackedImages + parsed.data.images.length > MAX_QUEUED_ATTACHMENTS) {
-          return c.json({ error: `too many queued attachments — ${MAX_QUEUED_ATTACHMENTS} attachment limit across the stack` }, 400);
-        }
-        const prospective = foldedLength(currentRun.task, [...stack, { text: parsed.data.text }]);
-        if (prospective > MAX_FOLDED_TASK_CHARS) {
-          return c.json(
-            {
-              error: `prompt too long — ${MAX_FOLDED_TASK_CHARS} character limit across the task and its queued messages (would be ${prospective})`,
-            },
-            400,
-          );
-        }
-      }
-
-      const queued = manager.enqueueMessage(id, content);
-      if (queued) return c.json({ queued: true, message: queued });
-      if (manager.deferMessage(id, content)) return c.json({ deferred: true });
-      return c.json({ error: 'session closed' }, 409);
-    })
-
-    // Edit / remove a stacked message (#472). Registered before any conflicting
-    // `/:id` route so `queued-messages` never matches as a run id.
-    .patch('/runs/:id/queued-messages/:msgId', jsonZodValidator(queuedMessagePatchSchema), async (c) => {
-      const { store, manager } = c.get('project');
-      const id = c.req.param('id');
-      const run = store.getRun(id);
-      if (!run) return c.json({ error: 'not found' }, 404);
-      const parsed = { data: c.req.valid('json') };
-      const msgId = c.req.param('msgId');
-      const stack = run.queuedMessages ?? [];
-      const existing = stack.find((m) => m.id === msgId);
-      if (!existing) return c.json({ error: 'not found' }, 404);
-
-      const effectiveText = parsed.data.text ?? existing.text;
-      const effectiveImageCount = parsed.data.images?.length ?? existing.images?.length ?? 0;
-      if (!effectiveText.trim() && effectiveImageCount === 0) {
-        return c.json({ error: 'message needs text or at least one attachment' }, 400);
-      }
-
-      const others = stack.filter((m) => m.id !== msgId);
-      const stackedImages = others.reduce((n, m) => n + (m.images?.length ?? 0), 0);
-      if (stackedImages + effectiveImageCount > MAX_QUEUED_ATTACHMENTS) {
-        return c.json({ error: `too many queued attachments — ${MAX_QUEUED_ATTACHMENTS} attachment limit across the stack` }, 400);
-      }
-      const prospective = foldedLength(run.task, [...others, { text: effectiveText }]);
-      if (prospective > MAX_FOLDED_TASK_CHARS) {
-        return c.json(
-          {
-            error: `prompt too long — ${MAX_FOLDED_TASK_CHARS} character limit across the task and its queued messages (would be ${prospective})`,
-          },
-          400,
-        );
-      }
-
-      const images: PastedContent[] | undefined = parsed.data.images?.map(toPastedContent);
-      const message = manager.editQueuedMessage(id, msgId, {
-        ...(parsed.data.text !== undefined ? { text: parsed.data.text } : {}),
-        ...(images !== undefined ? { images } : {}),
-      });
-      if (!message) return c.json({ error: 'run already started' }, 409);
-      return c.json({ message });
-    })
-
-    .delete('/runs/:id/queued-messages/:msgId', (c) => {
-      const { store, manager } = c.get('project');
-      const id = c.req.param('id');
-      const run = store.getRun(id);
-      if (!run) return c.json({ error: 'not found' }, 404);
-      const msgId = c.req.param('msgId');
-      if (!(run.queuedMessages ?? []).some((m) => m.id === msgId)) {
-        return c.json({ error: 'not found' }, 404);
-      }
-      if (!manager.removeQueuedMessage(id, msgId)) return c.json({ error: 'run already started' }, 409);
-      return c.json({ removed: true });
-    })
-
-    // "Finish": gracefully close a waiting session — the run completes as done.
-    .post('/runs/:id/finish', (c) => {
-      const { store, manager } = c.get('project');
-      const id = c.req.param('id');
-      if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-      const finished = manager.finish(id);
-      if (!finished) return c.json({ error: manager.finishBlockedReason(id) ?? 'no open session' }, 409);
-      return c.json({ finished: true });
-    })
-
-    // "Continue" (spec 003): reopen a finished run's session in-process.
-    .post('/runs/:id/continue', jsonZodValidator(continueSchema, { absent: ({}), runners: { ids: ['runner'] } }), async (c) => {
-      const { root: repoRoot, store, manager } = c.get('project');
-      const id = c.req.param('id');
-      const run = store.getRun(id);
-      if (!run) return c.json({ error: 'not found' }, 404);
-      // Bounded resume text (#429); an empty/absent body still just re-runs on the
-      // run's current backend, and a runner/model override reopens on that engine (#401).
-      const parsed = { data: c.req.valid('json') };
-      if (
-        agentModelsLocked(repoRoot, process.env, deps.home) &&
-        (parsed.data.model?.trim() || parsed.data.effort?.trim())
-      ) {
-        return c.json({ error: AGENT_MODELS_LOCKED_ERROR }, 409);
-      }
-      // Untouched tasks execute their original workflow, including step-level runners.
-      // Resolve the same fallback as POST /runs, and pass it through so validation
-      // and execution use the same provider even when the record inherited config.
-      // Before the provider check: a run saved on a removed runner has no provider of its own.
-      if (run.removedRunner !== undefined && parsed.data.runner === undefined) {
-        return c.json({ error: removedRunnerMessage(run.removedRunner) }, 409);
-      }
-      const untouched = isUntouchedCancelledRun(run);
-      const { original: originalProvider, target: provider, required } = await continueRunProviders(
-        run, parsed.data.runner, untouched, async () => (await loadConfig(repoRoot, deps.home)).defaultRunner,
-      );
-      const blocked = await providerActionError(required, { repoRoot, run, untouched, runners: { original: originalProvider, target: provider } });
-      if (blocked) return c.json({ error: blocked }, 409);
-      const result = manager.continueRun(id, {
-        text: parsed.data.text,
-        images: parsed.data.images?.map(toPastedContent),
-        runner: untouched || parsed.data.runner !== undefined ? provider : undefined,
-        ...(untouched ? { originalRunner: originalProvider } : {}),
-        model: parsed.data.model,
-        effort: parsed.data.effort,
-      });
-      if (!result.ok) return c.json({ error: result.error }, 409);
-      return c.json({ continued: true });
-    })
-
-    // "Open in terminal" (spec 003): hand the session off to a real terminal —
-    // in the task's worktree when it still exists (spec 006).
-    .post('/runs/:id/open-in-cli', async (c) => {
-      const project = c.get('project');
-      const checkout = openHandoffCheckout(c, '; resume the session from a machine that has the checkout');
-      if ('status' in checkout) return c.json(checkout.body, checkout.status);
-      if (checkout.run.removedRunner !== undefined) return c.json({ error: removedRunnerMessage(checkout.run.removedRunner) }, 409);
-      const { sessionId, backend: savedBackend, profileId } = latestSession(checkout.run), backend = resolveRunnerId(savedBackend);
-      if (!sessionId) return c.json({ error: 'no agent session to resume' }, 409);
-      if (runnerDefinition(backend).cli.interactive === false) return c.json({ error: 'this runner has no interactive CLI' }, 409);
-      const resume = checkout.resumeAllowed ? resumeCommand(backend, sessionId) : undefined;
-      // Fails closed on an id we do not recognise — see resumeCommand (open-mercato/cezar#431).
-      if (resume === null) return c.json({ error: 'the recorded session id has an unexpected shape' }, 409);
-      const blocked = await providerActionError([backend], { repoRoot: project.root, picks: { [backend]: resume ? profileId ?? DEFAULT_AGENT_ACCOUNT_ID : undefined } });
-      if (blocked) return c.json({ error: blocked }, 409);
-      const cwd = checkout.directory();
-      const refusal = fallbackProjectWriteError(cwd);
-      if (refusal) return c.json({ error: refusal }, 409);
-      const account = resume
-        ? { command: resume, ...await handoffEnv(backend, profileId) }
-        : await freshCliHandoff(backend, project.root, deps.home);
-      if ('error' in account) return c.json({ error: account.error }, 409);
-      const { command } = account;
-      const fallback = handoffFallbackCommand(cwd, command, account.env);
-      // Fail closed for the same reason as the session id: a terminal opened without the
-      // account's config dir resumes nothing and says nothing about why.
-      if (fallback === null) {
-        return c.json({ error: 'this account\'s folder cannot be used in a terminal command' }, 409);
-      }
-      const opened = await openTerminal(cwd, command, account.env);
-      if (!opened) {
-        return c.json({ error: 'no terminal emulator found', command: fallback }, 409);
-      }
-      return c.json({ opened: true, command });
-    })
-
-    // Open a run's worktree (or the repo root) in the chosen local app.
-    .post('/runs/:id/open-in', jsonZodValidator(openInSchema), async (c) => {
-      const project = c.get('project');
-      const checkout = openHandoffCheckout(c);
-      if ('status' in checkout) return c.json(checkout.body, checkout.status);
-      // Follows the safeParse convention (#429); the downstream allowlist match is the real
-      // injection guard, this just validates the shape.
-      const { target, path: relPath } = c.req.valid('json');
-      const dir = checkout.directory();
-
-      if (target === 'default') {
-        const worktree = checkout.defaultWorktree();
-        if (typeof worktree !== 'string') return c.json(worktree.body, worktree.status);
-        return openRunDefaultApp(c, worktree, relPath, openFile);
-      }
-      const cliRunner = agentCliRunner(target);
-      if (cliRunner) {
-        return openRunCli(c, checkout.run, cliRunner, dir, project.root, { home: deps.home,
-          providerActionError, resumeCommand, handoffEnv, handoffFallbackCommand, openTerminal,
-        }, checkout);
-      }
-      return openRunApp(c, target, dir, openApp);
-    })
-
-    // Handoff journal plus stored records (hearsay-tools/cezarion#1809): unknown task is 404; no file is ''.
-    .get('/runs/:id/handoff', (c) => {
-      const { store } = c.get('project');
-      const run = store.getRun(c.req.param('id'));
-      if (!run) return c.json({ error: 'not found' }, 404);
-      return c.text(renderHandoffRecords(readHandoff(store.claims.sourceDataDir(run.id), run.id), run.handoffRecords), 200, {
-        'content-type': 'text/markdown; charset=utf-8',
-      });
-    })
-
-    .get('/runs/:id/images/:file', paramZodValidator(attachmentFileParamSchema), async (c) => {
-      const { store } = c.get('project');
-      const run = store.getRun(c.req.param('id'));
-      if (!run) return c.json({ error: 'not found' }, 404);
-      const file = c.req.valid('param').file;
-      const path = await resolveAttachmentPathAsync(store.claims.sourceDataDir(run.id), run.id, file);
-      if (!path) return c.json({ error: 'not found' }, 404);
-      const ext = file.split('.').pop() ?? '';
-      const image = IMAGE_TYPES[ext];
-      // An image answers exactly as it always has — the cockpit renders it in an `<img>`.
-      // Everything else is a user-supplied file (#950) and leaves under the download headers.
-      const type = image ?? FILE_TYPES[ext] ?? 'application/octet-stream';
-      return new Response(await readFile(path), {
-        headers: {
-          'content-type': type,
-          'cache-control': 'private, max-age=31536000, immutable',
-          ...(image
-            ? {}
-            : {
-                'x-content-type-options': 'nosniff',
-                // Engine-generated names are `pasted-3.pdf`-shaped, but a header value is not the
-                // place to find out otherwise: anything exotic degrades to an underscore rather
-                // than to a quote that could split the header.
-                'content-disposition': `attachment; filename="${file.replace(/[^A-Za-z0-9._-]/g, '_')}"`,
-              }),
-        },
-      });
-    })
-
-    // Task diff (spec 006): what this run changed — its worktree vs its base.
-    .get('/runs/:id/diff', async (c) => {
-      const checkout = runCheckout(c.get('project'), c.req.param('id'), 'read', { directory: 'existing-worktree' });
-      if ('body' in checkout) return c.json(checkout.body, checkout.status);
-      if (!checkout.directory) return c.text('(no worktree — this task ran directly in the repo working tree)');
-      const result = await worktreeDiff(checkout.directory, checkout.run.baseBranch ?? 'HEAD', undefined, checkout.beforeLiveIndex);
-      if (typeof result !== 'string') return c.json({ error: result.error }, 409);
-      return c.text(result);
-    })
-
-    .get('/runs/:id/changes', async (c) => {
-      const checkout = runCheckout(c.get('project'), c.req.param('id'), 'read', { directory: 'working-directory' });
-      if ('body' in checkout) return c.json(checkout.body, checkout.status);
-      const { run, directory: workingDirectory } = checkout;
-      const result = await collectChanges(workingDirectory, run.baseBranch ?? 'HEAD', {
-        beforeLiveIndex: checkout.beforeLiveIndex,
-        taskBranch: run.branch,
-        // Anchors a repointed worktree at the branch as this run found it (#751).
-        runStartedAt: run.startedAt,
-        // A read-only GET against the user's real checkout must never modify its index.
-        intentToAdd: run.worktreePath ? undefined : false,
-      });
-      if (!result.ok) return c.json({ error: result.error }, 409);
-      return c.json(result.changes);
-    })
-
-    // The run's own commits (<base>..HEAD on the worktree branch) — the Commits tab.
-    .get('/runs/:id/commits', async (c) => {
-      const checkout = runCheckout(c.get('project'), c.req.param('id'), 'read', { directory: 'working-directory' });
-      if ('body' in checkout) return c.json(checkout.body, checkout.status);
-      const { run, directory: workingDirectory } = checkout;
-      const result = await collectRunCommits(workingDirectory, run.baseBranch ?? 'HEAD');
-      if (!result.ok) return c.json({ error: result.error }, 409);
-      return c.json({ commits: result.commits });
-    })
-
-    // One of the run's commits, structured like the Changes tab (reuses collectCommitChanges).
-    .get('/runs/:id/commit/:sha', async (c) => {
-      const checkout = runCheckout(c.get('project'), c.req.param('id'), 'read', { directory: 'working-directory' });
-      if ('body' in checkout) return c.json(checkout.body, checkout.status);
-      const { directory: workingDirectory } = checkout;
-      const result = await collectCommitChanges(workingDirectory, c.req.param('sha'));
-      if (!result.ok) return c.json({ error: result.error }, 409);
-      return c.json(result.commit);
-    })
-
-    .get('/runs/:id/file-link', paramZodValidator(artifactParamsSchema.omit({ artifactId: true })), queryZodValidator(fileLinkQuerySchema), async (c) => {
-      const { root, store } = c.get('project');
-      const checkout = runCheckout(c.get('project'), c.req.valid('param').id, 'read', { directory: 'recorded-path-or-root' });
-      if ('body' in checkout) return c.json(checkout.body, checkout.status);
-      const { run, directory: workingDirectory } = checkout;
-      const query = c.req.valid('query');
-      const loaded = await loadFileLink({ dataDir: store.claims.sourceDataDir(run.id), runId: run.id, projectRoot: root, workingDirectory, path: query.path });
-      if (query.raw === '1') {
-        if (!loaded.imageBytes || loaded.preview.type !== 'file') return c.json({ error: 'Only bounded raster images can be served inline.' }, 409);
-        return c.body(new Uint8Array(loaded.imageBytes).buffer, 200, {
-          'content-type': rasterMime(loaded.preview.path)!, 'x-content-type-options': 'nosniff',
-          'content-security-policy': "default-src 'none'; sandbox", 'cache-control': 'private, no-store',
-        });
-      }
-      return c.json(loaded.preview);
-    })
-    .get('/runs/:id/artifacts', paramZodValidator(artifactParamsSchema.omit({ artifactId: true })), async (c) => {
-      const { store } = c.get('project');
-      const id = c.req.valid('param').id;
-      if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-      return c.json({ artifacts: await listArtifacts(runArtifactDirectory(store, id), id) });
-    })
-    .get('/runs/:id/artifacts/:artifactId', paramZodValidator(artifactParamsSchema), async (c) => {
-      const { store } = c.get('project');
-      const { id, artifactId } = c.req.valid('param');
-      if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-      const entry = await readArtifact(runArtifactDirectory(store, id), id, artifactId);
-      if (!entry) return c.json({ error: 'Published file is missing or unavailable.' }, 404);
-      return c.json(artifactPreview(entry.metadata, entry.bytes));
-    })
-    .get('/runs/:id/artifacts/:artifactId/metadata', paramZodValidator(artifactParamsSchema), async (c) => {
-      const { store } = c.get('project');
-      const { id, artifactId } = c.req.valid('param');
-      if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-      const artifact = await readArtifactMetadata(runArtifactDirectory(store, id), id, artifactId);
-      if (!artifact) return c.json({ error: 'Published file is missing or unavailable.' }, 404);
-      return c.json({ artifact });
-    })
-    .get('/runs/:id/artifacts/:artifactId/download', paramZodValidator(artifactParamsSchema), async (c) => {
-      const { store } = c.get('project');
-      const { id, artifactId } = c.req.valid('param');
-      if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-      const entry = await readArtifact(runArtifactDirectory(store, id), id, artifactId);
-      if (!entry) return c.json({ error: 'Published file is missing or unavailable.' }, 404);
-      return c.body(new Uint8Array(entry.bytes).buffer, 200, {
-        'content-type': 'application/octet-stream', 'x-content-type-options': 'nosniff',
-        'content-disposition': `attachment; filename="${entry.metadata.name.replace(/[^A-Za-z0-9._-]/g, '_')}"`,
-        'content-security-policy': "default-src 'none'; sandbox", 'cache-control': 'private, no-store',
-      });
-    })
-    .get('/runs/:id/artifacts/:artifactId/image', paramZodValidator(artifactParamsSchema), async (c) => {
-      const { store } = c.get('project');
-      const { id, artifactId } = c.req.valid('param');
-      if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-      const entry = await readArtifact(runArtifactDirectory(store, id), id, artifactId);
-      if (!entry) return c.json({ error: 'Published file is missing or unavailable.' }, 404);
-      const mime = rasterMime(entry.metadata.name);
-      if (!mime) return c.json({ error: 'Only raster images can be served inline.' }, 409);
-      return c.body(new Uint8Array(entry.bytes).buffer, 200, {
-        'content-type': mime, 'x-content-type-options': 'nosniff',
-        'content-security-policy': "default-src 'none'; sandbox", 'cache-control': 'private, no-store',
-      });
-    })
-
-    // Files tab: directory listing (path omitted or a dir) or file content
-    // (size-capped, binary flagged). Traversal-safe — readWorktreePath rejects
-    // anything escaping the worktree. `raw=1` (R5 Step 1.6) serves the BYTES of
-    // image files only, for the preview's inline <img> — never HTML/JS/etc., so
-    // no worktree file can become a same-origin document, and never past the
-    // size cap. The no-script CSP neutralizes SVG opened as a top-level URL.
-    //
-    // An `Accept` that asks for images reaches the same raw branch without the flag — which is
-    // what an `<img>` sends — while the flag still wins whenever it is present and `*<slash>*`
-    // (every `fetch`) still gets the JSON listing. See `negotiate`.
-    .get('/runs/:id/files', queryZodValidator(worktreeFilesQuerySchema), async (c) => {
-      const query = c.req.valid('query');
-      c.header('vary', 'Accept');
-      const wantsRaw =
-        query.raw !== undefined
-          ? query.raw === '1'
-          : negotiate(c.req.header('accept'), FILE_FORMATS) === 'image/*';
-      const checkout = runCheckout(c.get('project'), c.req.param('id'), 'read', { directory: 'working-directory' });
-      if ('body' in checkout) return c.json(checkout.body, checkout.status);
-      const { directory: workingDirectory } = checkout;
-      const result = await readWorktreePath(workingDirectory, query.path ?? '');
-      if (result.kind === 'invalid' || result.kind === 'missing') {
-        return c.json({ error: result.error }, 409);
-      }
-      if (result.kind === 'dir') {
-        return c.json({
-          // `as const` or the literal widens to `string` during Hono's route-type inference,
-          // which erases the discriminant a consumer narrows on — `entry.type === 'dir'` then
-          // leaves `never` and every field access on it fails. The wire was always 'dir'.
-          type: 'dir' as const,
-          path: result.path,
-          entries: result.entries,
-        });
-      }
-      if (wantsRaw) {
-        const mime = imageMimeType(result.path);
-        if (mime === null || result.tooLarge) {
-          // `?raw=1` ASKED for bytes, so it hears why it cannot have them (a 409 with the
-          // reason). An `Accept` is only a preference, so a
-          // resource with no image representation falls THROUGH to the JSON answer below rather
-          // than turning a browser's navigation to a text file into an error.
-          if (query.raw !== undefined) {
-            const error =
-              mime === null
-                ? `raw serving is limited to images: ${result.path}`
-                : `file too large to serve raw (${result.size} bytes): ${result.path}`;
-            return c.json({ error }, 409);
-          }
-        } else {
-          const bytes = await readFile(join(workingDirectory, result.path));
-          return c.body(new Uint8Array(bytes).buffer as ArrayBuffer, 200, {
-            'content-type': mime,
-            'x-content-type-options': 'nosniff',
-            'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
-          });
-        }
-      }
-      return c.json({
-        type: 'file' as const,
-        path: result.path,
-        size: result.size,
-        binary: result.binary,
-        tooLarge: result.tooLarge,
-        ...(result.content !== undefined ? { content: result.content } : {}),
-      });
-    })
-
-    .post('/runs/:id/git/commit', jsonZodValidator(gitCommitSchema), async (c) => {
-      const checkout = runCheckout(c.get('project'), c.req.param('id'), 'mutate');
-      if ('status' in checkout) return c.json(checkout.body, checkout.status);
-      const parsed = { data: c.req.valid('json') };
-      const result = await commitAll(checkout.directory, parsed.data.message);
-      if (!result.ok) return c.json({ error: result.error }, 409);
-      return c.json({ committed: true, sha: result.sha });
-    })
-
-    .post('/runs/:id/git/push', async (c) => {
-      const { root: repoRoot } = c.get('project');
-      const checkout = runCheckout(c.get('project'), c.req.param('id'), 'mutate');
-      if ('status' in checkout) return c.json(checkout.body, checkout.status);
-      const { run } = checkout;
-      const result = await pushCurrentBranch(checkout.directory);
-      if (!result.ok) return c.json({ error: result.error }, 409);
-      const repoBase = forgeWebRoot((await getRepoInfo(repoRoot))?.remote) ?? undefined;
-      resolveForgeRoot(repoRoot, deps.forgeFactory).branchPushed(ownPullRequestNumbers(run, repoBase));
-      return c.json({
-        pushed: true,
-        branch: result.branch,
-        remote: result.remote,
-        upstreamSet: result.upstreamSet,
-      });
-    })
-
-    // Draft PR from the review gate (spec 009): final autosave → push →
-    // `gh pr create --draft`; on success the run completes as done with the PR
-    // badge. Failures come back as 409 with a `manual` merge command the GUI
-    // shows next to the toast. CEZ_DRY_RUN=1 fakes the URL (no push, no gh).
-    .post('/runs/:id/pr', async (c) => {
-      const { root: repoRoot, store } = c.get('project');
-      const id = c.req.param('id');
-      const checkout = runCheckout(c.get('project'), id, 'publish');
-      if ('status' in checkout) return c.json(checkout.body, checkout.status);
-      const { release } = checkout;
-      try {
-        const prepared = await preparePublishCheckout(c.get('project'), id);
-        if ('status' in prepared) return c.json(prepared.body, prepared.status);
-        const { run } = prepared;
-        const outcome = await resolveForgeRoot(repoRoot, deps.forgeFactory).createPR({
-          repoRoot,
-          run,
-          handoffText: readHandoff(store.claims.sourceDataDir(id), id),
-        });
-        if (!outcome.ok) {
-          return c.json({ error: outcome.error, manual: `git merge ${run.branch}` }, 409);
-        }
-        store.move(id, 'draft-pr', { pullRequestUrl: outcome.url });
-        store.eventLog.appendEvent(id, {
-          type: 'note',
-          message: `draft PR created: ${outcome.url}${outcome.dryRun ? ' (dry run — no real PR)' : ''}`,
-        });
-        return c.json({ url: outcome.url, dryRun: outcome.dryRun }, 201);
-      } finally {
-        release();
-      }
-    })
-
-    // Archived tasks keep their worktree for inspection; this is the explicit
-    // "🧹 Remove worktree" cleanup (spec 006).
-    .post('/runs/:id/remove-worktree', protectFallbackRun('worktree'), async (c) => {
-      const { root: repoRoot, store } = c.get('project');
-      const id = c.req.param('id');
-      const checkout = runCheckout(c.get('project'), id, 'remove', {
-        claim: 'publish', checksActive: true, deletion: 'worktree',
-        nullClaimError: 'worktree cleanup pending — retry after cleanup is confirmed',
-      });
-      if ('status' in checkout) return c.json(checkout.body, checkout.status);
-      const { run, release } = checkout;
-      try {
-        if (run.worktreePath) await releaseThenRemoveWorktree({ previewHost: deps.previewHost }, id, repoRoot, run.worktreePath, run.branch);
-        store.updateRun(id, { worktreePath: undefined, branch: undefined });
-        return c.json({ removed: true });
-      } finally { release(); }
-    })
-
-    .delete('/runs/:id', protectFallbackRun('record'), async (c) => {
-      const { root: repoRoot, store } = c.get('project');
-      const id = c.req.param('id');
-      const checkout = runCheckout(c.get('project'), id, 'remove', {
-        claim: 'publish', checksActive: true, deletion: 'record',
-        nullClaimError: 'worktree cleanup pending — retry after cleanup is confirmed',
-      });
-      if ('status' in checkout) return c.json(checkout.body, checkout.status);
-      const { run, release } = checkout;
-      try {
-        if (run.delegation?.role !== 'worker' && run.worktreePath) await releaseThenRemoveWorktree({ previewHost: deps.previewHost }, id, repoRoot, run.worktreePath, run.branch);
-        return store.retention.deleteRun(id) ? c.json({ deleted: true }) : c.json({ error: 'history cleanup incomplete — retry deletion' }, 409);
-      } finally { release(); }
-    });
+  const runsRoutes = createRunsRoutes({
+    home: deps.home,
+    forgeFactory: deps.forgeFactory,
+    delegation: deps.delegation,
+    workerCleanup: deps.workerCleanup,
+    previewHost: deps.previewHost,
+    capabilities,
+    modelCatalog,
+    providerStatus,
+    providerActionError,
+    resolveWorkspaceProfile,
+    projectRegistryEntry,
+    taskWebhooks,
+    openTerminal,
+    openFile,
+    openApp,
+  });
 
   const openTargetsRoutes = createOpenTargetsRoutes({ capabilities, openApp });
 
-  // Agent screenshots and user attachments — what the run manager persisted out of tool
-  // results and pasted messages (`persistAttachment`). `basename` pins reads inside the
-  // run's own dir.
-  const IMAGE_TYPES: Record<string, string> = {
-    img: 'application/octet-stream', // Legacy catch-all image uploads retain inline headers.
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    webp: 'image/webp',
-    gif: 'image/gif',
-  };
-  /**
-   * What a NON-image attachment is served as (#950). These are user-supplied bytes coming back
-   * from the cockpit's own origin, so the content type is the narrowest true one and it never
-   * travels alone: `nosniff` stops a browser from upgrading it to something executable, and an
-   * attachment disposition stops it from being rendered as a document in the cockpit's origin at
-   * all. Anything not named here keeps the pre-existing `application/octet-stream` default.
-   */
-  const FILE_TYPES: Record<string, string> = {
-    pdf: 'application/pdf',
-    txt: 'text/plain; charset=utf-8',
-    md: 'text/plain; charset=utf-8',
-  };
   const worktreesRoutes = createWorktreesRoutes({ home: deps.home, previewHost: deps.previewHost });
 
   const sseRoutes = createSseRoutes();

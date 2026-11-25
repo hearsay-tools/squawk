@@ -71,7 +71,7 @@ describe('run states and their exits (hearsay-tools/cezarion#1804)', () => {
   });
 
   it('names only functions that exist', () => {
-    const files = { run: runSources().map(blanked).join('\n'), store: [blanked('runs/store.ts'), blanked('runs/legacy-waits.ts'), blanked('runs/loaded-run-exits.ts')].join('\n'), server: blanked('server/server.ts'), exits: blanked('runs/run-exits.ts'), rules: blanked('runs/record-write-rules.ts') };
+    const files = { run: runSources().map(blanked).join('\n'), store: [blanked('runs/store.ts'), blanked('runs/legacy-waits.ts'), blanked('runs/loaded-run-exits.ts')].join('\n'), server: [blanked('server/server.ts'), blanked('server/runs-routes.ts')].join('\n'), exits: blanked('runs/run-exits.ts'), rules: blanked('runs/record-write-rules.ts') };
     const missing = [...new Set(RUN_TRIGGERS.flatMap((row) => row.via))].filter((name) => {
       const [file, fn] = name.includes(':') ? name.split(':') as ['store' | 'server' | 'exits' | 'rules', string] : ['run' as const, name];
       const defined = file === 'server'
@@ -86,7 +86,7 @@ describe('run states and their exits (hearsay-tools/cezarion#1804)', () => {
   // or commitWorkerContinuation(), one the store applies itself (commitAutoResumeWithdrawal, its
   // load-time writers), or the Draft PR route's.
   it('writes every exit in the run implementation, the store or the server', () => {
-    const source = [...runSources(), 'runs/store.ts', 'server/server.ts'].map((file) => readFileSync(resolve(src, file), 'utf8')).join('\n');
+    const source = [...runSources(), 'runs/store.ts', 'server/server.ts', 'server/runs-routes.ts'].map((file) => readFileSync(resolve(src, file), 'utf8')).join('\n');
     expect(Object.keys(RUN_EXITS).filter((exit) => !source.includes(`'${exit}'`))).toEqual([]);
   });
 
