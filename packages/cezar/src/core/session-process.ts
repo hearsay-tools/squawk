@@ -394,15 +394,21 @@ export function spawnSessionLeader(
   return child;
 }
 
-/** Signal a session: its whole group on POSIX, its tree on win32, else the leader alone. A
- * leader that already exited on its own is not group-signalled here: its exit scheduled the reap
- * of what it left behind (hearsay-tools/cezarion#1286). */
-export function signalSession(child: ChildProcess, signal: NodeJS.Signals, platform: NodeJS.Platform = process.platform): void {
+function registeredLeaderForSignal(child: ChildProcess, signal: NodeJS.Signals): Leader | undefined {
   const state = exitStates.get(child);
   if (state && signal === 'SIGKILL') state.forcedKill = true;
   const pid = child.pid;
   const leader = pid === undefined ? undefined : leaders.get(pid);
-  if (leader?.child === child && !leaderExited(child)) {
+  return leader?.child === child ? leader : undefined;
+}
+
+/** Signal a session: its whole group on POSIX, its tree on win32, else the leader alone. A
+ * leader that already exited on its own is not group-signalled here: its exit scheduled the reap
+ * of what it left behind (hearsay-tools/cezarion#1286). */
+export function signalSession(child: ChildProcess, signal: NodeJS.Signals, platform: NodeJS.Platform = process.platform): void {
+  const leader = registeredLeaderForSignal(child, signal);
+  const pid = child.pid;
+  if (leader && !leaderExited(child)) {
     leader.signalledAt ??= Date.now();
     signalProcessGroup(pid!, signal);
     return;
@@ -420,15 +426,13 @@ export function signalSession(child: ChildProcess, signal: NodeJS.Signals, platf
 /** Immediate cleanup for a no-turn probe, including members left by an exited leader.
  * Keep the same recorded-member guard as the deferred runner reap; never signal a reused group. */
 export function signalOwnedSessionGroup(child: ChildProcess, signal: NodeJS.Signals): void {
-  const state = exitStates.get(child);
-  if (state && signal === 'SIGKILL') state.forcedKill = true;
-  const pid = child.pid;
-  const leader = pid === undefined ? undefined : leaders.get(pid);
-  if (!leader || leader.child !== child) return;
+  const leader = registeredLeaderForSignal(child, signal);
+  if (!leader) return;
   if (leader.container) signalSessionContainer(leader.container, signal);
-  if (stale(pid!, leader)) return;
+  const pid = child.pid!;
+  if (stale(pid, leader)) return;
   leader.signalledAt ??= Date.now();
-  signalProcessGroup(pid!, signal);
+  signalProcessGroup(pid, signal);
 }
 
 /** The pgid of a registered, still-running grouped leader, for the worker process ledger. */
