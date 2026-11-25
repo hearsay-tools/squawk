@@ -1,15 +1,15 @@
 import { opencodeHttp } from './opencode-http.ts';
-import { AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS, InputSubmissions, SessionEndedBeforeAcknowledgement, V1TextCoalescer, boundOutputDrainAfterExit, formatModelIdentity, isAbortError, isSignalTerminationExit, openingInput, parseModelIdentity, prependSystemPrompt, signalSession, skillOf, spawnSessionLeader, summarizeRunnerStderr, trackChildExit, uiAskQuestions, validSkillMessage } from '@hearsay-tools/squawk/plugin/runtime';
+import { AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS, InputSubmissions, SessionEndedBeforeAcknowledgement, V1TextCoalescer, boundOutputDrainAfterExit, formatModelIdentity, isAbortError, isSignalTerminationExit, nativeMockPath, openingInput, parseModelIdentity, prependSystemPrompt, signalSession, skillOf, spawnSessionLeader, summarizeRunnerStderr, trackChildExit, uiAskQuestions, validSkillMessage } from '@hearsay-tools/squawk/plugin/runtime';
 import { productEnv, type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentSession, type AgentToolCallRecord, type AskQuestion, type ContentBlock, type InputDelivery, type SessionOptions } from '@hearsay-tools/squawk/plugin';
 import { opencodeSkillWarning, sessionErrorDetail, sessionErrorText } from './opencode-session-error.ts';
 import { finished } from 'node:stream/promises';
 import { setTimeout as delay } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { parseEffort } from '@hearsay-tools/squawk/plugin/runtime';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { OPENCODE_FACTS } from './facts.ts';
+import { OPENCODE_MOCK } from './mock.ts';
 import { OPENCODE_SPEC_SUPPORT } from './spec-support.ts';
 import { OPENCODE_MINIMAL_PROMPT_TOOLS, OPENCODE_MINIMAL_SESSION_PERMISSION, opencodeServeLaunch, opencodeSessionBody } from './opencode-minimal.ts';
 
@@ -134,7 +134,7 @@ export class OpencodeServerRunner implements AgentRunner {
 
   constructor(opts: OpencodeRunnerOptions = {}) {
     this.bin = opts.bin ?? productEnv('OPENCODE_BIN') ?? (productEnv('DRY_RUN') === '1'
-      ? fileURLToPath(new URL('../../../scripts/mock-opencode-serve.mjs', import.meta.url)) : 'opencode');
+      ? nativeMockPath(OPENCODE_MOCK) : 'opencode');
     this.timeoutMs = opts.timeoutMs;
     this.serverStartTimeoutMs = opts.serverStartTimeoutMs ?? SERVER_START_TIMEOUT_MS;
   }

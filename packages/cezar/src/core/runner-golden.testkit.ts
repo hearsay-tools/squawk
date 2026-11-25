@@ -52,7 +52,7 @@ export interface RunnerGolden {
    *  fails the session, so a retry needs a reopened process. Not written by a runner that is exempt
    *  from U13 (no provider refusal on its wire). */
   rejectedAgentInput: 'keeps-session' | 'ends-session';
-  /** The shipped plugin scripts (file names in `packages/cezar/scripts/`) a governed session's runtime
+  /** The shipped plugin scripts (file names in `runners/<id>/`) a governed session's runtime
    *  config loads, in order (D1, `core/harness-parity-session.cells.testkit.ts`). Only a runner that
    *  governs a session through a runtime plugin writes it. */
   runtimePlugins: string[];
@@ -69,9 +69,9 @@ export interface RunnerGolden {
   };
 }
 
-/** Matches a path to the shipped script `name` (`packages/cezar/scripts/<name>`). */
+/** Matches a path to a runner's shipped script `name` (`runners/<id>/<name>`). */
 export function shippedScriptPath(name: string): unknown {
-  return expect.stringMatching(new RegExp(`scripts/${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
+  return expect.stringMatching(new RegExp(`runners/[^/]+/${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
 }
 
 /** The value `key` of runner `runner`'s golden. */
