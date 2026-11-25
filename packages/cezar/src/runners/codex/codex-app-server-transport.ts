@@ -1,7 +1,10 @@
 import { productEnv, type LeaderState, type RunnerTimings, type SpawnScope } from '@hearsay-tools/squawk/plugin';
-import { trackChildExit, probeLeaderState, signalSession, spawnSessionLeader, buildChildEnv, DEFAULT_RUNNER_TIMINGS } from '@hearsay-tools/squawk/plugin/runtime';
-import { fileURLToPath } from 'node:url';
+import {
+  trackChildExit, probeLeaderState, signalSession, spawnSessionLeader, buildChildEnv, DEFAULT_RUNNER_TIMINGS,
+  nativeMockPath,
+} from '@hearsay-tools/squawk/plugin/runtime';
 import { type ChildProcessWithoutNullStreams, spawn as nodeSpawn } from 'node:child_process';
+import { CODEX_MOCK } from './mock.ts';
 
 
 export interface CodexAppServerMessage {
@@ -19,7 +22,7 @@ interface PendingRequest {
 
 export function resolveCodexExecutable(override?: string): string {
   return override ?? productEnv('CODEX_BIN') ?? (productEnv('DRY_RUN') === '1'
-    ? fileURLToPath(new URL('../../../scripts/mock-codex-app-server.mjs', import.meta.url)) : 'codex');
+    ? nativeMockPath(CODEX_MOCK) : 'codex');
 }
 
 export function buildCodexAppServerEnv(extraEnv?: Record<string, string>): NodeJS.ProcessEnv {

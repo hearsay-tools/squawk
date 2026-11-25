@@ -1,3 +1,4 @@
+import { nativeMockPath } from '@hearsay-tools/squawk/plugin/runtime';
 import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
@@ -12,6 +13,7 @@ import {
   waitForCodexAppServerExit,
 } from './codex-app-server-transport.ts';
 import { codexRunner } from './definition.ts';
+import { CODEX_MOCK } from './mock.ts';
 
 // The transport's child-env sanitizer reads Codex's allow-list from the registry; every case drives Codex.
 
@@ -40,6 +42,28 @@ describe('Codex app-server transport', () => {
     process.env.CEZ_CODEX_BIN = '/host/codex';
     expect(resolveCodexExecutable('/configured/codex')).toBe('/configured/codex');
     expect(resolveCodexExecutable()).toBe('/host/codex');
+  });
+
+  it('resolves the dry-run mock via nativeMockPath when DRY_RUN is enabled', () => {
+    const previousDryRun = process.env.HSQ_DRY_RUN;
+    const previousCezDryRun = process.env.CEZ_DRY_RUN;
+    const previousHsqBin = process.env.HSQ_CODEX_BIN;
+    delete process.env.HSQ_CODEX_BIN;
+    delete process.env.CEZ_CODEX_BIN;
+    delete process.env.CEZ_DRY_RUN;
+    try {
+      process.env.HSQ_DRY_RUN = '1';
+      expect(resolveCodexExecutable()).toBe(nativeMockPath(CODEX_MOCK));
+      delete process.env.HSQ_DRY_RUN;
+      expect(resolveCodexExecutable()).toBe('codex');
+    } finally {
+      if (previousDryRun === undefined) delete process.env.HSQ_DRY_RUN;
+      else process.env.HSQ_DRY_RUN = previousDryRun;
+      if (previousCezDryRun === undefined) delete process.env.CEZ_DRY_RUN;
+      else process.env.CEZ_DRY_RUN = previousCezDryRun;
+      if (previousHsqBin === undefined) delete process.env.HSQ_CODEX_BIN;
+      else process.env.HSQ_CODEX_BIN = previousHsqBin;
+    }
   });
 
   it('uses the Codex child-env sanitizer and preserves per-run values', () => {
