@@ -389,7 +389,7 @@ test('the CLI names the file, the line and the qualified form, and exits 1', (t)
   const run = (env) => spawnSync(process.execPath, [script, '--base', base], { cwd: repo.dir, encoding: 'utf8', env: { ...process.env, GITHUB_ACTIONS: '', ...env } });
   const local = run({});
   assert.equal(local.status, 1, local.stderr);
-  assert.match(local.stdout, /^src\/a\.ts:2: bare #1265 in a comment\. Write hearsay-tools\/cezarion#1265 \(fork\) or open-mercato\/cezar#1265 \(upstream\)\.$/m);
+  assert.match(local.stdout, /^src\/a\.ts:2: bare #1265 in a comment\. Write hearsay-tools\/squawk#1265 \(fork\) or open-mercato\/cezar#1265 \(upstream\)\.$/m);
   assert.doesNotMatch(local.stdout, /::error/);
   const actions = run({ GITHUB_ACTIONS: 'true' });
   assert.match(actions.stdout, /^::error file=src\/a\.ts,line=2,title=Bare issue citation::bare #1265 in a comment\./m);
