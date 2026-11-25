@@ -94,6 +94,32 @@ for (const relative of [
   assert.equal(added.status, 0, added.stdout + added.stderr);
 });
 
+const pins = (comment, files) => `${JSON.stringify({ $comment: comment, limit: 1000, files }, null, 2)}\n`;
+const sites = (entries) => `${JSON.stringify({ entries }, null, 2)}\n`;
+
+for (const [label, relative, before, after] of [
+  ['lowering one pin and dropping another', 'packages/cezar/src/file-length.baseline.json',
+    pins('Pins.', { 'a.ts': 1200, 'b.ts': 1100 }), pins('Pins.', { 'a.ts': 1150 })],
+  ['dropping a site', 'packages/cezar/src/lint/home-readers.baseline.json',
+    sites([{ file: 'a.ts', calls: 2 }, { file: 'b.ts', calls: 1 }]), sites([{ file: 'a.ts', calls: 1 }])],
+  ['emptying a wait baseline', 'packages/web/src/test/unit-wait-discipline.baseline.json',
+    '{ "$comment": "Shrinks.", "sites": ["x"] }\n', '{ "$comment": "Shrinks.", "sites": [] }\n'],
+]) test(`a ratchet baseline change ${label} qualifies`, t => {
+  const result = checkChange(t, relative, before, after);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+for (const [label, before, after] of [
+  ['raising a pin', pins('Pins.', { 'a.ts': 1200 }), pins('Pins.', { 'a.ts': 1201 })],
+  ['adding a pin', pins('Pins.', { 'a.ts': 1200 }), pins('Pins.', { 'a.ts': 1200, 'b.ts': 1001 })],
+  ['lowering a pin and changing the comment', pins('Pins.', { 'a.ts': 1200 }), pins('Pins may grow.', { 'a.ts': 1100 })],
+]) test(`a ratchet baseline change ${label} requires owner review`, t => {
+  const relative = 'packages/cezar/src/file-length.baseline.json';
+  const result = checkChange(t, relative, before, after);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.ok(result.stdout.includes(`lint gate: ${relative}`), result.stdout);
+});
+
 test('path rules name each guarded file, file mode change and new baseline', async () => {
   const { pathReasons } = await import(require('node:url').pathToFileURL(script).href);
   const file = (relative, change = {}) => ({ path: relative, status: 'M', oldMode: '100644', newMode: '100644', adds: ['new'], dels: ['old'], ...change });
@@ -101,6 +127,7 @@ test('path rules name each guarded file, file mode change and new baseline', asy
     file('.oxlintrc.json'),
     file('packages/cezar/src/lint/run.test.ts', { dels: [] }),
     file('packages/cezar/src/lint/new-rule.baseline.json', { status: 'A', dels: [] }),
+    file('packages/cezar/src/file-length.baseline.json', { adds: [], lowers: true }),
     file('docs/run.sh', { newMode: '100755' }),
     file('docs/link', { newMode: '120000' }),
     file('README.md'),

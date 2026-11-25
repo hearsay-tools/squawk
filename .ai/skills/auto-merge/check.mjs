@@ -13,7 +13,7 @@
 import { execFileSync } from 'node:child_process'
 import { matchesGlob } from 'node:path'
 import { parseArgs } from 'node:util'
-import { checkBaselineGrowth } from '../../../.github/scripts/baseline-growth.cjs'
+import { checkBaselineGrowth, compareBaseline } from '../../../.github/scripts/baseline-growth.cjs'
 
 const MAX_FILES = 10
 const MAX_LINES = 400
@@ -24,7 +24,8 @@ const LINT_CASES = 'packages/cezar/src/lint/{blank,server-wait-*,test-wait-disci
 
 // Paths that never auto-merge. A `source` rule skips test files; `except` skips the
 // globs it names. `unless` lets a file through when its diff only deletes
-// ('deletes') or only adds ('adds') lines.
+// ('deletes') or only adds ('adds') lines, or when a ratchet baseline only lowered
+// or dropped entries and kept its $comment ('lowers').
 export const NEVER = [
   { why: 'gate or test harness', globs: [
     '.github/workflows/**', '.github/codex/**', '.github/schemas/**', '.github/actionlint.yaml',
@@ -40,8 +41,10 @@ export const NEVER = [
     'packages/web/src/test/stubborn-child.ts',
   ] },
   { why: 'gate or test harness', source: true, globs: ['packages/web/e2e/*.{ts,mjs}', 'packages/web/e2e/spec-map/**'] },
-  { why: 'lint gate', source: true, except: [LINT_CASES], globs: [
-    'packages/cezar/src/lint/**', '.oxlintrc.json',
+  { why: 'lint gate', source: true, except: [LINT_CASES, '**/*.baseline.json'], globs: ['packages/cezar/src/lint/**', '.oxlintrc.json'] },
+  // npm run lint lowers these on its own; baseline-growth.cjs refuses a raise.
+  { why: 'lint gate', unless: 'lowers', globs: [
+    'packages/cezar/src/lint/**/*.baseline.json',
     'packages/cezar/src/{file-length,test-wait-discipline,test-wait-discipline-polls}.baseline.json',
     'packages/web/src/test/{card-2-contrast,search-params-discipline,unit-wait-discipline}.baseline.json',
   ] },
@@ -129,6 +132,16 @@ function names(lines, pattern) {
   return [...new Set(lines.flatMap((l) => l.match(pattern) ?? []))]
 }
 
+// A changed ratchet baseline that only lowered or dropped entries: nothing grew and its $comment stayed.
+function onlyLowers(base, head, path) {
+  try {
+    const [before, after] = [base, head].map((rev) => JSON.parse(git('show', `${rev}:${path}`)))
+    return before?.$comment === after?.$comment && compareBaseline(before, after).length === 0
+  } catch {
+    return false
+  }
+}
+
 function parseDiff(base, head) {
   // --raw -z: ":<old mode> <new mode> <old sha> <new sha> <status>\0<path>\0" per file.
   const files = new Map()
@@ -149,6 +162,7 @@ function parseDiff(base, head) {
     else if (file && inHunk && line.startsWith('-')) file.dels.push(line.slice(1))
   }
   const list = [...files.values()]
+  for (const f of list) f.lowers = f.status === 'M' && f.path.endsWith('.baseline.json') && onlyLowers(base, head, f.path)
   const lines = (which, test) => list.filter(test).flatMap((f) => f[which])
   // A /g pattern keeps lastIndex between test() calls, so test with a copy without it.
   const matches = (re) => (l) => new RegExp(re.source, re.flags.replace('g', '')).test(l)
@@ -196,6 +210,7 @@ export function pathReasons(diff) {
       if (!guards(rule, f.path)) continue
       if (rule.unless === 'deletes' && f.adds.length === 0) continue
       if (rule.unless === 'adds' && f.dels.length === 0) continue
+      if (rule.unless === 'lowers' && f.lowers) continue
       reasons.push(`${rule.why}: ${f.path}`)
     }
   }
