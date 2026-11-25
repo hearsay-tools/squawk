@@ -123,17 +123,16 @@ The rule text lives in the owner's Cezar prompt, outside this repository (§ Own
    selects the tests that `squeal.config.json` `inputs` declares as its readers
    (hearsay-tools/squawk#3729). A source change for which the selection finds no test also
    runs the full suite.
-3. Browser specs run the files that `scripts/e2e-affected.mjs` selects, only when that
-   list is shorter than the full set. A selection of every spec, an empty selection or a
-   selector failure runs no browser spec on the PR and passes with its reason in the log
-   (hearsay-tools/squawk#3727); the merge queue runs every spec.
+3. Browser shards skip on `pull_request_target` (hearsay-tools/squawk#3728); `verify`
+   accepts a skipped `cockpit-browser` result on pull requests while merge groups, `main`
+   pushes without queue proof, and manual dispatches run all eight full browser shards.
 4. A full Vitest fallback runs on 8 shards.
 5. Docs-only and infra-only changes keep today's skips.
 
-`scripts/e2e-affected.mjs` reads the spec map that `.github/workflows/e2e-spec-map.yml`
-captures after source changes reach `main`. That workflow runs the browser specs again,
-outside the merge path and the required checks. It stays as it is: it costs runner time,
-not merge time. Without a map, the selector picks every spec, so the PR runs no browser spec.
+`.github/workflows/e2e-spec-map.yml` and the spec-map capture tooling were removed after
+measuring 50 full-matrix PR runs (hearsay-tools/squawk#3728): short selections ran in 4 of
+50 runs (0 genuine browser subsets) while `e2e-spec-map.yml` cost about 750 job-minutes
+per day on `main` pushes.
 
 The queue no longer reuses PR suites (§ Merge queue and exact-commit reuse in
 `docs/sdlc/ci.md`), because a PR run with selected tests is not a full run.
