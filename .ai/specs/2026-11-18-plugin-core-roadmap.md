@@ -194,7 +194,7 @@ folder outside the product. The runners import core code only through the kit, b
 names script files in `packages/cezar/scripts/` by a relative path and imports `zod`, and the
 live `pi` run needed hand edits to its copy. The epic moves each runner's scripts into its own
 folder or behind the kit, and proves the result for all six runners with a test and a live run.
-The runners stay bundled.
+The runners stay bundled. Its spec and slices: [self-contained runner folders](2026-11-25-self-contained-runner-folders.md).
 
 ### Step 5: move features out
 
