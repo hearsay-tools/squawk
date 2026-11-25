@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { z } from 'zod';
-import type { PermissionOption, UiPermissionRequestedEvent } from '@hearsay-tools/squawk/plugin';
+import { z, type PermissionOption, type UiPermissionRequestedEvent } from '@hearsay-tools/squawk/plugin';
 
 // Native app-server v2 shapes (Codex 0.160.1): its generated JSON schemas and
 // https://developers.openai.com/codex/app-server/. Older servers omit startedAtMs;

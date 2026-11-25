@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hearsay-tools/squawk/plugin';
 
 // Codex owns policy interpretation. Even requirements we do not recognize can
 // constrain permissions; only an explicit null proves the unmanaged case.
