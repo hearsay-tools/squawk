@@ -28,7 +28,9 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 1. **No plugin API without a first-party feature that moves onto it.** A register call arrives
    in the same change as the built-in feature that uses it.
 2. **The three rules of ADR 0065 bind.** Built-in features use the same API as outside plugins.
-   Zero config stays. The API promise starts when outside code can load, which is step 4.
+   Zero config stays. The API promise starts when Squawk installs plugin packages from npm or git
+   (ADR 0065 rule 3 as amended on 2026-11-24); until then the plugin API and runner kit are
+   unstable.
 3. **Each step shrinks a list.** A step's acceptance names the entries it removes from
    `packages/cezar/src/lint/layer-import.baseline.json` or from another shrink-only baseline.
 4. **`main` stays usable after each slice**, at shipped defaults.
@@ -48,7 +50,7 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 | 1 | Runners become definitions that register themselves | Done: epic hearsay-tools/squawk#3824, [spec](2026-11-18-runner-definitions.md), [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md) |
 | 2 | A typed run lifecycle, and a narrower run store | Done: epic hearsay-tools/squawk#4007, [spec](2026-11-21-run-lifecycle-and-store-ports.md), [ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md) |
 | 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Done: epic hearsay-tools/squawk#4152, [spec](2026-11-23-open-registries-and-tables.md), [ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md) |
-| 4 | Loader and package format | Active (2026-11-24): epic hearsay-tools/squawk#4188, [spec](2026-11-24-plugin-loader-and-runner-kit.md), [plan](2026-11-24-plugin-loader-and-runner-kit-plan.md) |
+| 4 | Loader and package format | Done (first version, host folder only): epic hearsay-tools/squawk#4188, [spec](2026-11-24-plugin-loader-and-runner-kit.md), [ADR 0070](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md); project plugins, a trust gate and npm or git installation wait for a later epic |
 | 5 | Move features out of the core, smallest first | Not filed; the first slice is a launch slot for environment variables and prompt text |
 | 6 | Cockpit slots | Not filed |
 
@@ -145,12 +147,11 @@ entries to 93 (all seven required target entries plus two adjacent entries remov
 
 A file exports one function that receives the API object. Squawk finds it by folder, in the
 project and in the user's home. A package holds extensions and workflows. A project's plugins
-load only after a person trusts the project. From this step the API is a promise, so the API
-stays small.
+load only after a person trusts the project. The API becomes a promise once Squawk installs
+packages from npm or git, so the API stays small.
 
 The first version (epic hearsay-tools/squawk#4188,
-[spec](2026-11-24-plugin-loader-and-runner-kit.md),
-[plan](2026-11-24-plugin-loader-and-runner-kit-plan.md)) is narrower. It loads plugins from one
+[spec](2026-11-24-plugin-loader-and-runner-kit.md)) is narrower. It loads plugins from one
 host folder, `<config>/plugins/`, and adds a runner kit: one public entry
 (`@hearsay-tools/squawk/plugin`) with what a runner needs from the core. Every built-in runner
 moves onto the kit, because a fixture alone does not show what a real runner needs (step 1 showed
@@ -172,6 +173,21 @@ Preconditions from step 1 ([runner definitions](2026-11-18-runner-definitions.md
   `runners/ids.ts`.
 - **Measure with the static closure.** Test-selection counts (rule 5) use Squeal's static
   closure until Squeal prunes stale observed paths.
+
+Done on 2026-11-25.
+[ADR 0070](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md) records the
+result. `boot.ts` is the only production module that seals a registry. The six built-in runners
+load as bundled plugins through the same loader and `SquawkPluginApi` as a plugin in
+`<config>/plugins/`, `runners/built-in.ts` and `runners/ids.ts` are gone, and every runner folder
+reads core code only through `@hearsay-tools/squawk/plugin`: `runner-core-import.baseline.json`
+holds 0 entries. A plain-JS runner in a folder outside the repository runs a task to the review
+gate in a test, and the built `pi` runner loaded from `<config>/plugins/` completed a task on the
+real `pi` CLI. Stored runner settings survive a start where their runner did not load.
+`layer-import.baseline.json` holds 83 entries, as at the start of the step. The step moves no
+feature behind a port, so it lowers no count. Squeal selects slightly more test files than before: 1,177 for
+`core/registry.ts` (1,152 before) and 1,288 for `core/runner-registry.ts` (1,266 before),
+because the new loader and plugin tests reach both; the spec's implementation record has the
+full counts.
 
 ### Step 5: move features out
 

@@ -93,9 +93,16 @@ The definition has no tool-injection part. OpenCode's tool server setup is OpenC
 - A runner folder reads core code only through the runner kit, `@hearsay-tools/squawk/plugin`
   (`plugin/runner-kit.ts`), and never imports another runner's folder. Code that several runners
   share, such as the Pi-family RPC wire (`core/pi-rpc-wire.ts`, `core/pi-rpc-turn.ts`), lives in
-  `core/` and the kit re-exports it. `cez/runner-core-import` fails a new relative import out of a
-  runner folder; `runner-core-import.baseline.json` lists the ones that remain until each runner
-  moves onto the kit (hearsay-tools/squawk#4201).
+  `core/` and the kit re-exports it. `cez/runner-core-import` fails a relative import out of a
+  runner folder; `runner-core-import.baseline.json` holds 0 entries and only shrinks. Heavy helpers
+  live on the kit's subpaths (`/runtime`, `/model-settings`, `/managed-cli`, `/pi-rpc`), so a
+  `definition.ts` that imports the main entry keeps `bootRuntime()` light
+  ([ADR 0070](../adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md)).
+- A runner outside the repository is a host plugin in `<config>/plugins/<name>/`: a plain-JS
+  `index.mjs` or `index.js` whose setup calls `api.registerRunner(...)` and which imports Squawk
+  only from the kit. It loads after the bundled runners, runs with all of Squawk's permissions,
+  and is skipped, not fatal, when it fails. The kit is unstable until Squawk installs plugins from
+  npm or git. [Plugins](../plugins.md) is the user guide.
 
 ### Managed CLI installation
 
