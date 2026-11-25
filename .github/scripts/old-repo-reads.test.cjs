@@ -14,7 +14,7 @@ const repoRoot = path.join(__dirname, '..', '..');
 const ROOTS = ['.github/scripts', '.github/workflows', 'scripts', '.ai/skills'];
 const SKIPPED = /(?:\.test\.|\.testkit\.|(?:^|\/)(?:fixtures|__fixtures__)\/)/;
 const OLD_NAME_READ = [
-  /(?:--repo[ =]|-R |repo:|repos\/|github\.com\/)hearsay-tools\/cezarion\b/,
+  /(?:--repo[ =]|-R |repo:|repos\/|github\.com\/)['"]?hearsay-tools\/cezarion\b/,
   /owner:\s*['"]hearsay-tools['"]\s*,\s*repo:\s*['"]cezarion['"]/,
 ];
 
@@ -24,12 +24,12 @@ const oldNameReads = (files, read) => files.flatMap((file) =>
 
 test('finds old-name reads in commands, API paths, URLs and owner/repo objects, and passes citations', () => {
   const lines = {
-    'a.sh': 'gh issue list --repo hearsay-tools/cezarion --label x\ngh pr view 1 -R hearsay-tools/cezarion',
+    'a.sh': 'gh issue list --repo hearsay-tools/cezarion --label x\ngh pr view 1 -R hearsay-tools/cezarion\ngh pr list --repo "hearsay-tools/cezarion"',
     'b.cjs': "q: 'repo:hearsay-tools/cezarion is:issue'\napi('repos/hearsay-tools/cezarion/pulls')\nconst r = { owner: 'hearsay-tools', repo: 'cezarion' };",
     'c.md': 'Open https://github.com/hearsay-tools/cezarion/issues/12.\nCite hearsay-tools/cezarion#12 or use --repo hearsay-tools/squawk.',
   };
   assert.deepEqual(oldNameReads(Object.keys(lines), (file) => lines[file]).map((hit) => hit.split(': ')[0]), [
-    'a.sh:1', 'a.sh:2', 'b.cjs:1', 'b.cjs:2', 'b.cjs:3', 'c.md:1',
+    'a.sh:1', 'a.sh:2', 'a.sh:3', 'b.cjs:1', 'b.cjs:2', 'b.cjs:3', 'c.md:1',
   ]);
 });
 
