@@ -81,7 +81,7 @@ export function referencedPrDeclaration(run: RunRecord): number | undefined {
 const POLITENESS_PREFIX_RE = /^(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+|i\s+(?:want|would\s+like)\s+you\s+to\s+)/i;
 const SUBJECT_ACTION_RE = /^(?:please\s+)?(?:fix|resolve|address|implement|investigate|review|work(?:\s+on)?|handle|triage|repair|plan|refine|reproduce|debug|diagnose|check|process|follow\s+up(?:\s+on)?)\s+/i;
 const ISSUE_SUBJECT_REF_RE = /(https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/\d+|(?:[\w.-]+\/[\w.-]+)?#\d+|\d+)\b/i;
-const ACTION_SUBJECT_RE = new RegExp(`^((?:[a-z][a-z-]*\\s+){0,5})${ISSUE_SUBJECT_REF_RE.source}`, 'i');
+const ACTION_SUBJECT_RE = new RegExp(`^((?:[a-z][a-z-]*\\s+){0,5}|(?:[a-z][a-z-]*\\s+){0,4}issue)${ISSUE_SUBJECT_REF_RE.source}`, 'i');
 const DIRECT_SUBJECT_RE = new RegExp(`^((?:the\\s+)?(?:(?:github|fork|upstream)\\s+)?issue\\s*|(?:fork|upstream)\\s+)?${ISSUE_SUBJECT_REF_RE.source}`, 'i');
 const NON_SUBJECT_WORDS = new Set([
   'pr', 'pull', 'pull-request', 'against', 'like', 'unlike', 'versus', 'vs', 'instead',
@@ -101,8 +101,9 @@ function promptSubjectIssue(task: string): { ref: string; explicitIssue: boolean
   if (action && words.some((word) => NON_SUBJECT_WORDS.has(word))) return undefined;
   const ref = match[2]!;
   const explicitIssue = words.at(-1) === 'issue';
-  // Bare unhashed digits ("Fix 2 bugs") are only an issue ref after the word "issue".
-  if (/^\d+$/.test(ref) && !explicitIssue) return undefined;
+  // Bare unhashed digits ("Fix 2 bugs", "438 things") are only an issue ref after the word "issue"
+  // or when the entire prompt is a bare numeric skill input ("438").
+  if (/^\d+$/.test(ref) && !explicitIssue && stripped.trim() !== ref) return undefined;
   return { ref, explicitIssue };
 }
 

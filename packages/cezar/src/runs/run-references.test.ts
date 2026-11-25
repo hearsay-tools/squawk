@@ -50,6 +50,10 @@ describe('originatingIssue across automation templates and skill prompt shapes (
     ['campaign cleanup worker brief', 'Work hearsay-tools/squawk#1200 to a ready PR with green CI.', { markerRefs: { issue: 1216 } }, 1200],
     ['campaign feature worker brief (slug)', 'Implement hearsay-tools/squawk#1200 from approved plan .ai/specs/plan.md.', { markerRefs: { issue: 1216 } }, 1200],
     ['campaign feature worker brief (URL)', 'Implement https://github.com/hearsay-tools/squawk/issues/1200 from approved plan.', undefined, 1200],
+    // Numeric-only issue skill input (after refineTaskRefs disambiguation) and compact issue#N subjects
+    ['numeric-only issue skill input', '438', { issueNumber: 438, markerRefs: { issue: 1216 } }, 438],
+    ['compact issue#N after verb', 'Fix issue#438', { markerRefs: { issue: 1216 } }, 438],
+    ['compact friction issue#N', 'Handle friction issue#438 in hearsay-tools/squawk', undefined, 438],
     // Scheduled / digest / PR templates — NOT issue-originating
     ['friction daily digest schedule', 'Run the friction digest for hearsay-tools/squawk. Today is 2026-11-25.', undefined, undefined],
     ['CLI weekday triage schedule', 'Triage new issues', undefined, undefined],
@@ -64,6 +68,7 @@ describe('originatingIssue across automation templates and skill prompt shapes (
     ['check-differs-from mention', 'Check why this differs from https://github.com/o/r/issues/1200 and file a new issue', { markerRefs: { issue: 1216 } }, undefined],
     ['PR review mentioning issue', 'Review PR #900 for issue #1200', { markerRefs: { issue: 1216 } }, undefined],
     ['plain item count after verb', 'Fix 2 bugs in the parser', { markerRefs: { issue: 1216 } }, undefined],
+    ['plain leading number in prose', '438 things to check', { issueNumber: 438, markerRefs: { issue: 1216 } }, undefined],
   ])('%s → %j', (_label, task, extra, expected) => {
     const run = makeRunRecord({ task, ...extra });
     expect(originatingIssue(run)).toBe(expected);
