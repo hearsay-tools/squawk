@@ -5,5 +5,6 @@ import { fileURLToPath } from 'node:url';
 export function piBaseArgs(opts: { projectSkills?: boolean } = {}): string[] {
   return ['--mode', 'rpc',
     '--extension', fileURLToPath(new URL('../../../scripts/pi-retry-degraded-service.mjs', import.meta.url)),
+    '--extension', fileURLToPath(new URL('../../../scripts/pi-runaway-reply-guard.mjs', import.meta.url)),
     ...(opts.projectSkills === false ? [] : ['--extension', fileURLToPath(new URL('../../../scripts/pi-project-skills.mjs', import.meta.url))])];
 }

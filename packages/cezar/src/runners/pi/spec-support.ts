@@ -34,7 +34,7 @@ export const PI_SPEC_SUPPORT: AgentRunSpecSupport = {
   cwd: { honored: true, via: 'spawn cwd' },
   toolGrant: { honored: true, via: `mapped through piTools: the default list sends --no-builtin-tools and names its built-ins to the default-tools extension; a narrowed list, or one naming a tool outside the pi default set, sends --tools; a list that maps to nothing sends --tools with the Squawk tools only, or --no-tools; a bashAllowlist has no prefix equivalent, so it narrows the list to --tools without bash (fail closed); unset sends no tool flags` },
   restrictCrossSessionMessaging: { honored: false, reason: 'pi 1.4.0 has no built-in cross-session tool, and an extension\'s name cannot be discovered as messaging; the subagent extension stays (hearsay-tools/cezarion#2279)' },
-  minimal: { honored: true, via: `${PI_MINIMAL_ARGS.join(' ')}, and no project-skills extension; explicit --extension paths (the Squawk tools, the retry extension) still load` },
+  minimal: { honored: true, via: `${PI_MINIMAL_ARGS.join(' ')}, and no project-skills extension; explicit --extension paths (the Squawk tools, the retry and runaway-reply extensions) still load` },
   additionalDirectories: { honored: false, reason: 'pi has no extra-root flag' },
   env: { honored: true, via: 'merged over the child env through buildChildEnv' },
   model: { honored: true, via: '--model provider/model' },

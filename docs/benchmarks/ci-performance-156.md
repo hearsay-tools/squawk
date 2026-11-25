@@ -40,7 +40,7 @@ Normal CI uses `ubuntu-latest`, a floating LTS Node version and an npm cache; th
 1. Check out the desired harness SHA and inspect `campaign.json` and the experiment patch.
 2. Push it to a unique `bench/156-<campaign>` branch in this repository. This requires normal repository Actions permissions; it never changes main.
 3. Download `benchmark-*` artifacts from that run. Preserve `metadata.json`, `summary.json`, per-step JSON/time/log files, and `vitest.json`.
-4. Retrieve `gh api repos/hearsay-tools/cezarion/actions/runs/<id>/jobs --paginate` for job/step durations and status, and the run object for queue timestamps.
+4. Retrieve `gh api repos/hearsay-tools/squawk/actions/runs/<id>/jobs --paginate` for job/step durations and status, and the run object for queue timestamps.
 5. Report medians and ranges across all three repetitions. Keep failed runs separate from successful duration summaries, never silently omit them.
 
 For a fresh corrected snapshot reproduction, use the current harness containing the corrected snapshot collector, set `campaign.json` to three `baseline` jobs (repetitions 1, 2 and 3), and push a unique `bench/156-workers-*` ref. Those baseline jobs upload verified donors and the snapshot jobs in the same run consume the newly uploaded artifacts. Do not rerun the historical `e4169465c53fc598926370e835f2721d3234a543` harness for this purpose: its snapshot collector produced invalid `attempted:false` evidence. Run 34273855860 remains the original corrected evidence, but a reproduction must not depend on the expiring artifacts from run 34272576293.

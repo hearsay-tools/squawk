@@ -395,7 +395,7 @@ function checkCitations({ cwd, base }) {
 }
 
 const message = ({ number, context }) =>
-  `bare #${number} in a ${context}. Write hearsay-tools/cezarion#${number} (fork) or open-mercato/cezar#${number} (upstream).`;
+  `bare #${number} in a ${context}. Write hearsay-tools/squawk#${number} (fork) or open-mercato/cezar#${number} (upstream).`;
 const escapeData = (text) => text.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
 const escapeProperty = (text) => escapeData(text).replace(/:/g, '%3A').replace(/,/g, '%2C');
 
