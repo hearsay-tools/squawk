@@ -333,6 +333,7 @@ function DiffFileCard({
   onOpenInApp?: ((path: string) => void) | undefined
 }) {
   const badge = STATUS_BADGE[file.status]
+  const fullPath = file.oldPath ? `${file.oldPath} → ${file.path}` : file.path
   return (
     <section
       data-slot="diff-file"
@@ -349,13 +350,13 @@ function DiffFileCard({
           data-slot="diff-file-header"
           aria-expanded={open}
           onClick={onToggle}
-          className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left hover:bg-muted/50"
+          className="flex min-w-0 flex-1 items-start gap-2 px-3 py-2 text-left hover:bg-muted/50"
         >
           <ChevronRightIcon
-            className={cn('size-3.5 shrink-0 text-soft-foreground transition-transform', open && 'rotate-90')}
+            className={cn('mbs-[1px] size-3.5 shrink-0 text-soft-foreground motion-safe:transition-transform', open && 'rotate-90')}
             aria-hidden="true"
           />
-          <span data-slot="diff-file-path" className="min-w-0 truncate font-mono text-xs font-medium">
+          <span data-slot="diff-file-path" title={fullPath} className="min-w-0 wrap-anywhere font-mono text-xs font-medium">
             {file.oldPath ? (
               <>
                 <span className="text-soft-foreground">{file.oldPath} → </span>

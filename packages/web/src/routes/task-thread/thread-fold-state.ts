@@ -6,6 +6,8 @@ import type {
   ThreadConversationDelivery,
   ThreadConversationMessage,
   ThreadEntry,
+  ThreadFailureSource,
+  ThreadNote,
   ThreadPermission,
   ThreadProviderAuthRequired,
   ThreadState,
@@ -29,12 +31,23 @@ export interface DraftEntry {
   lastSeq: number
 }
 
+export interface DraftFailure {
+  draft: DraftEntry
+  cause: string
+  primarySource: ThreadFailureSource
+  primaryText: string
+  stepId?: string | undefined
+  fatal: boolean
+}
+
 export interface DraftTurn {
   id: string
   turnId?: string | undefined
   userMessage?: ThreadTurn['userMessage']
   startedAt?: string | undefined
   entries: DraftEntry[]
+  /** Failure notes recorded in this turn so duplicate sources fold into one entry (hearsay-tools/squawk#4018). */
+  failures?: DraftFailure[] | undefined
   planEntries?: PlanEntry[]
   completed?: { stopReason: StopReason; costUsd?: number; ts?: string | undefined }
   /** True once any v2 `item.*` event landed in this turn — the dedup latch. */
@@ -134,8 +147,120 @@ export function currentTurn(fold: FoldState): DraftTurn {
 }
 
 /** Append a cezar-owned entry (`origin: 'meta'`) to the current turn: it survives every dedup. */
-export function pushMeta(fold: FoldState, entry: ThreadEntry): void {
-  currentTurn(fold).entries.push({ origin: 'meta', entry, firstSeq: fold.eventSeq, lastSeq: fold.eventSeq })
+export function pushMeta(fold: FoldState, entry: ThreadEntry): DraftEntry {
+  const draft: DraftEntry = { origin: 'meta', entry, firstSeq: fold.eventSeq, lastSeq: fold.eventSeq }
+  currentTurn(fold).entries.push(draft)
+  return draft
+}
+
+// ---- failure folding (hearsay-tools/squawk#4018) ------------------------------------------
+
+const FAILURE_WRAPPERS = [
+  /^run failed\s+[—-]\s+/,
+  /^continue failed(?:\s+[—-]\s+|:\s+)/,
+  /^step\s+"[^"]+"\s+failed:\s+/,
+  /^step\s+\S+\s+failed\s+[—-]\s+/,
+] as const
+
+const FAILURE_LIFECYCLE = /^(?:run failed\s+[—-]\s+|continue failed(?:\s+[—-]\s+|:\s+))/
+
+export function normalizeFailureCause(text: string): string {
+  return text.trim().replace(/\s+/g, ' ')
+}
+
+/** Strip Squawk's outer run/continue/step failure wrappers so sources sharing one cause match. */
+export function unwrapFailureCause(text: string): string {
+  let current = text.trim()
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const pattern of FAILURE_WRAPPERS) {
+      const next = current.replace(pattern, '').trim()
+      if (next !== current && next !== '') {
+        current = next
+        changed = true
+      }
+    }
+  }
+  return normalizeFailureCause(current)
+}
+
+export function addFailureDetail(failure: DraftFailure, source: ThreadFailureSource, text: string): void {
+  if (source === failure.primarySource && text === failure.primaryText) return
+  if (failure.draft.entry.kind !== 'note') return
+  const note: ThreadNote = failure.draft.entry
+  if (note.details?.some((item) => item.source === source && item.text === text)) return
+  note.details = [...(note.details ?? []), { source, text }]
+}
+
+function findMatchingFailure(turn: DraftTurn, cause: string, stepId: string | undefined): DraftFailure | undefined {
+  const failures = turn.failures
+  if (!failures) return undefined
+  for (let i = failures.length - 1; i >= 0; i -= 1) {
+    const candidate = failures[i]!
+    if (cause !== '' && candidate.cause === cause) return candidate
+    if (cause === '' && candidate.fatal && (stepId === undefined || candidate.stepId === undefined || candidate.stepId === stepId)) {
+      return candidate
+    }
+  }
+  return undefined
+}
+
+export function recordFailure(
+  fold: FoldState,
+  event: RunEvent,
+  input: {
+    id: string
+    source: ThreadFailureSource
+    text: string
+    cause: string
+    stepId?: string | undefined
+    fatal: boolean
+  },
+): void {
+  const turn = currentTurn(fold)
+  const existing = findMatchingFailure(turn, input.cause, input.stepId)
+  if (existing) {
+    existing.draft.lastSeq = Math.max(existing.draft.lastSeq, event.seq)
+    if (input.fatal) existing.fatal = true
+    if (input.stepId !== undefined && existing.stepId === undefined) existing.stepId = input.stepId
+    addFailureDetail(existing, input.source, input.text)
+    return
+  }
+  const draft = pushMeta(fold, { kind: 'note', id: input.id, text: input.text, tone: 'danger' })
+  const failure: DraftFailure = {
+    draft,
+    cause: input.cause,
+    primarySource: input.source,
+    primaryText: input.text,
+    ...(input.stepId !== undefined ? { stepId: input.stepId } : {}),
+    fatal: input.fatal,
+  }
+  turn.failures = [...(turn.failures ?? []), failure]
+}
+
+/** Fold a `run failed — …` / `continue failed — …` lifecycle line into its matching failure entry. */
+export function foldLifecycleFailure(fold: FoldState, event: RunEvent, text: string): boolean {
+  if (!FAILURE_LIFECYCLE.test(text)) return false
+  const turn = fold.turns.at(-1)
+  if (!turn) return false
+  const cause = unwrapFailureCause(text)
+  if (cause === '') return false
+  const existing = findMatchingFailure(turn, cause, str(event.stepId))
+  if (!existing) return false
+  existing.draft.lastSeq = Math.max(existing.draft.lastSeq, event.seq)
+  existing.fatal = true
+  addFailureDetail(existing, 'lifecycle', text)
+  return true
+}
+
+/** Mark the matching turn failure fatal when `session.ended` closes with `reason: 'error'`. */
+export function markTurnFailureFatal(fold: FoldState, event: RunEvent, message: string | undefined): void {
+  const turn = fold.turns.at(-1)
+  if (!turn) return
+  const cause = message ? unwrapFailureCause(message) : ''
+  const existing = findMatchingFailure(turn, cause, str(event.stepId))
+  if (existing) existing.fatal = true
 }
 
 export function expirePermissions(fold: FoldState): void {
