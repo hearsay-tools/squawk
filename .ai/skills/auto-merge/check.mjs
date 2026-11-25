@@ -35,7 +35,7 @@ export const NEVER = [
     'squeal.config.json',
     'scripts/{test-changed,test-inputs,test-git-env,prepr,direct-importers,check-typecheck-coverage,test-home-env,test-browser-home-env,test-home-setup,test-install-marker,test-sandbox,test-package,e2e-affected,ci-test-selection,check-workspace-resolution}.mjs',
     '.ai/scripts/**', '**/tsconfig*.json',
-    'packages/cezar/src/{test-outbound-guard,test-launch-guard,home/test-home-selector,stubborn-child}.testkit.ts',
+    'packages/cezar/src/{test-outbound-guard,test-launch-guard,home/test-home-selector,stubborn-child,core/built-in-runner-ids}.testkit.ts',
     // The lint rule cez/stubborn-test-child exempts the helper and its cockpit copy (hearsay-tools/squawk#3941).
     'packages/web/src/test/stubborn-child.ts',
   ] },
