@@ -61,7 +61,7 @@ export const RUNNER_ID_READERS = [
   { reader: 'Continue admission', file: 'packages/cezar/src/workflows/continuation-admission.ts', anchor: 'removedRunnerStepAfter(' },
   { reader: 'Continue provenance by start time', file: 'packages/cezar/src/workflows/run/launch-read-resolver.ts', anchor: 'removedRunnerStepAfter(' },
   { reader: 'Worker execution identity', file: 'packages/cezar/src/delegation/execution-identity.ts', anchor: 'removedRunnerStepAfter(' },
-  { reader: 'HTTP Continue and checkout routes', file: 'packages/cezar/src/server/server.ts', anchor: 'run.removedRunner' },
+  { reader: 'HTTP Continue and checkout routes', file: 'packages/cezar/src/server/runs-routes.ts', anchor: 'run.removedRunner' },
   { reader: 'Cockpit run actions', file: 'packages/web/src/routes/task-thread/run-actions.ts', anchor: 'run.removedRunner' },
   { reader: 'Cockpit agent identity', file: 'packages/web/src/routes/task-thread/run-agent-identity.ts', anchor: 'run.removedRunner' },
   { reader: 'Cockpit continuation provider', file: 'packages/web/src/routes/task-thread/continuation-provider.ts', anchor: 'run.removedRunner' },

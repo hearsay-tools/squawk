@@ -498,7 +498,7 @@ holds its anchor, and adds every quoted use of the id.
 6. **Continue** — admission in `packages/cezar/src/workflows/continuation-admission.ts`,
    provenance by start time in `packages/cezar/src/workflows/run/launch-read-resolver.ts`,
    worker identity in `packages/cezar/src/delegation/execution-identity.ts`, and the HTTP
-   Continue and checkout routes in `packages/cezar/src/server/server.ts`.
+   Continue and checkout routes in `packages/cezar/src/server/runs-routes.ts`.
 7. **Cockpit** — `packages/web/src/routes/task-thread/run-actions.ts`,
    `packages/web/src/routes/task-thread/run-agent-identity.ts`,
    `packages/web/src/routes/task-thread/continuation-provider.ts` and
