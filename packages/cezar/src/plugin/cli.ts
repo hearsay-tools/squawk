@@ -29,11 +29,11 @@ export function formatPluginReport(report: PluginLoadReport): string {
   lines.push('', `Loaded (${report.loaded.length}):`);
   if (report.loaded.length === 0) lines.push('  none');
   for (const plugin of report.loaded) {
-    lines.push(`  ${plugin.name}  ${plugin.path}`, ...contributionLines(plugin.contributions));
+    lines.push(`  ${plugin.name}  ${plugin.source}  ${plugin.path}`, ...contributionLines(plugin.contributions));
   }
   lines.push('', `Skipped (${report.failed.length}):`);
   if (report.failed.length === 0) lines.push('  none');
-  for (const plugin of report.failed) lines.push(`  ${plugin.name}  ${plugin.path}`, `    error: ${plugin.error}`);
+  for (const plugin of report.failed) lines.push(`  ${plugin.name}  ${plugin.source}  ${plugin.path}`, `    error: ${plugin.error}`);
   return lines.join('\n');
 }
 
