@@ -191,17 +191,55 @@ function isNewUrl(node: EsNode): boolean {
     && propertyName(callee) === 'URL';
 }
 
+/** Normalize WHATWG file-URL dot segments (`%2e`, `.%2e`, `%2e.`, `%2e%2e`, case-insensitive). */
+function normalizeUrlSegment(segment: string): string {
+  const lower = segment.toLowerCase();
+  if (lower === '.' || lower === '%2e') return '.';
+  if (lower === '..' || lower === '.%2e' || lower === '%2e.' || lower === '%2e%2e') return '..';
+  return segment;
+}
+
+/** Resolve a URL string against `file`'s `file:///` base and report if it leaves `folder`. */
+function resolvedFileUrlEscape(spec: string, file: string, folder: string): RunnerFolderEscapeFinding | undefined {
+  let resolved: URL;
+  try {
+    resolved = new URL(spec, `file:///${file}`);
+  } catch {
+    return undefined;
+  }
+  if (resolved.protocol !== 'file:') return undefined;
+  const folderRoot = `/${folder.slice(0, -1)}`;
+  const inside = resolved.host === '' && (resolved.pathname === folderRoot || resolved.pathname.startsWith(`/${folder}`));
+  if (inside) return undefined;
+  const target = resolved.host ? `//${resolved.host}${resolved.pathname}` : resolved.pathname;
+  return { kind: 'url', target };
+}
+
 /** Inspect `new URL(spec, import.meta.url)` and return its escape finding if it leaves `folder`. */
 function checkNewUrl(node: EsNode, file: string, folder: string): RunnerFolderEscapeFinding | undefined {
   if (!isNewUrl(node)) return undefined;
   const args = children(node, 'arguments');
   if (args.length < 2 || !isImportMetaUrl(args[1])) return undefined;
-  const spec = staticOrPrefixedText(args[0]);
-  if (spec === undefined || URL_SCHEME.test(spec)) return undefined;
-  const pathPart = spec.split(/[?#]/, 1)[0] ?? '';
-  if (pathPart.startsWith('/')) return { kind: 'url', target: posix.resolve('/', pathPart) };
-  const target = escapedRelativeTarget(file, folder, pathPart.split('/'));
-  return target === undefined ? undefined : { kind: 'url', target };
+  const raw = staticOrPrefixedText(args[0]);
+  if (raw === undefined) return undefined;
+  // WHATWG URL parser strips leading/trailing C0 controls/spaces and removes ASCII tab/CR/LF.
+  const cleaned = raw.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, '').replace(/[\t\r\n]/g, '');
+  let relativeSpec = cleaned;
+  if (URL_SCHEME.test(cleaned)) {
+    if (!cleaned.toLowerCase().startsWith('file:')) return undefined;
+    relativeSpec = cleaned.slice(5);
+    if (relativeSpec.startsWith('/') || relativeSpec.startsWith('\\')) {
+      return resolvedFileUrlEscape(cleaned, file, folder);
+    }
+  }
+  const pathPart = (relativeSpec.split(/[?#]/, 1)[0] ?? '').replaceAll('\\', '/');
+  if (pathPart.startsWith('/')) {
+    return resolvedFileUrlEscape(cleaned, file, folder) ?? { kind: 'url', target: posix.resolve('/', pathPart) };
+  }
+  const segments = pathPart.split('/').map(normalizeUrlSegment);
+  const target = escapedRelativeTarget(file, folder, segments);
+  if (target !== undefined) return { kind: 'url', target };
+  return resolvedFileUrlEscape(cleaned, file, folder);
 }
 
 /** Extract the literal specifier of a `TSImportType` node across ESTree field shapes. */
@@ -227,7 +265,8 @@ export function classifySpecifier(file: string, specifier: string | undefined): 
   const folder = runnerFolderOf(file);
   if (!folder || specifier === undefined) return undefined;
   if (specifier.startsWith('.')) {
-    const target = escapedRelativeTarget(file, folder, specifier.split('/'));
+    const pathPart = specifier.split(/[?#]/, 1)[0] ?? '';
+    const target = escapedRelativeTarget(file, folder, pathPart.split('/').map(normalizeUrlSegment));
     return target === undefined ? undefined : { kind: 'import', target };
   }
   return isAllowedPackageSpecifier(specifier) ? undefined : { kind: 'package', target: specifier };
