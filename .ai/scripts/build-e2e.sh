@@ -5,7 +5,7 @@
 # them from a test boot invalidated every slow check and swapped the production bundle for
 # an e2e one (hearsay-tools/cezarion#649).
 #
-#   .ai/qa/build/cezar/dist/       tsc output + the inlined contract (real files)
+#   .ai/qa/build/cezar/dist/       tsc output + inlined contract + runner assets (real files)
 #   .ai/qa/build/cezar/web/dist/   vite output with VITE_CEZ_E2E=1 (real files)
 #   .ai/qa/build/cezar/scripts      -> packages/cezar/scripts       (mock CLIs, helpers)
 #   .ai/qa/build/cezar/package.json -> packages/cezar/package.json  ("type": "module", version)
@@ -40,10 +40,12 @@ for entry in scripts package.json node_modules; do
 done
 
 cd "$REPO_ROOT"
-# tsc and inline-contract directly rather than the package's `build` script: its prebuild
-# rewrites packages/cezar/README.md and its postbuild post-processes packages/cezar/dist.
+# tsc, inline-contract, and copy-runner-assets directly rather than the package's `build`
+# script: its prebuild rewrites packages/cezar/README.md and its postbuild post-processes
+# packages/cezar/dist.
 npm exec -w @wjarka/cezarion -- tsc -p tsconfig.json --outDir "$OUT/dist"
 node packages/cezar/scripts/inline-contract.mjs "$OUT/dist"
+node packages/cezar/scripts/copy-runner-assets.mjs "$REPO_ROOT/packages/cezar/src/runners" "$OUT/dist/runners"
 # VITE_CEZ_E2E=1 is the cockpit e2e mode (hearsay-tools/cezarion#415): it pins useNow and
 # every refetchInterval in the bundle, and makes Vite emit the `.cez-e2e-build` marker the
 # bootstrap checks.

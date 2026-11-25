@@ -115,7 +115,7 @@ E2E_BUILD_MARKER="$REPO_ROOT/$E2E_BUILD_ROOT/web/dist/.cez-e2e-build"
 # Fingerprint inputs — a change to any of these invalidates the cached build. Each workspace
 # contributes its own sources AND its own manifest: a dependency moved between packages
 # changes what gets bundled without touching a single source file.
-BUILD_INPUT_PATHS="packages/contract/src packages/contract/package.json packages/cezar/src packages/cezar/package.json packages/cezar/tsconfig.json packages/api-client/src packages/api-client/package.json packages/cezar/scripts/inline-contract.mjs packages/web/src packages/web/public packages/web/index.html packages/web/vite.config.ts packages/web/package.json package.json pnpm-lock.yaml pnpm-workspace.yaml .ai/scripts/test-env-up.sh .ai/scripts/build-e2e.sh"
+BUILD_INPUT_PATHS="packages/contract/src packages/contract/package.json packages/cezar/src packages/cezar/package.json packages/cezar/tsconfig.json packages/api-client/src packages/api-client/package.json packages/cezar/scripts/inline-contract.mjs packages/cezar/scripts/copy-runner-assets.mjs packages/web/src packages/web/public packages/web/index.html packages/web/vite.config.ts packages/web/package.json package.json pnpm-lock.yaml pnpm-workspace.yaml .ai/scripts/test-env-up.sh .ai/scripts/build-e2e.sh"
 
 # No ambient CEZ_* reaches the server (hearsay-tools/cezarion#1045). An agent's shell inherits
 # the live cockpit's feature overrides (CEZ_PREVIEW=1, CEZ_AUTOMATIONS=0, …) and its per-task plumbing

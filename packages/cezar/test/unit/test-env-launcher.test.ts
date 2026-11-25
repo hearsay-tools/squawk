@@ -116,6 +116,8 @@ function makeFixture(withSetsid: boolean): { root: string; path: string } {
   cpSync(join(repoRoot, 'packages/cezar/scripts/mock-skill-data'), join(root, 'packages/cezar/scripts/mock-skill-data'), { recursive: true });
   writeFileSync(join(root, 'packages/cezar/scripts/inline-contract.mjs'),
     "import { writeFileSync } from 'node:fs';\nwriteFileSync('.ai/inline-contract-dist', process.argv[2] ?? '(default)');\n");
+  writeFileSync(join(root, 'packages/cezar/scripts/copy-runner-assets.mjs'),
+    "import { writeFileSync } from 'node:fs';\nwriteFileSync('.ai/copy-runner-assets-args', JSON.stringify(process.argv.slice(2)));\n");
   writeFileSync(join(root, '.ai/browsers/agent-browser.md'), '# test provider\n');
   writeFileSync(join(root, 'package.json'), '{"private":true}\n');
   writeFileSync(join(root, 'pnpm-lock.yaml'), '{}\n');
@@ -215,7 +217,7 @@ done
   symlinkSync('npm', join(root, 'bin/pnpm'));
   // The served project is a clone of this checkout, so the fixture is a repository whose
   // generated state is ignored the way the real one's is.
-  writeFileSync(join(root, '.gitignore'), '/.ai/qa/\n/bin/\nnode_modules/\n/packages/cezar/dist/\n/packages/cezar/web/\n/.ai/build-invocations\n/.ai/build-node-env\n/.ai/inline-contract-dist\n/.ai/app-argv\n/.ai/app-cez-env\n/app.pid\n');
+  writeFileSync(join(root, '.gitignore'), '/.ai/qa/\n/bin/\nnode_modules/\n/packages/cezar/dist/\n/packages/cezar/web/\n/.ai/build-invocations\n/.ai/build-node-env\n/.ai/inline-contract-dist\n/.ai/copy-runner-assets-args\n/.ai/app-argv\n/.ai/app-cez-env\n/app.pid\n');
   const git = (...args: string[]) => fixtureGit(root, ...args);
   git('init', '-q', '-b', 'main');
   git('add', '-A');
@@ -327,8 +329,14 @@ test('the bootstrap builds into the ignored mirror and never writes the producti
   assert.equal(existsSync(join(fixture.root, 'packages/cezar/web/dist')), false);
   assert.equal(existsSync(join(fixture.root, E2E_BUILD, 'dist/index.js')), true);
   assert.equal(existsSync(join(fixture.root, E2E_BUILD, 'web/dist/.cez-e2e-build')), true);
-  // Absolute, because inline-contract runs from the repo root and tsc from the workspace.
-  assert.match(readFileSync(join(fixture.root, '.ai/inline-contract-dist'), 'utf8'), /^\/.*\/\.ai\/qa\/build\/cezar\/dist$/);
+  // Absolute, because inline-contract and copy-runner-assets run from the repo root and tsc from the workspace.
+  const inlineDist = readFileSync(join(fixture.root, '.ai/inline-contract-dist'), 'utf8');
+  assert.match(inlineDist, /^\/.*\/\.ai\/qa\/build\/cezar\/dist$/);
+  const repoDir = inlineDist.slice(0, -'/.ai/qa/build/cezar/dist'.length);
+  assert.deepEqual(
+    JSON.parse(readFileSync(join(fixture.root, '.ai/copy-runner-assets-args'), 'utf8')),
+    [`${repoDir}/packages/cezar/src/runners`, `${inlineDist}/runners`],
+  );
   for (const entry of ['scripts', 'package.json', 'node_modules']) {
     assert.equal(readlinkSync(join(fixture.root, E2E_BUILD, entry)), `../../../../packages/cezar/${entry}`);
   }
