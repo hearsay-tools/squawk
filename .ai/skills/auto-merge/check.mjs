@@ -71,7 +71,7 @@ export const NEVER = [
   ] },
   { why: 'build or release source', source: true, globs: [
     'scripts/release*.mjs', 'packages/cezar/src/release/**',
-    'packages/cezar/scripts/{check-pack,inline-contract,sync-readme,install-as-command}.mjs',
+    'packages/cezar/scripts/{check-pack,copy-runner-assets,inline-contract,sync-readme,install-as-command}.mjs',
     'packages/cezar/src/pack-check.ts', 'packages/web/vite.config.ts', 'packages/web/index.html',
     'packages/web/{product-identity.ts,src/lib/build-env.ts}', 'packages/cezar/scripts/product-identity.mjs',
   ] },
