@@ -266,16 +266,32 @@ function specifierOfImportNode(node: EsNode): string | undefined {
 }
 
 /** Classify an import/export/require specifier into an escape finding, or `undefined` if allowed. */
-export function classifySpecifier(file: string, specifier: string | undefined): RunnerFolderEscapeFinding | undefined {
+export function classifySpecifier(
+  file: string,
+  specifier: string | undefined,
+  mode: 'esm' | 'cjs' = 'esm',
+): RunnerFolderEscapeFinding | undefined {
   const folder = runnerFolderOf(file);
   if (!folder || specifier === undefined) return undefined;
-  if (specifier.startsWith('.')) return checkRelativeFileUrl(specifier, file, folder, 'import');
+  if (specifier.startsWith('.')) {
+    if (mode === 'cjs') {
+      const target = escapedRelativeTarget(file, folder, specifier.split(/[/\\]+/));
+      return target === undefined ? undefined : { kind: 'import', target };
+    }
+    return checkRelativeFileUrl(specifier, file, folder, 'import');
+  }
   return isAllowedPackageSpecifier(specifier) ? undefined : { kind: 'package', target: specifier };
 }
 
 /** Record imported aliases of `join`, `resolve`, `posix`, `win32`, or a `node:path*` namespace. */
 function collectPathImports(node: EsNode, pathFns: Map<string, 'join' | 'resolve'>, pathNamespaces: Set<string>): void {
   if (node.importKind === 'type') return;
+  if (node.type === 'TSImportEqualsDeclaration') {
+    const source = specifierOfImportNode(node);
+    const local = nameOf(child(node, 'id'));
+    if (source && PATH_MODULES.has(source) && local) pathNamespaces.add(local);
+    return;
+  }
   const source = stringOf(child(node, 'source'));
   if (!source || !PATH_MODULES.has(source)) return;
   for (const spec of children(node, 'specifiers')) {
@@ -362,7 +378,7 @@ function checkRequireCall(node: EsNode, file: string): RunnerFolderEscapeFinding
   if (callee?.type !== 'Identifier' || nameOf(callee) !== 'require') return undefined;
   const args = children(node, 'arguments');
   if (args.length !== 1) return undefined;
-  return classifySpecifier(file, staticOrPrefixedText(args[0]));
+  return classifySpecifier(file, staticOrPrefixedText(args[0]), 'cjs');
 }
 
 interface CollectedSite {
@@ -385,8 +401,11 @@ function collectVisitors(file: string, folder: string, done: (sites: readonly Co
   };
 
   const inspectImport = (node: EsNode) => {
-    if (node.type === 'ImportDeclaration') collectPathImports(node, pathFns, pathNamespaces);
-    record(node, classifySpecifier(file, specifierOfImportNode(node)));
+    if (node.type === 'ImportDeclaration' || node.type === 'TSImportEqualsDeclaration') {
+      collectPathImports(node, pathFns, pathNamespaces);
+    }
+    const mode = node.type === 'TSImportEqualsDeclaration' ? 'cjs' : 'esm';
+    record(node, classifySpecifier(file, specifierOfImportNode(node), mode));
   };
 
   const visitors: Visitors = Object.fromEntries(IMPORT_VISITORS.map(type => [type, inspectImport]));
