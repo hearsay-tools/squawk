@@ -189,6 +189,13 @@ feature behind a port, so it lowers no count. Squeal selects slightly more test 
 because the new loader and plugin tests reach both; the spec's implementation record has the
 full counts.
 
+Before step 5, epic hearsay-tools/squawk#4232 makes every bundled runner load unchanged from a
+folder outside the product. The runners import core code only through the kit, but each still
+names script files in `packages/cezar/scripts/` by a relative path and imports `zod`, and the
+live `pi` run needed hand edits to its copy. The epic moves each runner's scripts into its own
+folder or behind the kit, and proves the result for all six runners with a test and a live run.
+The runners stay bundled.
+
 ### Step 5: move features out
 
 Each feature becomes a built-in plugin and takes its routes out of `server/server.ts`. The
