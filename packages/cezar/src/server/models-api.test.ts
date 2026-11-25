@@ -1,7 +1,7 @@
 import '../built-in-wait-kinds.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { registerBundledRunners } from '../core/bundled-runners.testkit.ts';
+import { BUILT_IN_RUNNER_IDS } from '../core/built-in-runner-ids.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,7 +17,7 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
-registerBuiltInRunners();
+await registerBundledRunners();
 sealTestRunners();
 
 describe('workspace model catalog API', () => {

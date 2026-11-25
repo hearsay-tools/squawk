@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { expect } from 'vitest';
 import { collectedOnly, partitionParity, type CellBody, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
 import { SKILL_PROVISION_CRITERIA } from './harness-parity-core.testkit.ts';

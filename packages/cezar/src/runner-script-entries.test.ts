@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { repoRoot } from './lint/source-rule.ts';
 
-// Each Node entry outside index.ts that reads runner data registers the built-in runners at its
+// Each Node entry outside index.ts that reads runner data loads the bundled runners at its
 // top level, before it reads config or runs a task (spec 2026-11-18-runner-definitions). The
 // scripts start real CLIs or many processes, so this reads their source.
 const ENTRIES = [
@@ -18,10 +18,14 @@ const ENTRIES = [
   '.ai/scripts/probe-steering.ts',
 ];
 
-it.each(ENTRIES)('%s registers and seals the built-in runners at startup', (entry) => {
+it.each(ENTRIES)('%s loads the bundled runners through the plugin loader, then seals them, at startup', (entry) => {
   const source = readFileSync(join(repoRoot, entry), 'utf8');
-  expect(source).toMatch(/\{ registerBuiltInRunners, sealBuiltInRunners \} (?:from |=[^\n]*(?:import|load)\()/);
-  expect(source).toMatch(/^(\s*)registerBuiltInRunners\(\);?\n\1sealBuiltInRunners\(\);?$/m);
+  expect(source).toMatch(/\{ loadBundledRunners \} =[^\n]*(?:import|load)\([^\n]*plugin\/loader\.[jt]s/);
+  expect(source).toMatch(/\{ sealRunners \} =[^\n]*(?:import|load)\([^\n]*core\/runner-registry\.[jt]s/);
+  const load = source.search(/^\s*await loadBundledRunners\(\);?$/m);
+  const seal = source.search(/^\s*sealRunners\(\);?$/m);
+  expect(load).toBeGreaterThan(-1);
+  expect(seal).toBeGreaterThan(load);
 });
 
 // Each benchmark reaches the same reviewed process boot before opening its store.

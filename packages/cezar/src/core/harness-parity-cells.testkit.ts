@@ -1,7 +1,7 @@
 import '../ci-wait/tools.testkit.ts';
 import '../built-in-run-slots.testkit.ts';
 import { UI_CRITERIA } from './ui-parity-rows.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

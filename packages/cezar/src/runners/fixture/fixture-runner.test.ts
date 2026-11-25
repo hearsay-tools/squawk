@@ -9,7 +9,7 @@ import { SEAM_CRITERIA, seamRows } from '../../core/harness-parity-seam-tier.tes
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';
 import { knownRunnerIds, registeredRunners, resolveRunnerId } from '../../core/runner-registry.ts';
 import { setupMonitoringFixture, waitForProduct } from '../../workflows/run-fixture.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from '../ids.ts';
+import { BUILT_IN_RUNNER_IDS } from '../../core/built-in-runner-ids.testkit.ts';
 import { fixtureRunner } from './definition.testkit.ts';
 import { FIXTURE_BIN_ENV } from './data.testkit.ts';
 

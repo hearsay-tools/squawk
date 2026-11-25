@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { driveSeam, MODEL_REFUSAL_CRITERIA, promptFor, waitFor } from './harness-parity.testkit.ts';
 

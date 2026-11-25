@@ -180,3 +180,51 @@ describe('pluginHealth', () => {
     expect(JSON.stringify(health)).not.toMatch(/My Plugins|fileserver|sk-secret/);
   });
 });
+
+describe('loadBundledRunners', () => {
+  /** A bundled runner folder: an entry that declares `order` and records its load. */
+  function bundled(name: string, order: number, body = '', file = 'index.mjs'): void {
+    plugin(name, `export const displayOrder = ${order};\nexport default async function setup(api) {\n  globalThis.pluginLoadOrder.push(${JSON.stringify(name)});\n${body}\n}\n`, file);
+  }
+
+  it('loads the bundled runners in display order, skips a folder with no entry and reports them as bundled', async () => {
+    bundled('zeta', 10);
+    bundled('alpha', 20);
+    mkdirSync(join(dir, 'fixture'));
+    writeFileSync(join(dir, 'fixture', 'definition.testkit.ts'), 'export {};\n');
+    const loader = await import('./loader.ts');
+    const report = await loader.loadBundledRunners(dir);
+    expect(order()).toEqual(['zeta', 'alpha']);
+    expect(report).toMatchObject({ folders: [dir], loaded: [{ name: 'zeta', source: 'bundled', path: join(dir, 'zeta') }, { name: 'alpha', source: 'bundled' }], failed: [] });
+    expect(loader.pluginLoadReport()).toBe(report);
+  });
+
+  it('commits what a bundled runner registers, through the same setup as a host plugin', async () => {
+    bundled('one', 10, "  api.registerCliCommand({ name: 'bundled-cmd', usage: [], parseMode: 'subcommand', homeMode: 'none', runtimeMode: 'none', load: async () => async () => 0 });");
+    const loader = await import('./loader.ts');
+    const report = await loader.loadBundledRunners(dir);
+    const cli = await import('../core/cli-registry.ts');
+    cli.sealCliCommands();
+    expect(cli.cliCommand('bundled-cmd')?.name).toBe('bundled-cmd');
+    expect(report.loaded[0]?.contributions.cliCommands).toEqual(['bundled-cmd']);
+  });
+
+  it.each([
+    ['setup throws', "  throw new Error('broken setup');", /Bundled runner "one" failed to load: broken setup/],
+    ['import fails', "  missing(;", /Bundled runner "one" failed to load:/],
+  ])('throws when a bundled runner fails (%s) and commits nothing of it', async (_case, body, message) => {
+    bundled('one', 10, `  api.registerCliCommand({ name: 'half', usage: [], parseMode: 'subcommand', homeMode: 'none', runtimeMode: 'none', load: async () => async () => 0 });\n${body}`);
+    const loader = await import('./loader.ts');
+    await expect(loader.loadBundledRunners(dir)).rejects.toThrow(message);
+    expect(loader.pluginLoadReport().loaded).toEqual([]);
+    const cli = await import('../core/cli-registry.ts');
+    cli.sealCliCommands();
+    expect(cli.cliCommand('half')).toBeUndefined();
+  });
+
+  it('throws when an entry has no default-exported setup', async () => {
+    plugin('one', 'export const displayOrder = 10;\n');
+    const loader = await import('./loader.ts');
+    await expect(loader.loadBundledRunners(dir)).rejects.toThrow(/Bundled runner "one" failed to load: index\.mjs has no default-exported setup function/);
+  });
+});

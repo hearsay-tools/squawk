@@ -6,7 +6,7 @@ import { child, children, nameOf, type AstRule, type EsNode } from './ast-rule.t
 import { literal, propertyName, unwrap } from './ast-syntax.ts';
 import { visit } from './babel-walk.ts';
 import { repoRoot } from './source-rule.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { bundledRunnerIds } from '../plugin/bundled-runners.ts';
 
 /**
  * Only `packages/cezar/src/core/` and `packages/cezar/src/runners/` branch on a runner id. Shared
@@ -17,7 +17,7 @@ import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
  * `packages/web/src/`. `packages/contract/` is not scanned: it declares `RUNNER_COCKPIT_FACTS`. The rule reports
  * - an equality comparison (`===`, `!==`, `==`, `!=`) with a runner-id string literal on one side;
  * - a `switch` with one or more runner-id `case` labels, as one site that names its labels.
- * The ids come from `runners/ids.ts`, the one roster of runner ids, plus the legacy ids. A
+ * The ids are the bundled runners' folder names (`plugin/bundled-runners.ts`), plus the legacy ids. A
  * literal may sit under parentheses, `as`, `satisfies` or `!`, or be a template with no
  * substitution.
  *
@@ -39,9 +39,9 @@ const OPERATORS = new Set(['===', '!==', '==', '!=']);
 
 export const runnerIdBranchesFile = 'packages/cezar/src/lint/runner-id-branch.baseline.json';
 
-/** The ids of the runners Squawk ships: `runners/ids.ts`, the one roster. */
+/** The ids of the runners Squawk bundles: the `runners/<id>/` folders with a plugin entry. */
 export function declaredRunnerIds(): string[] {
-  return [...BUILT_IN_RUNNER_IDS];
+  return bundledRunnerIds();
 }
 
 export function unwrapped(node: Node): Node {

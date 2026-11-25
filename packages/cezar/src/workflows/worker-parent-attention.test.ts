@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from '../core/built-in-runner-ids.testkit.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { SCENARIO_RUNNER } from '../core/parity-classes.testkit.ts';

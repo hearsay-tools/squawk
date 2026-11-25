@@ -14,10 +14,10 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp, type WorkspaceConfigResponse } from './server.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerBundledRunners } from '../core/bundled-runners.testkit.ts';
 
 // Starting a run and checking a request's runner id read the registered runners.
-registerBuiltInRunners();
+await registerBundledRunners();
 sealTestRunners();
 
 /**

@@ -11,7 +11,7 @@ import {
   type RunProviderCommand,
 } from './provider-auth.ts';
 import { registeredRunners } from './runner-registry.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { runnerGolden } from './runner-golden.testkit.ts';
 
 // The service reads every provider's login data from the registry; this file probes every runner.

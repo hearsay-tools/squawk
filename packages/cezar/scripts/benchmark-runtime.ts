@@ -6,14 +6,16 @@ import { installPluginResolveHook } from '../src/plugin/resolve-hook.ts';
 import { registerBuiltInRunSlots, sealBuiltInRunSlots } from '../src/built-in-run-slots.ts';
 
 installPluginResolveHook();
-const { registerBuiltInRunners, sealBuiltInRunners } = await import('../src/runners/built-in.ts');
+const { loadBundledRunners } = await import('../src/plugin/loader.ts');
+const { sealRunners } = await import('../src/core/runner-registry.ts');
+// The bundled runners load at import, so prepareBenchmarkRuntime stays synchronous.
+await loadBundledRunners();
 
 /** Boot the process services used by benchmarks that open a run store. */
 export function prepareBenchmarkRuntime(): void {
   // Workspace receipts and markers use the host's identity store (ADR 0032).
   installWindowsIdentityStore();
-  registerBuiltInRunners();
-  sealBuiltInRunners();
+  sealRunners();
   registerBuiltInRunSlots();
   sealBuiltInRunSlots();
   registerBuiltInStepKinds();

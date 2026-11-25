@@ -1,5 +1,5 @@
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from '../core/built-in-runner-ids.testkit.ts';
 import '../core/register-all-runners.testkit.ts';
 import { fakeRunnerFactory } from '../core/fake-runner-factory.testkit.ts';
 import { useRunners } from '../core/runners-under-test.testkit.ts';

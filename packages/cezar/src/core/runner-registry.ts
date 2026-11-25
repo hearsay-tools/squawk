@@ -7,7 +7,7 @@ import { DEFAULT_RUNNER_ID, LEGACY_RUNNER_IDS } from './runner-ids.ts';
 /** Register definitions first; the process entry seals before normal reads. */
 const runners = createKeyedRegistry<string, RunnerDefinition>({
   name: 'Runner registry',
-  bootHint: 'call registerBuiltInRunners() then sealBuiltInRunners() at the process entry, or sealTestRunners() in a test.',
+  bootHint: 'call bootRuntime() at the process entry, or sealTestRunners() in a test.',
   reservedKeys: [...LEGACY_RUNNER_IDS.keys()],
 });
 

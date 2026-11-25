@@ -15,6 +15,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findPackGaps } from '../dist/pack-check.js';
+import { bundledRunnerIds } from '../dist/plugin/bundled-runners.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -37,7 +38,9 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-const gaps = findPackGaps(files);
+// The bundled runners the source declares: each must ship its built plugin entry.
+const runnerIds = bundledRunnerIds(path.join(repoRoot, 'src/runners'));
+const gaps = findPackGaps(files, runnerIds);
 if (gaps.length > 0) {
   console.error('check:pack: the npm tarball would ship a broken cockpit:');
   for (const gap of gaps) console.error(`  - ${gap}`);
@@ -45,4 +48,4 @@ if (gaps.length > 0) {
 }
 
 const uiFiles = files.filter((f) => f.startsWith('web/dist/')).length;
-console.log(`check:pack ok — ${files.length} files, ${uiFiles} under web/dist (shell + assets present)`);
+console.log(`check:pack ok — ${files.length} files, ${uiFiles} under web/dist (shell + assets present), bundled runners ${runnerIds.join(', ')}`);

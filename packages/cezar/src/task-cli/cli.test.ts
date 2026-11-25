@@ -1,5 +1,5 @@
 import '../core/register-all-runners.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from '../core/built-in-runner-ids.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

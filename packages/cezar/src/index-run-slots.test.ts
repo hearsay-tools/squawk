@@ -17,7 +17,7 @@ it.each(commands)('%s %j initializes process services before its handler', async
   const slots = await import('./runs/removal-slots.ts');
   const executions = await import('./runs/worker-executions-registry.ts');
   const runners = await import('./core/runner-registry.ts');
-  const { BUILT_IN_RUNNER_IDS } = await import('./runners/ids.ts');
+  const { BUILT_IN_RUNNER_IDS } = await import('./core/built-in-runner-ids.testkit.ts');
   const check = () => {
     expect(slots.runSlotsSealed()).toBe(true);
     expect(executions.workerExecutionsRegistered()).toBe(true);

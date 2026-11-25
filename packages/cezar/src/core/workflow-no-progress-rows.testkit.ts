@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { collectedOnly, partitionParity, type CellBody, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
 import { NO_PROGRESS_CRITERIA, exemptionFor } from './harness-parity-core.testkit.ts';
 import { isRegisteredRunner } from './runner-registry.ts';

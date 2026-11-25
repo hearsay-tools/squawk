@@ -10,7 +10,7 @@ import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.t
 import { runnerGolden } from './runner-golden.testkit.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { allowProbePermissions, policyResponses } from './permission-policy.testkit.ts';
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 
 /**
  * The Tool-list kinds case table (.ai/specs/TEMPLATE.md § Case tables) as cells on every runner's native

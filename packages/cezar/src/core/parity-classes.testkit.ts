@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import type { ScenarioName } from './harness-parity-core.testkit.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 
@@ -52,7 +52,7 @@ export function turnPathValues<Id extends string>(ids: readonly Id[], facts: Rea
  */
 export const SCENARIO_RUNNER: string = 'fixture';
 
-/** The built-in runners, from `runners/ids.ts`: a static roster, read at collection time
+/** The bundled runners, from their folders (`core/built-in-runner-ids.testkit.ts`): a static roster, read at collection time
  *  before any registration, without loading any runner's data files. */
 const ROSTER: readonly string[] = BUILT_IN_RUNNER_IDS;
 

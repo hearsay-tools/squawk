@@ -84,9 +84,10 @@ import ompExtension from ${JSON.stringify(pathToFileURL(join(packageRoot, 'scrip
 import { registerBuiltInTools, sealBuiltInTools } from ${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/built-in-tools.js')).href)};
 import { registerBuiltInWaitKinds, sealBuiltInWaitKinds } from ${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/built-in-wait-kinds.js')).href)};
 installPluginResolveHook();
-const { registerBuiltInRunners, sealBuiltInRunners } = await import(${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/runners/built-in.js')).href)});
-registerBuiltInRunners();
-sealBuiltInRunners();
+const { loadBundledRunners } = await import(${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/plugin/loader.js')).href)});
+const { sealRunners } = await import(${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/core/runner-registry.js')).href)});
+await loadBundledRunners();
+sealRunners();
 registerBuiltInWaitKinds();
 sealBuiltInWaitKinds();
 registerBuiltInTools();

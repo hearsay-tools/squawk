@@ -16,7 +16,7 @@ export const BUILT_IN_RUN_SLOTS: RunSlots = {
 /**
  * Register the built-in removal slots and the worker executions
  * (`runs/worker-executions-registry.ts`). Each process entry calls it once, beside
- * `registerBuiltInRunners()`, before it can delete, reclaim or archive a run or start a worker. A
+ * the bundled runner load, before it can delete, reclaim or archive a run or start a worker. A
  * second call registers the same objects again, which the registries ignore.
  */
 export function registerBuiltInRunSlots(): void {

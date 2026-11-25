@@ -3,10 +3,10 @@ import { createRunner, isRegisteredRunner, registeredRunners, runnerDefinition }
 import { DEFAULT_RUNNER_ID, LEGACY_RUNNER_IDS } from './runner-ids.ts';
 
 // This file registers no runner, so the registry is empty: an entry that forgot
-// registerBuiltInRunners() fails at once instead of falling back to Claude.
+// bootRuntime() fails at once instead of falling back to Claude.
 it('throws on every definition read, naming the missing registration', async () => {
   for (const read of [() => registeredRunners(), () => isRegisteredRunner('claude'), () => runnerDefinition('claude')]) {
-    expect(read).toThrow(/Runner registry is unsealed: call registerBuiltInRunners\(\)/);
+    expect(read).toThrow(/Runner registry is unsealed: call bootRuntime\(\)/);
   }
   await expect(createRunner('claude')).rejects.toThrow(/Runner registry is unsealed/);
 });

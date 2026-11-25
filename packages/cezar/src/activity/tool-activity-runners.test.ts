@@ -1,4 +1,4 @@
-import { BUILT_IN_RUNNER_IDS } from '../runners/ids.ts';
+import { BUILT_IN_RUNNER_IDS } from '../core/built-in-runner-ids.testkit.ts';
 import { readFileSync } from 'node:fs';
 import { runnerGolden } from '../core/runner-golden.testkit.ts';
 import { dirname, join } from 'node:path';

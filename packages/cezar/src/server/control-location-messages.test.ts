@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { taskHelp } from '../task-cli/cli.ts';
 import { unavailableProviderMessage } from './provider-action-gate.ts';
 import { NO_WEBHOOK_ERROR } from './start-run-options.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerBundledRunners } from '../core/bundled-runners.testkit.ts';
 
-registerBuiltInRunners();
+await registerBundledRunners();
 sealTestRunners();
 
 // Full literals from 8dfacd3d0: changing the source of a location must not change messages.

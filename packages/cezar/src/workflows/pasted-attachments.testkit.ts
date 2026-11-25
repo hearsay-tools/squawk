@@ -61,11 +61,12 @@ export async function crashAfterContinue(repoRoot: string, dataDir: string, runI
     import { Home } from ${JSON.stringify(new URL('../home/home.ts', import.meta.url).href)};
     import { registerBuiltInStepKinds, sealBuiltInStepKinds } from ${JSON.stringify(new URL('./step-kind-registry.ts', import.meta.url).href)};
     installPluginResolveHook();
-    const { registerBuiltInRunners, sealBuiltInRunners } = await import(${JSON.stringify(new URL('../runners/built-in.ts', import.meta.url).href)});
+    const { loadBundledRunners } = await import(${JSON.stringify(new URL('../plugin/loader.ts', import.meta.url).href)});
+    const { sealRunners } = await import(${JSON.stringify(new URL('../core/runner-registry.ts', import.meta.url).href)});
     registerBuiltInStepKinds();
     sealBuiltInStepKinds();
-    registerBuiltInRunners();
-    sealBuiltInRunners();
+    await loadBundledRunners();
+    sealRunners();
     const home = Home.sandbox(process.env.CEZ_HOME);
     const input = JSON.parse(process.argv[1]);
     const store = RunStore.open(input.dataDir, { keepLive: true });

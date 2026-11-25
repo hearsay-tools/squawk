@@ -14,10 +14,11 @@ const repo = join(import.meta.dirname, '../../..');
 const CONTRACT = '@open-mercato/cezar-contract';
 
 const LOCAL_MODULES = [
+  // The runner roster: the setup hides each runner's host CLI (hearsay-tools/squawk#3715). Both
+  // modules read the bundled runner folders and load no definition and no adapter (review E1).
+  'packages/cezar/src/core/built-in-runner-ids.testkit.ts',
   'packages/cezar/src/home/test-home-selector.testkit.ts',
-  // The runner roster, a data-only leaf: the setup hides each runner's host CLI
-  // (hearsay-tools/squawk#3715); ids.ts loads no definition and no adapter (review E1).
-  'packages/cezar/src/runners/ids.ts',
+  'packages/cezar/src/plugin/bundled-runners.ts',
   'packages/cezar/src/runs/run-exits.ts',
   'packages/cezar/src/test-launch-guard.testkit.ts',
   'packages/cezar/src/test-outbound-guard.testkit.ts',

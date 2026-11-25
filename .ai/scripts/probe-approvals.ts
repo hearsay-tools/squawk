@@ -47,9 +47,10 @@ import { registerBuiltInTools, sealBuiltInTools } from '../../packages/cezar/src
 installPluginResolveHook();
 const { CodexAppServerRunner } = await import('../../packages/cezar/src/runners/codex/codex-app-server-runner.ts');
 const { resolveCodexExecutable } = await import('../../packages/cezar/src/runners/codex/codex-app-server-transport.ts');
-const { registerBuiltInRunners, sealBuiltInRunners } = await import('../../packages/cezar/src/runners/built-in.ts');
-registerBuiltInRunners();
-sealBuiltInRunners();
+const { loadBundledRunners } = await import('../../packages/cezar/src/plugin/loader.ts');
+const { sealRunners } = await import('../../packages/cezar/src/core/runner-registry.ts');
+await loadBundledRunners();
+sealRunners();
 registerBuiltInWaitKinds();
 sealBuiltInWaitKinds();
 registerBuiltInTools();

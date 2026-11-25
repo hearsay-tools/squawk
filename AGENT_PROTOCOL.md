@@ -340,18 +340,17 @@ A runner is one definition in its own folder, which one call registers
 changes these places and no other file, with one exception at the end of this section (a new
 turn-path fact value also adds a shared unit test):
 
-- **Its folder**, `packages/cezar/src/runners/<id>/`: the definition and its data files, the
-  adapter, the mapper, the catalogs, the test data files, the fixtures and every test of the
-  runner, parity files included. No backend-specific type leaves it.
+- **Its folder**, `packages/cezar/src/runners/<id>/`: the plugin entry `index.ts`, the definition
+  and its data files, the adapter, the mapper, the catalogs, the test data files, the fixtures and
+  every test of the runner, parity files included. No backend-specific type leaves it. The entry
+  default-exports a setup that calls `api.registerRunner(<id>Runner)` and declares
+  `export const displayOrder = <integer>;` on one line; boot loads every folder with an entry
+  through the plugin loader in that order (`plugin/bundled-runners.ts`), so no roster file
+  changes.
 - **Its scripts** in `packages/cezar/scripts/`: the mock script, its data files (the skill
   captures in `mock-skill-data/<id>.mjs` when it lists skills) and any helper the runner ships.
   They stay there because the packaged CLI tests and the mocks start them by path; the
   definition's `mock` part names the mock script.
-- **One line** in `BUILT_IN_RUNNERS` (`runners/built-in.ts`), in display order.
-- **Its id** in `BUILT_IN_RUNNER_IDS` (`runners/ids.ts`). `core/runner-registry.test.ts` fails
-  when the two lists differ. Only tests, testkits, dev scripts and lint rules read `runners/ids.ts`.
-  `cez/runner-ids-import` fails a production file that names it with a literal path (a static
-  import or export, a literal `import()` or `require()`, a type import); a path built from pieces, such as a template literal with a substitution, is outside its static scope.
 
 What a new runner's folder holds:
 
@@ -439,7 +438,7 @@ are stable.
     `core/model-identity.test.ts` holds the rules of the id map.
 11. **Host model discovery** — ships in the runner's PR: `<id>-model-catalog.ts` exports
     `discover<Id>Models`, and `loadModelCatalog()` imports it. `model-discovery-guard.test.ts`
-    forces the module, the export and the catalog entry for every id in `runners/ids.ts`, or an
+    forces the module, the export and the catalog entry for every bundled runner id, or an
     exemption with the wire reason. It does not force these rules. The adapter calls the CLI's own model-listing surface under the runner's child
     environment, with bounds, and throws when it cannot read the model list. It never reads
     the CLI's config or cache files and never runs a model turn. `server/models-api.test.ts`
