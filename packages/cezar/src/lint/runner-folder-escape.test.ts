@@ -101,10 +101,14 @@ describe('runner-folder-escape (hearsay-tools/squawk#4255)', () => {
       'fs',
       'node:',
       'node:../fs',
+      'node:%2e%2e/fs',
+      'node:fs\\..\\other',
       '@hearsay-tools/squawk',
       '@hearsay-tools/squawk/core',
       '@hearsay-tools/squawk/plugin-extra',
       '@hearsay-tools/squawk/plugin/../core',
+      '@hearsay-tools/squawk/plugin/%2e%2e/core',
+      '@hearsay-tools/squawk/plugin\\..\\core',
       '@open-mercato/cezar-contract/effort',
     ]) expect(isAllowedPackageSpecifier(bad)).toBe(false);
   });
@@ -114,6 +118,7 @@ describe('runner-folder-escape (hearsay-tools/squawk#4255)', () => {
     expect(classifySpecifier(piFile, './sub/../pi-args.ts')).toBeUndefined();
     expect(classifySpecifier(nestedFile, '../antigravity-runner.ts')).toBeUndefined();
     expect(classifySpecifier(piFile, '../omp/omp-runner.ts')).toEqual({ kind: 'import', target: 'packages/cezar/src/runners/omp/omp-runner.ts' });
+    expect(classifySpecifier(piFile, './..\\omp/omp-runner.ts')).toEqual({ kind: 'import', target: 'packages/cezar/src/runners/omp/omp-runner.ts' });
     expect(classifySpecifier(piFile, '../pi/pi-args.ts')).toEqual({ kind: 'import', target: '../pi/pi-args.ts' });
     expect(classifySpecifier(piFile, 'zod')).toEqual({ kind: 'package', target: 'zod' });
     expect(classifySpecifier(piFile, 'node:fs')).toBeUndefined();
@@ -188,10 +193,14 @@ describe('runner-folder-escape (hearsay-tools/squawk#4255)', () => {
       "import type { UiEvent } from '../../core/ui-events.ts';",
       "import '../omp/omp-runner.ts';",
       "import './%2e%2e/omp/omp-runner.ts';",
+      "import './..\\\\omp/omp-runner.ts';",
+      "import '.\\\\..\\\\omp\\\\omp-runner.ts';",
       "import '../pi/pi-args.ts';",
       "export { productEnv } from '../../core/product-env.ts';",
       "export * from '../omp/omp-runner.ts';",
       "const v = () => import('../../core/product-env.ts');",
+      "const v1 = () => import('./..\\\\omp/omp-runner.ts');",
+      "const v2 = () => import('./%2e%2e/omp/omp-runner.ts');",
       'const w = (name: string) => import(`../../../scripts/${name}`);',
       "type Env = import('../../core/product-env.ts').ProductEnv;",
       "import env = require('../../core/product-env.ts');",
