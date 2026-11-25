@@ -56,6 +56,57 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
   return mockPath;
 }
 
+/**
+ * A pi RPC mock for input that lands between the runaway run's end and its agent_settled: pi starts
+ * the input's run first, so it is processing when the retry prompt arrives, and it rejects any
+ * prompt without streamingBehavior there, as pi does.
+ */
+function writeRaceMock(cwd: string): string {
+  const mockPath = join(cwd, 'mock-pi-runaway-race.mjs');
+  writeFileSync(mockPath, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+import readline from 'node:readline';
+const send = (v) => process.stdout.write(JSON.stringify(v) + '\\n');
+const usage = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { total: 0 } };
+const end = (stopReason, extra = {}) => {
+  send({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'x' } });
+  send({ type: 'message_end', message: { role: 'assistant', provider: 'cliproxy-grok', model: 'grok-4.7', usage, content: [{ type: 'text', text: 'x' }], stopReason, ...extra } });
+};
+let prompts = 0;
+let busy = false;
+for await (const line of readline.createInterface({ input: process.stdin })) {
+  const command = JSON.parse(line);
+  if (command.type === 'get_state') {
+    send({ id: command.id, type: 'response', command: 'get_state', success: true, data: { sessionId: 'pi-race', model: { id: 'grok-4.7' } } });
+    continue;
+  }
+  if (command.type !== 'prompt') continue;
+  appendFileSync(${JSON.stringify(join(cwd, 'prompts.ndjson'))}, JSON.stringify({ id: command.id ?? null, message: command.message, streamingBehavior: command.streamingBehavior ?? null }) + '\\n');
+  const ack = { ...(command.id ? { id: command.id } : {}), type: 'response', command: 'prompt' };
+  if (busy && !command.streamingBehavior) { send({ ...ack, success: false, error: 'Agent is already processing. Specify streamingBehavior' }); continue; }
+  send({ ...ack, success: true });
+  prompts += 1;
+  if (prompts === 1) {
+    send({ type: 'agent_start' });
+    end('error', { errorMessage: '[cezar:runaway-reply] the reply passed 64 KiB of text in one message' });
+    send({ type: 'agent_end', messages: [], willRetry: false });
+  } else if (prompts === 2) {
+    // The input reached pi before Squawk read agent_settled: its run is already processing.
+    send({ type: 'agent_settled' });
+    busy = true;
+    send({ type: 'agent_start' });
+  } else {
+    // The steered retry joins the running run, which then ends cleanly.
+    end('stop');
+    send({ type: 'agent_end', messages: [], willRetry: false });
+    busy = false;
+    send({ type: 'agent_settled' });
+  }
+}
+`, { mode: 0o755 });
+  return mockPath;
+}
+
 interface Run { events: AgentEvent[]; uiEvents: UiEvent[]; prompts: Array<{ id: string | null; message: string }> }
 
 /** Runs one session: the opening prompt, then each follow-up after the previous turn ends. */
@@ -118,5 +169,25 @@ describe('pi runaway-reply retry (hearsay-tools/squawk#4236)', () => {
     expect(prompts.map((prompt) => prompt.message)).toEqual(['go', RUNAWAY_REPLY_RETRY_PROMPT, 'next', RUNAWAY_REPLY_RETRY_PROMPT]);
     expect(events.filter((event) => event.type === 'error')).toEqual([]);
     expect(events.filter((event) => event.type === 'turn-end')).toHaveLength(2);
+  });
+
+  it('steers the retry into a run that input started before Squawk read agent_settled', async () => {
+    const events: AgentEvent[] = [];
+    let steered = false;
+    const session = new PiRunner({ bin: writeRaceMock(cwd) }).startSession(
+      { toolGrant: UNSET_TOOL_GRANT, userPrompt: 'go', cwd, timeoutMs: 10_000 },
+      (event) => {
+        events.push(event);
+        if (event.type === 'text' && !steered) { steered = true; session.sendMessage([{ type: 'text', text: 'more' }]); }
+        if (event.type === 'turn-end') session.end();
+      },
+    );
+    await session.result;
+    const prompts = readFileSync(join(cwd, 'prompts.ndjson'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+    expect(prompts.map((prompt) => [prompt.message, prompt.streamingBehavior])).toEqual([
+      ['go', null], ['more', 'steer'], [RUNAWAY_REPLY_RETRY_PROMPT, 'steer'],
+    ]);
+    expect(events.filter((event) => event.type === 'error')).toEqual([]);
+    expect(events.filter((event) => event.type === 'turn-end')).toHaveLength(1);
   });
 });

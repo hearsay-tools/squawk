@@ -207,11 +207,14 @@ export class PiRunner implements AgentRunner {
     };
 
     // The guard extension stopped a runaway reply and pi settled its run: the Squawk turn stays
-    // open, and the same session gets one retry prompt (hearsay-tools/squawk#4236).
+    // open, and the same session gets one retry prompt (hearsay-tools/squawk#4236). It always
+    // steers: input sent while the turn was open may have started pi's next run before this
+    // agent_settled was read, and pi rejects an unsteered prompt while a run is processing. The
+    // prompt is written before the note, so input sent from the note's handler follows it.
     const retryRunawayReply = (): void => {
       flushText();
+      write({ id: RUNAWAY_REPLY_RETRY_ID, type: 'prompt', message: RUNAWAY_REPLY_RETRY_PROMPT, streamingBehavior: 'steer' });
       onEvent?.({ type: 'note', message: RUNAWAY_REPLY_RETRY_NOTE });
-      write({ id: RUNAWAY_REPLY_RETRY_ID, type: 'prompt', message: RUNAWAY_REPLY_RETRY_PROMPT });
     };
     // pi refused the retry prompt, so no run will settle the open turn: settle it here.
     const failRunawayRetry = (value: Record<string, unknown>): void => {
