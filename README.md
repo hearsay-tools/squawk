@@ -451,6 +451,10 @@ See [Remote access (host Squawk on a server)](docs/remote-access.md).
 
 See [Reviewing task files](docs/task-files.md).
 
+## Plugins
+
+See [Plugins](docs/plugins.md).
+
 ## Configuration (optional)
 
 See [Configuration (optional)](docs/configuration.md).

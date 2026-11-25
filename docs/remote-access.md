@@ -44,5 +44,7 @@ See the **[Remote access overview](server-install/README.md)** for how it
 works and how to redeploy new versions. A remote cockpit keeps Agent config and
 worktree setup read-only; to edit them from the browser, see
 **[Remote settings administration](server-install/remote-settings.md)**.
+A remote cockpit loads [plugins](plugins.md) from the server's `<config>/plugins/`
+only: the browser cannot add or remove one, and health sends no plugin paths.
 
 ---
