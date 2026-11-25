@@ -166,8 +166,10 @@ test('copied dist/runners folders run without bundled runners and follow A3 base
   try {
     const packageRoot = await installTarball(root);
     const installedRunnersDir = join(packageRoot, 'dist/runners');
+    const expectedRunnerIds = bundledRunnerIds();
+    assert.ok(expectedRunnerIds.length > 0, 'checkout should ship bundled runners');
     const runnerIds = bundledRunnerIds(installedRunnersDir);
-    assert.ok(runnerIds.length > 0, 'installed tarball should ship bundled runners');
+    assert.deepEqual(runnerIds, expectedRunnerIds, 'installed tarball should ship every bundled runner folder');
 
     // 1. Verify the wrapper boots once without bundled runners and the CLI reuses that boot.
     const probeHomeDir = join(root, 'probe-home');
