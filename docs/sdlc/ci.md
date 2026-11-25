@@ -361,8 +361,6 @@ where four ran before. The setup of a shard (install, build, server start) does 
 so a queue run gets shorter and its runner-minutes rise. `node .github/scripts/queue-metrics.cjs`
 reports both. The pull request for that issue records the queue run time before and after.
 
-The legacy floor config, sequencer, reporter and duration manifest remain for PR compatibility. PR CI loads `ci.yml` from the target branch, whose old floor jobs still read these files from the PR checkout. The new workflow has no floor jobs and does not use these helpers. Remove the helpers only after the new workflow reaches the target branch.
-
 The required check keeps its name, **Unit, build, E2E, and package**. It requires
 typecheck, both unit groups and build/package on every change surface. Full-matrix changes also
 require all eight Vitest shards and all eight cockpit browser shards. Pull requests
