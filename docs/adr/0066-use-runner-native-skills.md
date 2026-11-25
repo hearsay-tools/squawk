@@ -24,10 +24,15 @@ are binding:
 | D7 | `cezar_automation` replaces the built-in automation skill, with paused creation and preview-before-enable enforced by the tool |
 | D8 | A path selects a listed copy. Name-only duplicates resolve by `repo` over `user` over `system`; an equal best scope or an unknown scope is ambiguous |
 
-A selected missing, stale or ambiguous reference fails at step open. An ambiguous typed name
-stays text with a note naming the paths. Run-only `skillPath` preserves a picked copy across
-worktrees and Continue; portable workflows and automations keep ids only.
-A resumed Continue does not trigger again. A fresh-session fallback does.
+A selected missing, stale or ambiguous reference fails at step open. On Continue, when a
+recorded `skillPath` disappears from the runner's list (for example after a plugin moves),
+Squawk falls back to resolving the skill id under D8 scope precedence, updates `skillPath`
+on the Continue step and owning step to the newly resolved path, and emits a note naming
+the old and new paths; Continue still fails when the id is missing or remains ambiguous
+under D8. An ambiguous typed name stays text with a note naming the paths. Run-only
+`skillPath` preserves a picked copy across worktrees and Continue; portable workflows and
+automations keep ids only. A resumed Continue does not trigger again. A fresh-session
+fallback does.
 
 ## Consequences
 

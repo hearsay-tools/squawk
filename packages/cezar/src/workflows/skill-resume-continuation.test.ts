@@ -162,7 +162,7 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
     expect(store.getRun(id)?.status).toBe('cancelled');
   });
 
-  const rejectedSkills = ['missing', 'ambiguous', 'stale path', 'unavailable'] as const;
+  const rejectedSkills = ['missing', 'removed with stale path', 'ambiguous', 'moved ambiguous', 'unavailable'] as const;
   type RejectedSkill = typeof rejectedSkills[number];
 
   function rejectedCatalog(kind: RejectedSkill) {
@@ -170,19 +170,21 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
     const other = join(repoRoot, 'second', TEAM_SKILL, 'SKILL.md');
     const old = join(repoRoot, 'removed', TEAM_SKILL, 'SKILL.md');
     const closeId = `${TEAM_SKILL}-near`;
-    const skills: RunnerSkill[] = kind === 'missing'
+    const isMissing = kind === 'missing' || kind === 'removed with stale path';
+    const isAmbiguous = kind === 'ambiguous' || kind === 'moved ambiguous';
+    const skills: RunnerSkill[] = isMissing
       ? [{ id: closeId, name: closeId, scope: 'repo', path }]
       : [{ id: TEAM_SKILL, name: TEAM_SKILL, scope: 'repo', path },
-        ...(kind === 'ambiguous' ? [{ id: TEAM_SKILL, name: TEAM_SKILL, scope: 'repo' as const, path: other }] : [])];
+        ...(isAmbiguous ? [{ id: TEAM_SKILL, name: TEAM_SKILL, scope: 'repo' as const, path: other }] : [])];
     const catalog = fixedSkillCatalog(skills);
     if (kind === 'unavailable') vi.spyOn(catalog, 'get').mockResolvedValue({
       runner: 'claude', skills: [], problems: [], source: 'unavailable', reason: 'probe refused sentinel',
     });
-    const evidence = kind === 'missing' ? ['missing', closeId, path]
-      : kind === 'ambiguous' ? ['ambiguous', path, other]
-      : kind === 'stale path' ? ['selected path', old, path]
+    const evidence = isMissing ? ['missing', closeId, path]
+      : isAmbiguous ? ['ambiguous', path, other]
       : ['unavailable', 'probe refused sentinel', 'Selected path: (name only)', 'Listed paths: (unavailable)'];
-    return { catalog, evidence, path: kind === 'stale path' ? old : undefined };
+    const stalePath = kind === 'removed with stale path' || kind === 'moved ambiguous' ? old : undefined;
+    return { catalog, evidence, path: stalePath };
   }
 
   for (const queued of [false, true]) it.each(rejectedSkills)(`%s fails Continue before any model call and releases admission (queued=${queued})`, async kind => {
@@ -229,6 +231,78 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
       expect(revoke).toHaveBeenCalledTimes(1);
       expect(semaphore.busy()).toBe(0);
     }, { timeout: LAUNCH_WAIT_MS });
+  });
+
+  it('Continue succeeds after a skill file moves uniquely, updates skillPath, and logs the old and new paths', async () => {
+    const oldPath = '/plugins/local-checkout/apptension-sdlc/skills/team-playbook/SKILL.md';
+    const newPath = '/home/agent/.gemini/config/plugins/apptension-sdlc/skills/team-playbook/SKILL.md';
+    const id = terminalSkillRun(TEAM_SKILL);
+    store.updateStep(id, 'task', { skillPath: oldPath });
+    manager.setSkillCatalog(fixedSkillCatalog([{ id: TEAM_SKILL, name: TEAM_SKILL, scope: 'user', path: newPath }]));
+
+    expect(manager.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
+    // bound: startSession captures the fallback skill after Continue resolves the moved path.
+    await vi.waitFor(() => expect(launches).toHaveLength(1), { timeout: LAUNCH_WAIT_MS });
+    expect(launches[0]!.spec.resumeFallbackSkill).toEqual({ id: TEAM_SKILL, path: newPath, args: '' });
+
+    const run = store.getRun(id)!;
+    expect(run.steps.find(step => step.id === 'task')?.skillPath).toBe(newPath);
+    expect(run.steps.at(-1)?.skillPath).toBe(newPath);
+    const moveNotes = () => store.eventLog.readEvents(id).filter(
+      event => event.type === 'note' && String(event.message).includes(oldPath) && String(event.message).includes(newPath),
+    );
+    expect(moveNotes()).toHaveLength(1);
+    sessions[0]!.finish();
+    // bound: wait for Continue 1 to settle before starting Continue 2 on the updated skillPath.
+    await vi.waitFor(() => expect(manager.isActive(id)).toBe(false), { timeout: LAUNCH_WAIT_MS });
+
+    expect(manager.continueRun(id, { text: 'second continue' })).toEqual({ ok: true });
+    // bound: startSession captures the second Continue launch using the updated skillPath.
+    await vi.waitFor(() => expect(launches).toHaveLength(2), { timeout: LAUNCH_WAIT_MS });
+    expect(launches[1]!.spec.resumeFallbackSkill).toEqual({ id: TEAM_SKILL, path: newPath, args: '' });
+    expect(moveNotes()).toHaveLength(1);
+    sessions[1]!.finish();
+  });
+
+  it('Continue resolves a moved skill by D8 scope precedence and stores a relative path inside the worktree', async () => {
+    const oldPath = join(repoRoot, 'removed', TEAM_SKILL, 'SKILL.md');
+    const repoPath = join(repoRoot, '.agents/skills', TEAM_SKILL, 'SKILL.md');
+    const userPath = '/home/agent/.agents/skills/team-playbook/SKILL.md';
+    const id = terminalSkillRun(TEAM_SKILL);
+    store.updateStep(id, 'task', { skillPath: oldPath });
+    manager.setSkillCatalog(fixedSkillCatalog([
+      { id: TEAM_SKILL, name: TEAM_SKILL, scope: 'user', path: userPath },
+      { id: TEAM_SKILL, name: TEAM_SKILL, scope: 'repo', path: repoPath },
+    ]));
+
+    expect(manager.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
+    // bound: startSession captures the D8-resolved fallback skill on Continue.
+    await vi.waitFor(() => expect(launches).toHaveLength(1), { timeout: LAUNCH_WAIT_MS });
+    expect(launches[0]!.spec.resumeFallbackSkill).toEqual({ id: TEAM_SKILL, path: repoPath, args: '' });
+    expect(store.getRun(id)?.steps.find(step => step.id === 'task')?.skillPath).toBe(`.agents/skills/${TEAM_SKILL}/SKILL.md`);
+    expect(store.getRun(id)?.steps.at(-1)?.skillPath).toBe(`.agents/skills/${TEAM_SKILL}/SKILL.md`);
+    expect(store.eventLog.readEvents(id).some(
+      event => event.type === 'note' && String(event.message).includes(oldPath) && String(event.message).includes(repoPath),
+    )).toBe(true);
+    sessions[0]!.finish();
+  });
+
+  it('Continue clears skillPath when a moved skill resolves uniquely without a reported path', async () => {
+    const oldPath = '/plugins/old/plugin-known/SKILL.md';
+    const id = terminalSkillRun('plugin:known');
+    store.updateStep(id, 'task', { skillPath: oldPath });
+    manager.setSkillCatalog(fixedSkillCatalog([{ id: 'plugin:known', name: 'Plugin skill', scope: 'other' }]));
+
+    expect(manager.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
+    // bound: startSession captures the pathless fallback skill after Continue clears the stale path.
+    await vi.waitFor(() => expect(launches).toHaveLength(1), { timeout: LAUNCH_WAIT_MS });
+    expect(launches[0]!.spec.resumeFallbackSkill).toEqual({ id: 'plugin:known', args: '' });
+    expect(store.getRun(id)?.steps.find(step => step.id === 'task')?.skillPath).toBeUndefined();
+    expect(store.getRun(id)?.steps.at(-1)?.skillPath).toBeUndefined();
+    expect(store.eventLog.readEvents(id).some(
+      event => event.type === 'note' && String(event.message).includes(oldPath) && String(event.message).includes('(path not reported)'),
+    )).toBe(true);
+    sessions[0]!.finish();
   });
 
   it('Continue resolves a unique other-scope plugin skill without a reported path', async () => {
