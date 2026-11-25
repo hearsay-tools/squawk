@@ -1,0 +1,28 @@
+{
+  "entries": [
+    {
+      "file": "packages/cezar/src/runners/opencode/opencode-permissions.ts",
+      "kind": "package",
+      "target": "zod",
+      "count": 1
+    },
+    {
+      "file": "packages/cezar/src/runners/opencode/opencode-server-runner.ts",
+      "kind": "url",
+      "target": "packages/cezar/scripts/mock-opencode-serve.mjs",
+      "count": 1
+    },
+    {
+      "file": "packages/cezar/src/runners/opencode/opencode-skill-catalog.ts",
+      "kind": "package",
+      "target": "zod",
+      "count": 1
+    },
+    {
+      "file": "packages/cezar/src/runners/opencode/opencode-task-scope.ts",
+      "kind": "url",
+      "target": "packages/cezar/scripts/opencode-task-scope.mjs",
+      "count": 1
+    }
+  ]
+}

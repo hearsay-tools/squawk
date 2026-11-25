@@ -19,6 +19,7 @@ import { staleRunnerIdBranches } from './runner-id-branch.ts';
 import { layerMapProblems, staleLayerImports } from './layer-import.ts';
 import { staleRunnerRosters } from './runner-roster-literal.ts';
 import { staleRunnerCoreImports } from './runner-core-import.ts';
+import { staleRunnerFolderEscapes } from './runner-folder-escape.ts';
 import { staleClockDates } from './test-unpinned-clock-date.ts';
 import { repoRoot } from './source-rule.ts';
 
@@ -140,7 +141,7 @@ export function staleEntries(root = repoRoot): string[] {
       problems.push(`${READERS} cez/run-fact-reader: ${file} no longer reads autoResumeAt; remove it from the list`);
     }
   }
-  problems.push(...staleHistoryReaders(root), ...staleHomeReaders(root), ...staleRunnerIdBranches(root), ...staleRunnerRosters(root), ...staleLayerImports(root), ...staleRunnerCoreImports(root), ...staleClockDates(root));
+  problems.push(...staleHistoryReaders(root), ...staleHomeReaders(root), ...staleRunnerIdBranches(root), ...staleRunnerRosters(root), ...staleLayerImports(root), ...staleRunnerCoreImports(root), ...staleRunnerFolderEscapes(root), ...staleClockDates(root));
   const baseline = readSetterBaseline(join(root, SETTERS));
   const actual = [...new Set(baseline.map((entry) => entry.file))].flatMap((file) => {
     const text = source(`${WEB_SRC}${file}`);
