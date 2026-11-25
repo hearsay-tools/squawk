@@ -935,6 +935,8 @@ const squawkExtensionArgs = [
   '--extension',
   expect.stringMatching(/scripts\/pi-retry-degraded-service\.mjs$/),
   '--extension',
+  expect.stringMatching(/scripts\/pi-runaway-reply-guard\.mjs$/),
+  '--extension',
   expect.stringMatching(/scripts\/pi-project-skills\.mjs$/),
 ];
 
@@ -956,12 +958,14 @@ describe('pi RPC argv', () => {
     ]) {
       const args = buildPiArgs(spec);
       const extensions = args.flatMap((arg, index) => (arg === '--extension' ? [args[index + 1]!] : []));
-      expect(extensions.slice(0, 2)).toEqual([
+      expect(extensions.slice(0, 3)).toEqual([
         expect.stringMatching(/scripts\/pi-retry-degraded-service\.mjs$/),
+        expect.stringMatching(/scripts\/pi-runaway-reply-guard\.mjs$/),
         expect.stringMatching(/scripts\/pi-project-skills\.mjs$/),
       ]);
-      if (spec.squawkTools) expect(extensions[2]).toMatch(/scripts\/pi-ci-wait\.mjs$/);
+      if (spec.squawkTools) expect(extensions[3]).toMatch(/scripts\/pi-ci-wait\.mjs$/);
       expect(existsSync(extensions[1]!)).toBe(true);
+      expect(existsSync(extensions[2]!)).toBe(true);
     }
   });
 
@@ -995,6 +999,7 @@ describe('pi RPC argv', () => {
     expect(args).toEqual(expect.arrayContaining([...PI_MINIMAL_ARGS]));
     expect(args.some(arg => arg.endsWith('pi-project-skills.mjs'))).toBe(false);
     expect(args.some(arg => arg.endsWith('pi-retry-degraded-service.mjs'))).toBe(true);
+    expect(args.some(arg => arg.endsWith('pi-runaway-reply-guard.mjs'))).toBe(true);
     expect(buildPiArgs({ toolGrant: UNSET_TOOL_GRANT, cwd: '/repo', userPrompt: 'task' })).not.toContain('--no-session');
   });
 
@@ -1099,6 +1104,7 @@ describe('pi tool selection (hearsay-tools/cezarion#1305)', () => {
     const args = buildPiArgs({ ...base, toolGrant: { kind: 'step-default', tools: stepDefault }, squawkTools: ci });
     expect(extensions(args)).toEqual([
       expect.stringMatching(/scripts\/pi-retry-degraded-service\.mjs$/),
+      expect.stringMatching(/scripts\/pi-runaway-reply-guard\.mjs$/),
       expect.stringMatching(/scripts\/pi-project-skills\.mjs$/),
       expect.stringMatching(/scripts\/pi-ci-wait\.mjs$/),
       expect.stringMatching(/scripts\/pi-default-tools\.mjs$/),
