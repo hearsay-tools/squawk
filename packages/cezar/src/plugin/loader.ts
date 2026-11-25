@@ -167,12 +167,14 @@ function addToReport(dir: string, loaded: readonly LoadedPlugin[], failed: reado
 /**
  * Load the bundled runners under `dir` (default: the `runners/` folder of this Squawk copy) in
  * display order, each through `runPluginSetup` like a host plugin, and add them to the report as
- * `bundled`. A bundled runner that fails to import or to register throws: Squawk shipped it, so
+ * `bundled`. A folder with no bundled runner, or a bundled runner that fails to import or to register, throws: Squawk shipped it, so
  * the cockpit would miss a runner it promises, and boot stops instead of hiding the defect.
  */
 export async function loadBundledRunners(dir: string = bundledRunnersDir()): Promise<PluginLoadReport> {
   const folders = bundledRunnerFolders(dir);
-  if (folders.length > 0) installPluginResolveHook();
+  // Squawk always ships its runners: none found means a broken build, never an empty cockpit.
+  if (folders.length === 0) throw new Error(`No bundled runner was found in ${dir}: Squawk ships runners/<id>/index.js for each runner; rebuild it.`);
+  installPluginResolveHook();
   const loaded: LoadedPlugin[] = [];
   for (const { id, path, entry } of folders) {
     try {

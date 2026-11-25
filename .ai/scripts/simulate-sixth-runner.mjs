@@ -54,7 +54,7 @@ export const COMPLETE_ID = 'hexacode';
 /** The places of the complete runner: its folder, its mock and shipped scripts and its skill data. */
 export const COMPLETE_PLACES = [`${SRC}/runners/${COMPLETE_ID}/`, `${SCRIPTS}/mock-${COMPLETE_ID}-`, `${SCRIPTS}/${COMPLETE_ID}-`,
   `${SCRIPTS}/mock-skill-data/${COMPLETE_ID}.mjs`];
-const ROSTER_MODULES = new Set(['core/built-in-runner-ids.testkit', 'core/bundled-runners.testkit', 'core/register-all-runners.testkit']);
+const ROSTER_MODULES = new Set(['plugin/bundled-runners', 'core/built-in-runner-ids.testkit', 'core/bundled-runners.testkit', 'core/register-all-runners.testkit']);
 const GUARD_TESTS = [`${SRC}/runner-class-rule.test.ts`, `${SRC}/core/harness-parity-closure.test.ts`, `${SRC}/vitest-setup-closure.test.ts`];
 
 function git(cwd, args) {

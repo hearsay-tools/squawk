@@ -222,6 +222,13 @@ describe('loadBundledRunners', () => {
     expect(cli.cliCommand('half')).toBeUndefined();
   });
 
+  it('throws when the folder holds no bundled runner, instead of booting with none', async () => {
+    mkdirSync(join(dir, 'fixture'));
+    const loader = await import('./loader.ts');
+    await expect(loader.loadBundledRunners(dir)).rejects.toThrow(`No bundled runner was found in ${dir}`);
+    expect(loader.pluginLoadReport().folders).toEqual([]);
+  });
+
   it('throws when an entry has no default-exported setup', async () => {
     plugin('one', 'export const displayOrder = 10;\n');
     const loader = await import('./loader.ts');

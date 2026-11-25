@@ -55,7 +55,8 @@ export function bundledRunnerFolders(dir: string = bundledRunnersDir()): Bundled
     const entry = BUNDLED_RUNNER_ENTRY_FILES.map(file => join(path, file)).find(isFile);
     return entry ? [{ id: folder.name, path, entry, displayOrder: displayOrderOf(entry) }] : [];
   });
-  folders.sort((a, b) => a.displayOrder - b.displayOrder);
+  // Folder-name code-point order breaks a tie, so the order and the error below never depend on readdir.
+  folders.sort((a, b) => a.displayOrder - b.displayOrder || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const repeated = folders.find((folder, index) => index > 0 && folders[index - 1]!.displayOrder === folder.displayOrder);
   if (repeated) throw new Error(`Bundled runners ${folders.filter(folder => folder.displayOrder === repeated.displayOrder).map(folder => folder.id).join(' and ')} declare the same displayOrder ${repeated.displayOrder}.`);
   return folders;
