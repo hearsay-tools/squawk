@@ -141,24 +141,38 @@ export function resolveIssueReference(run: RunRecord, handle?: RepoHandle | null
   return resolveReferencedRef(candidates, run.task, declared, handle);
 }
 
+/** Write or delete `referencedIssueUrl` so an absent URL leaves no own `undefined` key. */
+export function setReferencedIssueUrl(run: RunRecord, url: string | undefined): void {
+  if (url === undefined) delete run.referencedIssueUrl;
+  else run.referencedIssueUrl = url;
+}
+
 /** Check only the fields restoration writes, without copying or walking the run record. */
-export function isOriginatingIssueCurrent(run: RunRecord): boolean {
+export function isOriginatingIssueCurrent(run: RunRecord, handle?: RepoHandle | null): boolean {
   const origin = originatingIssue(run);
   if (origin === undefined || run.markerRefs?.issue === undefined) return true;
   if (run.issueNumber !== origin || Object.hasOwn(run, 'referencedIssueNumberSeeded')) return false;
   if (run.referencedIssueCandidates === undefined && refUrlNumber(run.referencedIssueUrl) === origin) return true;
-  const url = resolveIssueReference(run);
-  return Object.hasOwn(run, 'referencedIssueUrl') && run.referencedIssueUrl === url;
+  const url = resolveIssueReference(run, handle);
+  return url === undefined ? !Object.hasOwn(run, 'referencedIssueUrl') : run.referencedIssueUrl === url;
 }
 
-export function restoreOriginatingIssue(run: RunRecord): void {
+export function restoreOriginatingIssue(run: RunRecord, handle?: RepoHandle | null): void {
   const origin = originatingIssue(run);
   if (origin === undefined || run.markerRefs?.issue === undefined) return;
   run.issueNumber = origin;
   delete run.referencedIssueNumberSeeded;
   if (run.referencedIssueCandidates !== undefined || refUrlNumber(run.referencedIssueUrl) !== origin) {
-    run.referencedIssueUrl = resolveIssueReference(run);
+    setReferencedIssueUrl(run, resolveIssueReference(run, handle));
   }
+}
+
+/** Whether `restoreLostReferencedPullRequest` would leave `run` unchanged (for `handle`). */
+export function isPrReferenceCurrent(run: RunRecord, handle?: RepoHandle | null): boolean {
+  if (run.referencedPullRequestUrl !== undefined || run.markerRefs?.pr === undefined || referencedPrDeclaration(run) !== undefined) {
+    return true;
+  }
+  return resolveReferencedRef(run.referencedPrCandidates ?? [], run.task, undefined, handle) === undefined;
 }
 
 /** Whether a stored summary names a referenced PR or issue, or a declared PR, outside `handle`'s
@@ -192,22 +206,22 @@ export function rescopeRun(run: RunRecord, handle?: RepoHandle | null): boolean 
     run.referencedPullRequestUrl &&
     !isRepoScopedRef(run.referencedPullRequestUrl, run.task, handle)
   ) {
-    run.referencedPullRequestUrl = undefined;
+    delete run.referencedPullRequestUrl;
     changed = true;
   }
   if (
     run.referencedIssueUrl &&
     !isRepoScopedRef(run.referencedIssueUrl, run.task, handle)
   ) {
-    run.referencedIssueUrl = undefined;
+    delete run.referencedIssueUrl;
     changed = true;
     // Take back the number this janitor seeded from that very URL — the same revoke
     // `trackReferencedIssues` performs when ambiguity clears a resolution. A `prNumber`-style
     // number the prompt, namer or a marker owns is NOT ours to touch, which is exactly what
     // `referencedIssueNumberSeeded` records.
     if (run.referencedIssueNumberSeeded) {
-      run.issueNumber = undefined;
-      run.referencedIssueNumberSeeded = undefined;
+      delete run.issueNumber;
+      delete run.referencedIssueNumberSeeded;
     }
   }
   return changed;
@@ -259,7 +273,7 @@ export function trackReferencedIssues(
   const candidatesChanged = seen.size !== before;
   if (candidatesChanged) run.referencedIssueCandidates = [...seen];
   const prev = run.referencedIssueUrl;
-  run.referencedIssueUrl = resolveIssueReference(run, handle);
+  setReferencedIssueUrl(run, resolveIssueReference(run, handle));
   let numberChanged = false;
   if (run.markerRefs?.issue === undefined && ISSUE_URL_RE.test(seedHaystack)) {
     if (run.referencedIssueUrl && run.issueNumber === undefined) {

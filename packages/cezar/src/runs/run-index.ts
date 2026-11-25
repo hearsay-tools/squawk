@@ -165,8 +165,13 @@ function projectRows(db: RunDatabase, rows: readonly RunSummaryRow[], dataDir: s
     }
     // A row that decodes to nothing is one the store leaves out of its list rows too.
     const record = records.get(row.id);
-    if (record) runs.push(coldSummary(record, handle));
-    else unreadable++;
+    if (record) {
+      const rev = String(row.revision);
+      runs.push(coldSummary(record, handle, {
+        skipPrReferenceHeal: db.getMeta(`pr-reference-heal:${row.id}`) === rev,
+        skipIssueAttributionHeal: db.getMeta(`issue-attribution:${row.id}`) === rev,
+      }));
+    } else unreadable++;
   });
   if (unreadable > 0 && !reportedUnreadable.has(dataDir)) {
     reportedUnreadable.add(dataDir);
@@ -225,8 +230,12 @@ function readLegacyRecords(dataDir: string): RunRecord[] {
  * owns it, or recovery once this one builds the project, decides how it ends
  * (hearsay-tools/squawk#967). No process here holding it does not make it failed.
  */
-function coldSummary(run: RunRecord, handle?: RepoHandle | null): RunSummary {
-  reconcileLoadedRun(run, { keepLive: true });
+function coldSummary(
+  run: RunRecord,
+  handle?: RepoHandle | null,
+  heal?: { skipPrReferenceHeal?: boolean; skipIssueAttributionHeal?: boolean },
+): RunSummary {
+  reconcileLoadedRun(run, { keepLive: true, ...heal });
   rescopeRun(run, handle);
   return toRunSummary(run);
 }

@@ -33,7 +33,7 @@ import { mergePullRequests } from './pull-requests.ts';
 import { applyExit, type RunExitId } from './run-exits.ts';
 import {
   ISSUE_URL_RE, PR_URL_RE, refUrlNumber, referencedPrDeclaration, rescopeRun, resolveIssueReference, resolveReferencedRef,
-  trackReferencedIssues, trackReferencedPrs,
+  setReferencedIssueUrl, trackReferencedIssues, trackReferencedPrs,
 } from './run-references.ts';
 import type { RepoHandle, RunRecord, StepState } from './store.ts';
 
@@ -329,7 +329,7 @@ function resolveEditedTaskRefs(run: RunRecord, handle: RepoHandle | null | undef
     run.referencedPullRequestUrl = resolveReferencedRef(run.referencedPrCandidates, run.task, referencedPrDeclaration(run), handle);
   }
   if (run.referencedIssueCandidates !== undefined) {
-    run.referencedIssueUrl = resolveIssueReference(run, handle);
+    setReferencedIssueUrl(run, resolveIssueReference(run, handle));
     const number = refUrlNumber(run.referencedIssueUrl);
     if (run.referencedIssueNumberSeeded) {
       // We may change only the number this janitor owns, including clearing an ambiguous one.

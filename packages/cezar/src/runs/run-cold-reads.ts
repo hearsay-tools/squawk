@@ -125,7 +125,12 @@ export class RunColdReadsTopic {
     if (this.coldBase.size === 0) queueMicrotask(() => this.coldBase.clear());
     const family = rowFamily(row);
     this.coldBase.set(row.id, { revision: row.revision, seq: row.seq, data: row.data, extras, owned: this.claimed.has(family) || this.pendingClaims.has(family) });
-    reconcileLoadedRun(run, { keepLive: this.keepLive });
+    const rev = String(row.revision);
+    reconcileLoadedRun(run, {
+      keepLive: this.keepLive,
+      skipPrReferenceHeal: this.db?.getMeta(`pr-reference-heal:${row.id}`) === rev,
+      skipIssueAttributionHeal: this.db?.getMeta(`issue-attribution:${row.id}`) === rev,
+    });
     loaded?.(run);
     rescopeRun(run, this.repoHandle);
     return run;

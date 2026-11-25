@@ -22,7 +22,7 @@ import {
   type RunConflictEvidence, type RunDatabase, type RunDatabaseChanges, type RunDatabaseCommit, type RunFenceClaim, type RunRowInput, type RunWriteFence,
 } from './run-database.ts';
 import type { RunExitId } from './run-exits.ts';
-import { rescopeRun, isOriginatingIssueCurrent } from './run-references.ts';
+import { isOriginatingIssueCurrent, isPrReferenceCurrent, rescopeRun } from './run-references.ts';
 import type { RunRetentionTopic } from './run-retention.ts';
 import { encodeRunRow } from './run-row.ts';
 import type { RunStoreOpenError } from './store-open-error.ts';
@@ -261,7 +261,8 @@ export class RunPersistenceTopic implements RunPersistence {
       const encoded = encodeRawRecord(run, (this.base.get(run.id) ?? this.coldBase.get(run.id))?.extras);
       extras.set(run.id, encoded.extras);
       upserts.push({ ...encodeRunRow(run, encoded.data),
-        issueAttributionCurrent: isOriginatingIssueCurrent(run) });
+        issueAttributionCurrent: isOriginatingIssueCurrent(run, this.repoHandle),
+        prReferenceCurrent: isPrReferenceCurrent(run, this.repoHandle) });
     };
     for (const [id, next] of staged) {
       if (next) encode(next);
