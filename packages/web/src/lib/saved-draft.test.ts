@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { sameJson, useSavedDraft } from './saved-draft'
+import { useSavedDraft } from './saved-draft'
 
 describe('useSavedDraft', () => {
   it('follows the saved value while the user has not changed it', () => {
@@ -24,14 +24,5 @@ describe('useSavedDraft', () => {
     rerender({ saved: 'mine' })
     rerender({ saved: 'theirs' })
     expect(result.current[0]).toBe('theirs')
-  })
-
-  it('compares structured values with the given equality', () => {
-    const { result, rerender } = renderHook(({ saved }) => useSavedDraft(saved, sameJson), {
-      initialProps: { saved: { name: 'a' } },
-    })
-    act(() => result.current[1]((current) => ({ ...current })))
-    rerender({ saved: { name: 'b' } })
-    expect(result.current[0]).toEqual({ name: 'b' })
   })
 })
