@@ -274,12 +274,30 @@ describe.skipIf(process.platform === 'win32')('session process groups (hearsay-t
     expect(alive(sibling.pid!)).toBe(true);
   });
 
-  it.runIf(isSessionContained())('on a contained host, Stop ends a detached setsid child, while gracefulEnd keeps it alive', async () => {
+  it.runIf(isSessionContained())('on a contained host, Stop ends a detached setsid child even when the leader handles SIGTERM and exits 0, while gracefulEnd keeps it alive', async () => {
     const stopped = await start(leaderScript(IGNORES_TERM, { detached: true }));
     signalSession(stopped.leader, 'SIGTERM');
     await exited(stopped.leader);
     // bound: SIGTERM grace, then cgroup.kill and reaping.
     await vi.waitFor(() => expect(alive(stopped.member)).toBe(false), { timeout: 10_000 });
+
+    // A leader whose SIGTERM handler exits 0 (as OpenCode's mock does): explicit Stop must still reap.
+    const exitZeroCwd = mkdtempSync(join(tmpdir(), 'cez-session-stop-exit0-'));
+    dirs.push(exitZeroCwd);
+    const exitZeroLeader = spawnSessionLeader(process.execPath, ['-e', `const { spawn } = require('child_process'); const fs = require('fs');
+process.on('SIGTERM', () => process.exit(0));
+const s = spawn(process.execPath, ['-e', ${JSON.stringify(IGNORES_TERM)}], { stdio: 'ignore', detached: true });
+fs.writeFileSync('member.pid.tmp', String(s.pid)); fs.renameSync('member.pid.tmp', 'member.pid');
+setTimeout(() => {}, 20000);`], { cwd: exitZeroCwd, env: process.env, timings: { killGraceMs: 100 } });
+    pids.push(exitZeroLeader.pid!);
+    // bound: wait for detached child PID publication.
+    const exitZeroMember = await vi.waitFor(() => requirePid(join(exitZeroCwd, 'member.pid')), { timeout: 10_000 });
+    pids.push(exitZeroMember);
+    signalSession(exitZeroLeader, 'SIGTERM');
+    await exited(exitZeroLeader);
+    expect(exitZeroLeader.exitCode).toBe(0);
+    // bound: SIGTERM grace, then cgroup.kill and reaping.
+    await vi.waitFor(() => expect(alive(exitZeroMember)).toBe(false), { timeout: 10_000 });
 
     const cwd = mkdtempSync(join(tmpdir(), 'cez-session-graceful-'));
     dirs.push(cwd);

@@ -282,7 +282,8 @@ export function isNormalSessionExit(
 ): boolean {
   if (state.forcedKill) return false;
   if (code === 0 && signal === null) return true;
-  return Boolean(state.gracefulEnd && signal !== 'SIGKILL' && (code === null || code === 0 || code === 143));
+  if (!state.gracefulEnd) return false;
+  return signal === 'SIGTERM' || (signal === null && code === 143);
 }
 
 /** Mark that a runner's normal `end()` teardown is signalling `child` (for example OpenCode's
@@ -396,7 +397,9 @@ export function spawnSessionLeader(
 
 function registeredLeaderForSignal(child: ChildProcess, signal: NodeJS.Signals): Leader | undefined {
   const state = exitStates.get(child);
-  if (state && signal === 'SIGKILL') state.forcedKill = true;
+  // Any explicit Stop / non-graceful signal or SIGKILL escalation marks the exit abnormal even
+  // if the leader handles SIGTERM and exits with code 0 (hearsay-tools/squawk#1345).
+  if (state && (signal === 'SIGKILL' || !state.gracefulEnd)) state.forcedKill = true;
   const pid = child.pid;
   const leader = pid === undefined ? undefined : leaders.get(pid);
   return leader?.child === child ? leader : undefined;
