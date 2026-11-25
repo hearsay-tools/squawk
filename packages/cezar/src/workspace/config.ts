@@ -19,7 +19,7 @@ import {
 import { WEBHOOK_TRIGGERS, type WebhookTrigger } from '@open-mercato/cezar-contract/attention';
 import { projectWebhookUrlSchema } from '@open-mercato/cezar-contract/projects';
 import type { ProviderId } from '../core/provider-auth.ts';
-import { knownRunnerIds, registeredRunners } from '../core/runner-registry.ts';
+import { knownRunnerIds } from '../core/runner-registry.ts';
 import { storedRunnerIdSchema } from '../core/runner-id-schema.ts';
 
 /**
@@ -205,15 +205,16 @@ const composerDefaultsSchema = z
 
 /**
  * A record keyed by registered id, checked against the registry when the file loads. A key no
- * registered runner took is kept and ignored, as `.passthrough()` kept it; a registered runner's
- * value goes through `field` (give it its own `.catch` for per-key degradation). Shared by
- * `agentDefaults.models` here and the account selections in `workspace/agent-accounts.ts`.
+ * registered runner took (or any key while the registry is unsealed) is kept and ignored, as
+ * `.passthrough()` kept it; a registered runner's value goes through `field` (give it its own
+ * `.catch` for per-key degradation). Shared by `agentDefaults.models` here and the account
+ * selections in `workspace/agent-accounts.ts`.
  */
 export function registeredRunnerRecord(field: z.ZodType<string | undefined>) {
   return z.record(z.string(), z.unknown()).transform((entries) => {
     const out = { ...entries } as Record<string, string | undefined>;
-    for (const { id } of registeredRunners()) {
-      if (id in entries) out[id] = field.parse(entries[id]);
+    for (const id of knownRunnerIds()) {
+      if (Object.hasOwn(entries, id)) out[id] = field.parse(entries[id]);
     }
     return out;
   });

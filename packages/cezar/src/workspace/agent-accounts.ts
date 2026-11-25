@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-contract/agent-profiles';
 import type { ProviderId } from '../core/provider-auth.ts';
 import { supportsProfiles } from '../core/agent-profiles.ts';
-import { isRegisteredRunner, registeredRunners, savedRunnerRegistration } from '../core/runner-registry.ts';
+import { isRegisteredRunner, knownRunnerIds, runnersSealed, savedRunnerRegistration } from '../core/runner-registry.ts';
 import { storedRunnerIdSchema } from '../core/runner-id-schema.ts';
 import { loadWorkspaceConfigSync, registeredRunnerRecord } from './config.ts';
 
@@ -194,6 +194,9 @@ function readStoredAccounts(home: Home): AgentAccountStore | 'absent' | 'corrupt
  * default stays in the file for a later load.
  */
 function upgradeSavedDefaults(home: Home, store: AgentAccountStore): AgentAccountStore {
+  // Before boot seals the runner registry, `knownRunnerIds()` is empty; folding now would strip
+  // `defaults` without copying any runner's choice into `selections`. Keep it for a booted load.
+  if (!runnersSealed()) return store;
   const roots = loadWorkspaceConfigSync(home.workspaceConfig).projects.map((project) => project.root);
   if (roots.length === 0 && savedDefaults(store).length > 0) return store;
   try {
@@ -213,7 +216,7 @@ function upgradeSavedDefaults(home: Home, store: AgentAccountStore): AgentAccoun
  *  in registration order (was `PROVIDER_IDS` order — the same five). */
 function savedDefaults(store: AgentAccountStore) {
   const saved = selectionSchema.safeParse((store as { defaults?: unknown }).defaults);
-  return saved.success ? registeredRunners().flatMap(({ id }) => saved.data[id] === undefined ? [] : [[id, saved.data[id]] as const]) : [];
+  return saved.success ? knownRunnerIds().flatMap((id) => saved.data[id] === undefined ? [] : [[id, saved.data[id]] as const]) : [];
 }
 
 function foldSavedDefaults(store: AgentAccountStore, roots: readonly string[]): AgentAccountStore {

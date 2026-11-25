@@ -5,7 +5,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
 import { loadWorkspaceConfig, type WorkspaceConfig } from './workspace/config.ts';
-import { registeredRunners } from './core/runner-registry.ts';
+import { knownRunnerIds } from './core/runner-registry.ts';
 import { storedRunnerIdSchema } from './core/runner-id-schema.ts';
 import { DEFAULT_RUNNER_ID } from './core/runner-ids.ts';
 
@@ -92,7 +92,8 @@ const configSchema = z.object({
   defaultModels: z
     .record(z.string(), z.unknown())
     .transform((entries) => {
-      const known = new Set(registeredRunners().map(({ id }) => id));
+      const knownIds = knownRunnerIds();
+      const known = new Set(knownIds);
       const valueSchema = z.string().trim().min(1).max(200);
       const out: Record<string, string> = {};
       // Unknown keys first, in stored order, then registered keys in registry order. Every value is
@@ -104,8 +105,8 @@ const configSchema = z.object({
         const parsed = valueSchema.safeParse(value);
         if (parsed.success) out[id] = parsed.data;
       }
-      for (const { id } of registeredRunners()) {
-        if (!(id in entries)) continue;
+      for (const id of knownIds) {
+        if (!Object.hasOwn(entries, id)) continue;
         const parsed = valueSchema.safeParse(entries[id]);
         if (parsed.success) out[id] = parsed.data;
       }
