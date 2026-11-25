@@ -81,11 +81,13 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
 
   const save = useMutation({
     mutationFn: (next: PromptTemplate[]) => putUiState({ promptTemplates: next }),
-    onSuccess: (merged) => {
+    onSuccess: (merged, submitted) => {
       queryClient.setQueryData(queryKeys.uiState, merged)
       // The server stores the normalized list (trimmed text); hold that, so a save never leaves
-      // whitespace the form counts as an unsaved edit.
-      setTemplates(normalizePromptTemplates(merged.promptTemplates))
+      // whitespace the form counts as an unsaved edit. Edits made while the save was pending stay.
+      setTemplates((current) =>
+        sameJson(current, submitted) ? normalizePromptTemplates(merged.promptTemplates) : current,
+      )
       toast('Prompt templates saved')
     },
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),

@@ -259,6 +259,29 @@ describe('the prompt templates section', () => {
     await waitFor(() => expect(saveButton().disabled).toBe(true))
     expect(hasUnsentInput()).toBe(false)
   })
+
+  it('keeps an edit made while Save is pending, and it still holds a reload', async () => {
+    serve({ promptTemplates: [{ id: 'custom-1', label: 'My snippet', text: 'A' }] })
+    const served = vi.mocked(fetch).getMockImplementation()!
+    let answer!: () => void
+    vi.mocked(fetch).mockImplementation(async (input, init) =>
+      init?.method === 'PUT' ? new Promise<Response>((resolve) => { answer = () => void served(input, init).then(resolve) }) : served(input, init),
+    )
+    renderSection()
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    const textInput = () => rows()[0]!.querySelector<HTMLTextAreaElement>('[data-slot="prompt-template-text-input"]')!
+
+    fireEvent.change(textInput(), { target: { value: 'B' } })
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(answer).toBeTypeOf('function'))
+    fireEvent.change(textInput(), { target: { value: 'C' } })
+    await act(async () => answer())
+
+    await waitFor(() => expect(putBody()?.promptTemplates).toEqual([{ id: 'custom-1', label: 'My snippet', text: 'B' }]))
+    await waitFor(() => expect(saveButton().disabled).toBe(false))
+    expect(textInput().value).toBe('C')
+    expect(hasUnsentInput()).toBe(true)
+  })
 })
 
 // ---- assigning templates to skills (#413 follow-up) ---------------------------------------------
