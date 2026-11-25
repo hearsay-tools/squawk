@@ -8,6 +8,7 @@ import { parseEffort } from '@hearsay-tools/squawk/plugin/runtime';
 import { PI_FACTS } from './facts.js';
 import { PI_SPEC_SUPPORT, PI_MINIMAL_ARGS } from './spec-support.js';
 import { createPiUiState, mapPiRpcMessage, piFlushProviderError, piProviderErrorMessage, piTurnStarted } from './pi-ui-mapper.js';
+import { PiRunawayReplyRetry, RUNAWAY_REPLY_RETRY_ID, RUNAWAY_REPLY_RETRY_NOTE, RUNAWAY_REPLY_RETRY_PROMPT } from './runaway-reply.ts';
 
 export interface PiRunnerOptions {
   /** Override the binary name/path; defaults to `pi` on PATH (`CEZ_PI_BIN`). */
@@ -107,6 +108,7 @@ export class PiRunner implements AgentRunner {
       }
     };
     let humanPromptAcks = 0;
+    const runawayReplies = new PiRunawayReplyRetry();
     // Agent input readiness, the pending agent receipt, carried input, the turn-end step and
     // auto-end live in the shared Pi-family core.
     const rpcInput = new PiRpcInput({
@@ -202,6 +204,25 @@ export class PiRunner implements AgentRunner {
         if (child.exitCode === null && child.signalCode === null) signalSession(child, 'SIGKILL');
       }, (spec.timings?.killGraceMs ?? DEFAULT_RUNNER_TIMINGS.killGraceMs));
       interruptKillTimer.unref?.();
+    };
+
+    // The guard extension stopped a runaway reply and pi settled its run: the Squawk turn stays
+    // open, and the same session gets one retry prompt (hearsay-tools/squawk#4236).
+    const retryRunawayReply = (): void => {
+      flushText();
+      onEvent?.({ type: 'note', message: RUNAWAY_REPLY_RETRY_NOTE });
+      write({ id: RUNAWAY_REPLY_RETRY_ID, type: 'prompt', message: RUNAWAY_REPLY_RETRY_PROMPT });
+    };
+    // pi refused the retry prompt, so no run will settle the open turn: settle it here.
+    const failRunawayRetry = (value: Record<string, unknown>): void => {
+      onEvent?.({ type: 'error', message: `pi: runaway-reply retry prompt failed: ${rpcError(value)}` });
+      settleTurn({ type: 'agent_settled' });
+    };
+    const settleTurn = (value: Record<string, unknown>): void => {
+      flushText();
+      emitUi(value);
+      runawayReplies.turnSettled();
+      rpcInput.settleTurn();
     };
 
     let fallbackOpeningPending = !spec.skill && !!spec.resumeFallbackSkill;
@@ -317,6 +338,8 @@ export class PiRunner implements AgentRunner {
         if (value.success !== true) {
           onEvent?.({ type: 'note', message: `pi: set_steering_mode failed: ${rpcError(value)}` });
         }
+      } else if (value.command === 'prompt' && value.id === RUNAWAY_REPLY_RETRY_ID) {
+        if (value.success !== true) failRunawayRetry(value);
       } else if (value.command === 'prompt') {
         settlePromptAck(value);
       } else if (value.success === false) {
@@ -328,7 +351,6 @@ export class PiRunner implements AgentRunner {
     const dispatchNative = (value: Record<string, unknown>): void => {
       switch (value.type) {
         case 'response': handleResponse(value); break;
-        case 'agent_settled': rpcInput.settleTurn(); break;
         case 'extension_error': onEvent?.({ type: 'note', message: string(value.error) ?? 'pi extension error' }); break;
         default: dispatchPiTurnMessage(value, turnMessages);
       }
@@ -339,8 +361,14 @@ export class PiRunner implements AgentRunner {
         onEvent?.({ type: 'note', message: `pi: skipped unparseable RPC line: ${truncate(line)}` });
         return;
       }
+      if (isRecord(value)) runawayReplies.readMessage(value);
       restorePiMessageEndError(value);
       opts.onActivity?.();
+      if (isRecord(value) && value.type === 'agent_settled') {
+        if (runawayReplies.takeRetry()) retryRunawayReply();
+        else settleTurn(value);
+        return;
+      }
       // Flush before real message/tool/turn boundaries so v2 UI events
       // never overtake a pending block. Do NOT flush on prompt/response
       // acks — mid-turn `steer` can land between text_deltas and would

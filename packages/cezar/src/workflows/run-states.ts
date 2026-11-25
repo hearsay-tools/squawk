@@ -41,7 +41,7 @@ export const RUN_STATES: { readonly [S in RunState]: RunStateSpec } = {
   queued: { final: false, note: 'In the line, with no session: an unstarted run, a continuation or a workflow remainder. store:createRun writes the entry.' },
   running: {
     final: false,
-    note: 'A turn is in progress and a live session holds a slot. Its automatic exits are the runner ending the turn, failing or exiting; a provider that hangs and stays alive stays running until a person stops it, because no turn timeout ships.',
+    note: 'A turn is in progress and a live session holds a slot. Its automatic exits are the runner ending the turn, failing or exiting; a turn with no model progress for 30 minutes is ended by the no-progress guard (`core/managed-session.ts`), and a pi reply that passes 64 KiB of text is stopped and retried once (hearsay-tools/squawk#4236).',
   },
   'waiting:permission': { final: false, humanOnly: 'Authorization is the user\'s, also for an owned worker. No permission timeout ships.' },
   'waiting:human': {
