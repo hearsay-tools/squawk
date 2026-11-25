@@ -36,8 +36,10 @@ a split happens before the push. Split a file's change across PRs, or generate l
 at test time.
 Pure whole-file deletions (removed files with no additions) are exempt from the per-file size and missing-patch checks because no content remains to review. NUL-byte diffs, incomplete file lists, replacements and edited renames keep the existing rules.
 
-Main PRs start heavy verification (unit tests, build/package, Vitest and browser shards)
-as soon as their queue proof, change classification and immutable PR inputs are ready.
+Main PRs start heavy verification (unit tests, build/package and Vitest shards; cockpit
+browser shards skip on PRs and run on merge groups, `main` pushes without queue proof, and
+manual dispatches) as soon as their queue proof, change classification and immutable PR
+inputs are ready.
 **Unit tests (package)** and **Unit tests (scripts)** run the two groups of
 `npm run test:unit` in parallel. The root command still runs both in sequence.
 **Build and package** runs the build,
@@ -315,9 +317,10 @@ failure and the fixed result, including lease and checkout isolation.
 Required verification includes the unit groups, build/package and shard jobs,
 plus the complexity and clone gates. Typecheck, workflow lint, citations, classification and policy ratchets
 feed the `Review preflight` gate. Heavy jobs wait only for their skip inputs:
-unit tests and build/package need queue proof and immutable PR inputs; Vitest and browser shards
-also need change-surface and PR-shape classification. They run beside typecheck and
-preflight. `verify` requires all of them. Other events keep their existing test inventory. The eight Vitest shards and the eight cockpit browser shards use the exact Node version in
+unit tests and build/package need queue proof and immutable PR inputs; Vitest also needs
+change-surface and PR-shape classification; cockpit browser shards skip PR runs and need
+queue proof, change-surface and PR-shape classification. They run beside typecheck and
+preflight. `verify` requires all of them (accepting skipped browser shards on PRs). Other events keep their existing test inventory. The eight Vitest shards and the eight cockpit browser shards use the exact Node version in
 `.node-version`; typecheck, unit tests and build/package use
 exactly the `engines.node` minimum (Node 24.21.0). Every job installs Node without a GitHub API call (§ Node setup without GitHub API calls):
 
@@ -353,7 +356,8 @@ reports both. The pull request for that issue records the queue run time before 
 
 The required check keeps its name, **Unit, build, E2E, and package**. It requires
 typecheck, both unit groups and build/package on every change surface. Full-matrix changes also
-require all eight Vitest shards and all eight cockpit browser shards. Pull requests
+require all eight Vitest shards, plus all eight cockpit browser shards on merge groups,
+`main` pushes without queue proof, and manual dispatches (PR runs skip browser shards). Pull requests
 and merge groups require the complexity and clone gates. Packaged CLI E2E and
 cockpit browser E2E stay separate named checks. The aggregate and snapshot jobs
 remain on GitHub-hosted Ubuntu. Develop snapshot publishing still waits for this aggregate. Same-repository
@@ -368,7 +372,7 @@ Missing `NPM_TOKEN` produces an explicit dry run. The publisher serializes each
 PR's snapshots without cancelling an active publish and rechecks eligibility
 after waiting.
 
-Cockpit shards run on separate VMs, each owning its server, `CEZ_HOME`, test-env descriptor and browser namespace. The browser sequencer uses measured durations in `.github/cockpit-test-durations.json` to select each slice; `fileParallelism: false` keeps tests sequential within each shard. The matrix uses `fail-fast: false` so a failure does not cancel evidence from the other shards. The aggregate waits on the entire matrix and requires its result to be `success`.
+Cockpit shards run on separate VMs, each owning its server, `CEZ_HOME`, test-env descriptor and browser namespace. The browser sequencer uses measured durations in `.github/cockpit-test-durations.json` to select each slice; `fileParallelism: false` keeps tests sequential within each shard. The matrix uses `fail-fast: false` so a failure does not cancel evidence from the other shards. The aggregate waits on the entire matrix and requires its result to be `success` on merge groups, unproved `main` pushes and manual dispatches (pull requests accept `skipped`).
 
 Local `npm run test:e2e:local` builds once and runs four duration-weighted shards
 concurrently, with separate worktrees, app ports, `CEZ_HOME` directories, descriptors,
