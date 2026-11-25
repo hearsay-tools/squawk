@@ -92,7 +92,7 @@ Also search each reader's actual record paths, including paths outside the
 checkout. For ignored records, use a targeted `--no-ignore` search; for example:
 
 ```sh
-rg --hidden --no-ignore -n -F -e '<old form>' -e '<new form>' -g '*.handoff.md' .ai/cezar/runs
+rg --hidden --no-ignore -n -F -e '<old form>' -e '<new form>' -g '*.handoff.md' .ai/squawk/runs
 ```
 
 A search cannot find a caller that omits a newly required field: keep executable
