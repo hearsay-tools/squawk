@@ -123,7 +123,8 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'undocumented-env-name': ['packages/cezar/scripts/e.mjs', "process.env.CEZ_NOT_DOCUMENTED_ANYWHERE = '1';\n"],
   'child-killed-read': ['packages/cezar/src/core/watchdog-killed.ts', "if (!child.killed) child.kill('SIGKILL');\n"],
   'run-store-testkit-import': ['packages/cezar/src/runs/kit-import.ts', "import { setRunStatus } from './run-store.testkit.ts';\n"],
-  'runner-core-import': ['packages/cezar/src/runners/claude/kit-escape.ts', "import { productEnv } from '../../core/product-env.ts';\n"],
+  'runner-core-import': ['packages/cezar/src/runners/claude/kit-escape.ts', "// oxlint-disable-next-line cez/runner-folder-escape\nimport { productEnv } from '../../core/product-env.ts';\n"],
+  'runner-folder-escape': ['packages/cezar/src/runners/claude/folder-escape.ts', "import { z } from 'zod';\n"],
   'test-unpinned-clock-date': ['packages/web/src/clock-violation.test.ts', "const at = '2026-10-27T00:00:00Z';\n"],
   'stubborn-test-child': ['packages/cezar/src/stubborn-violation.test.ts', "spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)\"]);\n"],
 };
@@ -174,6 +175,9 @@ const APPROVED: Record<string, string> = {
   // runner-core-import: the runner kit's package entry, and a test that reaches outside its runner folder.
   'packages/cezar/src/runners/pi/kit-reader.ts': "import { productEnv } from '@hearsay-tools/squawk/plugin';\n",
   'packages/cezar/src/runners/pi/kit-reader.test.ts': "import { productEnv } from '../../core/product-env.ts';\n",
+  // runner-folder-escape: node:*, kit subpaths, intra-folder URL/join/import, non-import.meta.url URLs, and .mjs runner files.
+  'packages/cezar/src/runners/pi/self-contained.ts': "import { join } from 'node:path';\nimport { productEnv } from '@hearsay-tools/squawk/plugin/runtime';\nimport './pi-args.ts';\nconst ext = new URL('./extensions/x.mjs', import.meta.url);\nconst sub = join(here, 'extensions', 'x.mjs');\nconst other = new URL('../../dist/ci-wait/client.js', clientUrl);\n",
+  'packages/cezar/src/runners/pi/extensions/self-contained.mjs': "import { existsSync } from 'node:fs';\nconst local = new URL('./helper.mjs', import.meta.url);\nexport default { existsSync, local };\n",
   // runner-roster-literal: a subset and a derived list. No file keeps a listed roster.
   'packages/web/src/lib/runner-subset.ts': "const some = ['codex', 'pi'];\nconst stored = [...BUILT_IN_RUNNER_IDS, 'claude-cli'];\n",
   // test-unpinned-clock-date: a pinned clock and a reasoned real clock.
@@ -337,6 +341,16 @@ describe('the cez rules under oxlint', () => {
     expect(findingsFor(file)).toEqual([]);
   }, OXLINT_TIMEOUT_MS);
 
+  it.each(fixtureCases([
+    ['packages/cezar/src/runners/pi/url-escape.ts', "const u = new URL('../../../scripts/x.mjs', import.meta.url);\n"],
+    ['packages/cezar/src/runners/claude/path-escape.ts', "import { resolve as resolvePath } from 'node:path';\nconst p = resolvePath(here, '..', '..', '..', 'scripts', 'mock-claude.mjs');\n"],
+    ['packages/cezar/src/runners/pi/extensions/script-url-escape.mjs', "const u = new URL('../../../../scripts/x.mjs', import.meta.url);\n"],
+    ['packages/cezar/src/runners/pi/extensions/script-import-escape.mjs', "import { x } from '../../../other/x.mjs';\n"],
+    ['packages/cezar/src/runners/codex/pkg-escape.ts', "const mod = await import('zod');\n"],
+  ]))('oxlint refuses runner folder escape in %s: %s', (file) => {
+    expect(findingsFor(file)).toEqual([expect.stringContaining('cez(runner-folder-escape)')]);
+  }, OXLINT_TIMEOUT_MS);
+
   it('fails a file oxlint cannot parse', () => {
     expect(problems).toContainEqual(expect.stringMatching(/^packages\/cezar\/src\/broken\.ts:1:\d+ oxlint: /));
   });
@@ -390,6 +404,9 @@ describe('stale entries', () => {
     'packages/cezar/src/lint/layers.json': JSON.stringify({ layers: {} }),
     'packages/cezar/src/lint/layer-import.baseline.json': JSON.stringify({ entries: [] }),
     'packages/cezar/src/lint/runner-core-import.baseline.json': JSON.stringify({ entries: [] }),
+    'packages/cezar/src/lint/runner-folder-escape/pi.baseline.json': JSON.stringify({
+      entries: [{ file: 'packages/cezar/src/runners/pi/gone.ts', kind: 'package', target: 'zod', count: 1 }],
+    }),
     'packages/cezar/src/lint/resume-time-readers.json': JSON.stringify({ files: { 'packages/web/src/lib/reads.ts': 'reads', 'packages/web/src/lib/stopped.ts': 'stopped' } }),
     'packages/web/src/test/search-params-discipline.baseline.json': JSON.stringify({ sites: [{ file: 'routes/x.tsx', site: '[query, setQuery] = useSearchParams()', reason: 'r' }] }),
     'packages/api-client/src/index.ts': "export * from '@open-mercato/cezar-contract';\n",
@@ -402,6 +419,7 @@ describe('stale entries', () => {
     expect(staleEntries(seeded(lists))).toEqual([
       'packages/cezar/src/lint/contract-root-import.baseline.json cez/contract-root-import: packages/web/src/gone.ts no longer imports a contract root at runtime; remove its exemption',
       'packages/cezar/src/lint/resume-time-readers.json cez/run-fact-reader: packages/web/src/lib/stopped.ts no longer reads autoResumeAt; remove it from the list',
+      'packages/cezar/src/lint/runner-folder-escape/pi.baseline.json cez/runner-folder-escape: stale or invalid entry packages/cezar/src/runners/pi/gone.ts [package] → zod (lists 1, the file has 0); lower the count or remove the entry',
       'packages/cezar/src/lint/test-unpinned-clock-date.baseline.json cez/test-unpinned-clock-date: stale or invalid entry packages/web/src/gone.test.ts (2); remove it',
       'packages/web/src/test/search-params-discipline.baseline.json cez/raw-query-setter: routes/x.tsx no longer has [query, setQuery] = useSearchParams(); remove the entry',
       'packages/web/src/test/card-2-contrast.baseline.json cez/card-2-contrast: stale entry gone.tsx: <p className="bg-card-2 text-danger">. Fix new sites; remove fixed entries from the baseline. Never add allowances. (hearsay-tools/cezarion#1133, hearsay-tools/cezarion#2423).',

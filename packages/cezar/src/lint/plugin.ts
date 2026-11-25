@@ -30,6 +30,7 @@ import { launchReadOutsideResolver } from './launch-read-outside-resolver.ts';
 import { childKilledRead } from './child-killed-read.ts';
 import { runStoreTestkitImport } from './run-store-testkit-import.ts';
 import { runnerCoreImport } from './runner-core-import.ts';
+import { runnerFolderEscape } from './runner-folder-escape.ts';
 import { testWaitDiscipline } from './test-wait-discipline.ts';
 import { undocumentedEnvName } from './undocumented-env-name.ts';
 import { unitWaitDiscipline } from './unit-wait-discipline.ts';
@@ -42,7 +43,7 @@ export const AST_RULES: AstRule[] = [
   designGuardian, layerImport, mockLifecycleBoundary, mockScenarioBoundary, nativeMockSource,
   parityRunnerSubset, rawQuerySetter, runFactReader, runHistoryReader, runnerFactCombination,
   runnerIdBranch, runnerRosterLiteral, undocumentedEnvName,
-  childKilledRead, runStoreTestkitImport, runnerCoreImport, launchReadOutsideResolver,
+  childKilledRead, runStoreTestkitImport, runnerCoreImport, runnerFolderEscape, launchReadOutsideResolver,
   attentionBucketCompareOutsideOwner, automationsCapabilityReadOutsideOwner,
   subagentChildrenOutsideDock, testEnumLiteral, stubbornTestChild, testUnpinnedClockDate,
   activeRunLiteral, activeRunMapWrite, ...activeRunWriteRules, testWaitDiscipline, unitWaitDiscipline,
