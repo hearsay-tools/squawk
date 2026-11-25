@@ -8,8 +8,6 @@
     "packages/cezar/src/server/forge/github.ts": 3163,
     "packages/cezar/src/server/server.ts": 4548,
     "packages/web/e2e/agent-browser.ts": 1139,
-    "packages/web/src/api/client.ts": 2077,
-    "packages/web/src/api/queries.ts": 1899,
     "packages/web/src/routes/github/github.tsx": 1242,
     "packages/web/src/routes/global-tasks.tsx": 1069,
     "packages/web/src/routes/tasks-overview.tsx": 1619
