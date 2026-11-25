@@ -213,7 +213,8 @@ function compareMain(arg: string): void {
     const baseTimings = sideTimings('base', base);
     const candidateTimings = sideTimings('candidate', candidate);
     rounds.push({ loads, base: baseRun, candidate: candidateRun, baseTimings, candidateTimings });
-    console.error(`round ${round}/${runs}: base ${baseRun.user.toFixed(2)} s, candidate ${candidateRun.user.toFixed(2)} s user, load ${loadavg()}`);
+    const [baseLoad = Number.NaN, candidateLoad = Number.NaN] = loads;
+    console.error(`round ${round}/${runs}: base ${baseRun.user.toFixed(2)} s user at load ${baseLoad.toFixed(2)}, candidate ${candidateRun.user.toFixed(2)} s user at load ${candidateLoad.toFixed(2)}`);
   }
   console.log(compareReport({ base: describe, command: `oxlint -c <config> ${paths.join(' ')}`, rounds, cores: availableParallelism() }));
 }
