@@ -75,6 +75,7 @@ const builtinRules = Object.fromEntries(Object.entries(base.rules).filter(([name
 let scratch = '';
 
 const loadavg = () => osLoadavg().map(value => value.toFixed(2)).join(' ');
+const oneMinute = () => osLoadavg()[0] ?? Number.NaN;
 const seconds = (text: string) => {
   const match = /^(\d+)m([\d.]+)s$/.exec(text);
   return match ? Number(match[1]) * 60 + Number(match[2]) : Number.NaN;
@@ -183,9 +184,9 @@ function compareMain(arg: string): void {
   const candidate: Side = { config: join(repoRoot, '.oxlintrc.json'), cwd: repoRoot };
   const rounds: CompareRound[] = [];
   for (let round = 1; round <= runs; round++) {
-    const loads = [osLoadavg()[0]];
+    const loads = [oneMinute()];
     const baseRun = measure('base', base.config, base.cwd);
-    loads.push(osLoadavg()[0]);
+    loads.push(oneMinute());
     const candidateRun = measure('candidate', candidate.config, candidate.cwd);
     const baseTimings = sideTimings('base', base);
     const candidateTimings = sideTimings('candidate', candidate);

@@ -20,7 +20,8 @@ export interface CompareInput { base: string; command: string; rounds: CompareRo
 export function median(values: readonly number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+  const upper = sorted[middle] ?? Number.NaN;
+  return sorted.length % 2 === 1 ? upper : ((sorted[middle - 1] ?? Number.NaN) + upper) / 2;
 }
 
 /** The `cez/*` rows of oxlint's `--debug timings` table: rule name to JS milliseconds. */
