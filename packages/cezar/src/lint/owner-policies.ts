@@ -218,7 +218,8 @@ export const OWNER_POLICIES: Record<string, OwnerPolicy> = {
     "name": "server-declared-validator-schema",
     "message": "Declare the request schema in packages/contract and import its value from @open-mercato/cezar-contract/<module> (docs/areas/http-api.md); server.ts only chains routes. (hearsay-tools/squawk#3774).",
     "files": [
-      "packages/cezar/src/server/server.ts"
+      "packages/cezar/src/server/server.ts",
+      "packages/cezar/src/server/*-routes.ts"
     ],
     "ignores": []
   },

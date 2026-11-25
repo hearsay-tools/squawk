@@ -1,7 +1,6 @@
 import { memoizeRead } from './bounded-read-cache.ts';
 import { cachedWorktreeSizeBytes } from './worktree-size-cache.ts';
 import { readRepoRefs, forgetRepoRead } from './repo-read-cache.ts';
-import { allocateAgentProfileId } from './agent-profile-id.ts';
 import { runnerSkillsQuerySchema } from '@open-mercato/cezar-contract/runner-skills';
 import type { RunnerSkillCatalog } from '../core/runner-skill-catalog.ts';
 import { readRunnerSkills } from './runner-skills.ts';
@@ -16,17 +15,15 @@ import { writeMergedConfig } from './config-merge.ts';
 import { applyWorkspaceConfigPatch } from './workspace-config-patch.ts';
 import { retryAutomationLogReceipt } from './automation-log-retry.ts';
 import { automationCreateSchema, automationUpdateSchema, automationCheckRequestSchema, automationLogQuerySchema } from '@open-mercato/cezar-contract/automation-requests';
-import { providerConnectSchema, createAgentProfileSchema, updateAgentProfileSchema, selectAgentProfileSchema, providerEnabledSchema, providerRetrySchema, providerRouteParamsSchema, agentProfileRouteParamsSchema } from '@open-mercato/cezar-contract/provider-requests';
 import { planSchema, parseWorkflowSchema } from '@open-mercato/cezar-contract/workflow-requests';
 import { uiStateBody } from '@open-mercato/cezar-contract/ui-state-requests';
 import { queuedMessagePatchSchema, continueSchema, archiveSchema, openInSchema } from '@open-mercato/cezar-contract/run-requests';
-import { refreshQuery, strictRefreshQuerySchema, browseQuerySchema, worktreeFilesQuerySchema } from '@open-mercato/cezar-contract/query-requests';
+import { refreshQuery, browseQuerySchema, worktreeFilesQuerySchema } from '@open-mercato/cezar-contract/query-requests';
 import { mergeNumberParams, prChangesParams, prChangesQuery, mergeBodySchema } from '@open-mercato/cezar-contract/github-requests';
 import { gitCommitSchema, reclaimBodySchema, repoBranchSchema } from '@open-mercato/cezar-contract/repo-requests';
 import { setConfigSchema, setAgentConfigSchema } from '@open-mercato/cezar-contract/config-requests';
 import { saveWorkflowInputSchema as saveWorkflowSchema } from '@open-mercato/cezar-contract/workflows';
 import { patchRunInputSchema as patchRunSchema, messageInputSchema as messageSchema } from '@open-mercato/cezar-contract/runs';
-import { checkoutProjectInputSchema as checkoutSchema, registerProjectInputSchema as registerProjectSchema } from '@open-mercato/cezar-contract/projects';
 import { setWorkspaceConfigInputSchema as workspaceConfigUpdateSchema } from '@open-mercato/cezar-contract/workspace';
 import { reclaimRunParamsSchema } from '@open-mercato/cezar-contract/repo-requests';
 import { githubChecksQuerySchema } from '@open-mercato/cezar-contract/github-requests';
@@ -35,25 +32,13 @@ import { commitQuerySchema } from '@open-mercato/cezar-contract/query-requests';
 import { imageMimeType } from '@open-mercato/cezar-contract/image-path';
 import { providerForActiveRun } from '@open-mercato/cezar-contract/active-provider';
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
-import { defined } from '../core/defined.ts';
 import { isAbsoluteHostPath } from '../core/host-path.ts';
 import { resolveArchiveOnMerge, resolveGlobalArchiveOnMerge } from '../archive-on-merge-setting.ts';
-import type {
-  ProjectsResponse,
-  RegisterProjectResponse,
-  RemoveProjectResponse,
-  UpdateProjectResponse,
-  AgentWebhooksResponse,
-  ProjectWebhookResponse,
-  SendAgentReportResponse,
-  TestProjectWebhookResponse,
-  WorkspaceConfigResponse, ConfigResponse, AgentProfileResponse, AgentProfilesResponse,
-} from '@open-mercato/cezar-contract';
+import type { AgentWebhooksResponse, SendAgentReportResponse, WorkspaceConfigResponse, ConfigResponse } from '@open-mercato/cezar-contract';
 export type { WorkspaceConfigResponse } from '@open-mercato/cezar-contract';
 import { permissionDecisionSchema } from '@open-mercato/cezar-contract/permissions';
 import { runIdParamSchema as permissionRunIdParamSchema } from '@open-mercato/cezar-contract/events';
 import { CheckoutProgressCache } from './checkout-progress.ts';
-import { checkoutProgressParamsSchema, createProjectInputSchema, type CreateProjectResponse, type GithubOwnersResponse } from '@open-mercato/cezar-contract/projects';
 import { createWorkspaceLiveRoutes } from './workspace-live-routes.ts';
 import { createActivityRoutes, type ActivityServerDeps } from './activity-routes.ts';
 import { createRunnersRoutes } from './runners-routes.ts';
@@ -88,15 +73,14 @@ import {
   isGithubAutomation,
 } from '../automations/types.ts';
 import type { IncomingMessage } from 'node:http';
-import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Hono, type Context, type Next } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { streamSSE } from 'hono/streaming';
 import { matchedRoutes } from 'hono/route';
 import { jsonZodValidator, paramZodValidator, queryZodValidator } from './validators.ts';
-import { deliverOnce, registryEntry, sendAgentReport, TaskWebhooks } from '../runs/webhook.ts';
+import { registryEntry, sendAgentReport, TaskWebhooks } from '../runs/webhook.ts';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { z } from 'zod';
 import { repoPullInputSchema, deleteBranchesInputSchema } from '@open-mercato/cezar-contract/repo';
@@ -117,37 +101,17 @@ import { setWorkspaceUiStateInputSchema } from '@open-mercato/cezar-contract/wor
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
 import { openProjectInSchema } from '@open-mercato/cezar-contract/workspace';
-import { isRegisteredRunner, knownRunnerIds, registeredRunnerId, registeredRunners, resolveRunnerId, runnerDefinition } from '../core/runner-registry.ts';
+import { registeredRunnerId, registeredRunners, resolveRunnerId, runnerDefinition } from '../core/runner-registry.ts';
 import { REMOVED_RUNNER_IDS } from '../runs/legacy-run-rows.ts';
 import {
   attachmentFileParamSchema,
 } from '@open-mercato/cezar-contract/runs';
-import {
-  agentWebhookParamsSchema,
-  createProjectWebhookInputSchema,
-  projectWebhookParamsSchema,
-  sendAgentReportInputSchema,
-  updateProjectInputSchema,
-  updateProjectWebhookInputSchema,
-} from '@open-mercato/cezar-contract/projects';
-import { PROJECT_WEBHOOKS_MAX } from '@open-mercato/cezar-contract/project-limits';
-import {
-  agentWebhook,
-  agentWebhooks,
-  applyTaskWebhookInput,
-  createdWebhook,
-  editedWebhook,
-  nameTaken,
-  projectWebhooks,
-  redactWebhook,
-  setProjectWebhooks,
-  taskWebhooks as taskWebhookList,
-} from '../workspace/webhooks.ts';
+import { agentWebhookParamsSchema, sendAgentReportInputSchema } from '@open-mercato/cezar-contract/projects';
+import { agentWebhook, agentWebhooks, taskWebhooks as taskWebhookList } from '../workspace/webhooks.ts';
 import { environmentStamp, type detectEnvironment } from '../core/backend-detect.ts';
 import type { ContentBlock } from '../core/agent-runner.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
-import { applyProviderEnablement } from '../core/provider-availability.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { createModelsRoutes } from './models-routes.ts';
 import { createProviderSignInRoutes } from './provider-sign-in-routes.ts';
@@ -162,7 +126,7 @@ import {
 } from '../workflows/types.ts';
 import { planChain, slugify } from '../planner.ts';
 import { readHandoff, renderHandoffRecords } from '../handoff.ts';
-import type { RepoHandle, RunRecord, RunStatus, RunStore } from '../runs/store.ts';
+import type { RepoHandle, RunRecord, RunStore } from '../runs/store.ts';
 import {
   HistoryCursorError,
   deriveRunContextEvents,
@@ -211,49 +175,17 @@ import { readConfigFile, writeConfigFile } from '../agent-config/files.ts';
 import { readAgentModelDefaults } from '../agent-config/models.ts';
 import { listAgentConfig } from '../agent-config/service.ts';
 import { findConfigFile } from '../agent-config/catalog.ts';
-import {
-  defaultWorkspaceConfig,
-  loadWorkspaceConfig,
-  mergeWriteWorkspaceConfig, preservedDisabledProviders,
-  effectiveComposerDefault,
-  type WorkspaceConfig,
-  type StoredProjectWebhook,
-  type WorkspaceProject,
-} from '../workspace/config.ts';
-import {
-  CONTROL_CHARS_RE,
-  DEFAULT_AGENT_ACCOUNT_ID,
-  defaultAgentAccountStore,
-  isAbsoluteConfigDir,
-  loadAgentAccounts,
-  mergeWriteAgentAccounts, removeAgentAccount,
-  type AgentAccount,
-  type AgentAccountStore,
-} from '../workspace/agent-accounts.ts';
-import {
-  defaultAgentProfile,
-  listAgentProfiles,
-  profileDirState,
-  resolveStoredProfile,
-  sameProfileDir,
-  type ResolvedAgentProfile,
-} from '../workspace/agent-profiles.ts';
-import { profileCapableProviders, profileEnv, supportsProfiles } from '../core/agent-profiles.ts';
+import { defaultWorkspaceConfig, loadWorkspaceConfig, mergeWriteWorkspaceConfig, effectiveComposerDefault, type WorkspaceConfig } from '../workspace/config.ts';
+import { DEFAULT_AGENT_ACCOUNT_ID, defaultAgentAccountStore, loadAgentAccounts, type AgentAccount } from '../workspace/agent-accounts.ts';
+import { defaultAgentProfile, listAgentProfiles, resolveStoredProfile, type ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
+import { profileEnv } from '../core/agent-profiles.ts';
 import { shellQuote, withEnvPrefix } from '../core/shell-env.ts';
 import { resumeCommand } from '../core/runner-cli.ts';
-import {
-  normalizeProjectTags,
-  probeProjectStatus,
-  toProjectListEntry,
-  registerProject,
-  removeProject,
-  shouldRegisterProject,
-  type ProjectListEntry,
-} from '../workspace/projects.ts';
+import { type ProjectListEntry } from '../workspace/projects.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { mergeWriteWorkspaceUiState, readWorkspaceUiState } from '../workspace/ui-state.ts';
-import { checkoutRepo, type CloneRunner } from './checkout.ts';
-import { createProject, listGithubOwners, type CommandRunner } from './create-project.ts';
+import { type CloneRunner } from './checkout.ts';
+import { type CommandRunner } from './create-project.ts';
 import { createWorkspaceRunFeed, currentRecord, type RunWrite } from './workspace-run-feed.ts';
 import { ProjectContexts, type ProjectContext, type ProjectRunManager, type RunManagerFactory } from './project-context.ts';
 
@@ -262,7 +194,7 @@ import { expandTilde } from '../paths.ts';
 import { isLoopbackHostHeader, resolveCapabilities } from './capabilities.ts';
 import type { SocketHub, WsUpgradeVerdict } from './ws.ts';
 import type { PreviewHost } from '../preview/host.ts';
-import { browseDirectory, isInsideBrowseRoot, isLexicallyInsideBrowseRoot, resolveBrowseRoot } from './fs-browse.ts';
+import { browseDirectory, resolveBrowseRoot } from './fs-browse.ts';
 import { resolveForge, forgeWebRoot, resolveForgeRoot, GithubPrNotFoundError, GH_CHECKS_MAX, GH_REF_STATUS_MAX, type ForgeFactory } from './forge/index.ts';
 import { refNumberFromUrl } from '@open-mercato/cezar-contract/run-search';
 import { projectAdmissionRefusal, withProjectAdmission, type CockpitOwnership } from './cockpit-ownership.ts';
@@ -272,14 +204,7 @@ import { freshCliHandoff, openRunApp, openRunCli, openRunDefaultApp } from './op
 import { agentCliRunner, detectOpenTargets, openFileInDefaultApp, openInApp } from './open-in-app.ts';
 import { ProviderRuntimeAuthObserver } from './provider-auth-runtime.ts';
 import { continueRunProviders } from './provider-action-gate.ts';
-import {
-  attachProjectWebhooks,
-  createBootContext,
-  createProviderStatus,
-  emitProviderRow,
-  resolveServerDeps,
-  watchProviderRuntimeAuth,
-} from './server-deps.ts';
+import { attachProjectWebhooks, createBootContext, createProviderStatus, resolveServerDeps, watchProviderRuntimeAuth } from './server-deps.ts';
 import {
   NO_WEBHOOK_ERROR,
   agentProfileRefusal,
@@ -301,6 +226,9 @@ import {
 } from './static-ui.ts';
 import { compression, createStaticAssets, isFile } from './static-assets.ts';
 import { registerBrandFileRoutes } from './brand-file-routes.ts';
+import { createProjectsRoutes } from './projects-routes.ts';
+import { createAgentProfilesRoutes, createProvidersRoutes } from './providers-routes.ts';
+import { hostedProfileRefusal, streamSSENoBuffer, UI_STATE_BODY_LIMIT, WorkspaceEventBus, type ProjectApiEnv } from './server-types.ts';
 export interface ServerDeps extends ActivityServerDeps {
   home: Home;
   /** Per-repository forge injection for embedded servers and tests. */
@@ -412,18 +340,7 @@ export interface ServerDeps extends ActivityServerDeps {
 }
 // ---- project-scoped routing (multi-project spec, step 2.2) -----------------
 
-/** Hono env for the mirrored project-route table: the scope resolver puts the
- *  request's `ProjectContext` on the context, handlers read `c.get('project')`. */
-export type ProjectApiEnv = { Variables: { project: ProjectContext; stoppedOnAdoption?: boolean } };
-
-/** The hosted-mode refusal, worded like the agent-config one it mirrors. */
-const HOSTED_GITHUB_CREATE_REFUSAL = 'Creating GitHub repositories is available from a local cockpit only';
-const HOSTED_GITHUB_OWNERS_REASON = 'GitHub repositories can be created from a local cockpit only';
-
-const hostedProfileRefusal = {
-  error: 'agent accounts are managed from the machine that owns the checkout (this cockpit runs in hosted mode)',
-};
-
+export { WorkspaceEventBus, type ProjectApiEnv, type WorkspaceEventName } from './server-types.ts';
 /** One row of the mirrored project-route table. */
 export interface ProjectRouteInfo {
   method: string;
@@ -477,54 +394,6 @@ export type { ProjectsResponse, RegisterProjectResponse, RemoveProjectResponse, 
 
 // ---- workspace SSE (multi-project spec, step 2.8) --------------------------
 
-/** Workspace-level event names carried ONLY on `GET /api/workspace/events`
- *  (never on the per-project streams): registry mutations, the GUI-clone
- *  progress feed (step 4.3), and host-wide unstamped provider status. */
-export type WorkspaceEventName =
-  | 'project-added'
-  | 'project-removed'
-  | 'checkout-progress'
-  | 'health'
-  | 'provider-status'
-  | 'automation-change'
-  | 'project-ready';
-
-/**
- * The in-process bus for workspace-level SSE events. The registry-mutating
- * routes (`POST /api/projects` — step 4.2, emits `project-added` for a
- * genuinely new entry; `DELETE /api/projects/:projectId` — step 4.4) and the
- * checkout flow (step 4.3) call `emit()`; runtime provider auth observation
- * emits host-wide `provider-status`; every open `/api/workspace/events` stream
- * relays the event verbatim under its name. Injectable via
- * `ServerDeps.workspaceEvents` so tests (and any out-of-createApp emitter) can
- * drive the stream.
- */
-export class WorkspaceEventBus {
-  private readonly listeners = new Set<(event: WorkspaceEventName, data: unknown) => void>();
-
-  emit(event: WorkspaceEventName, data: unknown): void {
-    for (const listener of [...this.listeners]) listener(event, data);
-  }
-
-  /** Subscribe; returns an unsubscribe. */
-  on(listener: (event: WorkspaceEventName, data: unknown) => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-}
-
-/** streamSSE with the anti-buffering contract (#424): hono's own header is a
- *  bare `no-cache`, which lets an intermediary (reverse proxy, compression
- *  middleware, corporate MITM) transform-buffer the stream — the client then
- *  sees a silently frozen transcript while the server keeps writing. Headers
- *  are set on the returned Response because hono's helper overwrites
- *  `Cache-Control` set via `c.header()` before it. */
-const streamSSENoBuffer: typeof streamSSE = (c, cb, onError) => {
-  const res = streamSSE(c, cb, onError);
-  res.headers.set('Cache-Control', 'no-cache, no-transform');
-  res.headers.set('X-Accel-Buffering', 'no');
-  return res;
-};
 
 // Queued prompt stack bounds (#472). The per-message bounds mirror `messageSchema`
 // above; the one that actually matters is the FOLDED total, because 20 messages of
@@ -549,9 +418,6 @@ function foldedLength(task: string, stack: Array<{ text: string }>): number {
 // images at ~7 MB base64 each); the ui-state PUT gets a much tighter cap since
 // it only ever carries small GUI prefs.
 const GLOBAL_BODY_LIMIT = 32 * 1024 * 1024; // 32 MiB
-const UI_STATE_BODY_LIMIT = 128 * 1024; // 128 KiB
-
-function writeErrorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 // The return type is INFERRED on purpose: it is the chained app type built at the bottom of
 // this function, and `AppType` (src/server/app-type.ts) is `ReturnType<typeof createApp>`.
 // Annotating it `Hono` here would erase every route from the type and leave the typed client
@@ -655,64 +521,6 @@ export function createApp(deps: ServerDeps) {
   const projectRegistryEntry = workspaceProjects.registryEntry;
   workspaceProjects.bindContexts(bootContext, contexts);
 
-  /** One `task.test` POST to `webhook`, or a dry run under `CEZ_DRY_RUN=1`. */
-  const sendTestDelivery = async (projectId: string, webhook: StoredProjectWebhook): Promise<TestProjectWebhookResponse> => {
-    if (productEnv('DRY_RUN') === '1') return { ok: true, dryRun: true };
-    const payload = {
-      event: 'task.test' as const,
-      deliveryId: randomUUID(),
-      projectId,
-      webhook: { id: webhook.id, name: webhook.name },
-      occurredAt: new Date().toISOString(),
-    };
-    const result = await deliverOnce(webhook, payload, { fetch: deps.taskWebhookFetch });
-    return {
-      ok: result.ok,
-      ...(result.status === undefined ? {} : { status: result.status }),
-      ...(result.error === undefined ? {} : { error: result.error }),
-    };
-  };
-
-  type WebhookEdit =
-    | { webhooks: StoredProjectWebhook[]; webhook: StoredProjectWebhook }
-    | { error: string; status: 404 | 409 };
-  /**
-   * Read-modify-write one project's webhook list (hearsay-tools/cezarion#1576), with the PATCH
-   * route's guards: an unknown project 404s without a write, and a
-   * failed write (a read-only home) answers 500 having persisted nothing.
-   */
-  const editProjectWebhooks = async (
-    raw: string,
-    edit: (webhooks: StoredProjectWebhook[]) => WebhookEdit,
-  ): Promise<{ body: ProjectWebhookResponse } | { error: string; status: 400 | 404 | 409 | 500 }> => {
-    const resolved = await workspaceProjects.resolveProjectId(raw);
-    if ('error' in resolved) return { ...resolved, status: 404 };
-    const { id } = resolved;
-    const known = await loadWorkspaceConfig(deps.home.workspaceConfig).then((config) => config.projects.some((p) => p.id === id), () => false);
-    if (!known) return { error: `unknown project: ${id}`, status: 404 };
-    let updated: WorkspaceProject | undefined;
-    let outcome: WebhookEdit | undefined;
-    try {
-      await mergeWriteWorkspaceConfig((config) => {
-        const entry = config.projects.find((p) => p.id === id);
-        if (!entry) return;
-        outcome = edit([...projectWebhooks(entry)]);
-        if ('error' in outcome) return;
-        setProjectWebhooks(entry, outcome.webhooks);
-        updated = entry;
-      }, deps.home);
-    } catch (err) {
-      return { error: err instanceof Error ? err.message : String(err), status: 500 };
-    }
-    if (outcome && 'error' in outcome) return outcome;
-    if (!updated || !outcome) return { error: `unknown project: ${id}`, status: 404 };
-    return {
-      body: {
-        project: toProjectListEntry(updated, await probeProjectStatus(updated.root)),
-        webhook: redactWebhook(outcome.webhook),
-      },
-    };
-  };
 
   const app = new Hono();
   app.use('*', compression);
@@ -1138,496 +946,29 @@ export function createApp(deps: ServerDeps) {
     }
   };
 
-  // ---- chained family: agent providers (workspace-level) ----
-  const providersRoutes = new Hono<ProjectApiEnv>()
-    .get(
-      '/providers/status',
-      queryZodValidator(strictRefreshQuerySchema, { message: 'refresh must be 1 when provided' }),
-      async (c) => {
-        const query = { data: c.req.valid('query') };
-        const refresh = query.data.refresh === '1';
-        if (refresh) {
-          for (const { id } of registeredRunners()) modelCatalog.invalidate(id);
-        }
-        return c.json(await providerStatus({ refresh }));
-      },
-    )
-
-    .put(
-      '/providers/:provider/enabled',
-      paramZodValidator(providerRouteParamsSchema, { message: 'provider and enabled boolean are required', runners: { ids: ['provider'] } }),
-      jsonZodValidator(providerEnabledSchema, { message: 'provider and enabled boolean are required' }),
-      async (c) => {
-        const provider = { data: registeredRunnerId(c.req.valid('param').provider) };
-        const body = { data: c.req.valid('json') };
-        let workspace: WorkspaceConfig;
-        try {
-          workspace = await workspaceConfig.mergeWrite((config) => {
-            const disabled = new Set(config.disabledProviders);
-            if (body.data.enabled) disabled.delete(provider.data);
-            else disabled.add(provider.data);
-            config.disabledProviders = preservedDisabledProviders(registeredRunners().map(({ id }) => id), disabled, config.disabledProviders);
-          });
-        } catch {
-          return c.json({ error: 'Provider preference could not be saved.' }, 500);
-        }
-        const result = applyProviderEnablement(
-          await providerAuth.status(),
-          workspace.disabledProviders,
-        );
-        emitProviderRow(workspaceEvents, result.providers, provider.data);
-        return c.json(result);
-      },
-    )
-
-    .post(
-      '/providers/:provider/retry',
-      paramZodValidator(providerRouteParamsSchema, { message: 'provider and current authFailureId are required', runners: { ids: ['provider'] } }),
-      jsonZodValidator(providerRetrySchema, { message: 'provider and current authFailureId are required' }),
-      async (c) => {
-        const provider = { data: registeredRunnerId(c.req.valid('param').provider) };
-        const body = { data: c.req.valid('json') };
-        if (!providerAuth.clearRuntimeAuthFailure(provider.data, body.data.authFailureId)) {
-          return c.json({ error: 'Authentication incident changed. Refresh and try again.' }, 409);
-        }
-        invalidateHostModels(provider.data);
-        const result = await providerStatus({ refresh: true });
-        emitProviderRow(workspaceEvents, result.providers, provider.data);
-        return c.json(result);
-      },
-    )
-
-    .post('/providers/connect', jsonZodValidator(providerConnectSchema, { message: `provider must be ${knownRunnerIds().slice(0, -1).join(', ')}, or ${knownRunnerIds().at(-1)}`, runners: { ids: ['provider'] } }), async (c) => {
-      const body = { data: c.req.valid('json') };
-
-      const provider = body.data.provider as ProviderId;
-      // A NAMED account is refused in hosted mode before anything is resolved, exactly like every
-      // sibling route in the agent-profiles family. Checking later would already have read
-      // `~/.cezar/agent-accounts.json`, built a command carrying the account's absolute path (which
-      // both the success body and the hosted 409 echo), and — for a stored account — spawned a
-      // probe. It would also answer `unknown account: <id>` for a wrong id, which is an enumeration
-      // oracle for the very ids the hosted listing withholds. The bare-provider spelling keeps its
-      // existing behaviour: it names no host path and is how the Providers card has always worked.
-      if (body.data.profileId !== undefined
-        && body.data.profileId !== DEFAULT_AGENT_ACCOUNT_ID
-        && !capabilities().localHandoff) {
-        return c.json(hostedProfileRefusal, 409);
-      }
-      // Resolve the account BEFORE anything else: both the command and the status probe below
-      // must describe the same one, or the pane reports on the personal login while the terminal
-      // signs into the work login.
-      const resolved = await resolveWorkspaceProfile(provider, body.data.profileId);
-      if ('error' in resolved) return c.json({ error: resolved.error }, 400);
-      const { profile } = resolved;
-      const command = providerAuth.loginCommand(provider, profile.isDefault ? null : profile.path);
-      // Fail closed: a config dir that cannot be embedded safely in this platform's shell has no
-      // safe degradation. Running the bare command would sign the user into a DIFFERENT account
-      // than the one they clicked, and nothing in the terminal would say so.
-      if (command === null) {
-        return c.json({ error: providerAuth.loginRefusalHint(provider, profile.configDir) }, 409);
-      }
-      // BOTH branches must mean "is this account signed in NOW". The default branch refreshes; the
-      // account branch has to evict first, because `profileStatus` serves the per-account cache and
-      // a connected answer there stands for CONNECTED_TTL_MS. Without this, Connect after a
-      // `claude /logout` answers "already connected", opens nothing, and the user is stuck — and it
-      // would contradict this module's own invariant that opening a login is one of the things
-      // Squawk CAN observe and therefore invalidates explicitly rather than waiting out a window.
-      if (!profile.isDefault) providerAuth.forgetProfileStatus(provider, profile.id);
-      const row = profile.isDefault
-        ? (await providerAuth.status({ refresh: true })).providers.find(
-          (candidate) => candidate.provider === provider,
-        )
-        : await providerAuth.profileStatus(provider, { id: profile.id, configDir: profile.path });
-      if (!row) {
-        return c.json({ error: 'Authentication could not be verified. Try again.' }, 500);
-      }
-
-      if (row.status === 'connected') {
-        invalidateHostModels(provider);
-        return c.json({ opened: false, connected: true, command });
-      }
-      if (row.status === 'not-installed') {
-        return c.json({ error: row.hint ?? providerAuth.installHint(provider), command }, 409);
-      }
-      if (row.status === 'unknown') {
-        return c.json({ error: row.hint ?? 'Authentication could not be verified. Try again.', command }, 409);
-      }
-      if (!capabilities().localHandoff) {
-        return c.json({ error: `Run this command on the machine hosting Squawk.`, command }, 409);
-      }
-      let opened = false;
-      try {
-        // No `env` argument: `loginCommand` already rendered the account's config dir INTO the
-        // command, because this string is also the copy-paste fallback the pane shows. Passing
-        // it again here would set the variable twice.
-        opened = await openTerminal(bootRoot, command);
-      } catch {
-        // Terminal handoff is best-effort; the exact command remains the safe fallback.
-      }
-      if (!opened) {
-        return c.json({ error: 'No terminal emulator could be opened. Run this command manually.', command }, 409);
-      }
-      invalidateHostModels(provider);
-      return c.json({ opened: true, command });
-    });
-
-  // ---- chained family: agent profiles / accounts (workspace-level) ----------
-  // Extra config dirs for a SECOND login of the same agent CLI (spec
-  // 2026-07-29-agent-profiles). Workspace-level and therefore SINGLE-MOUNT: an account belongs to
-  // the person and the machine, never to a repo, and a project-scoped spelling would be a second
-  // surface to protect with no consumer. Which account a project uses is a field on
-  // `PATCH /api/v1/projects/:projectId` instead.
-  //
-  // Writing is a LOCAL-MACHINE capability, exactly like `PUT /api/v1/agent-config/:id`: a profile
-  // points an agent at a directory on the host, and the listing echoes absolute paths carrying
-  // the username — the same disclosure `/api/v1/health` trims in hosted mode (#431).
-
-  /** Build the wire row for one resolved profile: its dir state plus whatever auth is cached. */
-  const agentProfileBody = async (profile: ResolvedAgentProfile): Promise<AgentProfileResponse['profile']> => ({
-    id: profile.id,
-    provider: profile.provider,
-    label: profile.label,
-    configDir: profile.configDir,
-    path: profile.path,
-    ...(await profileDirState(profile.provider, profile.path)),
-    isDefault: profile.isDefault,
-    // CACHED auth only — this listing must never pay a CLI spawn.
-    //
-    // Probing here cost a shell-out per provider PLUS one per extra account: ~0.7s with no extra
-    // accounts and over 2s with a few, on every cold load, for a route whose real job (what
-    // accounts exist) is a JSON read and a handful of stats. `GET /api/v1/health` already
-    // established the rule — it serves whatever the cache holds and never pays a `gh` shell-out.
-    // An absent `status` means "not determined yet", which the cockpit renders as Checking… and
-    // then fills in from the per-account status route below.
-    //
-    // SPREAD, not `status: maybeUndefined`: hono would type the key as always-present while
-    // `JSON.stringify` drops it, which is exactly the drift `contract-parity` catches (AGENTS.md
-    // names this as one of the two recurring mismatches).
-    ...(() => {
-      const cached = profile.isDefault
-        ? providerAuth.peekStatus()?.providers.find((row) => row.provider === profile.provider)
-        : providerAuth.peekProfileStatus(profile.provider, profile.id);
-      return cached ? { status: cached } : {};
-    })(),
+  const providersRoutes = createProvidersRoutes({
+    bootRoot,
+    capabilities,
+    modelCatalog,
+    providerAuth,
+    providerStatus,
+    invalidateHostModels,
+    workspaceConfig,
+    workspaceEvents,
+    openTerminal,
+    resolveWorkspaceProfile,
   });
 
-  /**
-   * Resolve `:id` to an account for the per-account reads below. Unlike `resolveWorkspaceProfile`
-   * this accepts the reserved `default` for a NAMED provider, which these routes cannot infer — so
-   * the id may be `default:<provider>` as well as a stored account id.
-   */
-  const accountById = async (id: string): Promise<ResolvedAgentProfile | null> => {
-    const [head, tail] = id.split(':');
-    if (head === DEFAULT_AGENT_ACCOUNT_ID) {
-      const provider = registeredRunners().find(({ id }) => id === tail)?.id;
-      return provider ? defaultAgentProfile(provider) : null;
-    }
-    try {
-      const stored = (await loadAgentAccounts(deps.home)).accounts.find((a) => a.id === id);
-      return stored && isRegisteredRunner(stored.provider) ? resolveStoredProfile(stored) : null;
-    } catch {
-      return null;
-    }
-  };
-
-  /** The per-account routes' gate: refuse hosted mode before resolving the id, then 404 an unknown id. */
-  const localAccount = async (c: Context<ProjectApiEnv, '/workspace/agent-profiles/:id'>) => {
-    if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
-    const id = c.req.param('id');
-    return (await accountById(id)) ?? c.json({ error: `unknown account: ${id}` }, 404);
-  };
-
-  /** Validate a client-supplied config dir. Returns the error text, or null when it is usable. */
-  const checkProfileDir = (configDir: string): string | null => {
-    if (CONTROL_CHARS_RE.test(configDir)) return 'folder must not contain control characters';
-    const expanded = expandTilde(configDir);
-    // Absolute after expansion: a relative dir would resolve against whatever cwd the agent
-    // happens to be spawned in, which for a task is a throwaway worktree. Through
-    // `isAbsoluteConfigDir`, never a leading-`/` test — see its note: a string test refuses every
-    // real Windows path, and this is the only gate the Add-account dialog has.
-    return isAbsoluteConfigDir(expanded) ? null : `folder must be an absolute path: ${configDir}`;
-  };
-
-  /** Refuse a dir that is already some other account's (or the default's), compared through
-   *  `realpath` — two spellings of one directory would be two accounts silently sharing one
-   *  session store, and "which one am I logged into?" would stop having an answer. */
-  const conflictingProfile = async (
-    profiles: readonly AgentAccount[],
-    provider: ProviderId,
-    path: string,
-    exceptId?: string,
-  ): Promise<string | null> => {
-    if (await sameProfileDir(path, defaultAgentProfile(provider).path)) {
-      return 'that is already this agent\'s default folder';
-    }
-    for (const candidate of profiles) {
-      if (candidate.provider !== provider || candidate.id === exceptId) continue;
-      if (await sameProfileDir(path, expandTilde(candidate.configDir))) {
-        return `that folder is already used by "${candidate.label || candidate.id}"`;
-      }
-    }
-    return null;
-  };
-
-  const agentProfilesRoutes = new Hono<ProjectApiEnv>()
-    .get('/workspace/agent-profiles', async (c) => {
-      const editable = capabilities().localHandoff;
-      // Hosted mode withholds the listing entirely rather than serving it read-only: the paths
-      // are the host disclosure, so an empty list is the only honest hosted answer.
-      //
-      // ONE body object, never a hosted `return` and a local `return`: two returns let hono
-      // narrow `editable` to the literal `false`/`true` of each branch, and the contract's
-      // honest `z.boolean()` then reads as wider than the route. Same shape as
-      // `listAgentConfig`, which carries the same flag for the same reason.
-      let store = defaultAgentAccountStore();
-      if (editable) {
-        try {
-          store = await loadAgentAccounts(deps.home);
-        } catch {
-          // an unreadable home degrades to "no extra accounts", never a failed request
-        }
-      }
-      const profiles = editable
-        ? await Promise.all(listAgentProfiles(store, registeredRunners().map(({ id }) => id)).map(agentProfileBody))
-        : [];
-      return c.json<AgentProfilesResponse>({
-        editable,
-        profiles,
-        profileCapableProviders: profileCapableProviders(),
-        // Which account each project uses, keyed by repo root. Served here rather than on the
-        // project registry because it lives in the same file as the accounts it names.
-        selections: editable ? store.selections : {},
-      });
-    })
-
-    .post('/workspace/agent-profiles', jsonZodValidator(() => createAgentProfileSchema, { runners: { ids: ['provider'] } }), async (c) => {
-      if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
-      const { configDir, label } = c.req.valid('json'), provider = registeredRunnerId(c.req.valid('json').provider);
-      if (!supportsProfiles(provider)) {
-        return c.json({ error: `${provider} cannot carry more than one account` }, 400);
-      }
-      const dirError = checkProfileDir(configDir);
-      if (dirError) return c.json({ error: dirError }, 400);
-
-      // Read-first, exactly like `POST /projects`: the duplicate check needs `realpath`, and the
-      // merge-write mutator is deliberately SYNCHRONOUS so the read→rename window stays as small
-      // as it is for every other writer of this file. Two processes adding the same folder in
-      // that window would both win — a cosmetic duplicate, not a correctness problem, since the
-      // schema's id dedupe is what keeps resolution deterministic.
-      let existing: readonly AgentAccount[] = [];
-      try {
-        existing = (await loadAgentAccounts(deps.home)).accounts;
-      } catch {
-        // unreadable store — the merge-write below reports the real failure
-      }
-      const conflict = await conflictingProfile(existing, provider, expandTilde(configDir));
-      if (conflict !== null) return c.json({ error: conflict }, 409);
-
-      let created: AgentAccount | undefined;
-      try {
-        await mergeWriteAgentAccounts((store) => {
-          const id = allocateAgentProfileId(label ?? configDir, store.accounts.map((a) => a.id));
-          created = {
-            id,
-            provider,
-            configDir,
-            label: label?.trim() || id,
-            addedAt: new Date().toISOString(),
-          };
-          store.accounts.push(created);
-        }, deps.home);
-      } catch (err) {
-        return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
-      }
-      if (!created) return c.json({ error: 'account could not be saved' }, 500);
-      // A brand-new account is the one thing the boot warm could not have known about, so learn it
-      // now rather than only when something asks. Still off the response: the row is returned with
-      // `status` absent (the listing's rule), the pane shows Checking…, and its follow-up request
-      // joins this same in-flight probe.
-      const account = resolveStoredProfile(created);
-      const created201 = await agentProfileBody(account);
-      void providerAuth
-        .profileStatus(account.provider, { id: account.id, configDir: account.path })
-        .catch(() => {});
-      return c.json({ profile: created201 }, 201);
-    })
-
-    .patch(
-      '/workspace/agent-profiles/:id',
-      paramZodValidator(agentProfileRouteParamsSchema),
-      jsonZodValidator(() => updateAgentProfileSchema),
-      async (c) => {
-        if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
-        const id = c.req.param('id');
-        const { label, configDir } = c.req.valid('json');
-        if (configDir !== undefined) {
-          const dirError = checkProfileDir(configDir);
-          if (dirError) return c.json({ error: dirError }, 400);
-        }
-
-        // Read-first (see POST above, and `PATCH /projects`): a well-formed but unknown id must
-        // 404 WITHOUT rewriting the config, and the duplicate check needs async `realpath`.
-        let existing: readonly AgentAccount[] = [];
-        try {
-          existing = (await loadAgentAccounts(deps.home)).accounts;
-        } catch {
-          // unreadable store — treated as unknown, like DELETE and PATCH /projects
-        }
-        const current = existing.find((a) => a.id === id);
-        if (!current || !isRegisteredRunner(current.provider)) return c.json({ error: `unknown account: ${id}` }, 404);
-        if (configDir !== undefined) {
-          const conflict = await conflictingProfile(existing, current.provider, expandTilde(configDir), id);
-          if (conflict !== null) return c.json({ error: conflict }, 409);
-        }
-
-        let updated: AgentAccount | undefined;
-        try {
-          await mergeWriteAgentAccounts((store) => {
-            const entry = store.accounts.find((a) => a.id === id);
-            if (!entry) return; // lost a race with a concurrent delete — answered below
-            // Mutated in place so `.passthrough()` keys on the row survive.
-            if (label !== undefined) entry.label = label.trim() || entry.id;
-            if (configDir !== undefined) entry.configDir = configDir;
-            updated = entry;
-          }, deps.home);
-        } catch (err) {
-          return c.json({ error: writeErrorMessage(err) }, 500);
-        }
-        if (!updated) return c.json({ error: `unknown account: ${id}` }, 404);
-        // The dir may have moved under a cached probe — drop THIS account's answer so the response
-        // reports the new folder's state rather than the old one's, and leave every other account's
-        // warm answer alone (it is still true). Then re-learn it in the background, so the server's
-        // knowledge is complete again whether or not a cockpit is open to ask; the pane's own
-        // request for this row joins the same in-flight probe rather than spawning a second.
-        const repointed = resolveStoredProfile(updated);
-        providerAuth.forgetProfileStatus(repointed.provider, repointed.id);
-        const body = await agentProfileBody(repointed);
-        void providerAuth
-          .profileStatus(repointed.provider, { id: repointed.id, configDir: repointed.path })
-          .catch(() => {});
-        return c.json({ profile: body });
-      },
-    )
-
-    /**
-     * One account's authentication state, probed for real.
-     *
-     * Separate from the listing because a probe shells out to an agent CLI: keeping it here lets
-     * the pane paint immediately and fill each row in as its answer lands, instead of every cold
-     * load blocking on N spawns. `refresh=1` drops this account's cached answer and re-probes, for
-     * the "Check again" affordance — the cache itself holds a connected answer for minutes and an
-     * unsettled one for a minute (`cacheTtlFor` in `core/provider-auth.ts`).
-     */
-    .get(
-      '/workspace/agent-profiles/:id/status',
-      paramZodValidator(agentProfileRouteParamsSchema),
-      queryZodValidator(strictRefreshQuerySchema, { message: 'refresh must be 1 when provided' }),
-      async (c) => {
-        const account = await localAccount(c);
-        if (account instanceof Response) return account;
-        const refresh = c.req.valid('query').refresh === '1';
-        if (refresh) invalidateHostModels(account.provider);
-        // The discovered account's row is the one `GET /api/v1/providers/status` owns, so it comes
-        // from there — enablement included, which a bare probe does not know about.
-        if (account.isDefault) {
-          const all = await providerStatus(refresh ? { refresh: true } : undefined);
-          const row = all.providers.find((candidate) => candidate.provider === account.provider);
-          return c.json({ status: row ?? { provider: account.provider, status: 'unknown' as const } });
-        }
-        // "Check again" re-probes THIS account only — the other accounts' warm answers are not
-        // invalidated by asking about this one.
-        if (refresh) providerAuth.forgetProfileStatus(account.provider, account.id);
-        return c.json({
-          status: await providerAuth.profileStatus(account.provider, {
-            id: account.id,
-            configDir: account.path,
-          }),
-        });
-      },
-    )
-
-    // Which account a PROJECT uses. On the accounts family rather than `PATCH /api/v1/projects`
-    // because the selection is stored beside the accounts it names — one file, one atomic write,
-    // and nothing about it can be dropped by a Squawk version that never heard of accounts.
-    .put(
-      '/workspace/agent-profiles/selection',
-      jsonZodValidator(() => selectAgentProfileSchema, { runners: { ids: ['provider'] } }),
-      async (c) => {
-        if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
-        const { projectId, profileId } = c.req.valid('json'), provider = registeredRunnerId(c.req.valid('json').provider);
-        const resolvedId = await workspaceProjects.canonicalProjectId(projectId);
-        // Keyed by repo ROOT, so the selection survives the registry being rebuilt and needs no
-        // cross-reference into config.json. An unknown project is a 404 rather than an orphan
-        // entry nobody will ever read.
-        const root = await projectRootFor(resolvedId);
-        if (root === null) return c.json({ error: `unknown project: ${projectId}` }, 404);
-        // A user naming an account that does not exist gets told so — the opposite of how RUN
-        // resolution treats a dangling stored id, and deliberately: a run has no better answer
-        // than the default, a person does.
-        if (profileId !== null && profileId !== DEFAULT_AGENT_ACCOUNT_ID) {
-          const account = await resolveWorkspaceProfile(provider, profileId);
-          if ('error' in account) return c.json({ error: account.error }, 400);
-        }
-        let store: AgentAccountStore;
-        try {
-          store = await mergeWriteAgentAccounts((current) => {
-            const selection = current.selections[root] ?? {};
-            // `null` and the reserved `default` both mean "back to the discovered account", which
-            // is stored as ABSENCE — the default id is never written to the file.
-            if (profileId === null || profileId === DEFAULT_AGENT_ACCOUNT_ID) delete selection[provider];
-            else selection[provider] = profileId;
-            if (Object.keys(selection).length === 0) delete current.selections[root];
-            else current.selections[root] = selection;
-          }, deps.home);
-        } catch (err) {
-          return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
-        }
-        return c.json({ selections: store.selections });
-      },
-    )
-
-    .delete(
-      '/workspace/agent-profiles/:id',
-      paramZodValidator(agentProfileRouteParamsSchema),
-      async (c) => {
-        if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
-        const id = c.req.param('id');
-        let removed = false;
-        // Captured inside the mutator, because after the write there is nothing left to ask which
-        // provider this account belonged to — and the eviction below is keyed by it.
-        let removedProvider: ProviderId | undefined;
-        try {
-          await mergeWriteAgentAccounts((store) => {
-            removedProvider = removeAgentAccount(store, id);
-            removed = removedProvider !== undefined;
-          }, deps.home);
-        } catch (err) {
-          return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
-        }
-        if (!removed) return c.json({ error: `unknown account: ${id}` }, 404);
-        // Only this account's answer: it is about to stop existing, and holding it would let a
-        // re-added account with the same id read the deleted one's state.
-        providerAuth.forgetProfileStatus(removedProvider, id);
-        return c.json({ removed: true as const, id });
-      },
-    );
-
-  // ---- workspace projects (multi-project spec) -----------------------------
-  // The registered-project list for the cockpit sidebar. Same-origin (unlike
-  // health), so absolute `root`s are fine here. `listProjects()` TTL-caches
-  // its per-root status/branch probes, so a burst of renders never shells git
-  // N times. Never 404s: empty or unreadable registry → `projects: []`.
-  /** The configured checkout root, as WRITTEN (`~` kept — callers that touch
-   *  the filesystem expand it). An unreadable workspace degrades to the
-   *  default rather than failing the request: every caller here is a route
-   *  that must keep answering. */
-  const workspaceProjectsDir = async (): Promise<string> => {
-    try {
-      return (await loadWorkspaceConfig(deps.home.workspaceConfig)).projectsDir;
-    } catch {
-      return defaultWorkspaceConfig().projectsDir;
-    }
-  };
+  const agentProfilesRoutes = createAgentProfilesRoutes({
+    home: deps.home,
+    capabilities,
+    providerAuth,
+    providerStatus,
+    invalidateHostModels,
+    workspaceProjects,
+    resolveWorkspaceProfile,
+    projectRootFor,
+  });
 
   const workspaceBrowseRoot = async (): Promise<string> => {
     try {
@@ -1637,522 +978,19 @@ export function createApp(deps: ServerDeps) {
     }
   };
 
-  // ---- chained family: project registry (workspace-level) ----
-  const projectsRoutes = new Hono<ProjectApiEnv>()
-    .get('/projects', async (c) => {
-      let projects: ProjectListEntry[] = [];
-      let projectsDir = defaultWorkspaceConfig().projectsDir;
-      try {
-        projectsDir = (await loadWorkspaceConfig(deps.home.workspaceConfig)).projectsDir;
-        projects = await workspaceProjects.listProjects();
-      } catch {
-        // unreadable workspace — degrade to the empty registry + defaults
-      }
-      const body: ProjectsResponse = {
-        projects,
-        bootProject: await resolveBootProject(projects),
-        projectsDir,
-      };
-      return c.json(body);
-    })
-
-    .post('/projects', jsonZodValidator(() => registerProjectSchema, { message: 'root must be a non-empty path' }), async (c) => {
-      const parsed = { data: c.req.valid('json') };
-      const registered = await registerFolder(parsed.data.root, 'local');
-      if (registered.status !== 200) return c.json(registered.body, registered.status);
-      if (registered.existing) {
-        // 409 with the EXISTING entry (spec): the dialog treats it as "you already have this one"
-        // and navigates there rather than dead-ending.
-        const { project } = registered.body;
-        return c.json({ project, error: `already registered as ${project.id}` }, 409);
-      }
-      return c.json(registered.body, 200);
-    })
-
-    .delete('/projects/:projectId', async (c) => {
-      const raw = c.req.param('projectId');
-      // Same gate the scoped-route resolver applies, and the same 404 wording —
-      // a malformed id is an unknown project, not a validation essay.
-      const resolved = await workspaceProjects.resolveProjectId(raw, true);
-      if ('error' in resolved) return c.json(resolved, 404);
-      // `default` is the boot alias everywhere else in the API; honour it here
-      // too rather than 404ing a spelling the cockpit is allowed to use.
-      const { id, bootId } = resolved;
-
-      let entry: WorkspaceProject | undefined;
-      try {
-        entry = (await loadWorkspaceConfig(deps.home.workspaceConfig)).projects.find((p) => p.id === id);
-      } catch {
-        // unreadable workspace — there is nothing to remove, and saying so is
-        // more useful than a 500 the user cannot act on
-      }
-      if (!entry) return c.json({ error: `unknown project: ${id}` }, 404);
-
-      // The boot project is refused, not removed: `hsq serve` re-registers the
-      // repo it was started in on every boot, so "removing" it would undo itself
-      // at the next restart while breaking this session's sidebar in the
-      // meantime. The pane disables the button and says the same thing.
-      if (id === bootId) {
-        return c.json(
-          {
-            error: `Squawk is serving ${entry.name} right now — it re-registers itself at every start, so it cannot be removed from here`,
-          },
-          409,
-        );
-      }
-
-      // A background warm-up may be building this project right now: count its runs, and dispose
-      // it, only once that build has landed (#667).
-      await contexts.settle(id);
-      const active = activeRunCount(id);
-      if (active > 0) {
-        return c.json(
-          {
-            error: `${entry.name} has ${active} running task${active === 1 ? '' : 's'} — cancel or finish ${active === 1 ? 'it' : 'them'} before removing the project`,
-            runningTasks: active,
-          },
-          409,
-        );
-      }
-
-      let removed: boolean;
-      try {
-        removed = await removeProject(id, deps.home);
-      } catch (err) {
-        // e.g. a read-only home — nothing was persisted (atomic tmp+rename).
-        return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
-      }
-      // Lost a race with another writer (or another Squawk process): the entry is
-      // gone, which is what the caller wanted, but say it honestly.
-      if (!removed) return c.json({ error: `unknown project: ${id}` }, 404);
-      // In-process handles for a project no route can reach any more: store
-      // closed (index flushed), manager's timers and usage subscription dropped.
-      contexts.dispose(id);
-      workspaceEvents.emit('project-removed', { id });
-      const body: RemoveProjectResponse = { removed: true, id };
-      return c.json(body);
-    })
-
-    // Edit the per-project registry fields the cockpit owns: the concurrency ceiling (spec
-    // 2026-07-22-per-project-concurrency) and the grouping tags (spec
-    // 2026-08-10-global-tasks-and-project-tags). A PATCH (not PUT) because it touches named
-    // fields and leaves the rest of the entry alone, and a distinct route from POST
-    // (register-a-folder) to keep register vs. edit semantics clear.
-    //
-    // The body schema is the CONTRACT's, passed directly rather than restated behind a thunk:
-    // it is already in scope, and a second copy is a second thing to keep in step. Its bounds
-    // mirror `workspaceProjectSchema` (config.ts) exactly, so a value this route accepts can
-    // never be degraded away by the next load's `.catch`.
-    //
-    // Deliberately NOT the home of the agent-account selection: that lives in
-    // `~/.cezar/agent-accounts.json` beside the accounts it names, so a Squawk version that has
-    // never heard of accounts cannot drop it (see workspace/agent-accounts.ts).
-    .patch('/projects/:projectId', jsonZodValidator(updateProjectInputSchema), async (c) => {
-      const raw = c.req.param('projectId');
-      // Same gate + 404 wording as DELETE: a malformed id is an unknown project.
-      const resolved = await workspaceProjects.resolveProjectId(raw);
-      if ('error' in resolved) return c.json(resolved, 404);
-      const parsed = { data: c.req.valid('json') };
-      // `default` is the boot alias the cockpit is allowed to use everywhere else.
-      const { id } = resolved;
-      const { maxParallel, tags, webhook } = parsed.data;
-
-      // Read-first (mirroring DELETE, server.ts:1252-1258): a well-formed but
-      // unknown id must 404 WITHOUT rewriting the config — otherwise it would both
-      // do a needless full-config tmp+rename and, on a read-only home, surface the
-      // write failure as a 500 where the honest answer is 404.
-      let known = false;
-      try {
-        known = (await loadWorkspaceConfig(deps.home.workspaceConfig)).projects.some((p) => p.id === id);
-      } catch {
-        // unreadable workspace — treat as unknown; the read-only case answers 404,
-        // not a 500 the caller cannot act on (same reasoning as DELETE).
-      }
-      if (!known) return c.json({ error: `unknown project: ${id}` }, 404);
-
-      let updated: WorkspaceProject | undefined;
-      try {
-        await mergeWriteWorkspaceConfig((config) => {
-          const entry = config.projects.find((p) => p.id === id);
-          if (!entry) return; // lost a race with a concurrent remove — answered below
-          // Each key is applied only when the body NAMED it: a PATCH that says
-          // nothing about a field must leave it exactly as it was, which is what
-          // keeps the tags editor from clearing a concurrency ceiling (and the
-          // pre-tags `{ maxParallel }` body from clearing tags). null clears;
-          // a value sets. Mutated in place so `.passthrough()` keys survive.
-          if (maxParallel !== undefined) {
-            if (maxParallel === null) delete entry.maxParallel;
-            else entry.maxParallel = maxParallel;
-          }
-          if (tags !== undefined) {
-            // Normalized on the way IN, so every reader — this API, the CLI, the
-            // global Tasks page — sees one spelling per tag and never has to
-            // fold case itself.
-            const normalized = normalizeProjectTags(tags);
-            if (normalized === undefined) delete entry.tags;
-            else entry.tags = normalized;
-          }
-          if (webhook !== undefined) {
-            // The token is write-only (#589): the form never has it back, so an omitted token
-            // keeps the stored one and only `''` clears it. An omitted `triggers` keeps the stored
-            // selection the same way, so a URL or token edit never resets it (#1356).
-            // Since #1576 this edits the first webhook with task notifications on.
-            applyTaskWebhookInput(entry, webhook);
-          }
-          updated = entry;
-        }, deps.home);
-      } catch (err) {
-        // e.g. a read-only home — nothing was persisted (atomic tmp+rename).
-        return c.json({ error: writeErrorMessage(err) }, 500);
-      }
-      // Raced with a concurrent removal between the read and the write.
-      if (!updated) return c.json({ error: `unknown project: ${id}` }, 404);
-
-      // The new ceiling takes effect WITHOUT a restart: refresh the shared
-      // semaphore's snapshot and pump every manager — the same live-apply hook
-      // `PUT /api/workspace/config` fires for a workspace-cap change.
-      await deps.semaphore?.refresh();
-      const body: UpdateProjectResponse = {
-        project: toProjectListEntry(updated, await probeProjectStatus(updated.root)),
-      };
-      return c.json(body);
-    })
-
-    // "Send test" (#589): one `task.test` delivery to the STORED webhook, now, with the timeout
-    // the real deliveries use and no retries — the settings page wants the answer, not a queue.
-    .post('/projects/:projectId/webhook/test', async (c) => {
-      const raw = c.req.param('projectId');
-      const entry = await workspaceProjects.resolveRegistryEntry(raw);
-      if (!entry) return c.json({ error: `unknown project: ${raw}` }, 404);
-      // Since #1576: the first webhook with task notifications on.
-      const webhook = taskWebhookList(entry)[0];
-      if (!webhook) return c.json({ error: NO_WEBHOOK_ERROR }, 400);
-      const body: TestProjectWebhookResponse = await sendTestDelivery(entry.id, webhook);
-      return c.json(body);
-    })
-
-    // ---- project webhooks (hearsay-tools/cezarion#1576) ----
-    // Several webhooks per project, each with its own task-state selection and an explicit
-    // "Expose to agents" switch. Registry edits like the PATCH above:
-    // 404 on an unknown project or webhook, and a write that names nothing else leaves the
-    // rest of the entry alone. The first write stores `webhooks` and drops the old `webhook` key.
-    .post('/projects/:projectId/webhooks', jsonZodValidator(createProjectWebhookInputSchema), async (c) => {
-      const input = c.req.valid('json');
-      const answer = await editProjectWebhooks(c.req.param('projectId'), (webhooks) => {
-        if (webhooks.length >= PROJECT_WEBHOOKS_MAX) return { error: `a project holds at most ${PROJECT_WEBHOOKS_MAX} webhooks`, status: 409 };
-        if (nameTaken(webhooks, input.name)) return { error: webhookNameTakenError(input.name), status: 409 };
-        const webhook = createdWebhook(webhooks, input);
-        return { webhooks: [...webhooks, webhook], webhook };
-      });
-      if ('error' in answer) return c.json({ error: answer.error }, answer.status);
-      const body: ProjectWebhookResponse = answer.body;
-      return c.json(body, 201);
-    })
-
-    .patch('/projects/:projectId/webhooks/:webhookId', paramZodValidator(projectWebhookParamsSchema), jsonZodValidator(updateProjectWebhookInputSchema), async (c) => {
-      const { projectId, webhookId } = c.req.valid('param');
-      const input = c.req.valid('json');
-      const answer = await editProjectWebhooks(projectId, (webhooks) => {
-        const index = webhooks.findIndex((webhook) => webhook.id === webhookId);
-        if (index < 0) return { error: `unknown webhook: ${webhookId}`, status: 404 };
-        if (input.name !== undefined && nameTaken(webhooks, input.name, webhookId)) return { error: webhookNameTakenError(input.name), status: 409 };
-        const webhook = editedWebhook(webhooks[index]!, input);
-        return { webhooks: webhooks.map((entry, at) => (at === index ? webhook : entry)), webhook };
-      });
-      if ('error' in answer) return c.json({ error: answer.error }, answer.status);
-      const body: ProjectWebhookResponse = answer.body;
-      return c.json(body);
-    })
-
-    .delete('/projects/:projectId/webhooks/:webhookId', paramZodValidator(projectWebhookParamsSchema), async (c) => {
-      const { projectId, webhookId } = c.req.valid('param');
-      const answer = await editProjectWebhooks(projectId, (webhooks) => {
-        const webhook = webhooks.find((entry) => entry.id === webhookId);
-        if (!webhook) return { error: `unknown webhook: ${webhookId}`, status: 404 };
-        return { webhooks: webhooks.filter((entry) => entry !== webhook), webhook };
-      });
-      if ('error' in answer) return c.json({ error: answer.error }, answer.status);
-      const project = answer.body.project;
-      const body: UpdateProjectResponse = { project: defined({ ...project, webhook: project.webhook && defined(project.webhook) }) };
-      return c.json(body);
-    })
-
-    // "Send test" for one webhook: one `task.test` delivery, now, no retries.
-    .post('/projects/:projectId/webhooks/:webhookId/test', paramZodValidator(projectWebhookParamsSchema), async (c) => {
-      const { projectId, webhookId } = c.req.valid('param');
-      const entry = await workspaceProjects.resolveRegistryEntry(projectId);
-      if (!entry) return c.json({ error: `unknown project: ${projectId}` }, 404);
-      const webhook = projectWebhooks(entry).find((candidate) => candidate.id === webhookId);
-      if (!webhook) return c.json({ error: `unknown webhook: ${webhookId}` }, 404);
-      const body: TestProjectWebhookResponse = await sendTestDelivery(entry.id, webhook);
-      return c.json(body);
-    })
-
-    .get('/projects/checkout/:checkoutId/progress', paramZodValidator(checkoutProgressParamsSchema), c => c.json({ progress: checkoutProgress.get(c.req.valid('param').checkoutId) }))
-
-    .post('/projects/checkout', jsonZodValidator(() => checkoutSchema, { message: 'url must be a GitHub repository' }), async (c) => {
-      const parsed = { data: c.req.valid('json') };
-      const { url, name, checkoutId } = parsed.data;
-      const result = await checkoutRepo({
-        url,
-        name,
-        checkoutId,
-        projectsDir: expandTilde(await workspaceProjectsDir()),
-        onProgress: (event) => { checkoutProgress.record(event); workspaceEvents.emit('checkout-progress', event); },
-        // A closed dialog / navigated-away tab aborts the request; the clone is
-        // killed and its partial directory removed rather than left running.
-        signal: c.req.raw.signal,
-        ...(deps.cloneRunner ? { run: deps.cloneRunner } : {}),
-      });
-      if (!result.ok) {
-        // `reason` rides along on the 503 (`gh` unavailable) — the spec's
-        // `{ error, reason }` degradation, mirroring the GitHub pane.
-        return c.json(
-          'reason' in result ? { error: result.error, reason: result.reason } : { error: result.error },
-          result.status,
-        );
-      }
-      // An existing entry for the same root (its folder had been deleted) is a success too: the
-      // project the user asked for is there (hearsay-tools/squawk#1086).
-      const registered = await registerFolder(result.target, 'checkout');
-      if (registered.status !== 200) {
-        // The clone SUCCEEDED and its files are legitimately the user's, so this
-        // path deliberately does NOT clean up — an unregisterable checkout is a
-        // registry problem, not a reason to delete a repo we just fetched. Say
-        // where it is so they can register it by hand.
-        return c.json({ error: `${registered.body.error} (the clone is at ${result.target})` }, registered.status);
-      }
-      return c.json(registered.body, 200);
-    })
-
-    // ---- new project (spec 2026-10-15-create-new-project) ------------------
-    // "Add project → New project": a fresh git repo at `<projectsDir>/<name>`,
-    // optionally backed by a new PRIVATE GitHub repository (never public — the
-    // body has no visibility field to set), optionally from a template. Same
-    // progress stream and cache, same `registerFolder` commit, same
-    // `{ error, reason }` degradation as the clone route above.
-    //
-    // A hosted cockpit creates LOCAL projects only: GitHub creation would act
-    // with the host's `gh` account on a remote viewer's behalf, and the owner
-    // list would show that viewer the host's login and organisations.
-    .get('/projects/github-owners', async (c) => {
-      if (!capabilities().localHandoff) {
-        const body: GithubOwnersResponse = { available: false, reason: HOSTED_GITHUB_OWNERS_REASON };
-        return c.json(body);
-      }
-      return c.json(await listGithubOwners(deps.projectCommandRunner));
-    })
-
-    .post('/projects/create', jsonZodValidator(() => createProjectInputSchema, { message: 'project name must be a valid GitHub repository name — letters, digits, ".", "-" and "_" only, no spaces' }), async (c) => {
-      const { name, github, checkoutId } = c.req.valid('json');
-      if (github && !capabilities().localHandoff) {
-        return c.json({ error: HOSTED_GITHUB_CREATE_REFUSAL }, 409);
-      }
-      const projectsDir = expandTilde(await workspaceProjectsDir());
-      // `registerFolder` re-checks hosted containment, but only AFTER the
-      // repository exists; asked here first, an out-of-root checkout root
-      // refuses before anything is created.
-      if (!capabilities().localHandoff && !(await isInsideHostedBrowseRoot(join(projectsDir, name)))) {
-        return c.json({ error: 'folder is outside the browsable root' }, 400);
-      }
-      const result = await createProject({
-        name,
-        github,
-        checkoutId,
-        projectsDir,
-        onProgress: (event) => { checkoutProgress.record(event); workspaceEvents.emit('checkout-progress', event); },
-        // Cancels only the steps before `gh repo create` (create-project.ts).
-        signal: c.req.raw.signal,
-        ...(deps.projectCommandRunner ? { run: deps.projectCommandRunner } : {}),
-      });
-      if (!result.ok) {
-        return c.json(
-          'reason' in result ? { error: result.error, reason: result.reason } : { error: result.error },
-          result.status,
-        );
-      }
-      // GitHub-backed projects register as `checkout` (they have an origin the
-      // clone flow would also produce); a local-only repo is `local`.
-      // A new entry, or the existing one for the same root — what creating a registered project
-      // whose folder had been deleted produces. Both are a success.
-      const registered = await registerFolder(result.target, result.slug ? 'checkout' : 'local');
-      if (registered.status !== 200) {
-        // As with a clone: the repository is the user's now, so it stays — and a GitHub warning
-        // rides along, since its finishing commands are the only record of what is left to do.
-        const warning = result.warning ? `\n${result.warning}` : '';
-        return c.json({ error: `${registered.body.error} (the project is at ${result.target})${warning}` }, registered.status);
-      }
-      const body: CreateProjectResponse = { project: registered.body.project, ...(result.warning ? { warning: result.warning } : {}) };
-      return c.json(body, 200);
-    });
-
-  /** Hosted containment for a path that may not exist yet: lexical for the
-   *  path itself, realpath for its nearest existing ancestor (a symlink inside
-   *  the browse root may point out of it). Same rule as `registerFolder`. */
-  const isInsideHostedBrowseRoot = async (candidate: string): Promise<boolean> => {
-    const browseRoot = resolveBrowseRoot(await workspaceBrowseRoot());
-    if (!(await isLexicallyInsideBrowseRoot(browseRoot, candidate))) return false;
-    let existing = candidate;
-    while (!(await stat(existing).then(() => true, () => false))) {
-      const parent = dirname(existing);
-      if (parent === existing) return false;
-      existing = parent;
-    }
-    return isInsideBrowseRoot(browseRoot, existing);
-  };
-
-  // Register an existing folder (multi-project spec, "Add project" — the
-  // folder-browser dialog's commit step, step 4.2). Workspace-level like its
-  // GET twin. Everything here is a guard; the registry write itself is one
-  // idempotent `registerProject` call.
-
-  /**
-   * The register-a-folder half of `POST /api/projects`, factored out so the
-   * checkout route (step 4.3) commits its fresh clone through the SAME guards
-   * and the same `project-added` emission rather than a second copy of them.
-   * A root the registry already holds is a success with `existing: true`; each
-   * route decides how to answer it.
-   */
-  const registerFolder = async (
-    spelled: string,
-    source: 'local' | 'checkout',
-  ): Promise<
-    // Discriminated on `status`, not one object with a union `body`: a flat
-    // `{ status: 200 | 400 | 409 | 500; body: RegisterProjectResponse | { error } }` made
-    // `c.json(body, status)` type the route's 200 as carrying the ERROR bodies too, which is a
-    // shape neither POST route can answer with (`contract-parity.workspace.test.ts` pins it).
-    // Split here so the success branch narrows at the call site instead.
-    | { status: 200; body: RegisterProjectResponse; existing: boolean }
-    | { status: 400 | 500; body: { error: string } }
-  > => {
-    // `~` is expanded for the same reason `/api/fs/browse` expands it: the
-    // dialog hands back absolute paths, but a hand-written body (curl, a
-    // future CLI) spells home the way a shell does.
-    const requested = expandTilde(spelled);
-    if (!isAbsoluteHostPath(requested)) {
-      return {
-        status: 400,
-        body: { error: `not a folder: ${spelled} is not an absolute path` },
-      };
-    }
-    // Hosted mode: the same root the picker is narrowed to, re-checked — see
-    // `isInsideBrowseRoot`. Local mode deliberately has NO containment: a
-    // project under `/srv/code` is a normal local setup and `hsq serve`
-    // registers it today.
-    //
-    // Containment is asked in two halves, around the stat, and the split is
-    // deliberate.
-    //
-    // The LEXICAL half runs BEFORE the stat, and that order is the security
-    // property: an out-of-root path must answer the SAME way whether or not it
-    // exists, or the route becomes the existence oracle fs-browse narrows the
-    // tree to prevent. Lexical, not realpath, because a realpath check answers
-    // `false` for a path that IS inside the root and merely absent — which
-    // would tell a hosted user who typo'd a folder under their own checkout
-    // root that it is "outside the browsable root".
-    const hostedBrowseRoot = capabilities().localHandoff
-      ? null
-      : resolveBrowseRoot(await workspaceBrowseRoot());
-    if (hostedBrowseRoot !== null) {
-      if (!(await isLexicallyInsideBrowseRoot(hostedBrowseRoot, requested))) {
-        // No resolved path in the message (fs-browse's rule): saying where the
-        // root is would hand a remote viewer the layout the narrowing hides.
-        return {
-          status: 400,
-          body: { error: 'folder is outside the browsable root' },
-        };
-      }
-    }
-    // Existence is checked HERE rather than left to `registerProject` (which
-    // degrades a failed realpath to a plain resolve): a registry full of
-    // `missing` rows the user never had is worse than a 400 they can act on.
-    const info = await stat(requested).catch(() => null);
-    if (!info?.isDirectory()) return { status: 400, body: { error: `no such folder: ${spelled}` } };
-    // The REALPATH half, now that the path is known to exist: a symlink inside
-    // the root pointing out of it spells as contained and is not. Same message
-    // as the lexical rejection, so the two halves stay indistinguishable from
-    // outside.
-    if (hostedBrowseRoot !== null && !(await isInsideBrowseRoot(hostedBrowseRoot, requested))) {
-      return {
-        status: 400,
-        body: { error: 'folder is outside the browsable root' },
-      };
-    }
-    // The boot-time auto-registration guard, applied to the manual gesture
-    // too: `$HOME` and Squawk's own task worktrees are exactly as wrong a
-    // project root when a human clicks "Add project" as when `hsq serve`
-    // would have registered them. Reachable from the dialog, which starts at
-    // `~` and can add the folder it is showing.
-    if (!(await shouldRegisterProject(requested))) {
-      return {
-        status: 400,
-        body: {
-          error: `not a project folder: ${spelled} is your home directory or a Squawk task worktree`,
-        },
-      };
-    }
-    // Asked BEFORE the write, because `registerProject` is idempotent and
-    // cannot tell us afterwards whether it appended or just bumped
-    // `lastOpenedAt`. Same realpath key the registry dedupes on.
-    const real = await realpath(requested).catch(() => requested);
-    let known = false;
-    try {
-      known = (await loadWorkspaceConfig(deps.home.workspaceConfig)).projects.some((p) => p.root === real);
-    } catch {
-      // unreadable workspace — treat as unknown; the write below will fail loudly
-    }
-    let project: ProjectListEntry;
-    try {
-      const entry = await registerProject(requested, source, deps.home);
-      project = toProjectListEntry(entry, await probeProjectStatus(entry.root));
-    } catch (err) {
-      // e.g. a read-only home — nothing was persisted (atomic tmp+rename).
-      return {
-        status: 500,
-        body: { error: err instanceof Error ? err.message : String(err) },
-      };
-    }
-    // Only a genuinely new project is an event — a re-add is a no-op for every
-    // open cockpit's sidebar.
-    if (!known) workspaceEvents.emit('project-added', { project });
-    return { status: 200, body: { project }, existing: known };
-  };
-
-  // Deregister a project (multi-project spec, step 4.4 — Settings → Projects,
-  // the per-row "Remove"). READ THIS BEFORE TOUCHING THE HANDLER: the ONLY
-  // durable effect allowed here is dropping one entry from
-  // `~/.cezar/config.json`. There is deliberately no `rm`, no `rmdir`, no
-  // `RunStore.open` (which would `mkdir` `<root>/.ai/cezar/runs` and therefore
-  // WRITE into a folder the user just asked us to forget) anywhere below —
-  // `removeProject` is a registry filter and `contexts.dispose` only tears down
-  // in-process handles. Re-registering the same root later finds every task,
-  // worktree and transcript exactly where it was. The confirmation copy in the
-  // cockpit promises precisely this; the promise is kept here.
-  //
-  // A run this server is responsible for blocks the removal with a 409 (spec):
-  // deregistering mid-run would strand a live agent process under a root no
-  // route can resolve any more — the run would keep burning tokens with no
-  // cockpit able to show, message or cancel it.
-  const ACTIVE_RUN_STATUSES: ReadonlySet<RunStatus> = new Set<RunStatus>(['queued', 'running', 'waiting']);
-
-  /**
-   * How many of `projectId`'s runs this process is actively responsible for.
-   *
-   * Counted from the ALREADY-BUILT context only (`peek`, never `context()`):
-   * a project with no context in this process has no manager, therefore no
-   * agent to strand — and building one to answer the question would recover
-   * and resume runs on a project being deleted, which is the exact opposite of
-   * what the caller asked for. Reading the run index off disk instead was
-   * rejected for the same reason as the `rm` above: `RunStore.open` creates
-   * directories, and a stale `running` row left by a crashed process would
-   * become a 409 the user could never clear.
-   */
-  const activeRunCount = (projectId: string): number => {
-    const ctx = contexts.peek(projectId);
-    if (!ctx) return 0;
-    return ctx.store.queries.listRuns().filter((run) => ACTIVE_RUN_STATUSES.has(run.status)).length;
-  };
-
+  const projectsRoutes = createProjectsRoutes({
+    home: deps.home,
+    capabilities,
+    contexts,
+    workspaceProjects,
+    workspaceEvents,
+    checkoutProgress,
+    semaphore: deps.semaphore,
+    taskWebhookFetch: deps.taskWebhookFetch,
+    cloneRunner: deps.cloneRunner,
+    projectCommandRunner: deps.projectCommandRunner,
+    workspaceBrowseRoot,
+  });
 
   // ---- GUI clone (multi-project spec, step 4.3) ----------------------------
   // "Add project → Clone from GitHub": clone into the checkout root, then
@@ -4504,7 +3342,6 @@ export function createApp(deps: ServerDeps) {
 
 export { cockpitOriginFor } from './server-deps.ts';
 
-const webhookNameTakenError = (name: string) => `this project already has a webhook named "${name.trim()}" — pick another name`;
 
 
 /**
