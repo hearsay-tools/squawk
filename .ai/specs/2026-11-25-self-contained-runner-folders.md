@@ -47,7 +47,7 @@ product, not what they do.
   folders unchanged into `<config>/plugins/`, starts Squawk with no bundled runner, and runs a
   `HSQ_DRY_RUN=1` task on each, with no expected failure left. The six
   `runner-folder-escape` baselines are empty. Each runner has a recorded live run from
-  `<config>/plugins/` on its real CLI, or the close-out names why it has none.
+  `<config>/plugins/` on its real CLI.
 - **Failure:** a runner file that adds `new URL('../../../scripts/x.mjs', import.meta.url)`,
   `join(here, '..', '..', 'scripts')` or `import … from 'zod'` fails `cez/runner-folder-escape`.
   A runner folder that still needs a file outside it fails the copy-out test.
@@ -76,14 +76,21 @@ closure.
 `HSQ_TOOL_SOCKET` is, through `productEnvEntries`) to the session env. Its value is the file URL
 of the running copy's tool client: `src/ci-wait/client.ts` under source, `dist/ci-wait/client.js`
 when built. `pi-ci-wait.mjs` and `omp-ci-wait.mjs` import the client from that URL and from no
-relative path.
+path relative to their own file.
+
+OMP keeps its source-checkout fallback. OMP's loader cannot resolve the workspace contract
+package from a source checkout (`src/runners/omp/__fixtures__/README.md`, the 2026-10-05 rows),
+so `omp-ci-wait.mjs` imports `client.ts` first and, when that import fails, the built
+`dist/ci-wait/client.js` of the same checkout if it exists, as it does today. It finds that file
+from the `HSQ_TOOL_CLIENT` URL (`new URL('../../dist/ci-wait/client.js', clientUrl)`), not from
+its own location. When `dist/` is absent, it rethrows the source error.
 
 Why: Pi has no MCP client, and OMP reads MCP servers only from files, with no per-session flag
 (`.ai/specs/2026-10-02-omp-runner.md`), so Squawk's tools reach both as an `--extension`. The
 extension runs in the agent CLI's process, where the resolve hook of ADR 0070 does not work.
 `provision()` already builds the env of every session that asks for Squawk's tools, so every
-runner gets the variable with no runner code, and the source-or-built choice moves out of the
-scripts.
+runner gets the variable with no runner code. Pi loads `client.ts` from a source checkout
+through its own loader, as it does today.
 
 Rejected: a kit helper that each runner calls to add the variable. Every caller would repeat
 what `provision()` already does.
@@ -112,7 +119,7 @@ The six mock CLIs and their shared helpers stay in `scripts/`. A new kit functio
 folder and throws an error that names the script when the file is absent. Every dry-run site in
 runner code, and `core/skill-probe.ts`, calls it instead of building a path.
 
-Why: the six mock CLIs share 1,337 lines of helpers, and those helpers import product code
+Why: the six mock CLIs share about 1,300 lines of helpers, and those helpers import product code
 (`product-env.mjs`) and packages (`@modelcontextprotocol/sdk`, `tsx`). More than 40 test sites,
 four lint rules and `.ai/scripts/simulate-sixth-runner.mjs` assume `scripts/mock-*.mjs`. A copied
 runner keeps its dry run because the product it loads into ships its mock. A runner whose script
@@ -159,8 +166,9 @@ checks paths and packages.
 
 Each runner slice runs its runner, copied unchanged from the built `dist/` into
 `<config>/plugins/` and started through the wrapper of decision 5, on its real CLI, to a
-finished task. The close-out names any runner whose CLI or login the acceptance host lacks. The
-evidence names no host path, host name or login.
+finished task. The evidence names no host path, host name or login. A runner whose CLI or login
+the acceptance host lacks blocks the close-out until the owner decides: a run on a host that has
+it, or an approved change to the epic's live-run criterion.
 
 ## Evidence
 
@@ -176,8 +184,9 @@ The inventory on `main` at `24bf0ced0` is in the epic's Agent context comment. A
   `omp/omp-runner.ts:192` and `:804-808`, `opencode/opencode-server-runner.ts:137`,
   `pi/pi-runner.ts:597`. `RunnerMock.script` holds a file name only, and core resolves it in
   `core/skill-probe.ts:26-29`.
-- **Mock CLIs.** `scripts/` holds 43 `mock-*.mjs` files. The six mock CLIs share 24 helper
-  files (1,337 lines). `mock-ask-answer.mjs` is shared by codex and opencode. Six helpers belong
+- **Mock CLIs.** `scripts/` holds 43 `mock-*.mjs` files. All six mock CLIs import the same 24
+  helper files (1,318 lines, `product-env.mjs` included), by a scan of their static and dynamic
+  `./` imports. `mock-ask-answer.mjs` is shared by codex and opencode. Six helpers belong
   to one mock each.
 - **Tool client.** `ci-wait/client.ts` imports `node:crypto`, `node:http`,
   `core/product-env.ts` and the contract's `agent-tools` and `wait-tools`, and through them
