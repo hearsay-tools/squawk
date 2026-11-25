@@ -1,7 +1,12 @@
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { findPackGaps, PLUGIN_ENTRY_FILES } from './pack-check.ts';
 import { PLUGIN_ENTRY_SUBPATHS } from './plugin/resolve-hook.ts';
-import { readFileSync } from 'node:fs';
+import { copyRunnerAssets, listRunnerAssets } from '../scripts/copy-runner-assets.mjs';
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { exports: Record<string, string> };
 
@@ -73,5 +78,67 @@ describe('findPackGaps', () => {
     const exported = Object.entries(packageJson.exports).filter(([subpath]) => subpath.startsWith('./plugin')).map(([, file]) => file.replace(/^\.\//, ''));
     expect([...PLUGIN_ENTRY_FILES].sort()).toEqual(exported.sort());
     expect(PLUGIN_ENTRY_FILES).toHaveLength(Object.keys(PLUGIN_ENTRY_SUBPATHS).length);
+  });
+
+  it('accepts present runner .mjs assets and fails when one is missing from the tarball', () => {
+    const assets = ['dist/runners/alpha/extensions/a.mjs', 'dist/runners/beta/b.mjs'];
+    expect(findPackGaps([...goodPack, ...assets], RUNNERS, assets)).toEqual([]);
+    const gaps = findPackGaps([...goodPack, assets[0]!], RUNNERS, assets);
+    expect(gaps).toEqual([expect.stringContaining('dist/runners/beta/b.mjs is missing')]);
+  });
+});
+
+describe('copy-runner-assets', () => {
+  const scriptPath = fileURLToPath(new URL('../scripts/copy-runner-assets.mjs', import.meta.url));
+
+  it('copies non-test .mjs runner assets preserving paths and excludes fixtures, tests, and non-bundled folders', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hsq-copy-runner-assets-'));
+    try {
+      const srcRunners = join(root, 'src/runners');
+      const distRunners = join(root, 'dist/runners');
+      mkdirSync(join(srcRunners, 'alpha/extensions'), { recursive: true });
+      mkdirSync(join(srcRunners, 'alpha/__fixtures__'), { recursive: true });
+      mkdirSync(join(srcRunners, 'beta'), { recursive: true });
+      mkdirSync(join(srcRunners, 'fixture'), { recursive: true });
+
+      writeFileSync(join(srcRunners, 'alpha/index.ts'), 'export const displayOrder = 1;\n');
+      writeFileSync(join(srcRunners, 'alpha/extensions/tool.mjs'), 'export const tool = 1;\n');
+      writeFileSync(join(srcRunners, 'alpha/extensions/tool.test.mjs'), 'export {};\n');
+      writeFileSync(join(srcRunners, 'alpha/extensions/helper.testkit.mjs'), 'export {};\n');
+      writeFileSync(join(srcRunners, 'alpha/__fixtures__/stub.mjs'), 'export {};\n');
+      writeFileSync(join(srcRunners, 'beta/index.ts'), 'export const displayOrder = 2;\n');
+      writeFileSync(join(srcRunners, 'beta/scope.mjs'), 'export const scope = 2;\n');
+      writeFileSync(join(srcRunners, 'beta/scope.d.mts'), 'export const scope: number;\n');
+      // Non-bundled test-only runner (no index.* entry) must be ignored.
+      writeFileSync(join(srcRunners, 'fixture/ignored.mjs'), 'export {};\n');
+
+      const expected = ['alpha/extensions/tool.mjs', 'beta/scope.mjs'];
+      expect(listRunnerAssets(srcRunners)).toEqual(expected);
+
+      const copied = copyRunnerAssets(srcRunners, distRunners);
+      expect(copied).toEqual(expected);
+      expect(readFileSync(join(distRunners, 'alpha/extensions/tool.mjs'), 'utf8')).toBe('export const tool = 1;\n');
+      expect(readFileSync(join(distRunners, 'beta/scope.mjs'), 'utf8')).toBe('export const scope = 2;\n');
+      expect(existsSync(join(distRunners, 'alpha/extensions/tool.test.mjs'))).toBe(false);
+      expect(existsSync(join(distRunners, 'alpha/extensions/helper.testkit.mjs'))).toBe(false);
+      expect(existsSync(join(distRunners, 'alpha/__fixtures__/stub.mjs'))).toBe(false);
+      expect(existsSync(join(distRunners, 'beta/scope.d.mts'))).toBe(false);
+      expect(existsSync(join(distRunners, 'fixture/ignored.mjs'))).toBe(false);
+
+      // CLI entrypoint copies into the target dist directory and findPackGaps enforces every listed asset.
+      const cliDist = join(root, 'cli-dist/runners');
+      const output = execFileSync(process.execPath, [scriptPath, srcRunners, cliDist], { encoding: 'utf8' });
+      expect(output).toContain('copied 2 runner asset(s)');
+      expect(readFileSync(join(cliDist, 'alpha/extensions/tool.mjs'), 'utf8')).toBe('export const tool = 1;\n');
+
+      const expectedPackAssets = expected.map((rel) => `dist/runners/${rel}`);
+      const basePack = withEntries(['web/dist/index.html', 'web/dist/assets/a.js']);
+      expect(findPackGaps([...basePack, ...expectedPackAssets], RUNNERS, expectedPackAssets)).toEqual([]);
+      expect(findPackGaps([...basePack, expectedPackAssets[0]!], RUNNERS, expectedPackAssets)).toEqual([
+        expect.stringContaining('dist/runners/beta/scope.mjs is missing'),
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

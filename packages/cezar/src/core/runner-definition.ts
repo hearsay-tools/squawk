@@ -75,7 +75,12 @@ export interface RunnerDefinition {
  * `lint/mock-scenario-boundary.ts` parses `script` from the source of `runners/<id>/mock.ts`.
  */
 export interface RunnerMock {
-  /** The mock script's file name in `packages/cezar/scripts/`. */
+  /**
+   * The mock script's file name in `packages/cezar/scripts/`. Runner dry-run code and
+   * `core/skill-probe.ts` resolve it through `nativeMockPath(mock)`
+   * (`@hearsay-tools/squawk/plugin/runtime`), which throws an error naming the script when this
+   * installation does not ship it.
+   */
   readonly script: string;
   /** Permission-policy runners prove tool admission through recorded native responses. */
   readonly toolGrantObservation?: 'permission-policy';

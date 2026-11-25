@@ -9,6 +9,7 @@
  */
 
 // Runner definition and adapter contract.
+export { z } from 'zod';
 export { defineRunner } from '../core/runner-definition.ts';
 export type {
   RunnerAccountsData, RunnerBrowserSignIn, RunnerCli, RunnerConfigFiles, RunnerDetection, RunnerDisplay, RunnerEnv,

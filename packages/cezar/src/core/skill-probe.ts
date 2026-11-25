@@ -1,8 +1,8 @@
 import { type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { buildChildEnv } from './agent-env.ts';
 import { profileEnv } from './agent-profiles.ts';
+import { nativeMockPath } from './native-mock.ts';
 import { productEnv } from './product-env.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { processGroupAlive, sessionGroupOf, signalOwnedSessionGroup, signalSession, spawnSessionLeader } from './session-process.ts';
@@ -26,7 +26,7 @@ export function skillExecutable(runner: string, bin?: string): string {
   return bin ?? { claude: productEnv('CLAUDE_BIN'), codex: productEnv('CODEX_BIN'),
     opencode: productEnv('OPENCODE_BIN'), pi: productEnv('PI_BIN'), omp: productEnv('OMP_BIN'),
     antigravity: productEnv('ANTIGRAVITY_BIN') }[runner] ?? (productEnv('DRY_RUN') === '1'
-    ? fileURLToPath(new URL(`../../scripts/${runnerDefinition(runner).mock.script}`, import.meta.url)) : runner);
+    ? nativeMockPath(runnerDefinition(runner).mock) : runner);
 }
 
 /** A no-turn probe owns a process group. Kill it and observe exit before releasing its caller. */

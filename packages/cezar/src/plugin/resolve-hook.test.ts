@@ -44,7 +44,7 @@ it('gives a plugin outside the repository the running copy of @hearsay-tools/squ
   const outside = mkdtempSync(join(tmpdir(), 'hsq-hook-plugin-'));
   try {
     mkdirSync(join(outside, 'plugin'));
-    writeFileSync(join(outside, 'plugin', 'index.mjs'), "export { productEnv } from '@hearsay-tools/squawk/plugin';\nexport { readNdjson } from '@hearsay-tools/squawk/plugin/runtime';\n");
+    writeFileSync(join(outside, 'plugin', 'index.mjs'), "export { productEnv, z } from '@hearsay-tools/squawk/plugin';\nexport { nativeMockPath, readNdjson } from '@hearsay-tools/squawk/plugin/runtime';\n");
     writeFileSync(join(outside, 'plugin', 'subpath.mjs'), "export * from '@hearsay-tools/squawk/plugin/runner-kit';\n");
     const hook = pathToFileURL(fileURLToPath(new URL('./resolve-hook.ts', import.meta.url))).href;
     const entry = pathToFileURL(fileURLToPath(new URL('./index.ts', import.meta.url))).href;
@@ -57,13 +57,22 @@ it('gives a plugin outside the repository the running copy of @hearsay-tools/squ
       const fromPlugin = await import(${JSON.stringify(plugin)});
       const running = await import(${JSON.stringify(entry)});
       const runningRuntime = await import(${JSON.stringify(runtime)});
+      const parsed = fromPlugin.z.object({ id: fromPlugin.z.string() }).parse({ id: 'host-plugin' });
       const subpath = await import(${JSON.stringify(subpath)}).then(() => 'loaded', error => error.message);
-      console.log(JSON.stringify({ same: fromPlugin.productEnv === running.productEnv && fromPlugin.readNdjson === runningRuntime.readNdjson, subpath }));
+      console.log(JSON.stringify({
+        same: fromPlugin.productEnv === running.productEnv
+          && fromPlugin.z === running.z
+          && fromPlugin.readNdjson === runningRuntime.readNdjson
+          && fromPlugin.nativeMockPath === runningRuntime.nativeMockPath,
+        parsed,
+        subpath,
+      }));
     `;
     // bound: a cold tsx start loads the runner kit; the default test timeout is the hang guard.
     const { stdout } = await promisify(execFile)(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script], { cwd: fileURLToPath(new URL('../..', import.meta.url)) });
     expect(JSON.parse(stdout.trim())).toEqual({
       same: true,
+      parsed: { id: 'host-plugin' },
       subpath: 'Cannot import @hearsay-tools/squawk/plugin/runner-kit: a plugin imports Squawk only from @hearsay-tools/squawk/plugin (or its documented kit subpaths).',
     });
   } finally {
