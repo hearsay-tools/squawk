@@ -148,7 +148,7 @@ export function InlineLog({ automationId, automationName, timeZone, showName = f
   const heading = `Recent activity${showName && automationName ? ` · ${automationName}` : ''}`
   if (!error && records && records.length === 0) {
     return (
-      <section data-slot="automation-inline-log" className="mt-3 flex flex-wrap items-center gap-x-2 border-t border-border pt-2.5 text-xs text-muted-foreground">
+      <section data-slot="automation-inline-log" className="flex flex-wrap items-center gap-x-2 border-t border-border pt-2.5 text-xs text-muted-foreground">
         <h3 className="font-medium text-foreground">{heading}</h3>
         <span aria-hidden="true">·</span>
         <p>Nothing has run yet.</p>
@@ -156,8 +156,8 @@ export function InlineLog({ automationId, automationName, timeZone, showName = f
     )
   }
   return (
-    <section data-slot="automation-inline-log" className="mt-3 min-w-0 border-t border-border pt-3">
-      <h3 className="mb-2 text-xs font-medium text-muted-foreground">{heading}</h3>
+    <section data-slot="automation-inline-log" className="min-w-0 border-t border-border pt-2.5">
+      <h3 className="mb-1.5 text-xs font-medium text-muted-foreground">{heading}</h3>
       {error && !records ? (
         <div className="grid justify-items-start gap-2"><PageState text={error} /><Button variant="outline" onClick={() => void refresh()}>Retry</Button></div>
       ) : !records ? <p className="text-xs text-muted-foreground">Loading activity…</p> : (

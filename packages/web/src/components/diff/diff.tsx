@@ -33,7 +33,7 @@ export function Diff(props: DiffProps) {
   // The empty state needs no engine — render it synchronously, chunk or no chunk.
   if (props.files.length === 0) {
     return (
-      <p data-slot="diff-empty" className={cn('px-1 text-xs text-soft-foreground', props.className)}>
+      <p data-slot="diff-empty" className={cn('px-1 text-xs text-muted-foreground', props.className)}>
         No changes.
       </p>
     )
@@ -41,7 +41,7 @@ export function Diff(props: DiffProps) {
   if (engine === 'failed') return <DiffFallback {...props} />
   if (engine === null) {
     return (
-      <p data-slot="diff-loading" className={cn('px-1 text-xs text-soft-foreground', props.className)}>
+      <p data-slot="diff-loading" className={cn('px-1 text-xs text-muted-foreground', props.className)}>
         Loading diff…
       </p>
     )
@@ -111,7 +111,7 @@ function FallbackFile({
   const fullPath = file.oldPath ? `${file.oldPath} → ${file.path}` : file.path
   return (
     <section data-slot="diff-file" data-path={file.path} className="min-w-0 overflow-clip rounded-md border border-border bg-card">
-      <header className="flex items-start gap-2 border-b border-border/50 px-3 py-2">
+      <header className="flex items-start gap-2 border-b border-border px-3 py-2">
         <span data-slot="diff-file-path" title={fullPath} className="min-w-0 wrap-anywhere font-mono text-xs font-medium">
           {fullPath}
         </span>
@@ -122,9 +122,9 @@ function FallbackFile({
       {shouldPreviewImage(file) ? (
         <ImagePreview file={file} imageSrc={imageSrc} onOpenInApp={onOpenInApp} />
       ) : file.binary ? (
-        <p className="px-4 py-2.5 text-xs text-soft-foreground">Binary file — no text diff.</p>
+        <p className="px-4 py-2.5 text-xs text-muted-foreground">Binary file — no text diff.</p>
       ) : file.patch === '' ? (
-        <p className="px-4 py-2.5 text-xs text-soft-foreground">No content changes (metadata only).</p>
+        <p className="px-4 py-2.5 text-xs text-muted-foreground">No content changes (metadata only).</p>
       ) : (
         <pre
           className={cn(
@@ -139,7 +139,7 @@ function FallbackFile({
                 'block px-4',
                 line.startsWith('+') && !line.startsWith('+++') && 'bg-diff-add',
                 line.startsWith('-') && !line.startsWith('---') && 'bg-diff-del',
-                line.startsWith('@@') && 'text-soft-foreground',
+                line.startsWith('@@') && 'text-muted-foreground',
               )}
             >
               {line}

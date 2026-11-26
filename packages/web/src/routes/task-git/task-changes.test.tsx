@@ -308,7 +308,7 @@ describe('the Changes tab route', () => {
     await waitFor(() => expect(toolbarAction('push')?.disabled).toBe(false))
   })
 
-  it('Create PR uses the existing /pr flow and flips to View PR once the record carries the URL', async () => {
+  it('Draft PR uses the existing /pr flow and flips to View PR once the record carries the URL', async () => {
     let record: ApiRun = RUN
     const sent = stubFetch({
       'POST /api/v1/runs/r1/pr': () => {

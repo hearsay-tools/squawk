@@ -33,22 +33,34 @@ export function DiffViewToggles({
         <ModeButton current={mode} value="unified" onModeChange={onModeChange} />
         <ModeButton current={mode} value="split" onModeChange={onModeChange} />
       </span>
-      <Button
-        variant="outline"
-        size="icon-sm"
-        data-slot="wrap-toggle"
-        aria-pressed={wrap}
-        aria-label="Wrap long lines"
-        title="Wrap long lines"
-        className={cn(
-          'size-11 rounded-lg',
-          wrap ? 'border-accent-text/40 bg-muted text-accent-text' : 'text-muted-foreground hover:text-foreground',
-        )}
-        onClick={() => onWrapChange(!wrap)}
-      >
-        <WrapTextIcon aria-hidden="true" />
-      </Button>
+      <WrapToggle wrap={wrap} onWrapChange={onWrapChange} />
     </>
+  )
+}
+
+/** The wrap switch on its own: the diff toolbars and the Files viewer header share one button.
+ *  `className` sizes it; the default is the toolbar's 44px square. */
+export function WrapToggle({ wrap, onWrapChange, className = 'size-11 rounded-lg' }: {
+  wrap: boolean
+  onWrapChange: (wrap: boolean) => void
+  className?: string
+}) {
+  return (
+    <Button
+      variant="outline"
+      size="icon-sm"
+      data-slot="wrap-toggle"
+      aria-pressed={wrap}
+      aria-label="Wrap long lines"
+      title="Wrap long lines"
+      className={cn(
+        className,
+        wrap ? 'border-accent-text/40 bg-muted text-accent-text' : 'text-muted-foreground hover:text-foreground',
+      )}
+      onClick={() => onWrapChange(!wrap)}
+    >
+      <WrapTextIcon aria-hidden="true" />
+    </Button>
   )
 }
 

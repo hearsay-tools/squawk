@@ -408,6 +408,21 @@ describe('the Files tab route', () => {
     )
   })
 
+  it('the code viewer wraps long lines by default and its header toggle turns wrapping off', async () => {
+    stubFetch()
+    renderFilesRoute()
+    await openFile('hello.ts')
+
+    await waitFor(() => expect(document.querySelector('[data-slot="file-preview-code"]')).not.toBeNull())
+    const toggle = document.querySelector<HTMLButtonElement>('[data-slot="file-preview-head"] [data-slot="wrap-toggle"]')!
+    const line = () => document.querySelector('[data-slot="file-preview-code"] .flex > span:last-child')!
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    expect(line().className).toContain('whitespace-pre-wrap')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    expect(line().className).not.toContain('whitespace-pre-wrap')
+  })
+
   it('an image renders inline through the raw URL (binary flag notwithstanding)', async () => {
     stubFetch()
     renderFilesRoute()

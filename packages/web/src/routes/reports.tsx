@@ -101,10 +101,11 @@ export function ReportsRoute() {
             )}
           </div>
         ) : (
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-1.5" aria-label="Reports">
             {reports.map(report => (
-              <li key={report.id} data-slot="report-row" className="reports-row flex items-center justify-between gap-3 rounded-xl border border-border bg-card py-2.5 pr-3 pl-4 transition-colors">
-                <div className="min-w-0 flex-1">
+              <li key={report.id} data-slot="report-row" className="reports-row flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors">
+                <FileTextIcon aria-hidden="true" className="size-4 shrink-0 self-start mt-0.5 text-accent-text" />
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <h2 className="flex min-w-0 text-[14px] leading-5 font-semibold text-foreground" title={reportTitle(report)}>
                     <Link
                       data-report-id={report.id}
@@ -113,28 +114,29 @@ export function ReportsRoute() {
                       state={{ readerFrom: key, filesRestoreKey: key }}
                       onClick={() => positions.set(key, { scroll: scroller.current?.scrollTop ?? 0, row: report.id, pages: result.data?.pages.length ?? 1 })}
                     >
-                      <FileTextIcon aria-hidden="true" className="mr-2 size-4 shrink-0 text-accent-text" />
                       <span className="min-w-0 truncate">{reportTitle(report)}</span>
                     </Link>
                   </h2>
-                  <div className="flex min-w-0 pl-6 text-xs leading-4 text-muted-foreground">
+                  {/* Line two: the source task, then the compact age. */}
+                  <div className="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
                     <Link
                       className="reports-task min-w-0 truncate text-xs text-muted-foreground no-underline hover:text-foreground hover:underline"
                       to={`/tasks/${report.runId}`}
                     >
                       <span className="min-w-0 truncate" title={report.taskTitle}>{report.taskTitle}</span>
                     </Link>
+                    <span aria-hidden="true" className="shrink-0">·</span>
+                    <time
+                      className="shrink-0 tabular-nums"
+                      dateTime={report.createdAt}
+                      title={formatFullReportTimestamp(report.createdAt)}
+                    >
+                      {shortAge(report.createdAt)}
+                    </time>
                   </div>
                 </div>
-                <time
-                  className="shrink-0 text-xs tabular-nums text-muted-foreground"
-                  dateTime={report.createdAt}
-                  title={formatFullReportTimestamp(report.createdAt)}
-                >
-                  {shortAge(report.createdAt)}
-                </time>
                 {/* The whole card opens the report (the title link's overlay); the chevron says so. */}
-                <ChevronRightIcon aria-hidden="true" data-slot="report-open-cue" className="reports-cue size-4 shrink-0 text-soft-foreground" />
+                <ChevronRightIcon aria-hidden="true" data-slot="report-open-cue" className="reports-cue size-4 shrink-0 text-muted-foreground" />
               </li>
             ))}
           </ul>

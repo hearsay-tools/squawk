@@ -52,7 +52,7 @@ export function ImagePreview({
           type="button"
           data-slot="diff-image-open"
           onClick={() => onOpenInApp(file.path)}
-          className="text-[11px] font-medium text-soft-foreground hover:text-foreground hover:underline"
+          className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
         >
           Open in default app
         </button>
@@ -62,5 +62,5 @@ export function ImagePreview({
 }
 
 function ImageNote({ children }: { children: React.ReactNode }) {
-  return <p className="px-4 py-2.5 text-xs text-soft-foreground">{children}</p>
+  return <p className="px-4 py-2.5 text-xs text-muted-foreground">{children}</p>
 }

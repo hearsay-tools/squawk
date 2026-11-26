@@ -2,9 +2,10 @@
 .reports-open { display: flex; min-width: 0; align-items: center; }
 .reports-open::after { content: ''; position: absolute; inset: 0; }
 .reports-task { position: relative; z-index: 1; display: inline-flex; min-width: 0; max-width: 100%; align-items: center; }
+/* Touch: both links keep a 44px target, and negative block margins keep the row two lines tall. */
 @media (hover: none), (max-width: 767px) {
-  .reports-open { min-block-size: 44px; }
-  .reports-task { min-block-size: 44px; }
+  .reports-open { min-block-size: 44px; margin-block: -12px; }
+  .reports-task { min-block-size: 44px; margin-block: -14px; }
 }
 .reports-open:focus-visible { outline: 2px solid transparent; }
 .reports-row:has(.reports-open:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }

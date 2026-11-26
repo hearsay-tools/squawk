@@ -1150,8 +1150,8 @@ function GithubRow({
           {item.title}
         </span>
       </span>
-      <span data-slot="gh-row-meta" className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[22px] font-mono text-[11px] text-muted-foreground md:flex-nowrap md:gap-y-0">
-        <span>#{item.number}</span>
+      <span data-slot="gh-row-meta" className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[22px] text-xs text-muted-foreground md:flex-nowrap md:gap-y-0">
+        <span className="tabular-nums">#{item.number}</span>
         <span data-slot="gh-row-author" className="max-w-full shrink-0 truncate md:min-w-0 md:shrink">{item.author}</span>
         <time dateTime={item.createdAt} title={new Date(item.createdAt).toLocaleString()}>{shortAge(item.createdAt)}</time>
         <CommentCount count={comments} />

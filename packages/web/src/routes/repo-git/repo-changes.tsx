@@ -71,44 +71,44 @@ export function RepoChangesSection() {
           subtitle="No uncommitted changes in the main working tree. Edits show up here as they happen."
         />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col items-stretch gap-5 px-4 pb-9 pt-0 [--diff-sticky-top:1rem] md:flex-row md:items-start md:px-9">
-          {/* Same deal as the task Changes tab: sticky AND its own scroller, so a long file list
-              never has to drag the diff to the bottom to show its last row. */}
-          <aside
-            data-slot="changes-tree-pane"
-            className="md:sticky md:top-4 md:max-h-[calc(100dvh_-_64px_-_var(--diff-sticky-top)_-_1rem)] w-full md:w-60 shrink-0 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-3.5 lg:w-[250px]"
-          >
-            <div data-slot="changes-tree-heading" className="mb-3 flex items-center justify-between gap-2 border-b border-border pb-3">
-              <h2 className="text-xs font-semibold">Changed files</h2>
-              {changes.data ? <AnimatedDiffStat stat={changes.data.stat} /> : null}
-            </div>
-            <ChangesTree root={tree} selected={selected} onSelect={selectFile} />
-          </aside>
-          <Diff
-            files={files}
-            viewRef={diffRef}
-            mode={effectiveMode}
-            wrap={effectiveWrap}
-            // No file route serves the main checkout, so the preview shows the patch's new side
-            // and no image: `loadFileText` and `imageSrc` stay unwired here.
-            preview={preview}
-            // The total sits beside the Changed files heading; the diff's header row carries the
-            // view toggles at its right end instead of a row of their own.
-            totals={false}
-            // A phone without a Markdown file has no control to show, so no empty row either.
-            actions={desktop || hasMarkdown ? (
-              <span data-slot="repo-changes-toolbar" className="flex items-center gap-1.5">
-                {/* Same rule as the task toolbar: these toggles exist ≥md only — phones force unified+wrap. */}
-                <span className="hidden items-center gap-1.5 md:flex">
-                  <DiffViewToggles mode={mode} wrap={wrap} onModeChange={setMode} onWrapChange={setWrap} />
-                </span>
-                {/* Every width, like the task toolbar's — see `MarkdownPreviewToggle`. */}
-                {hasMarkdown ? <MarkdownPreviewToggle preview={preview} onPreviewChange={setPreview} /> : null}
+        <>
+          {/* Full width above both columns, like the task Changes toolbar: the Changed files card
+              and the first diff card then start on one baseline. */}
+          <div data-slot="repo-changes-toolbar" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 pb-4 md:px-9 [&_button]:min-h-11">
+            {changes.data ? <AnimatedDiffStat stat={changes.data.stat} /> : null}
+            <span className="ml-auto flex items-center gap-2">
+              {/* Every width, like the task toolbar's — see `MarkdownPreviewToggle`. */}
+              {hasMarkdown ? <MarkdownPreviewToggle preview={preview} onPreviewChange={setPreview} /> : null}
+              {/* Same rule as the task toolbar: these toggles exist ≥md only — phones force unified+wrap. */}
+              <span className="hidden items-center gap-1.5 md:flex">
+                <DiffViewToggles mode={mode} wrap={wrap} onModeChange={setMode} onWrapChange={setWrap} />
               </span>
-            ) : undefined}
-            className="min-w-0 flex-1"
-          />
-        </div>
+            </span>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col items-stretch gap-5 px-4 pb-9 pt-0 [--diff-sticky-top:1rem] md:flex-row md:items-start md:px-9">
+            {/* Same deal as the task Changes tab: sticky AND its own scroller, so a long file list
+                never has to drag the diff to the bottom to show its last row. */}
+            <aside
+              data-slot="changes-tree-pane"
+              className="md:sticky md:top-4 md:max-h-[calc(100dvh_-_64px_-_var(--diff-sticky-top)_-_1rem)] w-full md:w-60 shrink-0 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-3.5 lg:w-[250px]"
+            >
+              <h2 data-slot="changes-tree-heading" className="mb-3 border-b border-border pb-3 text-xs font-semibold">Changed files</h2>
+              <ChangesTree root={tree} selected={selected} onSelect={selectFile} />
+            </aside>
+            <Diff
+              files={files}
+              viewRef={diffRef}
+              mode={effectiveMode}
+              wrap={effectiveWrap}
+              // No file route serves the main checkout, so the preview shows the patch's new side
+              // and no image: `loadFileText` and `imageSrc` stay unwired here.
+              preview={preview}
+              // The toolbar above shows the animated total; the diff does not repeat it.
+              totals={false}
+              className="min-w-0 flex-1"
+            />
+          </div>
+        </>
       )}
     </section>
   )

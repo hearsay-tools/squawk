@@ -345,7 +345,7 @@ function DiffFileCard({
           The offset is a consumer-set CSS var so the file header parks BELOW a sticky page
           header (Git / run header) rather than colliding with it; `z-10` keeps it beneath the
           page header's higher layer. Defaults to 0 for consumers without a sticky header. */}
-      <header className="sticky top-[var(--diff-sticky-top,0px)] z-10 flex items-center rounded-t-md border-b border-border/50 bg-card">
+      <header className="sticky top-[var(--diff-sticky-top,0px)] z-10 flex items-center rounded-t-md border-b border-border bg-card">
         <button
           type="button"
           data-slot="diff-file-header"
@@ -354,13 +354,13 @@ function DiffFileCard({
           className="flex min-w-0 flex-1 items-start gap-2 px-3 py-2 text-left hover:bg-muted/50"
         >
           <ChevronRightIcon
-            className={cn('mbs-[1px] size-3.5 shrink-0 text-soft-foreground motion-safe:transition-transform', open && 'rotate-90')}
+            className={cn('mbs-[1px] size-3.5 shrink-0 text-muted-foreground motion-safe:transition-transform', open && 'rotate-90')}
             aria-hidden="true"
           />
           <span data-slot="diff-file-path" title={fullPath} className="min-w-0 wrap-anywhere font-mono text-xs font-medium">
             {file.oldPath ? (
               <>
-                <span className="text-soft-foreground">{file.oldPath} → </span>
+                <span className="text-muted-foreground">{file.oldPath} → </span>
                 {file.path}
               </>
             ) : (
@@ -399,7 +399,7 @@ function DiffFileCard({
             className={cn(
               'mr-1.5 inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] font-medium max-md:h-11 max-md:px-3 pointer-coarse:h-11 pointer-coarse:px-3',
               'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring',
-              preview ? 'bg-muted text-foreground' : 'text-soft-foreground hover:bg-muted/50 hover:text-foreground',
+              preview ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
             )}
           >
             <EyeIcon aria-hidden="true" className="size-3.5" />
@@ -563,7 +563,7 @@ function useFileTokens(path: string, lineList: HunkLine[]): SynToken[][] | null 
 }
 
 function Note({ children }: { children: React.ReactNode }) {
-  return <p className="px-4 py-2.5 text-xs text-soft-foreground">{children}</p>
+  return <p className="px-4 py-2.5 text-xs text-muted-foreground">{children}</p>
 }
 
 // ---- rows ---------------------------------------------------------------------------------
@@ -575,9 +575,10 @@ const LINE_BG: Record<HunkLine['kind'], string | undefined> = {
 }
 const MARKER: Record<HunkLine['kind'], string> = { add: '+', del: '−', context: ' ' }
 
+/** The hunk's `@@ … @@` line: a band with a hairline above and below, legible in both themes. */
 function HunkHeaderRow({ hunk }: { hunk: Hunk }) {
   return (
-    <div data-slot="diff-hunk" className="bg-muted/40 px-4 py-0.5 whitespace-pre text-soft-foreground">
+    <div data-slot="diff-hunk" className="border-y border-border/70 bg-muted/60 px-4 py-0.5 whitespace-pre text-muted-foreground">
       {hunk.header}
     </div>
   )
@@ -588,7 +589,7 @@ function GapRow({ gap, onExpand }: { gap: ContextGap; onExpand?: ((gap: ContextG
   const label = gap.count === undefined ? '⋯ unchanged lines to end of file' : `⋯ ${gap.count} unchanged ${gap.count === 1 ? 'line' : 'lines'}`
   if (!onExpand) {
     return (
-      <div data-slot="diff-gap" className="border-y border-border/40 bg-muted/20 px-4 py-0.5 text-[11px] text-soft-foreground">
+      <div data-slot="diff-gap" className="border-y border-border/70 bg-muted/40 px-4 py-1 text-xs text-muted-foreground">
         {label}
       </div>
     )
@@ -598,7 +599,7 @@ function GapRow({ gap, onExpand }: { gap: ContextGap; onExpand?: ((gap: ContextG
       type="button"
       data-slot="diff-gap"
       onClick={() => onExpand(gap)}
-      className="block w-full border-y border-border/40 bg-muted/20 px-4 py-0.5 text-left text-[11px] text-soft-foreground hover:bg-muted/50 hover:text-foreground"
+      className="block w-full border-y border-border/70 bg-muted/40 px-4 py-1 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
     >
       {label} — expand
     </button>
@@ -628,7 +629,7 @@ function LineContent({ cell, tokens, wrap }: { cell: DiffCell; tokens: SynToken[
 
 function Gutter({ value }: { value: number | undefined }) {
   return (
-    <span className="w-10 shrink-0 pr-2 text-right text-soft-foreground/70 tabular-nums select-none">
+    <span className="w-10 shrink-0 pr-2 text-right text-muted-foreground tabular-nums select-none">
       {value ?? ''}
     </span>
   )
@@ -652,7 +653,7 @@ function UnifiedRowView({
     <div data-slot="diff-line" data-line={line.kind} className={cn('flex', LINE_BG[line.kind])}>
       <Gutter value={line.oldLine} />
       <Gutter value={line.newLine} />
-      <span className="w-4 shrink-0 text-soft-foreground select-none">{MARKER[line.kind]}</span>
+      <span className="w-4 shrink-0 text-muted-foreground select-none">{MARKER[line.kind]}</span>
       <LineContent cell={row.cell} tokens={tokensFor(line)} wrap={wrap} />
     </div>
   )
@@ -692,17 +693,17 @@ function SplitCell({
 }) {
   if (!cell) {
     // The other side has no counterpart line — an honest hatch-free blank.
-    return <div data-slot="diff-cell-empty" className={cn('bg-muted/20', side === 'new' && 'border-l border-border/40')} />
+    return <div data-slot="diff-cell-empty" className={cn('bg-muted/20', side === 'new' && 'border-l border-border/70')} />
   }
   const { line } = cell
   return (
     <div
       data-slot="diff-cell"
       data-line={line.kind}
-      className={cn('flex min-w-0 overflow-x-auto', LINE_BG[line.kind], side === 'new' && 'border-l border-border/40')}
+      className={cn('flex min-w-0 overflow-x-auto', LINE_BG[line.kind], side === 'new' && 'border-l border-border/70')}
     >
       <Gutter value={side === 'old' ? line.oldLine : line.newLine} />
-      <span className="w-4 shrink-0 text-soft-foreground select-none">{MARKER[line.kind]}</span>
+      <span className="w-4 shrink-0 text-muted-foreground select-none">{MARKER[line.kind]}</span>
       <LineContent cell={cell} tokens={tokensFor(line)} wrap={wrap} />
     </div>
   )

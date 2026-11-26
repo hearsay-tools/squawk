@@ -101,12 +101,12 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
                       to={`/tasks/${entry.runId}`}
                       data-slot="branch-task-link"
                       title={entry.title ? `Open the task ${entry.title}` : 'Open the task'}
-                      className="min-w-0 truncate rounded-[2px] text-[13px] underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                      className="min-w-0 truncate rounded-[2px] font-mono text-[12px] underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
                     >
                       {name}
                     </Link>
                   ) : (
-                    <span className={cn('min-w-0 truncate text-[13px]', current && 'font-medium')}>{name}</span>
+                    <span className={cn('min-w-0 truncate font-mono text-[12px]', current && 'font-medium')}>{name}</span>
                   )}
                   {entry ? <BranchClassLabel entry={entry} /> : null}
                 </span>

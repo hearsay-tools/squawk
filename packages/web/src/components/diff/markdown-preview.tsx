@@ -64,7 +64,7 @@ export function MarkdownPreview({
   const current = loaded?.path === file.path ? loaded : null
   if (canLoad && current === null) {
     return (
-      <p role="status" className="px-4 py-2.5 text-xs text-soft-foreground">
+      <p role="status" className="px-4 py-2.5 text-xs text-muted-foreground">
         Loading preview…
       </p>
     )
@@ -72,7 +72,7 @@ export function MarkdownPreview({
   const full = current?.text ?? null
   if (full === null && fromPatch.text === '') {
     // A pure rename or mode change: no new-side text to render, and no full file to fall back on.
-    return <p className="px-4 py-2.5 text-xs text-soft-foreground">No content changes to preview.</p>
+    return <p className="px-4 py-2.5 text-xs text-muted-foreground">No content changes to preview.</p>
   }
   const note =
     full !== null || fromPatch.complete
@@ -83,7 +83,7 @@ export function MarkdownPreview({
   return (
     <div data-slot="diff-markdown-preview" className="px-4 py-5 md:px-6">
       <div className="mx-auto max-w-[72ch]">
-        {note ? <p className="mb-4 text-xs text-soft-foreground">{note}</p> : null}
+        {note ? <p className="mb-4 text-xs text-muted-foreground">{note}</p> : null}
         <Markdown document imageSrc={resolveImage}>
           {full ?? fromPatch.text}
         </Markdown>

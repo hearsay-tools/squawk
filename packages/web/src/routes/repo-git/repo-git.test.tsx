@@ -314,7 +314,7 @@ describe('the Git view Recently on main section', () => {
     }
     const row = document.querySelector('[data-slot="commit-row"][data-sha="def5678"]')!
     expect(row.querySelector('[data-slot="commit-row-subject"]')?.textContent).toBe('fix: stop the bug')
-    expect(row.querySelector('[data-slot="commit-row-meta"]')?.textContent).toBe('def5678· Linus · 3d')
+    expect(row.querySelector('[data-slot="commit-row-meta"]')?.textContent).toBe('def5678·Linus · 3d')
     // `commit-meta` is the opened commit's header; a list row must not answer to it, or a wait for
     // the commit view passes on the list it is leaving (repo-git.e2e.ts, 2026-09-30 local run).
     expect(document.querySelector('[data-slot="commit-meta"]')).toBeNull()
@@ -744,13 +744,13 @@ describe('the Git view Not landed section', () => {
     renderAt('/git/not-landed')
     await waitFor(() => expect(document.querySelectorAll('[data-slot="not-landed-group"]')).toHaveLength(3))
     expect(groups()).toEqual([
-      { title: 'No pull request1· nobody sees this work until you act', rows: ['cez/51ab2d7e'] },
+      { title: 'No pull request1·nobody sees this work until you act', rows: ['cez/51ab2d7e'] },
       { title: 'Pull request open1', rows: ['cez/7c1e09aa'] },
-      { title: 'Task deleted1· this branch is the only copy of the work', rows: ['cez/9d04c1f2'] },
+      { title: 'Task deleted1·this branch is the only copy of the work', rows: ['cez/9d04c1f2'] },
     ])
     const noPr = document.querySelector<HTMLElement>('[data-slot="not-landed-row"][data-branch="cez/51ab2d7e"]')!
     expect(noPr.querySelector('[data-slot="not-landed-title"]')?.textContent).toBe('Retention sweep for archived runs')
-    expect(noPr.querySelector('[data-slot="not-landed-meta"]')?.textContent).toMatch(/^cez\/51ab2d7e· 4 commits\+212 −40· done \d+d$/)
+    expect(noPr.querySelector('[data-slot="not-landed-meta"]')?.textContent).toMatch(/^cez\/51ab2d7e·4 commits·\+212 −40·done \d+d$/)
     expect(noPr.querySelector('[data-slot="status-dot"]')?.getAttribute('data-tone')).toBe('success')
     expect(noPr.querySelector('[data-action="not-landed-open"]')?.getAttribute('href')).toBe('/tasks/run-51')
     expect(noPr.querySelector('[data-action="not-landed-create-pr"]')).not.toBeNull()
@@ -781,7 +781,7 @@ describe('the Git view Not landed section', () => {
     expect(chip.getAttribute('data-status')).toBe('merged')
   })
 
-  it('Create draft PR posts the task\'s own /runs/:id/pr', async () => {
+  it('Draft PR posts the task\'s own /runs/:id/pr', async () => {
     const sent = stubFetch({ 'POST /api/v1/runs/run-51/pr': () => jsonResponse({ url: 'https://github.com/acme/demo/pull/710' }) })
     renderAt('/git/not-landed')
     await waitFor(() => expect(document.querySelector('[data-action="not-landed-create-pr"]')).not.toBeNull())

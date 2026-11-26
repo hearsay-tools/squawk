@@ -137,7 +137,7 @@ export function RepoNotLandedSection() {
                 <h2 className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground">
                   <span className="font-semibold text-foreground">{group.title}</span>
                   <span className="tabular-nums">{group.rows.length}</span>
-                  {group.note ? <span>· {group.note}</span> : null}
+                  {group.note ? <><MetaDot /><span>{group.note}</span></> : null}
                 </h2>
                 <ul className="flex flex-col divide-y divide-border rounded-xl border border-border bg-card">
                   {group.rows.map((entry) => (
@@ -153,7 +153,7 @@ export function RepoNotLandedSection() {
             ))}
             </div>
             {/* A quiet footnote under the list, not a second block: the rows stay the focal point. */}
-            <p data-slot="not-landed-note" className="flex items-start gap-1.5 px-1 text-[11.5px] leading-snug text-soft-foreground">
+            <p data-slot="not-landed-note" className="flex items-start gap-1.5 px-1 text-xs leading-snug text-muted-foreground">
               <InfoIcon aria-hidden="true" className="mt-px size-3 shrink-0" />
               Delete a branch from its row's … menu. It confirms and names the commits it drops; nothing here is bulk-deleted.
             </p>
@@ -181,7 +181,7 @@ function NotLandedRow({ entry, finishedAt, onDelete }: {
   onDelete: () => void
 }) {
   return (
-    <li data-slot="not-landed-row" data-branch={entry.name} data-branch-class={entry.class} className="flex min-h-[54px] items-center gap-3 px-4 py-2.5 first:rounded-t-xl last:rounded-b-xl hover:bg-sidebar-row-hover">
+    <li data-slot="not-landed-row" data-branch={entry.name} data-branch-class={entry.class} className="flex min-h-[60px] items-center gap-3 px-4 py-3 first:rounded-t-xl last:rounded-b-xl hover:bg-sidebar-row-hover">
       <NotLandedTitleAndMeta entry={entry} finishedAt={finishedAt} />
       <NotLandedPr entry={entry} />
       <NotLandedActions entry={entry} onDelete={onDelete} />
@@ -193,7 +193,7 @@ function NotLandedPr({ entry }: { entry: RepoBranchEntry }) {
   return (
     <>
       {entry.pr ? (
-        <span data-slot="not-landed-pr" className="hidden shrink-0 items-center gap-[4px] text-[11.5px] text-muted-foreground md:flex">
+        <span data-slot="not-landed-pr" className="hidden shrink-0 items-center gap-1.5 text-xs text-muted-foreground md:flex">
           <ReferenceChip
             plain
             reference={{ kind: 'PR', number: entry.pr.number, url: entry.pr.url }}
@@ -238,9 +238,9 @@ function NotLandedActions({ entry, onDelete }: { entry: RepoBranchEntry; onDelet
         </Link>
       ) : null}
       {canCreatePr ? (
-        <button type="button" data-action="not-landed-create-pr" disabled={draftPr.isPending} onClick={() => draftPr.mutate()} className={cn(button, 'hidden bg-muted hover:brightness-110 md:inline-flex')}>
+        <button type="button" data-action="not-landed-create-pr" disabled={draftPr.isPending} onClick={() => draftPr.mutate()} className={cn(button, 'hidden border border-border hover:bg-muted md:inline-flex')}>
           <GitPullRequestCreateIcon aria-hidden="true" />
-          {draftPr.isPending ? 'Creating…' : 'Create draft PR'}
+          {draftPr.isPending ? 'Creating…' : 'Draft PR'}
         </button>
       ) : null}
       {orphan ? (
@@ -265,7 +265,7 @@ function NotLandedActions({ entry, onDelete }: { entry: RepoBranchEntry; onDelet
             </DropdownMenuItem>
           ) : null}
           {canCreatePr ? (
-            <DropdownMenuItem className="md:hidden" disabled={draftPr.isPending} onSelect={() => draftPr.mutate()}>Create draft PR</DropdownMenuItem>
+            <DropdownMenuItem className="md:hidden" disabled={draftPr.isPending} onSelect={() => draftPr.mutate()}>Draft PR</DropdownMenuItem>
           ) : null}
           <DropdownMenuItem className={cn(!orphan && 'md:hidden')} onSelect={copyBranch}>Copy branch</DropdownMenuItem>
           <DropdownMenuSeparator className="md:hidden" />
@@ -293,12 +293,12 @@ function NotLandedTitleAndMeta({ entry, finishedAt }: {
     <>
       <span className="flex size-[12px] shrink-0 items-center justify-center">
         {orphan ? (
-          <CircleDashedIcon aria-label="Task deleted" className="size-[12px] text-soft-foreground" />
+          <CircleDashedIcon aria-label="Task deleted" className="size-[12px] text-muted-foreground" />
         ) : (
           <StatusDot tone={(entry.runStatus && STATUS_TONE[entry.runStatus]) || 'neutral'} aria-label={entry.runStatus ?? undefined} />
         )}
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         {entry.runId ? (
           <Link to={`/tasks/${entry.runId}`} data-slot="not-landed-title" className="min-w-0 truncate rounded-[2px] text-[13px] text-foreground hover:underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring">
             {title}
@@ -306,14 +306,17 @@ function NotLandedTitleAndMeta({ entry, finishedAt }: {
         ) : (
           <span data-slot="not-landed-title" className="min-w-0 truncate text-[13px] text-muted-foreground" title={title}>{title}</span>
         )}
-        <span data-slot="not-landed-meta" className="flex min-w-0 items-center gap-[6px] text-[11px] text-muted-foreground">
-          <span className="shrink-0 font-mono text-muted-foreground">{entry.name}</span>
-          <span className="shrink-0">· {entry.ahead} commit{entry.ahead === 1 ? '' : 's'}</span>
-          {entry.diffStat ? <ChangeCounts adds={entry.diffStat.additions} dels={entry.diffStat.deletions} /> : null}
-          {when ? <span className="truncate" title={whenTitle}>· {when}</span> : null}
+        {/* Mono for the branch only; counts and ages stay sans. Each separator is its own item, so
+            the gap is the same on both sides of every dot. */}
+        <span data-slot="not-landed-meta" className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="shrink-0 font-mono text-[11px]">{entry.name}</span>
+          <MetaDot />
+          <span className="shrink-0">{entry.ahead} commit{entry.ahead === 1 ? '' : 's'}</span>
+          {entry.diffStat ? <><MetaDot /><ChangeCounts adds={entry.diffStat.additions} dels={entry.diffStat.deletions} /></> : null}
+          {when ? <><MetaDot /><span className="truncate" title={whenTitle}>{when}</span></> : null}
         </span>
         {entry.parentRunId ? (
-          <Link to={`/tasks/${entry.parentRunId}`} data-slot="not-landed-parent" className="w-fit rounded-[2px] text-[11px] text-muted-foreground hover:underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring">
+          <Link to={`/tasks/${entry.parentRunId}`} data-slot="not-landed-parent" className="w-fit rounded-[2px] text-xs text-muted-foreground hover:underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring">
             Worker of its parent task
           </Link>
         ) : null}
@@ -323,13 +326,18 @@ function NotLandedTitleAndMeta({ entry, finishedAt }: {
   )
 }
 
+/** A metadata separator: its own flex item, so the row's gap spaces it evenly on both sides. */
+function MetaDot() {
+  return <span aria-hidden="true" className="shrink-0">·</span>
+}
+
 /** `· waiting for review` / `· draft` beside the PR glyph: the forge status when the reference
  *  cache knows it, else the branch payload's own state. */
 function PrStateWords({ entry }: { entry: RepoBranchEntry }) {
   const known = referenceStatusPresentation(useReferenceStatus('PR', entry.pr?.number).status)
   const state = entry.pr?.state
   const words = state === 'draft' || state === 'closed' ? state : known ? known.label.toLowerCase() : 'open'
-  return <span data-slot="not-landed-pr-state">· {words}</span>
+  return <><MetaDot /><span data-slot="not-landed-pr-state">{words}</span></>
 }
 
 /**

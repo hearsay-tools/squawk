@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 
 import { HtmlReportFrame } from '@/components/html-report-frame'
 import { isHtmlPath } from '@/lib/html-report'
+import { WrapToggle } from './diff-controls'
 import { formatFileSize, previewKind } from './worktree-files'
 import { Markdown } from '../task-thread/markdown'
 import { followInApp } from '../task-thread/task-link'
@@ -140,35 +141,41 @@ export function FileEntryView({
   documentPreview?: boolean
 }) {
   const [source, setSource] = useState(false)
+  // Wrapped by default, like the Changes diff: a long line reads in place instead of off the edge.
+  const [wrap, setWrap] = useState(true)
   const shownPath = displayPath ?? formatDisplayFilePath(entry.path)
   const view = resolveEntryPresentation(entry, documentPreview, source)
   const hasActions = Boolean(snapshot || downloadUrl || view.toggle)
+  const code = !view.showImage && view.kind === 'text' && view.rendered === null
   return (
     <Pane className={className}>
       <header
         data-slot="file-preview-head"
-        className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-xs"
+        className={cn('flex min-h-11 items-center gap-2 border-b border-border bg-muted/40 ps-4 text-xs', code ? 'pe-2 py-1' : 'pe-4 py-2.5')}
       >
         <span className="min-w-0 truncate font-mono font-medium text-foreground" title={shownPath}>
           {shownPath}
         </span>
         <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">{formatFileSize(entry.size)}</span>
+        {/* Compact beside the size on a desktop mouse; the 44px target on a phone or touch pointer. */}
+        {code ? <WrapToggle wrap={wrap} onWrapChange={setWrap} className="size-8 rounded-md max-md:size-11 pointer-coarse:size-11" /> : null}
       </header>
       {hasActions ? <PreviewActions snapshot={snapshot} downloadUrl={downloadUrl} source={view.toggle ? source : null}
         onSource={() => setSource(value => !value)} readerHref={view.html && view.kind === 'text' ? readerHref : undefined} /> : null}
       <EntryBody runId={runId} entry={entry} kind={view.kind} showImage={view.showImage}
-        rendered={view.rendered} imageUrl={imageUrl} />
+        rendered={view.rendered} imageUrl={imageUrl} wrap={wrap} />
     </Pane>
   )
 }
 
-function EntryBody({ runId, entry, kind, showImage, rendered, imageUrl }: {
+function EntryBody({ runId, entry, kind, showImage, rendered, imageUrl, wrap }: {
   runId: string
   entry: Extract<WorktreeEntry, { type: 'file' }>
   kind: ReturnType<typeof previewKind>
   showImage: boolean
   rendered: 'markdown' | 'html' | null
   imageUrl?: string | undefined
+  wrap: boolean
 }) {
   if (showImage) return (
     <div className="flex justify-center p-4">
@@ -182,7 +189,7 @@ function EntryBody({ runId, entry, kind, showImage, rendered, imageUrl }: {
     subtitle={`${formatFileSize(entry.size)} of binary data — no text preview.`} />
   if (rendered === 'markdown') return <div className="p-4"><Markdown document>{entry.content ?? ''}</Markdown></div>
   if (rendered === 'html') return <HtmlReportFrame html={entry.content ?? ''} title={`Report: ${entry.path}`} className="h-[70vh]" />
-  return <CodeLines path={entry.path} text={entry.content ?? ''} />
+  return <CodeLines path={entry.path} text={entry.content ?? ''} wrap={wrap} />
 }
 
 function PreviewActions({ snapshot, downloadUrl, source, onSource, readerHref }: {
@@ -245,7 +252,8 @@ function useFileTokens(path: string, text: string): SynToken[][] {
   return highlightSync(text, lang)?.tokens ?? plain
 }
 
-export function CodeLines({ path, text }: { path: string; text: string }) {
+/** `wrap`: long lines break inside the pane; off, rows grow as wide as the longest line. */
+export function CodeLines({ path, text, wrap = false }: { path: string; text: string; wrap?: boolean }) {
   const tokens = useFileTokens(path, text)
   return (
     <div
@@ -256,13 +264,13 @@ export function CodeLines({ path, text }: { path: string; text: string }) {
       {/* Rows as wide as the longest line (`w-max`, at least the pane): a long line scrolls with
           its right padding intact instead of running into the pane edge, and the sticky gutter
           keeps the line numbers in view while the code scrolls under it. */}
-      <div className="w-max min-w-full">
+      <div className={wrap ? 'min-w-0' : 'w-max min-w-full'}>
       {tokens.map((line, index) => (
         <div key={index} className="flex">
-          <span className="sticky left-0 w-14 shrink-0 select-none bg-card pr-3 pl-4 text-right tabular-nums text-soft-foreground">
+          <span className="sticky left-0 w-14 shrink-0 select-none bg-card pr-3 pl-4 text-right tabular-nums text-muted-foreground">
             {index + 1}
           </span>
-          <span className="flex-1 whitespace-pre pr-6">
+          <span className={cn('min-w-0 flex-1 pr-6', wrap ? 'whitespace-pre-wrap wrap-anywhere' : 'whitespace-pre')}>
             {line.map((token, tokenIndex) => (
               <span
                 key={tokenIndex}

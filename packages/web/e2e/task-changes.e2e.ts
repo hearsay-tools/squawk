@@ -19,7 +19,7 @@ import { waitForStatus } from './poll'
  * available without the network) and the git surface is fully lit.
  *
  * What the dry-run backend honestly provides — verified, not assumed:
- *  - the fixture has no PR URL, so the toolbar deterministically offers Create PR. The
+ *  - the fixture has no PR URL, so the toolbar deterministically offers Draft PR. The
  *    create → View PR transition is pinned in task-changes.test.tsx.
  *  - the settle autosave leaves the worktree clean; the Commit test dirties it again from
  *    the outside (as a user editing in the worktree would) so the commit is REAL.
@@ -139,10 +139,10 @@ describe('the Changes tab against a live dry run', () => {
     expect(browser.text('[data-slot="changes-stat"]')).toContain('+1')
   })
 
-  it('the toolbar comes from the policy: Push, Create PR, Commit, and kebab', () => {
+  it('the toolbar comes from the policy: Push, Draft PR, Commit, and kebab', () => {
     browser.goto(`${baseUrl}${scoped(`/tasks/${runId}/changes`)}`)
     browser.waitForFunction(`document.querySelector('[data-slot="git-toolbar"]') !== null`)
-    // Commit reads /changes, Push reads /repo, and Create PR reads /health.
+    // Commit reads /changes, Push reads /repo, and Draft PR reads /health.
     // Wait for their inputs, then assert the policy on the same sample.
     const actions = browser.waitForValue(`(() => {
       const toolbar = document.querySelector('[data-slot="git-toolbar"]')

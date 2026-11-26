@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { scheduleLabel } from '@open-mercato/cezar-api-client/contract/automation-schedule'
 import { automationFailureNotice } from '@open-mercato/cezar-api-client/contract/automations'
 import type { AutomationListEntry, AutomationsResponse, OnceStatus } from '@open-mercato/cezar-api-client'
@@ -182,17 +182,23 @@ function badgeFor(automation: AutomationListEntry): (typeof ONCE_BADGE)[OnceStat
   return ONCE_BADGE[automation.onceStatus ?? (automation.enabled ? 'waiting' : 'paused')]
 }
 
-/** The card head: kind icon, name, trigger label, and the status badge or Enabled/Paused pill. */
-function AutomationCardHead({ automation, badge }: {
+/** The card head: kind icon, name, one metadata line (trigger · next run), and the status pill. */
+function AutomationCardHead({ automation, badge, nextRun }: {
   automation: AutomationListEntry
   badge: (typeof ONCE_BADGE)[OnceStatus] | undefined
+  /** The next-run part of the metadata line; absent on an archived card. */
+  nextRun?: ReactNode
 }) {
   const KindIcon = automation.kind === 'schedule' ? RefreshCwIcon : GithubIcon
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
         <h2 className="flex items-center gap-2 font-semibold break-words"><KindIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />{automation.name}</h2>
-        <p className="mt-1.5 text-[13px] break-words text-muted-foreground">{triggerLabel(automation)}</p>
+        {/* One metadata line at one size: the trigger and the next run read as one sentence. */}
+        <p data-slot="automation-meta" className="mt-1 flex flex-wrap items-baseline gap-x-1.5 ps-6 text-xs break-words text-muted-foreground">
+          <span>{triggerLabel(automation)}</span>
+          {nextRun ? <><span aria-hidden="true">·</span>{nextRun}</> : null}
+        </p>
       </div>
       {badge
         ? <Pill dot={badge.dot}>{badge.label}</Pill>
@@ -208,31 +214,29 @@ function ArchiveRecord({ automation, archive }: {
 }) {
   return (
     <>
-      <p className="mt-3 text-sm break-words">
+      <p className="text-sm break-words">
         {archive.outcome === 'launched' ? 'Started its task.' : 'Cancelled — no task was started.'}
         {archive.runId ? <> · <Link className="inline-flex min-h-11 items-center underline underline-offset-4" to={`/tasks/${archive.runId}`}>Open task</Link></> : null}
       </p>
-      <div className="mt-4 flex flex-wrap gap-2"><Button variant="outline" asChild><Link to={`/automations/${automation.id}`}>Details</Link></Button></div>
+      <div className="flex flex-wrap gap-2"><Button variant="outline" asChild><Link to={`/automations/${automation.id}`}>Details</Link></Button></div>
     </>
   )
 }
 
-/** The next-run line of a live card: continuous, the armed time, or the em-dash placeholder. */
-function NextRunLine({ automation, timeZone }: {
+/** The next-run part of a live card's metadata line: continuous, the armed time, or the em dash. */
+function NextRunMeta({ automation, timeZone }: {
   automation: AutomationListEntry
   timeZone: string
 }) {
   const isSchedule = automation.kind === 'schedule'
   const nextAt = automation.enabled && isSchedule ? automation.nextRunAt : undefined
+  if (!isSchedule && automation.enabled) return <span>continuous</span>
+  if (!nextAt) return <span>Next run: —</span>
   return (
-    <p className="mt-3 text-sm">
-      {!isSchedule && automation.enabled ? <span>continuous</span> : nextAt ? (
-        <>
-          <span>{`Next run: ${dayTime(nextAt, timeZone)}`}</span>
-          <span className="text-muted-foreground">{` · ${relativeIn(Date.now(), Date.parse(nextAt))}`}</span>
-        </>
-      ) : <span>Next run: —</span>}
-    </p>
+    <>
+      <span className="text-foreground">{`Next run: ${dayTime(nextAt, timeZone)}`}</span>
+      <span>{`· ${relativeIn(Date.now(), Date.parse(nextAt))}`}</span>
+    </>
   )
 }
 
@@ -241,7 +245,7 @@ function FailureNotice({ automation, timeZone }: { automation: AutomationListEnt
   const failure = automation.enabled ? automationFailureNotice(automation.state) : undefined
   if (!failure) return null
   return (
-    <p role="alert" data-slot="automation-failing" className="mt-3 text-sm break-words text-destructive">
+    <p role="alert" data-slot="automation-failing" className="text-sm break-words text-destructive">
       {`The last ${failure.consecutiveFailures} checks failed: ${failure.lastError}`}
       {failure.retryAt ? <span className="text-muted-foreground">{` · Next try ${dayTime(failure.retryAt, timeZone)}`}</span> : null}
     </p>
@@ -251,7 +255,7 @@ function FailureNotice({ automation, timeZone }: { automation: AutomationListEnt
 /** A card action: 32px where a pointer hovers, the 44px touch target where it cannot. */
 const CARD_ACTION = 'h-8 px-3 max-md:h-11 no-hover:h-11'
 
-/** The actions row of a live card: edit, run/preview, toggle, log, and the cancel entry. */
+/** The actions row of a live card: toggle, run/preview, edit, cancel, and the log at the far end. */
 function CardActions({ automation, busy, confirmingCancel, cancelRef, onToggle, onRun, onPreview, onOpenCancel }: {
   automation: AutomationListEntry
   busy: boolean
@@ -265,16 +269,25 @@ function CardActions({ automation, busy, confirmingCancel, cancelRef, onToggle, 
   const isSchedule = automation.kind === 'schedule'
   const isOnce = automation.schedule?.type === 'once'
   return (
-    // One button grammar: compact bordered buttons whose left edge lines up with the card's text,
-    // where a borderless first button would sit indented by its own padding.
-    <div data-slot="automation-actions" className="mt-4 flex flex-wrap items-center gap-2">
-      <Button variant="outline" size="sm" className={CARD_ACTION} asChild><Link to={`/automations/${automation.id}`}>Edit</Link></Button>
+    // One button grammar: compact bordered buttons whose left edge lines up with the card's text.
+    // The state change leads; Enable on a paused card carries the accent so the next step reads first.
+    <div data-slot="automation-actions" className="flex flex-wrap items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        className={cn(CARD_ACTION, !automation.enabled && 'border-accent-text/50 text-accent-text')}
+        data-action="automation-toggle"
+        disabled={busy}
+        onClick={onToggle}
+      >
+        {automation.enabled ? 'Pause' : 'Enable'}
+      </Button>
       {isSchedule
         ? <Button variant="outline" size="sm" className={CARD_ACTION} data-action="automation-run" disabled={busy} onClick={onRun}>Run now</Button>
         : <Button variant="outline" size="sm" className={CARD_ACTION} data-action="automation-preview" disabled={busy} onClick={onPreview}>Test filter</Button>}
-      <Button variant="outline" size="sm" className={CARD_ACTION} data-action="automation-toggle" disabled={busy} onClick={onToggle}>{automation.enabled ? 'Pause' : 'Enable'}</Button>
-      <Button variant="outline" size="sm" className={CARD_ACTION} asChild><Link to={`/automations/${automation.id}/log`}>Execution log</Link></Button>
+      <Button variant="outline" size="sm" className={CARD_ACTION} asChild><Link to={`/automations/${automation.id}`}>Edit</Link></Button>
       {isOnce && !confirmingCancel ? <Button variant="outline" size="sm" className={cn(CARD_ACTION, 'text-destructive')} ref={cancelRef} data-action="automation-cancel" disabled={busy} onClick={onOpenCancel}>Cancel</Button> : null}
+      <Button variant="outline" size="sm" className={cn(CARD_ACTION, 'sm:ms-auto')} asChild><Link to={`/automations/${automation.id}/log`}>Execution log</Link></Button>
     </div>
   )
 }
@@ -288,7 +301,7 @@ function CancelConfirm({ automation, busy, keepRef, onConfirm, onKeep }: {
   onKeep: () => void
 }) {
   return (
-    <div className="mt-3 grid justify-items-start gap-2">
+    <div className="grid justify-items-start gap-2">
       <p className="text-sm break-words">{`Cancel “${automation.name}”? It will never run, and it moves to Archived.`}</p>
       <div className="flex flex-wrap gap-2">
         <Button variant="danger-ghost" data-action="automation-cancel-confirm" disabled={busy} onClick={onConfirm}>Cancel schedule</Button>
@@ -301,7 +314,7 @@ function CancelConfirm({ automation, busy, keepRef, onConfirm, onKeep }: {
 /** The card's note paragraph: a progress word, a result, or a refusal. */
 function CardNote({ note }: { note: Note }) {
   return (
-    <p role={note.tone === 'error' ? 'alert' : 'status'} className={cn('mt-3 text-sm break-words', note.tone === 'error' ? 'text-destructive' : 'text-muted-foreground')}>
+    <p role={note.tone === 'error' ? 'alert' : 'status'} className={cn('text-sm break-words', note.tone === 'error' ? 'text-destructive' : 'text-muted-foreground')}>
       {note.text}
       {note.runId ? <> · <Link className="inline-flex min-h-11 items-center underline underline-offset-4" to={`/tasks/${note.runId}`}>Open task</Link></> : null}
     </p>
@@ -333,10 +346,13 @@ function AutomationCard({ automation, timeZone, note, busy, onRun, onToggle, onP
   const keep = () => { focusAfter.current = 'cancel'; setConfirmingCancel(false) }
   const archive = automation.archived
   return (
-    <li data-slot="automation-card" data-kind={automation.kind} className="min-w-0 rounded-xl border bg-card p-4">
-      <AutomationCardHead automation={automation} badge={badgeFor(automation)} />
+    <li data-slot="automation-card" data-kind={automation.kind} className="flex min-w-0 flex-col gap-2.5 rounded-xl border bg-card p-4">
+      <AutomationCardHead
+        automation={automation}
+        badge={badgeFor(automation)}
+        nextRun={archive ? undefined : <NextRunMeta automation={automation} timeZone={timeZone} />}
+      />
       {archive ? <ArchiveRecord automation={automation} archive={archive} /> : null}
-      {archive ? null : <NextRunLine automation={automation} timeZone={timeZone} />}
       {archive ? null : <FailureNotice automation={automation} timeZone={timeZone} />}
       {archive ? null : (
         <CardActions

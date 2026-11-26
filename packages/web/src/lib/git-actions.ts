@@ -36,7 +36,7 @@ export interface GitActionState {
   localHandoff: boolean
   /** Whether any step recorded an agent session — the terminal handoff resumes it. */
   hasSession: boolean
-  /** The run's PR, once known — flips Create PR into View PR. */
+  /** The run's PR, once known — flips Draft PR into View PR. */
   prUrl?: string | undefined
 }
 
@@ -84,34 +84,34 @@ function pushAction(state: GitActionState): GitAction {
 function createPrAction(state: GitActionState): GitAction {
   const disabled = (reason: string): GitAction => ({
     id: 'create-pr',
-    label: 'Create PR',
+    label: 'Draft PR',
     enabled: false,
     reason,
   })
   if (!state.hasWorktree || state.branch === undefined) {
-    return disabled(`Create PR unavailable — ${NO_WORKTREE_REASON}`)
+    return disabled(`Draft PR unavailable — ${NO_WORKTREE_REASON}`)
   }
   if (state.forge === null) {
-    return disabled('Create PR unavailable — no supported forge remote (GitHub) detected')
+    return disabled('Draft PR unavailable — no supported forge remote (GitHub) detected')
   }
   if (!state.forge.available) {
-    return disabled(`Create PR unavailable — ${state.forge.reason ?? 'the forge is unreachable'}`)
+    return disabled(`Draft PR unavailable — ${state.forge.reason ?? 'the forge is unreachable'}`)
   }
   // The server refuses `POST /pr` while the engine owns the run and on a usage-limit hold —
   // mirror both here rather than letting the click discover the 409.
   if (isUsageLimitHold(state.run)) {
-    return disabled('Create PR unavailable — the run is waiting on a usage-limit hold; choose Don’t resume first')
+    return disabled('Draft PR unavailable — the run is waiting on a usage-limit hold; choose Don’t resume first')
   }
   if (engineOwnsRun(state.run)) {
-    return disabled('Create PR unavailable — the run is still active; wait for the review gate')
+    return disabled('Draft PR unavailable — the run is still active; wait for the review gate')
   }
-  return { id: 'create-pr', label: 'Create PR', enabled: true }
+  return { id: 'create-pr', label: 'Draft PR', enabled: true }
 }
 
 /**
  * The policy. Slots:
  *  - primary: **View PR** once a PR URL is known, otherwise **Commit** (the workhorse).
- *  - secondary: **Push**, then **Create PR** while there is no PR yet.
+ *  - secondary: **Push**, then **Draft PR** while there is no PR yet.
  *  - menu: **Open in terminal** (the open-in-cli session handoff) — present ONLY in local
  *    mode; hosted mode (`localHandoff: false`) hides it entirely, per the deployment-modes
  *    doctrine (hidden, not disabled — there is no "my machine" to explain a disable with).

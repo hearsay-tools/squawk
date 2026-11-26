@@ -6,12 +6,14 @@ import { productCommand } from '@/lib/product-name'
 import { cliOf, shellQuote } from '@/lib/automation-cli'
 import { useActiveProjectId } from '@/lib/project-router'
 
+import { cliLines } from './cli-lines'
 import type { AutomationDraft } from './editor-draft'
 
 /**
  * "Copy as CLI" (#774, port of upstream #985): what the form holds, as the `hsq automation` line
  * that would create it — the flag form when every key has a flag, the JSON form otherwise. Built
- * from the body Save sends (`cliOf` → `toCreateBody`), so the two cannot disagree.
+ * from the body Save sends (`cliOf` → `toCreateBody`), so the two cannot disagree. The box shows
+ * it one flag per line with backslash continuations; Copy takes the same lines.
  */
 export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
   const projectId = useActiveProjectId()
@@ -22,6 +24,7 @@ export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
       ? `HSQ_COCKPIT_URL=${shellQuote(origin)} HSQ_PROJECT_ID=${shellQuote(projectId)} ${command}`
       : command
   }, [draft, origin, projectId])
+  const shown = useMemo(() => cliLines(line), [line])
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   useEffect(() => () => clearTimeout(timer.current), [])
@@ -31,7 +34,7 @@ export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
   const copy = async () => {
     clearTimeout(timer.current)
     try {
-      await navigator.clipboard.writeText(line)
+      await navigator.clipboard.writeText(shown)
       setState('copied')
       timer.current = setTimeout(() => setState('idle'), 1600)
     } catch {
@@ -48,13 +51,17 @@ export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
           {state === 'copied' ? 'Copied' : 'Copy'}
         </Button>
       </div>
-      {/* One line that scrolls sideways: no token breaks mid-word and no line is cut off below.
-          The bottom padding leaves room for the thin scrollbar, so it never covers a glyph. */}
-      <pre data-slot="copy-as-cli-line" tabIndex={0} aria-label="Command line" className="m-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-lg border border-border bg-muted px-3 pt-2.5 pb-3 font-mono text-xs leading-5 whitespace-pre text-muted-foreground [scrollbar-width:thin] focus-visible:outline-2 focus-visible:outline-ring">{line}</pre>
+      {/* One flag per line; a long value still scrolls sideways and never breaks mid-word. The
+          right edge fades over the end padding, so a clipped glyph reads as "more to scroll" and
+          the fade sits on empty padding once scrolled to the end. The frame carries the border and
+          focus ring, so the fade masks neither. */}
+      <div className="max-w-full rounded-lg border border-border bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring">
+        <pre data-slot="copy-as-cli-line" tabIndex={0} aria-label="Command line" className="m-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain ps-3 pe-8 pt-2.5 pb-3 font-mono text-xs leading-5 whitespace-pre text-muted-foreground outline-none [mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)] [scrollbar-width:thin]">{shown}</pre>
+      </div>
       <p role="status" className="mbs-2 text-xs break-words text-muted-foreground">
         {state === 'failed'
           ? 'Could not copy — select the line and copy it by hand.'
-          : <>The definition Save would create. <code className="rounded-sm bg-muted px-1 py-px font-mono text-[11px] whitespace-nowrap text-foreground [word-spacing:-0.2em]">{`${productCommand()} automation schema`}</code> prints its shape.</>}
+          : <>The definition Save paused would create. <code className="rounded-sm bg-muted px-1 py-px font-mono text-[11px] whitespace-nowrap text-foreground [word-spacing:-0.2em]">{`${productCommand()} automation schema`}</code> prints its shape.</>}
       </p>
     </section>
   )

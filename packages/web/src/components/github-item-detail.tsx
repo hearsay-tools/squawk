@@ -101,8 +101,9 @@ function GithubItemMeta({
   deletions: number | undefined
 }) {
   return (
-    <p data-slot="gh-meta" className="flex flex-wrap items-center gap-x-1.5 font-mono text-[11px] text-muted-foreground">
-      <span>#{item.number}</span>·<span>{kindWord}</span>·<span>opened by {item.author}</span>·
+    // One metadata voice with the list rows: sans at text-xs; only SHAs and code stay mono.
+    <p data-slot="gh-meta" className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+      <span className="tabular-nums">#{item.number}</span>·<span>{kindWord}</span>·<span>opened by {item.author}</span>·
       <time dateTime={item.createdAt} title={fullDateTime(item.createdAt)}>{shortAge(item.createdAt)}</time>
       {commentCount ? (
         <>
@@ -567,7 +568,7 @@ function CommitGroup({ commits, colors }: { commits: GithubTimelineEvent[]; colo
             type="button"
             aria-expanded={true}
             onClick={() => setOpen(false)}
-            className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             <span aria-hidden="true">{EVENT_GLYPH.committed}</span>
             <span className="font-sans font-medium text-foreground">{actor}</span>
@@ -587,7 +588,7 @@ function CommitGroup({ commits, colors }: { commits: GithubTimelineEvent[]; colo
         type="button"
         aria-expanded={false}
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground"
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
       >
         <span aria-hidden="true">{EVENT_GLYPH.committed}</span>
         <span className="font-sans font-medium text-foreground">{actor}</span>
@@ -626,7 +627,7 @@ function EventRow({ event, colors }: { event: GithubTimelineEvent; colors: Recor
       data-slot="gh-event-row"
       data-kind={event.kind}
       className={cn(
-        'flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-muted-foreground',
+        'flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground',
         event.kind === 'merged' && 'text-accent-foreground',
       )}
     >
@@ -655,7 +656,7 @@ function CommittedPhrase({ event }: { event: GithubTimelineEvent }) {
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       <span className="shrink-0">committed</span>
-      {event.sha ? <span className="shrink-0 text-muted-foreground">{event.sha.slice(0, 7)}</span> : null}
+      {event.sha ? <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{event.sha.slice(0, 7)}</span> : null}
       {event.message ? (
         <span className="truncate font-sans text-foreground">{event.message}</span>
       ) : null}
@@ -754,7 +755,7 @@ function ThreadEntry({ comment }: { comment: GithubComment }) {
   const chip = comment.reviewState ? REVIEW_CHIP[comment.reviewState] : null
   return (
     <li data-slot="gh-thread-entry" data-kind={comment.kind} className="min-w-0">
-      <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
+      <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
         <Avatar url={comment.avatarUrl} login={comment.author} />
         <span className="font-sans font-medium text-foreground">{comment.author}</span>
         <span>{shortAge(comment.createdAt)}</span>
