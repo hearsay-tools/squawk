@@ -215,10 +215,15 @@ exactly that today, and a plugin that sets a provider base URL would need the sa
 The first epic (hearsay-tools/squawk#4309) adds that slot and loads jobs through the plugin
 loader, as bundled runners load. A measurement at `265976e09` on 2026-11-26 chose jobs: it has
 457 lines, no HTTP route and no cockpit view. The epic proposes that it needs the launch slot
-and no other new registration; its spec confirms that. The epic's proof has two parts.
-`layer-import.baseline.json` goes from 83 entries to 76. No file outside the jobs folder imports
-it, which the baseline cannot show, because `cez/layer-import` checks core files only and a
-`shell` file may import a feature.
+and no other new registration; its spec confirms that.
+
+The epic's proof has two parts. First, `layer-import.baseline.json` goes from 83 entries to 76.
+The launch slot removes six: four in `launch-context.ts` (one artifacts module, two automations
+modules, one webhooks module) and two in `session-events.ts` (one artifacts module, one jobs
+module). The jobs move removes the seventh: `workflows/run/run-settlement.ts` imports
+`jobs/job.ts`. Second, no file outside the jobs folder imports it. The baseline cannot show
+that, because `cez/layer-import` checks core files only and a `shell` file may import a
+feature.
 
 The other three features that use the launch slot each have a server part. Webhooks is tied
 to task start and to the project settings routes. Artifacts has routes, a WebSocket topic and
