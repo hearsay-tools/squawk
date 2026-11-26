@@ -107,14 +107,37 @@ describe('plugin commands at dispatch', () => {
     expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([bundledRunnersDir(), home.plugins]);
   });
 
-  it('keeps help cold: no Home, no plugin, no runner, and a footer that points to hsq plugins', async () => {
+  it('loads plugin commands for help without preparing Home', async () => {
     writePlugin('greeter', greeter);
     const { deps, registries } = await dispatch(['--help']);
-    expect(deps.resolveCliHome).not.toHaveBeenCalled();
-    expect(registries).toEqual({ cli: true, runners: false });
+    expect(deps.resolveCliHome).toHaveBeenCalledOnce();
+    expect(deps.prepareOperatorHome).not.toHaveBeenCalled();
+    expect(registries).toEqual({ cli: true, runners: true });
     const help = deps.console.log.mock.calls[0]![0] as string;
     expect(help).toContain('run `hsq plugins` to list them');
-    expect(help).not.toContain('greet');
-    expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([]);
+    expect(help).toContain('hsq greet <name>');
+    expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([bundledRunnersDir(), home.plugins]);
+  });
+
+  it.each([
+    [['--help']],
+    [['--repo', '.', '--help']],
+    [['run', '--help']],
+  ])('skips host plugin warnings quietly for %j when home cannot be resolved', async (argv) => {
+    vi.resetModules();
+    const { main, defaultCliDeps } = await import('./cli-dispatch.ts');
+    const log = vi.fn();
+    const error = vi.fn();
+    await main({
+      ...defaultCliDeps,
+      resolveCliHome: () => { throw new Error('unresolvable home'); },
+      prepareOperatorHome: vi.fn(),
+      readOwnVersion: () => '0.0.0-test',
+      serveCommand: vi.fn(), serverCommand: vi.fn(), runCommand: vi.fn(), initCommand: vi.fn(),
+      process: { argv: ['node', '/bin/hsq', ...argv], cwd: () => '/work', env: {}, exitCode: undefined } as unknown as NodeJS.Process,
+      console: { log, error, warn: vi.fn() } as unknown as Console,
+    });
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('Squawk — local cockpit'));
+    expect(error).not.toHaveBeenCalled();
   });
 });

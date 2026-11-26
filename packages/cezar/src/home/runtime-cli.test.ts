@@ -1,11 +1,13 @@
 import { projectPaths } from '../project-paths.ts';
 import { productIdentity } from './identity.ts';
 import { expect, it, vi } from 'vitest';
+import * as entry from './entry.ts';
 import * as homes from './resolve.ts';
 
 it('prints global CLI help without preparing a Home', async () => {
   const argv = process.argv;
   const resolve = vi.spyOn(homes, 'resolveHome');
+  const prepare = vi.spyOn(entry, 'prepareOperatorHome');
   let printed!: () => void;
   const help = new Promise<void>(done => { printed = done; });
   const log = vi.spyOn(console, 'log').mockImplementation(message => {
@@ -16,7 +18,8 @@ it('prints global CLI help without preparing a Home', async () => {
     await import('../index.ts');
     await help;
     expect(log).toHaveBeenCalledWith(expect.stringContaining('Usage:'));
-    expect(resolve).not.toHaveBeenCalled();
+    expect(resolve).toHaveBeenCalledWith({ purpose: 'cli' });
+    expect(prepare).not.toHaveBeenCalled();
   } finally {
     process.argv = argv;
     vi.restoreAllMocks();

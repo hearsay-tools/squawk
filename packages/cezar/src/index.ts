@@ -111,7 +111,7 @@ function readOwnVersion(): string {
   }
 }
 
-// Dispatch seals the command table: cold for help and cold commands, a full boot otherwise.
+// Dispatch seals the command table: cold for version and cold commands, a full boot otherwise.
 main({
   ...defaultCliDeps, resolveCliHome: () => resolveHome({ purpose: 'cli' }), readOwnVersion, runCommand,
   initCommand: async (...args) => {
