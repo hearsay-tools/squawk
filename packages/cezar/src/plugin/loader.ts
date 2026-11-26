@@ -174,6 +174,23 @@ export interface LoadBundledRunnersOptions {
   allowEmpty?: boolean;
 }
 
+async function loadBundledEntries(
+  kind: 'runner' | 'feature',
+  dir: string,
+  folders: ReadonlyArray<{ readonly id: string; readonly path: string; readonly entry: string }>,
+): Promise<PluginLoadReport> {
+  installPluginResolveHook();
+  const loaded: LoadedPlugin[] = [];
+  for (const { id, path, entry } of folders) {
+    try {
+      loaded.push(Object.freeze({ name: id, source: 'bundled' as const, path, contributions: await loadEntry(path, entry) }));
+    } catch (error) {
+      throw new Error(`Bundled ${kind} "${id}" failed to load: ${errorText(error)}`, { cause: error });
+    }
+  }
+  return addToReport(dir, loaded, []);
+}
+
 /**
  * Load the bundled runners under `dir` (default: the `runners/` folder of this Squawk copy) in
  * display order, each through `runPluginSetup` like a host plugin, and add them to the report as
@@ -190,16 +207,7 @@ export async function loadBundledRunners(
   if (folders.length === 0 && !allowEmpty) {
     throw new Error(`No bundled runner was found in ${dir}: Squawk ships runners/<id>/index.js for each runner; rebuild it.`);
   }
-  installPluginResolveHook();
-  const loaded: LoadedPlugin[] = [];
-  for (const { id, path, entry } of folders) {
-    try {
-      loaded.push(Object.freeze({ name: id, source: 'bundled' as const, path, contributions: await loadEntry(path, entry) }));
-    } catch (error) {
-      throw new Error(`Bundled runner "${id}" failed to load: ${errorText(error)}`, { cause: error });
-    }
-  }
-  return addToReport(dir, loaded, []);
+  return loadBundledEntries('runner', dir, folders);
 }
 
 /** Load shipped features after runners. A broken shipped feature stops boot. */
@@ -207,16 +215,7 @@ export async function loadBundledFeatures(dir: string = bundledFeaturesDir()): P
   const folders = bundledFeatureFolders(dir);
   // Do not advertise absent or unused feature folders in `hsq plugins`.
   if (folders.length === 0) return report;
-  installPluginResolveHook();
-  const loaded: LoadedPlugin[] = [];
-  for (const { id, path, entry } of folders) {
-    try {
-      loaded.push(Object.freeze({ name: id, source: 'bundled' as const, path, contributions: await loadEntry(path, entry) }));
-    } catch (error) {
-      throw new Error(`Bundled feature "${id}" failed to load: ${errorText(error)}`, { cause: error });
-    }
-  }
-  return addToReport(dir, loaded, []);
+  return loadBundledEntries('feature', dir, folders);
 }
 
 /**

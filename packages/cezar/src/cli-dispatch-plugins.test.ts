@@ -118,4 +118,26 @@ describe('plugin commands at dispatch', () => {
     expect(help).toContain('hsq greet <name>');
     expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([bundledRunnersDir(), home.plugins]);
   });
+
+  it.each([
+    [['--help']],
+    [['--repo', '.', '--help']],
+    [['run', '--help']],
+  ])('skips host plugin warnings quietly for %j when home cannot be resolved', async (argv) => {
+    vi.resetModules();
+    const { main, defaultCliDeps } = await import('./cli-dispatch.ts');
+    const log = vi.fn();
+    const error = vi.fn();
+    await main({
+      ...defaultCliDeps,
+      resolveCliHome: () => { throw new Error('unresolvable home'); },
+      prepareOperatorHome: vi.fn(),
+      readOwnVersion: () => '0.0.0-test',
+      serveCommand: vi.fn(), serverCommand: vi.fn(), runCommand: vi.fn(), initCommand: vi.fn(),
+      process: { argv: ['node', '/bin/hsq', ...argv], cwd: () => '/work', env: {}, exitCode: undefined } as unknown as NodeJS.Process,
+      console: { log, error, warn: vi.fn() } as unknown as Console,
+    });
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('Squawk — local cockpit'));
+    expect(error).not.toHaveBeenCalled();
+  });
 });
