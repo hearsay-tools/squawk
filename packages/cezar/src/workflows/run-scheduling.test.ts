@@ -3,7 +3,7 @@ import { claudeRunner } from '../runners/claude/definition.ts';
 import { antigravityRunner } from '../runners/antigravity/definition.ts';
 import { describe, expect, it } from 'vitest';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS, makeRunRecord, makeStepState } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { accountHeldFor, deriveAccountHolds, queuedStartAt, resumeInFlight } from './run-scheduling.ts';
+import { accountHeldFor as heldWithLock, deriveAccountHolds, queuedStartAt, resumeInFlight } from './run-scheduling.ts';
 import type { WorkflowDef } from './types.ts';
 
 sealTestRunners(claudeRunner, antigravityRunner);
@@ -11,6 +11,8 @@ sealTestRunners(claudeRunner, antigravityRunner);
 const NOW = Date.parse('2026-11-12T12:00:00.000Z');
 const later = new Date(NOW + 60_000).toISOString();
 const same = <T>(run: T) => run;
+const accountHeldFor = (run: Parameters<typeof heldWithLock>[0], holds: Parameters<typeof heldWithLock>[1], fallbackRunner: string, modelsLocked = false) =>
+  heldWithLock(run, holds, fallbackRunner, () => modelsLocked);
 
 // hearsay-tools/squawk#3337: a usage limit holds its account; a provider-error hold does not.
 describe('account holds', () => {
@@ -39,12 +41,15 @@ describe('account holds', () => {
 });
 
 // hearsay-tools/squawk#4343: a limit closes the quota pool its model draws on, when the runner names
-// one. Antigravity bills Gemini and third-party models from separate pools.
+// one. Antigravity bills Gemini and third-party models from separate pools. `modelIdentity` is the
+// model the launch resolver recorded for the latest turn; the runner's default model records none.
 describe('quota pool holds', () => {
+  const identity = (model: string | undefined) => (model ? `antigravity/${model}` : undefined);
   const held = (model: string | undefined, runner = 'antigravity') =>
-    deriveAccountHolds([makeRunRecord({ status: RUN_STATUS.waiting, runner, model, autoResumeAt: later })], same, NOW);
+    deriveAccountHolds([makeRunRecord({ status: RUN_STATUS.waiting, runner, model, modelIdentity: runner === 'antigravity' ? identity(model) : model, autoResumeAt: later })], same, NOW);
   const queued = (model: string | undefined, runner = 'antigravity') =>
-    makeRunRecord({ status: RUN_STATUS.queued, runner, model });
+    makeRunRecord({ status: RUN_STATUS.queued, runner, model, modelIdentity: runner === 'antigravity' ? identity(model) : model });
+  const chain = (...models: string[]): WorkflowDef => ({ name: 'chain', source: 'file', steps: models.map((model, index) => ({ id: `s${index}`, model })) });
 
   it('a third-party hold leaves Gemini work free and blocks other third-party work', () => {
     const holds = held('claude-opus-5-5');
@@ -81,36 +86,58 @@ describe('quota pool holds', () => {
     expect(accountHeldFor(queued('sonnet', 'claude'), holds, 'claude')).toBe(true);
   });
 
-  it('a step model decides the pool of a workflow run', () => {
-    const workflowDef: WorkflowDef = { name: 'chain', source: 'file', steps: [{ id: 'implement', model: 'gemini-4-neon' }] };
-    const run = makeRunRecord({ status: RUN_STATUS.queued, runner: 'antigravity', model: 'claude-opus-5-5', workflowDef, steps: [makeStepState({ id: 'implement', status: STEP_STATUS.pending })] });
-    expect(accountHeldFor(run, held('claude-opus-5-5'), 'antigravity')).toBe(false);
+  // With the models lock on, or after a Continue that switched the model, the turn records no
+  // identity: the model the record names is not what ran.
+  it('a turn that recorded no model identity holds the account, whatever model the record names', () => {
+    const locked = makeRunRecord({ status: RUN_STATUS.waiting, runner: 'antigravity', model: 'gemini-4-neon', autoResumeAt: later });
+    const holds = deriveAccountHolds([locked], same, NOW);
+    expect(accountHeldFor(queued('claude-opus-5-5'), holds, 'antigravity')).toBe(true);
   });
 
-  it('a queued workflow tail takes the pool of the step its start cursor names, not the finished step', () => {
-    const workflowDef: WorkflowDef = { name: 'chain', source: 'file', steps: [{ id: 'a', model: 'claude-opus-5-5' }, { id: 'b', model: 'gemini-4-neon' }] };
-    const tail = (first: string, second: string) => makeRunRecord({
-      status: RUN_STATUS.queued, runner: 'antigravity', workflowCursor: { stepId: 'b', mode: 'start' },
-      workflowDef: { ...workflowDef, steps: [{ id: 'a', model: first }, { id: 'b', model: second }] },
-      steps: [makeStepState({ id: 'a', status: STEP_STATUS.done, sessionId: 'sess-a' }), makeStepState({ id: 'b', status: STEP_STATUS.pending })],
-    });
-    expect(accountHeldFor(tail('claude-opus-5-5', 'gemini-4-neon'), held('claude-opus-5-5'), 'antigravity')).toBe(false);
-    expect(accountHeldFor(tail('claude-opus-5-5', 'gemini-4-neon'), held('gemini-4-neon'), 'antigravity')).toBe(true);
-    expect(accountHeldFor(tail('gemini-4-neon', 'claude-opus-5-5'), held('gemini-4-neon'), 'antigravity')).toBe(false);
-    expect(accountHeldFor(tail('gemini-4-neon', 'claude-opus-5-5'), held('claude-opus-5-5'), 'antigravity')).toBe(true);
+  it('with the models lock on, a queued run runs the default model, so any pool hold blocks it', () => {
+    expect(accountHeldFor(queued('gemini-4-neon'), held('claude-opus-5-5'), 'antigravity', true)).toBe(true);
+  });
+
+  it('reads the models lock only when the account holds a pool hold', () => {
+    let reads = 0;
+    const lock = () => { reads += 1; return false; };
+    heldWithLock(queued('gemini-4-neon'), held('opus', 'claude'), 'antigravity', lock);
+    heldWithLock(queued('gemini-4-neon'), held(undefined), 'antigravity', lock);
+    expect(reads).toBe(0);
+    expect(heldWithLock(queued('gemini-4-neon'), held('claude-opus-5-5'), 'antigravity', lock)).toBe(false);
+    expect(reads).toBe(1);
+  });
+
+  it('a hold takes the pool of the model the turn ran on, not of another step', () => {
+    const run = makeRunRecord({ status: RUN_STATUS.waiting, runner: 'antigravity', model: 'gemini-4-neon', modelIdentity: identity('claude-opus-5-5'), workflowDef: chain('gemini-4-neon', 'claude-opus-5-5'), autoResumeAt: later });
+    const holds = deriveAccountHolds([run], same, NOW);
+    expect(accountHeldFor(queued('gemini-4-neon'), holds, 'antigravity')).toBe(false);
+    expect(accountHeldFor(queued('claude-sonnet-5-5'), holds, 'antigravity')).toBe(true);
+  });
+
+  it('a queued workflow whose steps draw on two pools is held by either pool', () => {
+    const run = { ...queued('gemini-4-neon'), workflowDef: chain('claude-opus-5-5', 'gemini-4-neon') };
+    expect(accountHeldFor(run, held('claude-opus-5-5'), 'antigravity')).toBe(true);
+    expect(accountHeldFor(run, held('gemini-4-neon'), 'antigravity')).toBe(true);
+  });
+
+  it('a queued workflow whose steps all draw on one pool is free of the other pool', () => {
+    const run = { ...queued('gemini-4-neon'), workflowDef: chain('gemini-4-neon', 'gemini-3.1-pro') };
+    expect(accountHeldFor(run, held('claude-opus-5-5'), 'antigravity')).toBe(false);
+    expect(accountHeldFor(run, held('gemini-4-neon'), 'antigravity')).toBe(true);
   });
 
   it('an in-flight third-party resume holds fresh third-party work, not Gemini work or other resumes', () => {
-    const holds = deriveAccountHolds([makeRunRecord({ status: RUN_STATUS.running, runner: 'antigravity', model: 'claude-opus-5-5', autoResumeAttempts: 1 })], same, NOW);
+    const holds = deriveAccountHolds([makeRunRecord({ status: RUN_STATUS.running, runner: 'antigravity', model: 'claude-opus-5-5', modelIdentity: identity('claude-opus-5-5'), autoResumeAttempts: 1 })], same, NOW);
     expect(accountHeldFor(queued('claude-sonnet-5-5'), holds, 'antigravity')).toBe(true);
     expect(accountHeldFor(queued('gemini-4-neon'), holds, 'antigravity')).toBe(false);
     expect(accountHeldFor({ ...queued('claude-sonnet-5-5'), autoResumeAttempts: 1 }, holds, 'antigravity')).toBe(false);
   });
 
   // A hold key is never saved: every pump derives it from the record, so a run parked before
-  // pools existed holds by its model after an upgrade, and resumes when its time comes.
+  // pools existed holds by its recorded model after an upgrade, and frees its pool on time.
   it('a run parked before the upgrade still holds, then frees its pool at its resume time', () => {
-    const parked = makeRunRecord({ status: RUN_STATUS.waiting, runner: 'antigravity', model: 'claude-opus-5-5', autoResumeAt: later, error: 'Third-party quota reached. Please switch to Gemini models. Resets in 4h14m' });
+    const parked = makeRunRecord({ status: RUN_STATUS.waiting, runner: 'antigravity', model: 'claude-opus-5-5', modelIdentity: identity('claude-opus-5-5'), autoResumeAt: later, error: 'Third-party quota reached. Please switch to Gemini models. Resets in 4h14m' });
     expect(accountHeldFor(queued('claude-opus-5-5'), deriveAccountHolds([parked], same, NOW), 'antigravity')).toBe(true);
     const afterReset = deriveAccountHolds([parked], same, Date.parse(later) + 1);
     expect(accountHeldFor(parked, afterReset, 'antigravity')).toBe(false);

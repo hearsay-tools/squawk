@@ -5,23 +5,25 @@ import type { AccountHolds } from '../workspace/semaphore.ts';
 import type { StartRunInput } from './run/types.ts';
 import type { WorkflowDef } from './types.ts';
 import { resolveRunnerId, runnerQuotaPool } from '../core/runner-registry.ts';
-import { executionModel } from './execution-account.ts';
 
-type HoldRun = Pick<RunRecord, 'runner' | 'agentProfile' | 'model' | 'steps' | 'workflowDef' | 'workflowCursor'>;
+type HoldRun = Pick<RunRecord, 'runner' | 'agentProfile' | 'model' | 'workflowDef'>;
 
 /**
  * A deadline hold blocks all work in its pool. An in-flight resume holds fresh work only; other
- * resumes must remain eligible.
+ * resumes must remain eligible. modelsLocked is read only when the account holds a pool hold: with
+ * the models lock on, every turn runs the runner's own default model, whose pool is unknown.
  */
 export function accountHeldFor(
   run: HoldRun & Pick<RunRecord, 'status' | 'autoResumeAttempts' | 'autoResumeReason'>,
   holds: AccountHolds,
   fallbackRunner: string,
+  modelsLocked: () => boolean,
 ): boolean {
   const account = runAccountKey(run, fallbackRunner);
-  const pool = runQuotaPool(run, fallbackRunner);
-  if (heldIn(holds.deadline, account, pool)) return true;
-  return heldIn(holds.inFlight, account, pool) && !resumeInFlight(run);
+  let pool: { value: string | undefined } | undefined;
+  const ownPool = () => (pool ??= { value: modelsLocked() ? undefined : queuedQuotaPool(run, fallbackRunner) }).value;
+  if (heldIn(holds.deadline, account, ownPool)) return true;
+  return heldIn(holds.inFlight, account, ownPool) && !resumeInFlight(run);
 }
 
 /**
@@ -39,27 +41,43 @@ export function runAccountKey(
 const POOL_SEPARATOR = '\u001f';
 
 /**
- * The key a usage-limit hold closes (hearsay-tools/squawk#4343): the account and the quota pool its
- * model draws on, or the account alone when its runner cannot name the pool.
+ * The key a usage-limit hold closes (hearsay-tools/squawk#4343): the account and the quota pool of
+ * the model its latest turn ran on, or the account alone when that pool is unknown. The launch
+ * resolver records that model as `modelIdentity` when a step or Continue opens, after the models
+ * lock and worker settings apply; the runner's own default model records none.
  */
-export function runHoldKey(run: HoldRun, fallbackRunner: string): string {
+export function runHoldKey(run: Pick<RunRecord, 'runner' | 'agentProfile' | 'modelIdentity'>, fallbackRunner: string): string {
   const account = runAccountKey(run, fallbackRunner);
-  const pool = runQuotaPool(run, fallbackRunner);
+  const pool = runnerQuotaPool(run.runner ?? fallbackRunner, run.modelIdentity);
   return pool === undefined ? account : `${account}${POOL_SEPARATOR}${pool}`;
 }
 
-function runQuotaPool(run: HoldRun, fallbackRunner: string): string | undefined {
-  return runnerQuotaPool(run.runner ?? fallbackRunner, executionModel(run));
+/**
+ * The pool every turn a queued run can take draws on (hearsay-tools/squawk#4343): each agent step
+ * runs its authored model, else the run-level pin, which an accepted Continue also sets. Steps on
+ * two pools, or a step on the runner's default model, read as unknown, which every pool hold on the
+ * account blocks.
+ */
+function queuedQuotaPool(run: HoldRun, fallbackRunner: string): string | undefined {
+  const runner = run.runner ?? fallbackRunner;
+  const [first, ...rest] = turnModels(run).map(model => runnerQuotaPool(runner, model));
+  return first !== undefined && rest.every(pool => pool === first) ? first : undefined;
+}
+
+function turnModels(run: HoldRun): (string | undefined)[] {
+  const agentSteps = run.workflowDef?.steps.filter(step => step.command === undefined && step.kind !== 'plugin') ?? [];
+  return agentSteps.length ? agentSteps.map(step => step.model ?? run.model) : [run.model];
 }
 
 /** An account-wide hold blocks every pool. A pool hold blocks its pool, and a run whose pool is
  *  unknown, since that run may draw on it. */
-function heldIn(keys: ReadonlySet<string>, account: string, pool: string | undefined): boolean {
+function heldIn(keys: ReadonlySet<string>, account: string, ownPool: () => string | undefined): boolean {
   if (keys.has(account)) return true;
-  if (pool !== undefined) return keys.has(`${account}${POOL_SEPARATOR}${pool}`);
   const prefix = `${account}${POOL_SEPARATOR}`;
-  for (const key of keys) if (key.startsWith(prefix)) return true;
-  return false;
+  const poolKeys = [...keys].filter(key => key.startsWith(prefix));
+  if (!poolKeys.length) return false;
+  const pool = ownPool();
+  return pool === undefined || poolKeys.includes(`${prefix}${pool}`);
 }
 
 /**
