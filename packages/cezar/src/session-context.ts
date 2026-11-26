@@ -402,6 +402,9 @@ type Rendered = { ok: true; text: string; sources: string[] } | { ok: false; rea
 function renderTemplate(template: string, input: SessionContextInput): Rendered {
   const sources: string[] = [];
   const values: string[] = [];
+  // The rendered size so far. Once it alone is over the limit the block cannot fit, so stop:
+  // repeated includes must not grow a small template into an unbounded string.
+  let size = Buffer.byteLength(template, 'utf8');
   for (const match of template.matchAll(TOKEN)) {
     const token = match[1]!;
     if (token.startsWith('file:')) {
@@ -409,6 +412,8 @@ function renderTemplate(template: string, input: SessionContextInput): Rendered 
       sources.push(path);
       const file = readIncludedFile(input.cwd, path);
       if (!file.ok) return { ok: false, reason: `file ${path}: ${file.reason}`, sources };
+      size += Buffer.byteLength(file.text, 'utf8') - Buffer.byteLength(match[0], 'utf8');
+      if (size > SESSION_CONTEXT_LIMIT_BYTES) return { ok: false, reason: `does not fit the ${SESSION_CONTEXT_LIMIT_BYTES}-byte limit`, sources };
       values.push(file.text);
       continue;
     }

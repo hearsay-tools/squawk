@@ -1,4 +1,4 @@
-import { isMap, isSeq, parseDocument } from 'yaml'
+import { isMap, isScalar, isSeq, parseDocument } from 'yaml'
 
 /**
  * Pure text edits for Settings → Session context. Squawk never re-serializes `context.yaml`:
@@ -37,39 +37,70 @@ function blockRule(id: string, indent: string): string {
   return [`${indent}- id: ${id}`, `${indent}  on: session_start`, `${indent}  target: both`, `${indent}  template: |`, `${indent}    ${STARTER_TEXT}`].join('\n')
 }
 
-/**
- * Add a starter rule to the `rules` list, as a text insert where the list is: inside the brackets
- * of a flow list, or after the last item of a block list at its indentation. An empty draft gets
- * `version` and `rules` first. A draft that does not parse gets the rule at its end.
- */
-export function addRule(text: string): { text: string; select: [number, number] } {
-  const id = freeRuleId(text)
-  if (text.trim() === '') {
-    const head = 'version: 1\nrules:\n'
-    return { text: `${head}${blockRule(id, '  ')}\n`, select: [head.length + 8, head.length + 8 + id.length] }
-  }
-  const doc = parseDocument(text)
-  const rules = doc.errors.length === 0 && isMap(doc.contents) ? doc.contents.get('rules', true) : undefined
-  if (isSeq(rules) && rules.flow && rules.range) {
-    // Right after the last item, or right after `[`: a trailing comma or a comment stays after it.
-    const last = rules.items.at(-1) as { range?: [number, number, number] } | undefined
-    const at = last?.range ? last.range[1] : text.indexOf('[', rules.range[0]) + 1
-    const lead = `${text.slice(0, at)}${last ? ', ' : ''}{ id: `
-    const item = `${lead}${id}, on: session_start, target: both, template: "${STARTER_TEXT}" }`
-    return { text: item + text.slice(at), select: [lead.length, lead.length + id.length] }
-  }
-  if (isSeq(rules) && rules.items.length > 0 && rules.range) {
-    const first = (rules.items[0] as { range?: [number, number, number] }).range?.[0] ?? rules.range[0]
-    const lineStart = text.lastIndexOf('\n', first - 1) + 1
-    const indent = /^[ \t]*/.exec(text.slice(lineStart))![0]
-    const end = text.slice(0, rules.range[1]).replace(/\s*$/, '').length
-    const lead = `${text.slice(0, end)}\n${indent}- id: `
-    return { text: lead + blockRule(id, indent).slice(indent.length + 6) + text.slice(end), select: [lead.length, lead.length + id.length] }
-  }
+type Inserted = { text: string; select: [number, number] }
+type Ranged = { range?: [number, number, number] | null }
+
+/** `text` up to `lead`, the id, then the rest: the id is what the caller selects. */
+function placed(lead: string, id: string, rest: string): Inserted {
+  return { text: lead + id + rest, select: [lead.length, lead.length + id.length] }
+}
+
+/** The starter rule's lines after `- id: <id>`, at `indent`. */
+function ruleTail(indent: string): string {
+  return blockRule('x', indent).slice(indent.length + 'x'.length + '- id: '.length)
+}
+
+/** `rules:`, `rules: null` or `rules: ~`: the key line becomes a block key with the rule under it. */
+function underNullKey(text: string, keyStart: number, id: string): Inserted {
+  const lineStart = text.lastIndexOf('\n', keyStart - 1) + 1
+  const lineEnd = text.indexOf('\n', keyStart)
+  const indent = text.slice(lineStart, keyStart)
+  const lead = `${text.slice(0, lineStart)}${indent}rules:\n${indent}  - id: `
+  return placed(lead, id, ruleTail(`${indent}  `) + (lineEnd === -1 ? '\n' : text.slice(lineEnd)))
+}
+
+/** Right after the last item, or right after `[`: a trailing comma or a comment stays after it. */
+function intoFlowList(text: string, start: number, last: Ranged | undefined, id: string): Inserted {
+  const at = last?.range ? last.range[1] : text.indexOf('[', start) + 1
+  const lead = `${text.slice(0, at)}${last ? ', ' : ''}{ id: `
+  return placed(lead, id, `, on: session_start, target: both, template: "${STARTER_TEXT}" }${text.slice(at)}`)
+}
+
+/** After the last item of a block list, at the indentation of its first item. */
+function intoBlockList(text: string, firstStart: number, valueEnd: number, id: string): Inserted {
+  const lineStart = text.lastIndexOf('\n', firstStart - 1) + 1
+  const indent = /^[ \t]*/.exec(text.slice(lineStart))![0]
+  const end = text.slice(0, valueEnd).replace(/\s*$/, '').length
+  return placed(`${text.slice(0, end)}\n${indent}- id: `, id, ruleTail(indent) + text.slice(end))
+}
+
+/** No `rules` list to insert into: add the key if it is missing, and the rule at the end. */
+function atEnd(text: string, id: string): Inserted {
   let head = text.endsWith('\n') ? text : `${text}\n`
   if (!/^rules:/m.test(head)) head += 'rules:\n'
-  const at = head.length + 8
-  return { text: `${head}${blockRule(id, '  ')}\n`, select: [at, at + id.length] }
+  return placed(`${head}  - id: `, id, `${ruleTail('  ')}\n`)
+}
+
+/**
+ * Add a starter rule to the `rules` list, as a text insert where the list is. An empty draft gets
+ * `version` and `rules` first. A draft that does not parse gets the rule at its end.
+ */
+export function addRule(text: string): Inserted {
+  const id = freeRuleId(text)
+  if (text.trim() === '') return atEnd('version: 1\n', id)
+  const doc = parseDocument(text)
+  const root = doc.errors.length === 0 && isMap(doc.contents) ? doc.contents : undefined
+  const pair = root?.items.find((item) => isScalar(item.key) && item.key.value === 'rules')
+  const rules = pair?.value
+  const keyStart = isScalar(pair?.key) ? pair.key.range?.[0] : undefined
+  if (keyStart !== undefined && (rules === null || (isScalar(rules) && rules.value === null))) return underNullKey(text, keyStart, id)
+  if (isSeq(rules) && rules.range) {
+    const last = rules.items.at(-1) as Ranged | undefined
+    if (rules.flow) return intoFlowList(text, rules.range[0], last, id)
+    const first = (rules.items[0] as Ranged | undefined)?.range?.[0]
+    if (first !== undefined) return intoBlockList(text, first, rules.range[1], id)
+  }
+  return atEnd(text, id)
 }
 
 /** Insert `{{token}}` over the selection. A `file:` token selects its path, ready to type over. */

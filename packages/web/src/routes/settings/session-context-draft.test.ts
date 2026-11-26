@@ -20,6 +20,16 @@ describe('session context draft edits', () => {
     expect(text.slice(...select)).toBe('new-rule-2')
   })
 
+  it.each([
+    { name: 'rules: null', before: 'version: 1\nrules: null\n' },
+    { name: 'an empty rules key before another key', before: 'rules:\nversion: 1\n' },
+    { name: 'rules: ~ with a comment', before: '  # team\nrules: ~ # later\nversion: 1\n' },
+  ])('adds the first rule under $name', ({ before }) => {
+    const { text, select } = addRule(before)
+    expect(parse(text)).toMatchObject({ version: 1, rules: [{ id: 'new-rule' }] })
+    expect(text.slice(...select)).toBe('new-rule')
+  })
+
   it('picks a free id when an existing id is quoted', () => {
     const { text } = addRule('version: 1\nrules:\n  - id: "new-rule"\n    on: session_start\n    template: x\n')
     expect((parse(text) as { rules: { id: string }[] }).rules.map((r) => r.id)).toEqual(['new-rule', 'new-rule-2'])
