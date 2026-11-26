@@ -2,7 +2,8 @@ import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { WorkerOperation } from '@open-mercato/cezar-contract';
 import { isAuthenticatedCaller } from '../delegation/credentials.ts';
-import { captureState, delegatingParent, parent, semaphore, store, useWorkerWaitFixture } from './worker-wait-claude.testkit.ts';
+import { runnersUnderTest, useRunners } from '../core/runners-under-test.testkit.ts';
+import { delegatingParent, parent, STARTUP_STALL_MS, store, useWorkerWaitFixture } from './worker-wait-claude.testkit.ts';
 
 sealTestRunners();
 
@@ -29,22 +30,56 @@ describe('service-ready worker-wait fixture (hearsay-tools/cezarion#1752)', () =
     expect(store.getRun(p.id)?.delegation).toMatchObject({ role: 'root', permissions: ['spawn', 'wait'] });
   });
 
-  it('reports each startup predicate and step session when the parent start wait times out (hearsay-tools/cezarion#3042)', async () => {
-    const capacity = vi.spyOn(semaphore, 'maxParallel').mockReturnValue(0);
-    onTestFinished(() => capacity.mockRestore());
-    // Exercise the failed predicate and its diagnostic path without spending the hang guard.
-    const waitFor = vi.spyOn(vi, 'waitFor').mockImplementationOnce(async callback => callback());
-    try {
-      await expect(parent()).rejects.toThrow(/"toolGenerationPresent":false/);
-      const dump = JSON.parse(JSON.stringify(captureState()));
-      expect(dump.runs).toEqual([expect.objectContaining({
-        active: true, toolGenerationPresent: false, hasSessionId: false,
-        steps: [{ id: 'task', sessionId: null }],
-        events: expect.stringContaining('events of run'),
-      })]);
-      expect(dump.ownedOperations).toEqual(expect.any(Array));
-    } finally {
-      waitFor.mockRestore();
+  /** Hold every run's start where it loads its runner (`createRunner`) until `release`. `fail`
+   *  releases it with a runner whose session cannot start, so the step fails before any session. */
+  function gateRunnerLoad() {
+    const real = runnersUnderTest();
+    const reached = Promise.withResolvers<void>(); const gate = Promise.withResolvers<Error | undefined>();
+    useRunners(async backend => {
+      reached.resolve();
+      const failure = await gate.promise; const runner = await real(backend);
+      if (failure) vi.spyOn(runner, 'startSession').mockImplementation(() => { throw failure; });
+      return runner;
+    });
+    onTestFinished(() => { vi.useRealTimers(); gate.resolve(new Error('runner load gate closed')); useRunners(real); });
+    return { reached: reached.promise, release: () => gate.resolve(undefined), fail: (error: Error) => gate.resolve(error) };
+  }
+  /** The run the fixture started, while `parent()` still waits on it. */
+  const startingRun = () => store.queries.listRunIds()[0]!;
+
+  // hearsay-tools/squawk#3042: the parent start waits on its session's start, not on a fixed bound.
+  it('lets a start that keeps making progress take longer than the stall guard', async () => {
+    const load = gateRunnerLoad();
+    const started = parent();
+    await load.reached;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    for (let elapsed = 0; elapsed < 3 * STARTUP_STALL_MS; elapsed += STARTUP_STALL_MS / 2) {
+      store.eventLog.appendEvent(startingRun(), { type: 'note', message: `still loading after ${elapsed} ms` });
+      await vi.advanceTimersByTimeAsync(STARTUP_STALL_MS / 2);
     }
+    vi.useRealTimers(); load.release();
+    const p = await started;
+    expect(store.eventLog.readEvents(p.id).some(event => event.type === 'session')).toBe(true);
+  });
+
+  it('fails a start that stalls, naming its step and its events', async () => {
+    const load = gateRunnerLoad();
+    const started = parent();
+    const failure = expect(started).rejects.toThrow(/made no progress for 15000 ms before its session started, at step task:\nevents of run/);
+    await load.reached;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    // The guard counts from the run's latest write or event.
+    store.eventLog.appendEvent(startingRun(), { type: 'note', message: 'last progress' });
+    await vi.advanceTimersByTimeAsync(STARTUP_STALL_MS);
+    await failure;
+    vi.useRealTimers(); load.fail(new Error('released after the stall'));
+  });
+
+  it('fails at once, with the run\'s error, when the run fails before its session starts', async () => {
+    const load = gateRunnerLoad();
+    const started = parent();
+    await load.reached;
+    load.fail(new Error('runner load failed'));
+    await expect(started).rejects.toThrow(/ failed before its session started: .*runner load failed/);
   });
 });

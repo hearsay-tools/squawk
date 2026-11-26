@@ -235,13 +235,61 @@ rl.on('close', () => process.exit(0));
     }).join('\n') : '  (no wire process started)' };
 }
 
+/** How long a starting run may go without a write or an event before `startParent` fails. */
+export const STARTUP_STALL_MS = 15_000;
+type StartSignal = 'started' | 'progress' | `settled:${string}`;
+/** The run events that say a session is open: the engine's `session` (the native session id an
+ *  adapter reports, as hook runners do) and the runner's `session.started`. */
+const SESSION_OPEN_EVENTS = new Set(['session', 'session.started']);
+/**
+ * Watch the store for one run's start, from before the run exists: `startRun` writes and publishes
+ * before it returns. `of(runId)` resolves on the run's first `SESSION_OPEN_EVENTS` event. It rejects at once when the run settles first, with the run's
+ * error and events. Its hang guard restarts at each write or event of the run, so a slow start
+ * passes and only a stalled one fails (hearsay-tools/squawk#3042).
+ */
+function watchSessionStart() {
+  const early: Array<[string, StartSignal]> = [];
+  let handle = (runId: string, signal: StartSignal) => { early.push([runId, signal]); };
+  const unsubscribe = store.lifecycle.subscribe({
+    'run.event': ({ runId, event }) => handle(runId, SESSION_OPEN_EVENTS.has(event.type) ? 'started' : 'progress'),
+    'run.updated': ({ run }) => handle(run.id, 'progress'),
+    'run.status-changed': ({ run, to }) => handle(run.id, terminal.includes(to) ? `settled:${to}` : 'progress'),
+  });
+  const stop = () => { unsubscribe(); handle = () => {}; };
+  const of = (runId: string) => new Promise<void>((resolve, reject) => {
+    // The clock that set the guard clears it, real or fake: a test may switch clocks mid-start.
+    let disarm = () => {};
+    const finish = (error?: Error) => { disarm(); stop(); if (error) reject(error); else resolve(); };
+    const stalled = () => finish(new Error(`Run ${runId} made no progress for ${STARTUP_STALL_MS} ms before its session started, `
+      + `at step ${store.getRun(runId)?.currentStepId ?? '-'}:\n${timeline(runId)}\n${JSON.stringify(captureState())}`));
+    const arm = () => {
+      disarm();
+      const clear = globalThis.clearTimeout;
+      // bound: a start with no write or event for this long has stalled; `session.started` is the signal.
+      const timer = globalThis.setTimeout(stalled, STARTUP_STALL_MS);
+      disarm = () => clear(timer);
+    };
+    handle = (id, signal) => {
+      if (id !== runId) return;
+      if (signal === 'started') finish();
+      else if (signal === 'progress') arm();
+      else finish(new Error(`Run ${runId} ${signal.slice('settled:'.length)} before its session started: ${store.getRun(runId)?.error ?? 'no error'}\n${timeline(runId)}`));
+    };
+    arm();
+    for (const [id, signal] of early.splice(0)) handle(id, signal);
+  });
+  return { of, stop };
+}
+
 async function startParent(task: string, runner: string, permissions: WorkerOperation[]) {
   checkpoint('parent-start');
-  const run = manager.startRun(QUICK_TASK_WORKFLOW, { task, runner });
-  store.commitDelegation([{ id: run.id, delegation: { role: 'root', permissions, receipts: [] } }]);
-  await until(() => {
-    return manager.isActive(run.id) && toolGenerations.has(run.id) && store.getRun(run.id)?.steps.some(step => !!step.sessionId) === true;
-  }, () => JSON.stringify(captureState()));
+  const start = watchSessionStart();
+  let run: ReturnType<RunManager['startRun']>;
+  try {
+    run = manager.startRun(QUICK_TASK_WORKFLOW, { task, runner });
+    store.commitDelegation([{ id: run.id, delegation: { role: 'root', permissions, receipts: [] } }]);
+  } catch (error) { start.stop(); throw error; }
+  await start.of(run.id);
   checkpoint('parent-session-open'); return run;
 }
 /** The root may message its workers, as provisioned roots do, so their questions reach it
