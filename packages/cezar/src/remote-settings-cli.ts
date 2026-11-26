@@ -20,9 +20,9 @@ import { COCKPIT_PORTS } from './task-cli/discovery.ts';
  */
 
 export const REMOTE_SETTINGS_WARNING =
-  'Anyone this cockpit admits can now save agent hooks, MCP servers and worktree setup commands that run on this machine as this user, and sign in to runner accounts on this machine. Keep the cockpit behind owner-only Tailscale access or an authenticated HTTPS proxy, bound to loopback.';
+  'Anyone this cockpit admits can now save agent hooks, MCP servers and worktree setup commands that run on this machine as this user, and manage or sign in to runner accounts on this machine. Keep the cockpit behind owner-only Tailscale access or an authenticated HTTPS proxy, bound to loopback.';
 
-const USAGE = commandText(`cez remote-settings — let a remote cockpit (CEZ_REMOTE=1) edit Agent config and worktree setup, and sign in to runner accounts.
+const USAGE = commandText(`cez remote-settings — let a remote cockpit (CEZ_REMOTE=1) edit Agent config and worktree setup, and manage or sign in to runner accounts.
 One JSON object per invocation; exit 0 ok, 2 refused, 64 usage.
 
   enable [--port <n>]    allow remote edits on the cockpit listening on that port. Without --port,

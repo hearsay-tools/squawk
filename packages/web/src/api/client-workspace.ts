@@ -360,8 +360,9 @@ export async function getWorkspaceConfig(opts?: ReadOptions): Promise<WorkspaceC
 
 /**
  * Every agent account on this machine (spec 2026-07-29-agent-profiles) — the discovered defaults
- * plus any extra config dirs. Workspace-level, so never scope-prefixed. Hosted mode answers
- * `{editable: false, profiles: [], …}` rather than leaking host paths.
+ * plus any extra config dirs. Workspace-level, so never scope-prefixed. On a remote cockpit without
+ * `settingsAdmin`, host paths (`configDir`, `path`, and raw repo roots in `selections`) are omitted
+ * while `profiles` and `projectSelections` still let users choose configured accounts.
  *
  * The collections are filled in HERE rather than guarded at each of the ~5 read sites. During
  * development the cockpit and the server can be different versions (Vite serves this bundle while
@@ -379,6 +380,7 @@ export async function getAgentProfiles(opts?: ReadOptions): Promise<AgentProfile
     ...answer,
     profileCapableProviders: answer.profileCapableProviders ?? [],
     selections: answer.selections ?? {},
+    projectSelections: answer.projectSelections ?? {},
     profiles: answer.profiles ?? [],
   }
 }

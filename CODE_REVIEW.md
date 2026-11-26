@@ -109,6 +109,7 @@ recovery path), a hold, park or resume, cross-run relationship, ToolGrant mappin
 running task's worktree files, detached process, lock or ownership check, or restored
 client state need the applicable
 [case tables](.ai/specs/TEMPLATE.md#case-tables) in the spec or plan before implementation.
+A spec or plan that deletes or retires rule text needs the Removed rule text table.
 
 ## CI surface rules
 

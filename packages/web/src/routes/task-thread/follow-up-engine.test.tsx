@@ -644,6 +644,7 @@ const ACCOUNTS: AgentProfilesResponse = {
   editable: true,
   profileCapableProviders: ['claude', 'codex'],
   selections: {},
+  projectSelections: {},
   profiles: [
     {
       id: 'default',
@@ -865,6 +866,7 @@ describe('owned worker Continue engine controls', () => {
       editable: true,
       profileCapableProviders: ['claude', 'codex'],
       selections: {},
+      projectSelections: {},
       profiles: [
         {
           id: 'default',

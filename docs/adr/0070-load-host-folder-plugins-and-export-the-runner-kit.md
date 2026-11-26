@@ -123,8 +123,9 @@ npm or git (owner decision 1); ADR 0065 records the amendment.
 - **A plugin is as trusted as Squawk.** Squawk does not sandbox it and does not ask before it
   loads it. Hosted operators own the folder; the cockpit cannot change it.
 - **The kit carries every runner's needs.** Moving all six built-in runners onto the kit made the
-  kit complete for the cases those runners cover. A gap that remains is a follow-up
-  (hearsay-tools/squawk#4232: Pi extension scripts and the tool-bridge client path).
+  kit complete for the cases those runners cover. The remaining follow-up (hearsay-tools/squawk#4232:
+  self-contained runner assets, `z` re-export, `HSQ_TOOL_CLIENT` and `nativeMockPath`) is now
+  complete and recorded in [ADR 0071](0071-keep-runner-folders-self-contained.md).
 - **Deferred work.** Project-scoped plugins and a trust gate, installing from npm or git,
   install and remove commands, cockpit plugin management and workflows inside a plugin wait for a
   later epic. New extension slots are roadmap step 5; cockpit UI slots are step 6.

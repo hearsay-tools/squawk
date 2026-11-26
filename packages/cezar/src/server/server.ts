@@ -66,7 +66,7 @@ import { compression, createStaticAssets, isFile } from './static-assets.ts';
 import { registerBrandFileRoutes } from './brand-file-routes.ts';
 import { createProjectsRoutes } from './projects-routes.ts';
 import { createAgentProfilesRoutes, createProvidersRoutes } from './providers-routes.ts';
-import { hostedProfileRefusal, WorkspaceEventBus, type ProjectApiEnv } from './server-types.ts';
+import { WorkspaceEventBus, type ProjectApiEnv } from './server-types.ts';
 import { createAutomationsRouteBundles } from './automations-routes.ts';
 import { createGithubRoutes } from './github-routes.ts';
 import { createOpenTargetsRoutes, createRepoRoutes, createWorktreesRoutes } from './repo-routes.ts';
@@ -661,13 +661,9 @@ export function createApp(deps: ServerDeps) {
    * Extra accounts are warmed ONE AT A TIME, after the defaults. Each is a CLI spawn, and a machine
    * with several accounts would otherwise fan out a spawn storm at exactly the moment the browser is
    * fetching the bundle; nothing is waiting on this, so sequential costs nothing that matters.
-   *
-   * Hosted mode warms only the defaults: the agent-profiles family is refused there, so there are
-   * no accounts to learn about.
    */
   const warmAgentKnowledge = async (): Promise<void> => {
     await providerAuth.status().catch(() => {});
-    if (!capabilities().localHandoff) return;
     const store = await loadAgentAccounts(deps.home).catch(() => defaultAgentAccountStore());
     for (const account of listAgentProfiles(store, registeredRunners().map(({ id }) => id))) {
       if (account.isDefault) continue; // covered by `status()` above
@@ -732,6 +728,7 @@ export function createApp(deps: ServerDeps) {
   });
 
   const agentProfilesRoutes = createAgentProfilesRoutes({
+    bootRoot,
     home: deps.home,
     capabilities,
     providerAuth,
@@ -783,7 +780,7 @@ export function createApp(deps: ServerDeps) {
   });
 
   const fsBrowseRoutes = createFsBrowseRoutes(workspaceBrowseRoot);
-  const skillsRoutes = createSkillsRoutes({ home: deps.home, capabilities, skillCatalog, resolveWorkspaceProfile });
+  const skillsRoutes = createSkillsRoutes({ home: deps.home, skillCatalog, resolveWorkspaceProfile });
   const uiStateRoutes = createUiStateRoutes();
   const workflowsRoutes = createWorkflowsRoutes();
   const planRoutes = createPlanRoutes({ home: deps.home, skillCatalog, providerActionError, resolveWorkspaceProfile });
@@ -888,7 +885,7 @@ export function createApp(deps: ServerDeps) {
   const workspaceV1 = new Hono()
     .route('/', liveRoutes)
     .route('/', healthRoutes).route('/', createRunnersRoutes({ home: deps.home, settingsAdmin: () => capabilities().settingsAdmin }))
-    .route('/', createModelsRoutes({ capabilities, resolveWorkspaceProfile, modelCatalog, hostedProfileRefusal }))
+    .route('/', createModelsRoutes({ resolveWorkspaceProfile, modelCatalog }))
     .route('/', providersRoutes)
     .route('/', createProviderSignInRoutes({ settingsAdmin: () => capabilities().settingsAdmin, resolve: resolveWorkspaceProfile, auth: providerAuth, invalidateModels: invalidateHostModels }))
     .route('/', projectsRoutes)
