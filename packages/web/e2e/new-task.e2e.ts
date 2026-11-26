@@ -99,9 +99,15 @@ beforeEach(async () => {
   })()`)
 })
 
-function pickSpecWriter() {
+/** Open the source menu and wait until the runner's skills are in it: the menu opens on the
+ *  workflows first, `aria-busy` until the skill rows arrive. */
+function openSourceMenu() {
   browser.click('[data-slot="source-pill"]')
-  browser.waitForFunction(`document.querySelector('[data-slot="source-menu"]') !== null`)
+  browser.waitForFunction(`document.querySelector('[data-slot="source-menu"]')?.getAttribute('aria-busy') === 'false'`)
+}
+
+function pickSpecWriter() {
+  openSourceMenu()
   browser.evaluate(`{
     const item = document.querySelector('[data-slot="source-option"][data-source-ref="spec-writer"]')
     const label = item.querySelector('span')
@@ -240,8 +246,7 @@ describe('the full-screen /new against a live dry-run server', () => {
   })
 
   it('the source dropdown groups project skills first and picking one updates the pill', () => {
-    browser.click('[data-slot="source-pill"]')
-    browser.waitForFunction(`document.querySelector('[data-slot="source-menu"]') !== null`)
+    openSourceMenu()
     const groups = browser.evaluate(`[...document.querySelectorAll('[cmdk-group-heading]')].map(h => h.textContent)`) as string[]
     expect(groups[0]).toBe('Project skills')
     expect(groups).toContain('Workflows')
