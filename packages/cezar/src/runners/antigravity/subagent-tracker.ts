@@ -42,6 +42,7 @@ export class AntigravitySubagentTracker {
   private childToParent = new Map<string, string>();
   private parentToChild = new Map<string, string>();
   private latestReply = new Map<string, string>();
+  private killedParents = new Set<string>();
 
   fork(): AntigravitySubagentTracker {
     const next = new AntigravitySubagentTracker();
@@ -50,6 +51,7 @@ export class AntigravitySubagentTracker {
     next.childToParent = new Map(this.childToParent);
     next.parentToChild = new Map(this.parentToChild);
     next.latestReply = new Map(this.latestReply);
+    next.killedParents = new Set(this.killedParents);
     return next;
   }
 
@@ -103,21 +105,28 @@ export class AntigravitySubagentTracker {
     if (item.parentItemId !== undefined || item.status !== 'completed' || antigravityNativeToolName(update) !== 'manage_subagents') return [];
     const args = manageArgsSchema.safeParse(update.rawInput ?? update.args).data;
     if (!args) return [];
-    if (args.Action === 'kill_all') return this.drainActive('declined', 'Stopped by parent');
+    if (args.Action === 'kill_all') {
+      const killed = this.drainActive('declined', 'Stopped by parent');
+      for (const entry of killed) this.killedParents.add(entry.id);
+      return killed;
+    }
     if (args.Action !== 'kill' || !args.ConversationIds?.length) return [];
     const settled: SettledSubagent[] = [];
     for (const rawId of args.ConversationIds) {
       const parentId = this.childToParent.get(rawId.toLowerCase()) ?? (this.unboundOrder.length === 1 ? this.unboundOrder[0] : undefined);
-      if (parentId && this.removeActive(parentId)) settled.push({ id: parentId, status: 'declined', output: 'Stopped by parent' });
+      if (parentId && this.removeActive(parentId)) {
+        this.killedParents.add(parentId);
+        settled.push({ id: parentId, status: 'declined', output: 'Stopped by parent' });
+      }
     }
     return settled;
   }
 
-  /** Records a child's `send_message` text without closing the subagent (it may keep working). */
+  /** Records a child's `send_message` text without closing the subagent, or resolves a settled non-killed parent for late output amendment. */
   recordChildMessage(childId: string, output: string): string | undefined {
     const parentId = this.childToParent.get(childId.toLowerCase());
-    if (!parentId || !this.activeCalls.has(parentId)) return undefined;
-    if (output) this.latestReply.set(parentId, output);
+    if (!parentId || this.killedParents.has(parentId)) return undefined;
+    if (output && this.activeCalls.has(parentId)) this.latestReply.set(parentId, output);
     return parentId;
   }
 

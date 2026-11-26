@@ -109,6 +109,28 @@ describe('Antigravity subagent tracking and child transcripts', () => {
     const completions = ui.filter((e): e is Extract<UiEvent, { type: 'item.completed' }> => e.type === 'item.completed' && e.item.id === 'call_sub');
     expect(completions).toHaveLength(1);
     expect(completions[0]?.item).toMatchObject({ id: 'call_sub', status: 'declined', output: 'Stopped by parent' });
+    // Late child message after explicit kill never overwrites the declined output.
+    expect(tracker.recordChildMessage(childId, 'late reply')).toBeUndefined();
+  });
+
+  it('amends a settled Task with a late child reply read after turn settlement while preserving completed status', () => {
+    const tracker = new AntigravitySubagentTracker();
+    const ui: UiEvent[] = [];
+    const events = new AcpEvents({ uiEvent: event => ui.push(event) }, antigravityWireHooks(tracker));
+    events.begin();
+    const args = { TypeName: 'self', Role: 'Late Reporter', Prompt: 'Work' };
+    events.update({ sessionUpdate: 'tool_call', toolCallId: 'call_late', name: 'invoke_subagent', kind: 'other', title: 'Run invoke_subagent', status: 'in_progress', rawInput: args });
+    events.update({ sessionUpdate: 'tool_call_update', toolCallId: 'call_late', name: 'invoke_subagent', kind: 'other', title: 'Run invoke_subagent', status: 'completed', rawInput: args });
+    const childId = '44444444-4444-4444-8444-444444444444';
+    tracker.bindChild('call_late', childId);
+    // Parent turn settles before the 250ms transcript poll reads the final child delivery.
+    events.finish('end_turn');
+    const parentId = tracker.recordChildMessage(childId, 'final child answer');
+    expect(parentId).toBe('call_late');
+    events.updateHeldTool(parentId!, 'final child answer');
+    const amended = ui.filter((e): e is Extract<UiEvent, { type: 'item.updated' }> => e.type === 'item.updated' && e.item.id === 'call_late').at(-1);
+    // oxlint-disable-next-line cez/test-enum-literal -- UI tool status is independent of run status.
+    expect(amended).toEqual({ type: 'item.updated', late: true, item: expect.objectContaining({ id: 'call_late', status: 'completed', output: 'final child answer' }) });
   });
 
   it('maps the live CLI 1.5.18 child transcript into nested items while deduplicating ACP-forwarded tools', async () => {

@@ -69,13 +69,14 @@ export class AcpEvents {
     this.sink.event?.({ type: 'turn-end' });
   }
 
-  /** Updates a held tool item's output while keeping it running. */
+  /** Updates a held tool item's output while running, or amends a settled non-declined tool with `late: true`. */
   updateHeldTool(id: string, output: string): void {
     const tool = this.tools.get(id);
-    if (!tool || tool.status === 'completed' || tool.status === 'failed' || tool.status === 'declined') return;
+    if (!tool || tool.status === 'declined') return;
+    const terminal = tool.status === 'completed' || tool.status === 'failed';
     const item: UiToolItem = { ...tool, output };
     this.tools.set(id, item);
-    this.sink.uiEvent?.({ type: 'item.updated', item });
+    this.sink.uiEvent?.({ type: 'item.updated', item, ...(terminal ? { late: true } : {}) });
   }
 
   /** Completes a tool item that `holdToolCompletion` kept open past its wire response. */
