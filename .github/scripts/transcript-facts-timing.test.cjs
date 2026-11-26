@@ -158,9 +158,11 @@ test('names the main-thread wait a watcher thread sees', async () => {
   const watch = await startThreadWatch();
   if (process.platform !== 'linux') { assert.equal(watch, null); return; }
   watch.watch(true);
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 40);
+  // The main thread waits in futex(2) until the watcher records it there.
+  const recorded = watch.awaitRecord(30_000); // bound: hang guard if the watcher never runs
   watch.watch(false);
   const seen = await watch.stop();
-  // Atomics.wait parks the main thread in futex(2), syscall 202 on x86-64 and 98 on arm64.
+  assert.equal(recorded, 'ok');
+  // futex(2) is syscall 202 on x86-64 and 98 on arm64.
   assert.ok(seen.some(entry => entry.state === 'S' && ['202', '98'].includes(entry.syscall)), JSON.stringify(seen.slice(0, 5)));
 });

@@ -121,8 +121,12 @@ for (let mode; (mode = Atomics.load(flag, 0)) !== 2;) {
   if (mode === 0) { Atomics.wait(flag, 0, 0); continue; }
   const stat = read('stat');
   const state = stat === null ? '?' : stat.charAt(stat.lastIndexOf(')') + 2);
-  if (state !== 'R') seen.push({ at: performance.timeOrigin + performance.now(), state, wchan: read('wchan'),
-    syscall: read('syscall')?.split(' ')[0] ?? null });
+  if (state !== 'R') {
+    seen.push({ at: performance.timeOrigin + performance.now(), state, wchan: read('wchan'),
+      syscall: read('syscall')?.split(' ')[0] ?? null });
+    Atomics.add(flag, 1, 1);
+    Atomics.notify(flag, 1);
+  }
   Atomics.wait(flag, 0, 1, 1);
 }
 parentPort.postMessage(seen);
@@ -132,12 +136,15 @@ parentPort.postMessage(seen);
  * child process or a page fault, about once a millisecond while watching is on. */
 export async function startThreadWatch() {
   if (process.platform !== 'linux') return null;
-  const flag = new Int32Array(new SharedArrayBuffer(4));
+  // [0]: 0 paused, 1 watching, 2 stop. [1]: samples recorded so far.
+  const flag = new Int32Array(new SharedArrayBuffer(8));
   const worker = new Worker(WATCH_SOURCE, { eval: true, workerData: { flag: flag.buffer, pid: process.pid } });
   await once(worker, 'message');
   const set = mode => { Atomics.store(flag, 0, mode); Atomics.notify(flag, 0); };
   return {
     watch: on => set(on ? 1 : 0),
+    /** Block the main thread until the watcher records one more sample: 'ok' or 'timed-out'. */
+    awaitRecord: timeoutMs => Atomics.wait(flag, 1, Atomics.load(flag, 1), timeoutMs) === 'timed-out' ? 'timed-out' : 'ok',
     async stop() {
       const reply = once(worker, 'message');
       set(2);
