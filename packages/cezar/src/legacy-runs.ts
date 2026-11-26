@@ -44,9 +44,11 @@ const cache = new Map<string, ReadonlySet<string>>();
  * next move rewrites the file from the run store.
  */
 export class LegacyRunsUnreadableError extends Error {
-  constructor(readonly file: string, cause: unknown) {
+  readonly file: string;
+  constructor(file: string, cause: unknown) {
     super(`Cannot read ${file}: ${cause instanceof Error ? cause.message : String(cause)}. `
       + 'It names the tasks whose files stayed in .ai/cezar/; the next cockpit start or migrate-project rewrites it', { cause });
+    this.file = file;
   }
 }
 

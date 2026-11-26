@@ -2,6 +2,7 @@ import { agentToolMetadata, enabledAgentTools } from './tool-registry.ts';
 import { squawkAskRequestSchema, squawkCancelWaitRequestSchema, squawkDoneRequestSchema } from '@open-mercato/cezar-contract/wait-tools';
 import { ASK_LIMITS } from '@open-mercato/cezar-contract/ask-schema';
 import { registeredWaitKinds } from '../workflows/run/wait-kind-registry.ts';
+import { cliCommandAdvertised } from '../core/cli-registry.ts';
 import { z } from 'zod';
 
 /**
@@ -20,24 +21,30 @@ export function flatWaitInputSchema() {
   return { type: 'object' as const, properties, required: ['kind'], additionalProperties: false };
 }
 
+const WAIT_INTRO = `Open a wait on something outside this turn: a GitHub pull request's checks or its merge (kind "pr"), workers you own (kind "worker"), the replies to requests you sent (kind "request"), named peer tasks that may message you or settle (kind "peer"), a timer (kind "timer"), or a background command (kind "process"). End your turn after it answers; Squawk wakes you when any open wait resolves, with its result. A human message wakes you too and closes no wait; only a message from a peer that a peer wait names closes that wait. Several waits can be open at once; the answer lists them. To wait for the user, call cezar_ask. A checks wait wakes with "stuck" when it has observed a check as queued for at least 15 minutes; its result names the checks, queued minutes and recovery. It ends "startup_failure" when a workflow run on the head created no job. A checks observation is not merge approval; only a merge wait's "merged" outcome means the PR merged. Times in the answers, such as \`deadline\`, are UTC. `;
+// hearsay-tools/cezarion#3097: Codex ends a command's process group when the command returns,
+// so a plain `&` job dies there, and `setsid … & echo $!` prints a dead PID under Claude.
+const JOB_PROCESS_TEXT = 'kind "process" wakes you when a background command ends. To start one yourself, run ' +
+  '`hsq job start <name> -- <command> [args...]` (your instructions give the full command for this session under "Long commands") ' +
+  'and pass the `pid` and `exitFile` it prints as `pid` and `exit_file`, so the wake reports the exit code. ' +
+  'To end a job early, run `hsq job stop <name>`; never `kill` its `pid`, which leaves its children running. ' +
+  `It writes the command's output to the \`log\` file it prints, refuses a name that still runs, and the job outlives this session; Squawk does not stop it. ` +
+  `Its files are in $TMPDIR, the task's temp directory, which Squawk keeps across its own restart and, after the task ends, while a job in it runs, so \`hsq job status <name>\` still finds the job after a Continue. ` +
+  'For files that must outlive the task, pass `--dir` with a directory you keep; a process wait accepts that job\'s `exitFile` too. ' +
+  'Do not start a long command with `&`, `nohup`, `setsid` or your own background-task tool: it can end with the shell call or the session, or leave you a PID that is not the command\'s. ';
+/** Without the jobs feature no command starts a background command for the agent: name only the wait. */
+const GENERIC_PROCESS_TEXT = 'kind "process" wakes you when a background command ends. Pass its `pid`, and as `exit_file` a file that the command writes its exit code to, in $TMPDIR or the worktree, with a new name for each command, so the wake reports the exit code. ';
+const WAIT_OUTRO =
+  // A batch that writes its exit file outside $TMPDIR made agents start a watcher to copy it in.
+  'For a command that is already running, or that writes its own status file somewhere else, pass only its `pid` and leave `exit_file` out. ' +
+  'The wake then reports `exited` without a code: read the command\'s own log or status file after it. ' +
+  'Never start a watcher or helper process to copy a file into $TMPDIR. ' +
+  'An unchanged repeat names the retained wait. A changed timeout is refused and keeps that wait active; do not cancel it as a duplicate. On an unknown outcome retry the same operation_id and arguments, without a fallback timer.';
+
 export const waitToolDefinition = {
   name: 'cezar_wait',
-  description: `Open a wait on something outside this turn: a GitHub pull request's checks or its merge (kind "pr"), workers you own (kind "worker"), the replies to requests you sent (kind "request"), named peer tasks that may message you or settle (kind "peer"), a timer (kind "timer"), or a background command (kind "process"). End your turn after it answers; Squawk wakes you when any open wait resolves, with its result. A human message wakes you too and closes no wait; only a message from a peer that a peer wait names closes that wait. Several waits can be open at once; the answer lists them. To wait for the user, call cezar_ask. A checks wait wakes with "stuck" when it has observed a check as queued for at least 15 minutes; its result names the checks, queued minutes and recovery. It ends "startup_failure" when a workflow run on the head created no job. A checks observation is not merge approval; only a merge wait's "merged" outcome means the PR merged. Times in the answers, such as \`deadline\`, are UTC. ` +
-    // hearsay-tools/cezarion#3097: Codex ends a command's process group when the command returns,
-    // so a plain `&` job dies there, and `setsid … & echo $!` prints a dead PID under Claude.
-    'kind "process" wakes you when a background command ends. To start one yourself, run ' +
-    '`hsq job start <name> -- <command> [args...]` (your instructions give the full command for this session under "Long commands") ' +
-    'and pass the `pid` and `exitFile` it prints as `pid` and `exit_file`, so the wake reports the exit code. ' +
-    'To end a job early, run `hsq job stop <name>`; never `kill` its `pid`, which leaves its children running. ' +
-    `It writes the command's output to the \`log\` file it prints, refuses a name that still runs, and the job outlives this session; Squawk does not stop it. ` +
-    `Its files are in $TMPDIR, the task's temp directory, which Squawk keeps across its own restart and, after the task ends, while a job in it runs, so \`hsq job status <name>\` still finds the job after a Continue. ` +
-    'For files that must outlive the task, pass `--dir` with a directory you keep; a process wait accepts that job\'s `exitFile` too. ' +
-    'Do not start a long command with `&`, `nohup`, `setsid` or your own background-task tool: it can end with the shell call or the session, or leave you a PID that is not the command\'s. ' +
-    // A batch that writes its exit file outside $TMPDIR made agents start a watcher to copy it in.
-    'For a command that is already running, or that writes its own status file somewhere else, pass only its `pid` and leave `exit_file` out. ' +
-    'The wake then reports `exited` without a code: read the command\'s own log or status file after it. ' +
-    'Never start a watcher or helper process to copy a file into $TMPDIR. ' +
-    'An unchanged repeat names the retained wait. A changed timeout is refused and keeps that wait active; do not cancel it as a duplicate. On an unknown outcome retry the same operation_id and arguments, without a fallback timer.',
+  /** Names `hsq job` only while that command can run here (spec 2026-11-26-launch-slot-and-bundled-jobs). */
+  get description() { return WAIT_INTRO + (cliCommandAdvertised('job') ? JOB_PROCESS_TEXT : GENERIC_PROCESS_TEXT) + WAIT_OUTRO; },
   get inputSchema() { return flatWaitInputSchema(); },
 };
 /**

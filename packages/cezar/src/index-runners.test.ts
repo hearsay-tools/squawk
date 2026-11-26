@@ -9,7 +9,7 @@ import { expect, it, vi } from 'vitest';
 // Cold processes prove metadata and HTTP/file commands never evaluate the service graph.
 it.each([
   ['--version'], ['-v'],
-  ...['job', 'artifact', 'message', 'webhook', 'automation', 'backup', 'remote-settings'].map(command => [command, '--help']),
+  ...['artifact', 'message', 'webhook', 'automation', 'backup', 'remote-settings'].map(command => [command, '--help']),
 ].map(argv => ({ argv, status: 0 })).concat(
   ['list', 'inspect', 'collect', 'wait'].map(operation => ({ argv: ['worker', operation], status: 1 })),
 ))('keeps the service and runner modules unloaded for $argv', ({ argv, status }) => {

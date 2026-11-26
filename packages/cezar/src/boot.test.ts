@@ -7,6 +7,7 @@ import { traverse } from '@babel/types';
 import { afterEach, expect, it, vi } from 'vitest';
 import { BUILT_IN_RUNNER_IDS } from './core/built-in-runner-ids.testkit.ts';
 import { bundledRunnersDir } from './plugin/bundled-runners.ts';
+import { bundledFeaturesDir } from './plugin/bundled-features.ts';
 
 const srcRoot = fileURLToPath(new URL('.', import.meta.url));
 
@@ -75,7 +76,9 @@ it('seals only the CLI command table on a cold boot', async () => {
   const cli = await import('./core/cli-registry.ts');
   boot.bootColdCli();
   expect(cli.cliCommandsSealed()).toBe(true);
-  expect(cli.knownCliCommand('job')?.name).toBe('job');
+  expect(cli.knownCliCommand('message')?.name).toBe('message');
+  // `job` belongs to the bundled jobs feature, which only a runtime boot loads.
+  expect(cli.knownCliCommand('job')).toBeUndefined();
   const runners = await import('./core/runner-registry.ts');
   const slots = await import('./runs/removal-slots.ts');
   const workers = await import('./runs/worker-executions-registry.ts');
@@ -111,7 +114,9 @@ it('boots the other registries after the CLI command table is already sealed', a
   registerCliCommand(command);
   sealCliCommands();
   const boot = await import('./boot.ts');
-  await boot.bootRuntime();
+  // A bundled feature that adds a command cannot join a table sealed before boot: load none.
+  const features = mkdtempSync(join(tmpdir(), 'hsq-no-features-'));
+  try { await boot.bootRuntime({ bundledFeaturesDir: features }); } finally { rmSync(features, { recursive: true, force: true }); }
   const { cliCommand } = await import('./core/cli-registry.ts');
   const { runnersSealed } = await import('./core/runner-registry.ts');
   expect(cliCommand('fixture')).toBe(command);
@@ -161,12 +166,12 @@ it('installs the resolve hook, loads the bundled runners, then host plugins, the
       expect(cli.cliCommandsSealed()).toBe(false);
     } });
     // The loader asks for the hook again before the first plugin of each folder; the real install is idempotent.
-    expect(order).toEqual(['hook', 'runners', 'hook', 'features', 'plugins', 'hook', 'beforeSeal']);
+    expect(order).toEqual(['hook', 'runners', 'hook', 'features', 'hook', 'plugins', 'hook', 'beforeSeal']);
     expect(cli.cliCommand('extra')?.name).toBe('extra');
     expect(lifecycle.registeredRunLifecycleListeners()).toHaveLength(1);
     const report = (await import('./plugin/loader.ts')).pluginLoadReport();
-    expect(report.folders).toEqual([bundledRunnersDir(), dir]);
-    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([...BUILT_IN_RUNNER_IDS.map(id => [id, 'bundled']), ['extra', 'host']]);
+    expect(report.folders).toEqual([bundledRunnersDir(), bundledFeaturesDir(), dir]);
+    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([...BUILT_IN_RUNNER_IDS.map(id => [id, 'bundled']), ['jobs', 'bundled'], ['extra', 'host']]);
     expect(report.failed).toEqual([]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -180,7 +185,9 @@ it('loads no host plugin without a plugin folder and never installs the hook on 
   const boot = await import('./boot.ts');
   boot.bootColdCli();
   expect(install).not.toHaveBeenCalled();
-  await boot.bootRuntime();
+  // The cold boot sealed the command table, so no bundled feature that adds a command may load.
+  const features = mkdtempSync(join(tmpdir(), 'hsq-no-features-'));
+  try { await boot.bootRuntime({ bundledFeaturesDir: features }); } finally { rmSync(features, { recursive: true, force: true }); }
   // Once by boot and once by the bundled runner load.
   expect(install).toHaveBeenCalledTimes(2);
   expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([bundledRunnersDir()]);
@@ -196,8 +203,8 @@ it('does not load host plugins twice when a failed hook is retried', async () =>
     await expect(boot.bootRuntime({ pluginsDir: dir, beforeSeal: () => { throw new Error('hook failed'); } })).rejects.toThrow('hook failed');
     await boot.bootRuntime({ pluginsDir: dir });
     const report = (await import('./plugin/loader.ts')).pluginLoadReport();
-    expect(report.folders).toEqual([bundledRunnersDir(), dir]);
-    expect(report.loaded.map(plugin => plugin.name)).toEqual([...BUILT_IN_RUNNER_IDS, 'extra']);
+    expect(report.folders).toEqual([bundledRunnersDir(), bundledFeaturesDir(), dir]);
+    expect(report.loaded.map(plugin => plugin.name)).toEqual([...BUILT_IN_RUNNER_IDS, 'jobs', 'extra']);
     expect(report.failed).toEqual([]);
     expect((await import('./core/cli-registry.ts')).cliCommand('extra')?.name).toBe('extra');
   } finally {
@@ -291,8 +298,8 @@ it('boots with no bundled runner when bundledRunnersDir is empty and reuses that
     const runners = await import('./core/runner-registry.ts');
     expect(runners.registeredRunners().map(runner => [runner.id, runner.display.displayName])).toEqual([['claude', 'Host Claude']]);
     const report = (await import('./plugin/loader.ts')).pluginLoadReport();
-    expect(report.folders).toEqual([emptyBundled, hostDir]);
-    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([['claude', 'host']]);
+    expect(report.folders).toEqual([emptyBundled, bundledFeaturesDir(), hostDir]);
+    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([['jobs', 'bundled'], ['claude', 'host']]);
     expect(report.failed).toEqual([]);
   } finally {
     rmSync(emptyBundled, { recursive: true, force: true });
@@ -324,6 +331,33 @@ it('loads the feature override before host plugins and reuses it after a failed 
   } finally {
     rmSync(features, { recursive: true, force: true });
     rmSync(host, { recursive: true, force: true });
+  }
+});
+
+it('loads the shipped jobs feature as a bundled plugin with its command, removal slot and launch part', async () => {
+  vi.resetModules();
+  const boot = await import('./boot.ts');
+  await boot.bootRuntime();
+  const jobs = (await import('./plugin/loader.ts')).pluginLoadReport().loaded.find(plugin => plugin.name === 'jobs');
+  expect(jobs?.source).toBe('bundled');
+  expect(jobs?.path).toBe(join(bundledFeaturesDir(), 'jobs'));
+  expect(jobs?.contributions).toMatchObject({ cliCommands: ['job'], removalSlots: 1, launchParts: ['jobs'] });
+  expect((await import('./core/cli-registry.ts')).cliCommand('job')?.name).toBe('job');
+});
+
+it('boots without the jobs feature when the features folder is empty', async () => {
+  vi.resetModules();
+  const features = mkdtempSync(join(tmpdir(), 'hsq-no-features-'));
+  try {
+    const boot = await import('./boot.ts');
+    await boot.bootRuntime({ bundledFeaturesDir: features });
+    const report = (await import('./plugin/loader.ts')).pluginLoadReport();
+    expect(report.loaded.map(plugin => plugin.name)).not.toContain('jobs');
+    expect(report.failed).toEqual([]);
+    expect((await import('./core/cli-registry.ts')).hasCliCommand('job')).toBe(false);
+    expect((await import('./core/launch-registry.ts')).registeredLaunchParts().map(part => part.id)).toEqual(['automations', 'webhooks', 'artifacts']);
+  } finally {
+    rmSync(features, { recursive: true, force: true });
   }
 });
 

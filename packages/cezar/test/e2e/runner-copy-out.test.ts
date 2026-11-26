@@ -159,13 +159,15 @@ test('every copied dist/runners folder loads and runs without bundled runners', 
     const probeRes = await runWrapped(packageRoot, probeHomeDir, root, ['plugins', '--json']);
     assert.equal(probeRes.code, 0, probeRes.stderr);
     const probeReport = JSON.parse(probeRes.stdout) as PluginsJson;
-    assert.equal(probeReport.folders.length, 2, 'CLI bootRuntime should reuse wrapper boot without re-reading plugin folders');
-    assert.deepEqual(probeReport.loaded.filter(p => p.source === 'bundled'), []);
+    // The empty runners folder, the shipped features folder and the host folder, each read once.
+    assert.equal(probeReport.folders.length, 3, 'CLI bootRuntime should reuse wrapper boot without re-reading plugin folders');
+    // No bundled runner loads; the bundled jobs feature still does.
+    assert.deepEqual(probeReport.loaded.filter(p => p.source === 'bundled').map(p => p.name), ['jobs']);
     assert.deepEqual(probeReport.failed, []);
-    assert.equal(probeReport.loaded.length, 1);
-    assert.equal(probeReport.loaded[0]?.name, 'boot-probe');
-    assert.equal(probeReport.loaded[0]?.source, 'host');
-    assert.deepEqual(probeReport.loaded[0]?.contributions.cliCommands, ['boot-probe']);
+    const probe = probeReport.loaded.filter(p => p.source === 'host');
+    assert.equal(probe.length, 1);
+    assert.equal(probe[0]?.name, 'boot-probe');
+    assert.deepEqual(probe[0]?.contributions.cliCommands, ['boot-probe']);
 
     // 2. Copy all installed dist/runners/<id>/ folders unchanged into <config>/plugins/<id>/.
     const homeDir = join(root, 'home');
@@ -181,11 +183,12 @@ test('every copied dist/runners folder loads and runs without bundled runners', 
     const copyPluginsRes = await runWrapped(packageRoot, homeDir, root, ['plugins', '--json']);
     assert.equal(copyPluginsRes.code, 0, copyPluginsRes.stderr);
     const copyPlugins = JSON.parse(copyPluginsRes.stdout) as PluginsJson;
-    assert.deepEqual(copyPlugins.loaded.filter(p => p.source === 'bundled'), []);
+    // No bundled runner loads; the bundled jobs feature still does.
+    assert.deepEqual(copyPlugins.loaded.filter(p => p.source === 'bundled').map(p => p.name), ['jobs']);
     assert.deepEqual(copyPlugins.failed, []);
-    assert.deepEqual(copyPlugins.loaded.map(p => p.name).sort(), [...runnerIds].sort());
-    for (const entry of copyPlugins.loaded) {
-      assert.equal(entry.source, 'host');
+    const hostRunners = copyPlugins.loaded.filter(p => p.source === 'host');
+    assert.deepEqual(hostRunners.map(p => p.name).sort(), [...runnerIds].sort());
+    for (const entry of hostRunners) {
       assert.deepEqual(entry.contributions.runners, [entry.name]);
     }
 

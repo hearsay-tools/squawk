@@ -39,6 +39,9 @@ export const cliCommandsSealed = commands.isSealed;
 export const cliCommand = commands.get;
 export const registeredCliCommands = commands.values;
 export const hasCliCommand = commands.has;
+/** Whether agent-facing text may name this command: always before the registry seals (a contract
+ *  test, a tool server that never boots the CLI), and after it only when the command registered. */
+export const cliCommandAdvertised = (name: string): boolean => !cliCommandsSealed() || hasCliCommand(name);
 /** Cold home helpers do not boot or inspect an unsealed registry. */
 export const knownCliCommand = (name: string): CliCommandDefinition | undefined => commands.isSealed() ? commands.get(name) : undefined;
 /** Whether this command line needs the full runtime boot: runners, stores and plugins. */

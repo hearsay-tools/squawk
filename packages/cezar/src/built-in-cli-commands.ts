@@ -84,10 +84,6 @@ const builtIns: readonly CliCommandDefinition[] = [
     parseMode: 'subcommand', homeMode: 'none', runtimeMode: 'always',
     load: async () => (await import('./plugin/cli.ts')).runPluginsCommand,
   },
-  { name: 'job', usage: ["  cez job start <name> -- <cmd> run a long command that outlives the agent session (see: job --help)"],
-    parseMode: 'subcommand', homeMode: 'none', runtimeMode: 'none',
-    load: async () => (await import('./jobs/cli.ts')).runJobCommand,
-  },
   { name: 'server-install', usage: ["  cez server-install        interactive wizard to host Squawk on a server"],
     parseMode: 'root', homeMode: 'conditional', runtimeMode: 'always',
     load: async () => async ({ deps, home, repoRoot, values, portExplicit }) => {

@@ -1,4 +1,4 @@
-import { assertRunSlotsSealed, deletionRefusal } from './removal-slots.ts';
+import { assertRunSlotsSealed, deletionRefusal, directoryDeletionRefusal } from './removal-slots.ts';
 import { legacyRunsBeside, runDataDir } from '../legacy-runs.ts';
 import { productEnv } from '../core/product-env.ts';
 /**
@@ -744,12 +744,14 @@ function keepRefusedScratch(dataDir: string, keep: Set<string>): void {
 /**
  * Startup sweep of confined repo-local and digest directories not claimed by keepRunIds. Respect
  * full-run and dataDir ownership markers; retain unreadable or uncertain ownership. A directory
- * `spare` names stays too: the caller keeps one that holds a running job (hearsay-tools/squawk#3138).
- * A run whose scratch a deletion gate refuses (`runs/removal-slots.ts`) is kept like one in
- * keepRunIds; the sweep throws before it removes anything while the removal slots are not sealed.
+ * `spare` names stays too, and so does one a deletion gate refuses by directory (a running job
+ * holds it, hearsay-tools/squawk#3138). A run whose scratch a deletion gate refuses
+ * (`runs/removal-slots.ts`) is kept like one in keepRunIds; the sweep throws before it removes
+ * anything while the removal slots are not sealed.
  */
-export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>, spare: (dir: string) => boolean = () => false): string[] {
+export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>, spareDir: (dir: string) => boolean = () => false): string[] {
   assertRunSlotsSealed();
+  const spare = (dir: string) => spareDir(dir) || directoryDeletionRefusal(dir, 'scratch') !== undefined;
   // Private worker evidence outlives corrupt/missing/quarantined index rows. Both local
   // and digest-named fallback scratch belong to deferred cleanup, not this orphan sweep.
   const workers = workerEvidenceRunIds(dataDir);

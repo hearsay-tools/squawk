@@ -68,6 +68,7 @@
     "cez/run-store-testkit-import": "error",
     "cez/runner-core-import": "error",
     "cez/runner-folder-escape": "error",
+    "cez/bundled-feature-import": "error",
     "cez/probe-release-port": "error",
     "cez/stubborn-test-child": "error",
     "cez/test-unpinned-clock-date": "error",

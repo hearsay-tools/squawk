@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runWorktreeSetupSchema } from '@open-mercato/cezar-contract/runs';
-import { claimJob, jobPaths } from '../jobs/job.ts';
+import { claimJob, jobPaths } from '../features/jobs/job.ts';
 import { processStartToken } from '../detached-process.ts';
 import { historyPaths } from './history-file.ts';
 import { readRunIndexFromDisk } from './run-index.ts';
@@ -39,7 +39,7 @@ import {
 import type { RunRecord } from './store.ts';
 import { onRunWrite } from './lifecycle-listeners.testkit.ts';
 import { sealTestRunSlots } from './removal-slots.testkit.ts';
-import { jobsDeletionGate } from '../jobs/removal-slot.ts';
+import { jobsDeletionGate } from '../features/jobs/removal-slot.ts';
 
 // Retention archives settled families; a job's tmp directory outlives the archive.
 sealTestRunSlots({ gates: [jobsDeletionGate] });
