@@ -77,7 +77,9 @@ beforeAll(async () => {
       git('-c', 'user.name=E2E', '-c', 'user.email=e2e@example.test', 'commit', '--allow-empty', '-q', '-m', subject)
     }
     // The fixture's own state stays out of `git status`, so the dirty count is exactly ours.
-    writeFileSync(join(dir, '.git/info/exclude'), '.ai/\n')
+    // fixtureServeEnv puts the server's homes inside the repo; the server writes there while
+    // the spec runs, so counting them made the uncommitted line change between two reads.
+    writeFileSync(join(dir, '.git/info/exclude'), '.ai/\n/.cez-home/\n/.server-home/\n')
     mkdirSync(join(dir, '.ai/cezar/worktrees'), { recursive: true })
   }
   seed(root, 'main', ['fixture: first', 'fixture: second', 'fixture: third'])
@@ -197,8 +199,7 @@ describe('the fixture', () => {
   it('has the git state this spec assumes', async () => {
     const repo = (await fetch(`${base}/api/v1/p/${project}/repo`).then((r) => r.json())) as { info: { branch: string }; status: Array<{ path: string }>; branches: string[] }
     expect(repo.info.branch).toBe('main')
-    // Booting may add files of its own (Squawk's data gitignore); ours is the one this spec names.
-    expect(repo.status.map((entry) => entry.path)).toContain('dirty.txt')
+    expect(repo.status.map((entry) => entry.path)).toEqual(['dirty.txt'])
     expect(repo.branches).toEqual(['feature', 'main'])
     const branches = (await fetch(`${base}/api/v1/p/${project}/repo/branches`).then((r) => r.json())) as { prStateKnown: boolean; branches: Array<{ name: string; class: string }> }
     expect(Object.fromEntries(branches.branches.map((entry) => [entry.name, entry.class]))).toEqual({
@@ -212,8 +213,7 @@ describe('the fixture', () => {
 })
 
 describe('Git desktop sidebar (issue 06 §3)', () => {
-  it('shows the checkout block, then Recently on main (lit), Not landed, Cleanup and All branches with counts', async () => {
-    const dirty = ((await fetch(`${base}/api/v1/p/${project}/repo`).then((r) => r.json())) as { status: unknown[] }).status.length
+  it('shows the checkout block, then Recently on main (lit), Not landed, Cleanup and All branches with counts', () => {
     openDesktop()
     const rows = browser.waitForValue<SectionRow[]>(sectionsJs(SIDEBAR), (value) => Array.isArray(value) && value[1]?.count !== null && value[2]?.count !== null && value[3]?.count !== null)
     expect(rows.map(({ section, label, href, current }) => ({ section, label, href, current }))).toEqual([
@@ -233,7 +233,7 @@ describe('Git desktop sidebar (issue 06 §3)', () => {
     expect(browser.text(`${CHECKOUT} [data-slot="git-checkout-branch"]`)).toBe('main')
     expect(browser.evaluate(`document.querySelector('${CHECKOUT} [data-action="repo-pull"]').title`)).toContain('No remote configured')
     expect(browser.text(`${CHECKOUT} [data-slot="base-branch"]`)).toBe('main')
-    expect(browser.text(`${CHECKOUT} [data-slot="git-uncommitted"]`)).toBe(`${dirty} uncommitted file${dirty === 1 ? '' : 's'}`)
+    expect(browser.text(`${CHECKOUT} [data-slot="git-uncommitted"]`)).toBe('1 uncommitted file')
     expect(browser.evaluate(`document.querySelector('${CHECKOUT} [data-slot="git-uncommitted"]').getAttribute('href')`)).toBe(scoped('/git/changes'))
 
     // The Tasks quick list is not here either.
