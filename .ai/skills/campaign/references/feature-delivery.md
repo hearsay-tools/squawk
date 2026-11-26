@@ -21,6 +21,9 @@ For each slice, record:
 - Interfaces, stored-state changes, dependencies and release conditions.
 - Behavior on main after this slice alone, at shipped defaults. If it cannot
   work safely before another slice, change the cut or order before spawning.
+- Trusted-gate exceptions the slice needs, such as a `crossPackageExceptions`
+  entry. CI judges a pull request with main's copy of the gate, so each
+  exception lands in its own pull request before the slice.
 
 Put the case tables AGENTS.md requires in the approved plan. Preserve zero
 config: a default-off replacement does not preserve an existing working path.

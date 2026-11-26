@@ -355,3 +355,31 @@ test('only module sources resolve, from the file the fragment was cut from', () 
     assert.ok(!carried(clone('a', imports('packages/demo/src/a/x.ts')), clone('a', imports('./x.ts'))), 'a resolved source never reads as written text');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+// hearsay-tools/squawk#4295: CI runs the base branch's gate, so an exception added in the same change is ignored.
+test('a failing change that edits the gate says the trusted copy judged it', () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'clone-gate-edit-'));
+  const git = (...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', ...args], { cwd: repo, encoding: 'utf8' }).trim();
+  const write = (name, content) => { fs.mkdirSync(path.dirname(path.join(repo, name)), { recursive: true }); fs.writeFileSync(path.join(repo, name), content); };
+  const scan = (base) => spawnSync(process.execPath, [script, '--base', base], { cwd: repo, encoding: 'utf8' });
+  const code = `export function calculate(values: number[]) {\n let total = 0;\n${Array.from({ length: 12 }, (_, i) => ` total += values[${i}] * ${i + 37};`).join('\n')}\n return total;\n}\n`;
+  const notice = /edits \.github\/scripts\/check-clones\.cjs\. CI judges a pull request with the base branch's trusted copy/;
+  try {
+    git('init', '--quiet');
+    write('packages/contract/src/shared.ts', code);
+    write('.github/scripts/check-clones.cjs', '// base copy\n');
+    git('add', '.'); git('commit', '-qm', 'base');
+    const base = git('rev-parse', 'HEAD');
+    write('packages/web/src/copied.ts', code);
+    git('add', '.'); git('commit', '-qm', 'cross-package clone');
+    const plain = scan(base);
+    assert.equal(plain.status, 1, plain.stdout + plain.stderr);
+    assert.doesNotMatch(plain.stdout, notice);
+    write('.github/scripts/check-clones.cjs', '// candidate copy with a new exception\n');
+    git('add', '.'); git('commit', '-qm', 'candidate exception');
+    const edited = scan(base);
+    assert.equal(edited.status, 1, edited.stdout + edited.stderr);
+    assert.match(edited.stdout, notice);
+    assert.match(edited.stdout, /Land the gate or exception change in its own pull request first\.\n$/);
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
