@@ -8,7 +8,8 @@ import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { timingSnapshot, timingDelta, blockingBudget, prepareOpenTiming } from './transcript-facts-timing.mjs';
+import { PerformanceObserver } from 'node:perf_hooks';
+import { timingSnapshot, timingDelta, blockingBudget, prepareOpenTiming, hookCalls, callsWithin, startThreadWatch, summarizeWaits } from './transcript-facts-timing.mjs';
 import { seedColdHistories, verifyFacts } from './transcript-facts-fixture.mjs';
 
 const root = mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'cez-facts-health-'));
@@ -23,6 +24,9 @@ let dataDir;
 let store;
 let bootStore;
 let server;
+let unhookCalls;
+let gcObserver;
+let threadWatch;
 const watchdog = setTimeout(() => { console.error('health measurement exceeded 30s'); process.exitCode = 1; server?.closeAllConnections(); server?.close(); store?.close(); bootStore?.close(); }, 30_000);
 try {
   const { RunStore } = await import(new URL('runs/store.js', runtime.url));
@@ -79,18 +83,32 @@ try {
   assert.equal((await prime.json()).version, 'task4-measurement');
   const primingLatencyMs = performance.now() - primingStart;
   assert.equal(readdirSync(join(dataDir, 'runs')).filter(name => name.endsWith('.facts.json')).length, 0);
+  // Diagnostics only: name the main-thread calls and GC pauses inside each sample.
+  const { TranscriptFactsIndex } = await import(new URL('runs/transcript-facts.js', runtime.url));
+  const { TranscriptFactsQueue } = await import(new URL('runs/transcript-facts-queue.js', runtime.url));
+  const { RunQueriesTopic } = await import(new URL('runs/run-queries.js', runtime.url));
+  const calls = [];
+  unhookCalls = hookCalls([[RunQueriesTopic.prototype, 'listConversationRootIds'], [RunQueriesTopic.prototype, 'listFamilyRunIds'],
+    [RunQueriesTopic.prototype, 'listRunIds'], [TranscriptFactsIndex.prototype, 'warm'], [TranscriptFactsIndex.prototype, 'peek'],
+    [TranscriptFactsIndex.prototype, 'accept'], [TranscriptFactsIndex.prototype, 'persist'],
+    [TranscriptFactsQueue.prototype, 'start'], [TranscriptFactsQueue.prototype, 'createWorker']], calls);
+  const gcPauses = [];
+  gcObserver = new PerformanceObserver(list => { for (const entry of list.getEntries()) gcPauses.push(entry); });
+  gcObserver.observe({ entryTypes: ['gc'] });
+  threadWatch = await startThreadWatch();
   const start = performance.now();
   let end;
   let warming;
   const samples = [];
   const pauseMs = 5;
   // Each sample after the first also covers the pause before its request, so blocking
-  // between requests is measured too; blockingBudget subtracts the planned pause.
+  // between requests is measured too; the pause is loop idle time, which blockingBudget excludes.
   let pauseStart;
   for (;;) {
     const measurementStart = pauseStart ?? timingSnapshot();
     const plannedMs = pauseStart ? pauseMs : 0;
     const requestStart = performance.now();
+    if (!store) threadWatch?.watch(true);
     const pendingResponse = fetch(endpoint, { signal: AbortSignal.timeout(2_000) });
     // The first request includes synchronous project-open work too.
     if (!store) {
@@ -103,13 +121,26 @@ try {
     const requestEnd = performance.now();
     // Include EVERY request begun while cold warm-up was active, even one ending after it.
     const measurement = timingDelta(measurementStart, timingSnapshot());
+    threadWatch?.watch(false);
     samples.push({ fromMs: measurementStart.at - start, startMs: requestStart - start, endMs: requestEnd - start,
-      latencyMs: requestEnd - requestStart, plannedMs, ...measurement, ...blockingBudget(measurement, plannedMs) });
+      latencyMs: requestEnd - requestStart, plannedMs, ...measurement, ...blockingBudget(measurement) });
     if (end !== undefined) break;
     pauseStart = timingSnapshot();
     await delay(pauseMs);
   }
   await warming;
+  unhookCalls();
+  const firstSampleWaits = (await threadWatch?.stop()) ?? [];
+  threadWatch = undefined;
+  for (const entry of gcObserver.takeRecords()) gcPauses.push(entry);
+  gcObserver.disconnect();
+  for (const sample of samples) {
+    const from = start + sample.fromMs;
+    const to = from + sample.elapsedMs;
+    const gc = gcPauses.filter(entry => entry.startTime >= from && entry.startTime < to);
+    Object.assign(sample, { calls: callsWithin(calls, from, to),
+      gc: { count: gc.length, durationMs: gc.reduce((sum, entry) => sum + entry.duration, 0) } });
+  }
   assert.ok(samples.length > 0, 'health requests must overlap cold warming');
   assert.ok(samples.every(sample => sample.fromMs < end - start && sample.endMs > 0));
   // Keep first-open and repeated-open costs separate. Reopening must not rescan clean history.
@@ -124,12 +155,18 @@ try {
     ...verifyFacts(dataDir, fixtures, store), durationMs: end - start,
     maxBlockingMs: Math.max(...samples.map(sample => sample.blockingMs)),
     maxMainThreadCpuMs: Math.max(...samples.map(sample => sample.mainThreadCpuMs)),
+    maxLoopIdleMs: Math.max(...samples.map(sample => sample.loopIdleMs)),
+    firstSampleWaits: summarizeWaits(firstSampleWaits), firstSampleWaitTrace: firstSampleWaits.slice(0, 300),
     sampleCount: samples.length, maxLatencyMs: Math.max(...samples.map(sample => sample.latencyMs)), samples };
   console.log(JSON.stringify(result));
-  // Exclude run-queue delay, but retain synchronous blocking and request latency.
+  // Exclude run-queue delay and loop idle time: a response that waits on the thread pool, a worker
+  // or the kernel is latency (kept in maxLatencyMs), not main-thread blocking. Synchronous work counts.
   assert.ok(result.maxBlockingMs < 50, `max health blocking ${result.maxBlockingMs.toFixed(3)}ms must be <50ms`);
 } finally {
   clearTimeout(watchdog);
+  unhookCalls?.();
+  gcObserver?.disconnect();
+  await threadWatch?.stop();
   let cleanupTimer;
   try {
     if (server) await Promise.race([server.shutdownForRestart(), new Promise((_, reject) => {
