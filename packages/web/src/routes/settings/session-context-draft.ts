@@ -15,16 +15,24 @@ export const FILE_TOKEN_LABEL = 'file:<path>'
 
 const RULE_ID = /(?:^\s*-\s*|\{\s*)id:\s*([^\s,}]+)/gm
 
-/** A rule id the draft does not use yet: `new-rule`, then `new-rule-2`, … */
-function freeRuleId(text: string): string {
-  const used = new Set<unknown>([...text.matchAll(RULE_ID)].map((match) => match[1]))
-  // Quoted or otherwise written ids: read them from the parsed rules when the draft parses.
+/** Collect rule ids (unquoted or parsed YAML) from one context YAML document. */
+function collectRuleIds(text: string, used: Set<unknown>): void {
+  if (!text) return
+  for (const match of text.matchAll(RULE_ID)) used.add(match[1])
+  // Quoted or otherwise written ids: read them from the parsed rules when the text parses.
   try {
     const rules = (parseDocument(text).toJS() as { rules?: unknown } | null)?.rules
     if (Array.isArray(rules)) for (const rule of rules) used.add((rule as { id?: unknown } | null)?.id)
   } catch {
     // A draft that does not parse keeps the ids the pattern found.
   }
+}
+
+/** A rule id neither the local draft nor the shared layer uses yet: `new-rule`, then `new-rule-2`, … */
+function freeRuleId(text: string, sharedText = ''): string {
+  const used = new Set<unknown>()
+  collectRuleIds(text, used)
+  collectRuleIds(sharedText, used)
   if (!used.has('new-rule')) return 'new-rule'
   let n = 2
   while (used.has(`new-rule-${n}`)) n++
@@ -120,8 +128,8 @@ function intoList(text: string, rules: unknown, id: string): Inserted | undefine
   return first === undefined ? undefined : intoBlockList(text, first, rules.range[1], id)
 }
 
-export function addRule(text: string): Inserted {
-  const id = freeRuleId(text)
+export function addRule(text: string, sharedText = ''): Inserted {
+  const id = freeRuleId(text, sharedText)
   if (text.trim() === '') return atEnd('version: 1\n', id)
   const doc = parseDocument(text)
   const root = doc.errors.length === 0 && isMap(doc.contents) ? doc.contents : undefined

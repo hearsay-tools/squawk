@@ -177,6 +177,37 @@ describe('SessionContextSection', () => {
     expect(sharedEditor.value).toBe(SHARED_VALID)
   })
 
+  it('picks a free starter id that does not collide with shared context.yaml rules', async () => {
+    const sharedNewRule = 'version: 1\nrules:\n  - id: new-rule\n    on: session_start\n    template: Team rule\n'
+    serve({
+      state: stateOf({ local: { exists: false, content: '', version: null }, shared: { exists: true, content: sharedNewRule, tracked: true } }),
+      puts: [],
+      previews: [],
+    })
+    renderSection()
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a local rule' }))
+    expect(editor().value).toContain('id: new-rule-2')
+    expect(editor().value).not.toContain('id: new-rule\n')
+  })
+
+  it('preserves an unsaved local draft when shared.path changes on refetch', async () => {
+    const server: FakeServer = {
+      state: stateOf({ local: { path: '.ai/squawk/context.local.yaml' }, shared: { path: '.ai/cezar/context.yaml' } }),
+      puts: [],
+      previews: [],
+    }
+    serve(server)
+    const client = createQueryClient()
+    renderSection(client)
+    await screen.findByLabelText('context.local.yaml rules')
+    const mine = VALID.replace('Hello', 'Mine')
+    type(mine)
+    server.state = stateOf({ local: { path: '.ai/squawk/context.local.yaml', version: 'v-disk' }, shared: { path: '.ai/squawk/context.yaml' } })
+    await act(() => client.invalidateQueries({ queryKey: queryKeys.sessionContext }))
+    expect(editor().value).toBe(mine)
+    expect(hasUnsentInput()).toBe(true)
+  })
+
   it('switches between Local and Shared tabs with arrow keys while keeping unsaved local drafts and combined preview', async () => {
     serve({ state: stateOf(), puts: [], previews: [] })
     renderSection()

@@ -43,7 +43,7 @@ export function SessionContextSection() {
             </p>
           )}
           <SessionContextWorkspace
-            key={`${query.data.local.path}|${query.data.shared.path}`}
+            key={query.data.local.path}
             state={query.data}
             refetch={() => query.refetch()}
           />
@@ -211,7 +211,7 @@ function SessionContextWorkspace({ state, refetch }: { state: SessionContextStat
         localPath={local.path}
         sharedPath={shared.path}
         readOnlyReason={local.readOnlyReason}
-        onAdd={writable ? () => editor.edit(addRule('')) : undefined}
+        onAdd={writable ? () => editor.edit(addRule('', shared.content)) : undefined}
       />
     )
   }
@@ -251,7 +251,7 @@ function SessionContextWorkspace({ state, refetch }: { state: SessionContextStat
               marked={marked}
               inputRef={editor.inputRef}
               onDraft={editor.setDraft}
-              onAdd={() => editor.edit(addRule(content))}
+              onAdd={() => editor.edit(addRule(content, shared.content))}
               onInsert={editor.insert}
             />
           ) : (
