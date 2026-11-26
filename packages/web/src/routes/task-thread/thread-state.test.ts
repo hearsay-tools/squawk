@@ -1741,3 +1741,76 @@ describe('reduceThread — folded provider failures (hearsay-tools/squawk#4018)'
     })
   })
 })
+
+describe('reduceThread — open streaming messages', () => {
+  /** A turn-end marker cut mid-stream. */
+  const partialDone = 'CEZ:DONE'.slice(0, 6)
+  const started = (seq: number, id = 'm1') =>
+    line(seq, 'item.started', { item: { kind: 'message', id, role: 'assistant', text: '' } })
+  const delta = (seq: number, text: string, id = 'm1') => line(seq, 'item.delta', { itemId: id, field: 'text', delta: text })
+  const completed = (seq: number, text: string, id = 'm1') =>
+    line(seq, 'item.completed', { item: { kind: 'message', id, role: 'assistant', text } })
+  const messages = (events: RunEvent[], activeTurn: boolean) =>
+    reduceThread(events, { activeTurn }).turns.at(-1)!.items.filter((item): item is UiMessageItem & { streaming?: true } => item.kind === 'message')
+
+  it('flags an open message on the live turn, and clears the flag on completion or a settled run', () => {
+    const open = [line(1, 'turn.started', { turnId: 't' }), started(2), delta(3, 'Hel')]
+    expect(messages(open, true)[0]).toMatchObject({ text: 'Hel', streaming: true })
+    expect(messages(open, false)[0]!.streaming).toBeUndefined()
+    expect(messages([...open, completed(4, 'Hello')], true)[0]!.streaming).toBeUndefined()
+  })
+
+  it.each([
+    ['behind', ['Hello', ' wor']],
+    ['ahead', ['Hello', ' world', ' and more']],
+    ['one chunk behind', ['Hel']],
+  ])('drops a v1 chunk run %s of the open v2 message', (_label, chunks) => {
+    const events = [
+      line(1, 'turn.started', { turnId: 't' }),
+      started(2),
+      delta(3, 'Hello world'),
+      ...chunks.map((text, i) => line(4 + i, 'text', { text })),
+    ]
+    expect(messages(events, true).map((m) => m.id)).toEqual(['m1'])
+  })
+
+  it('drops v1 chunks that arrive after an open message started but before its first delta', () => {
+    const events = [line(1, 'turn.started', { turnId: 't' }), started(2), line(3, 'text', { text: 'Hel' }), line(4, 'text', { text: 'lo' })]
+    expect(messages(events, true).map((m) => m.id)).toEqual(['m1'])
+  })
+
+  it('keeps v1-only prose that does not continue the open message', () => {
+    const events = [line(1, 'turn.started', { turnId: 't' }), started(2), delta(3, 'Hello world'), line(4, 'text', { text: 'Unrelated.' })]
+    expect(messages(events, true).map((m) => m.text)).toEqual(['Hello world', 'Unrelated.'])
+  })
+
+  it('keeps a v1 prefix of a completed v2 message (the claude msg.result fallback stays visible)', () => {
+    const events = [line(1, 'turn.started', { turnId: 't' }), started(2), completed(3, 'Hello world'), line(4, 'text', { text: 'Hello' })]
+    expect(messages(events, true).map((m) => m.text)).toEqual(['Hello world', 'Hello'])
+    const prefixOfOpen = [line(1, 'turn.started', { turnId: 't' }), started(2), delta(3, 'Hello world'), line(4, 'text', { text: 'Hello' })]
+    expect(messages(prefixOfOpen, false).map((m) => m.text)).toEqual(['Hello world', 'Hello'])
+  })
+
+  it.each([
+    ['done marker', `Done.\n\n${partialDone}`],
+    ['CEZ:PR=4', 'Opened it.\nCEZ:PR=4'],
+    ['CEZ:ASK', 'Pick one.\nCEZ:ASK {"que'],
+    ['inline CEZ:MON', 'Watching. CEZ:MON'],
+    ['a lone C', 'Done.\nC'],
+  ])('hides a partial %s tail on an open message of the live turn', (_label, text) => {
+    const events = [line(1, 'turn.started', { turnId: 't' }), started(2), delta(3, text)]
+    expect(messages(events, true)[0]!.text.trimEnd()).toBe(text.split(/\n|\s+CEZ/)[0])
+  })
+
+  it('keeps prose that only looks like a marker prefix', () => {
+    const events = [line(1, 'turn.started', { turnId: 't' }), started(2), delta(3, 'See C')]
+    expect(messages(events, true)[0]!.text).toBe('See C')
+  })
+
+  it('shows an incomplete marker once the message completes or the run settles', () => {
+    const open = [line(1, 'turn.started', { turnId: 't' }), started(2), delta(3, 'Pick one.\nCEZ:ASK {"que')]
+    expect(messages(open, false)[0]!.text).toBe('Pick one.\nCEZ:ASK {"que')
+    const done = [line(1, 'turn.started', { turnId: 't' }), started(2), completed(3, `Done.\n${partialDone}`)]
+    expect(messages(done, true)[0]!.text).toBe(`Done.\n${partialDone}`)
+  })
+})

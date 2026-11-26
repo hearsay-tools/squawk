@@ -130,10 +130,12 @@ function buildThreadBlocks(allEntries: readonly ThreadEntry[]): ThreadBlock[] {
   // text, and dropping it here — rather than at the leaf — keeps it out of row counts, children
   // lists, and the always-rendered `thread-row` wrapper, which would otherwise reserve a blank
   // ~3rem gap. A live item that is still empty simply appears once its first delta lands.
+  // Blank messages go too: a streaming `item.started` carries `text: ''`, and a message whose
+  // only text was a stripped protocol marker (`CEZ:DONE`, a provisional `CEZ:ASK`) is empty.
   const entries = allEntries.filter(
     (entry) =>
       !(entry.kind === 'tool' && entry.toolKind === 'plan') &&
-      !(entry.kind === 'reasoning' && entry.text.trim() === ''),
+      !((entry.kind === 'reasoning' || entry.kind === 'message') && entry.text.trim() === ''),
   )
 
   // Pass 1 — nesting. Children keep stream order; only tool items can be parents.
