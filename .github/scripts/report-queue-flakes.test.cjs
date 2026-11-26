@@ -184,7 +184,7 @@ test('without usable names the report is filed without names and says why', asyn
   const cases = [
     ['no artifact', {}, /No failed-file list from this run attempt/],
     ['a malformed artifact', { 'failed-test-files-vitest-shard-2': Buffer.from('not a zip') }, /failed-file list was malformed/],
-    ['an empty list', { 'failed-test-files-vitest-shard-2': listArchive([]) }, /before any test file finished/],
+    ['an empty list', { 'failed-test-files-vitest-shard-2': listArchive([]) }, /failed-file list is empty: its failure named no test file\. Read the job log\./],
     ['only foreign names', { 'failed-test-files-vitest-shard-2': listArchive(['packages/cezar/src/gone.test.ts']) }, /1 name dropped/],
   ];
   for (const [label, artifacts, note] of cases) {

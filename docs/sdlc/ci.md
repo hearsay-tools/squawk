@@ -534,6 +534,21 @@ checks. See [release App setup](../publishing.md#release-app-setup).
   ```
 
   `failure-diagnostics.cjs` reads each cap line as one cause per file and limit.
+- The reporter also fails a file that the run planned but that never reported a result.
+  Vitest's `Worker exited unexpectedly` error names neither the file nor the worker's exit
+  code and signal; the reporter reads the exit from Node's `child_process` diagnostics
+  channel. Vitest stops its own workers with `kill()`, so it skips those. The log, an
+  `::error` annotation per file and the job summary carry the block:
+
+  ```
+  Vitest test files that did not finish:
+  <path>: did not finish; the run ended before the file reported a result
+  Vitest worker <pid> exited unexpectedly: exit code <code>, signal <signal>
+  ```
+
+  `SIGKILL` is a kill from outside the worker, such as the kernel's out-of-memory killer.
+  `SIGABRT` after `JavaScript heap out of memory` in the log is the V8 heap limit.
+  `SIGSEGV` is a crash in native code.
 - A file near a limit is split or made faster. Do not raise a limit for one file.
 
 ### Pinned actions
@@ -1228,10 +1243,12 @@ hearsay-tools/cezarion#3290).
   (`node_modules/.vite/vitest/`, or `packages/web/e2e/node_modules/.vite/vitest/` for the
   browser config). Vitest's sequencer runs cached failures first and orders the other
   files by cached duration, so without the cache the rerun keeps the first run's order.
-  A file over a [per-file duration limit](#per-file-duration-limits) passed its tests, so the cache does not mark it
-  failed: the cap reporter (`.github/scripts/vitest-file-duration.mjs`) writes such files
-  to `node_modules/.vite/vitest/file-duration-cap.txt`, and the reset adds them to the
-  list and deletes that file.
+  A file over a [per-file duration limit](#per-file-duration-limits) passed its tests, and
+  a file whose worker died has no result, so the cache marks neither failed: the cap
+  reporter (`.github/scripts/vitest-file-duration.mjs`) writes such files to
+  `node_modules/.vite/vitest/file-duration-cap.txt`, and the reset adds them to the list
+  and deletes that file. The browser config has no cap reporter, so a browser file whose
+  worker died is not on its list.
 - The rerun step (id `rerun`, `Rerun server and cockpit unit suites with Squeal
   recording`; id `e2e-rerun`, `Rerun cockpit browser E2E`) runs the first step's script
   again: the whole shard, not only the failed files, because a failure can depend on
@@ -1240,8 +1257,8 @@ hearsay-tools/cezarion#3290).
 - Before the rerun, the job uploads the list as `failed-test-files-vitest-shard-N` or
   `failed-test-files-cockpit-browser-shard-N`, kept 7 days, only when the first run
   failed. The upload comes first so that a rerun that reaches the job's time limit,
-  which cancels every later step, cannot lose it. A run that failed before any test
-  file finished leaves the list empty. The browser job also uploads the first run's
+  which cancels every later step, cannot lose it. A run whose failure names no test file,
+  such as an unhandled error after the last file ended, leaves the list empty. The browser job also uploads the first run's
   failure bundles as
   `cockpit-failures-first-run-shard-N`, because each spec clears its old bundles when it
   runs again.
