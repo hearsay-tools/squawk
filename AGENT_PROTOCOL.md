@@ -458,7 +458,9 @@ are stable.
    so the cockpit needs no edit. Keep every change additive, so that old run records still
    parse.
 10. **Model selection** — the `models` part (`models.ts`): `suggested`, `known`, `retired` and
-    the `idMap`, and `models.loadSettings()` for the native default model.
+    the `idMap`, and `models.loadSettings()` for the native default model. A CLI whose account
+    bills model groups from separate quotas sets `quotaPool(model)`, so a usage-limit hold
+    closes only that pool.
     `core/model-identity.test.ts` holds the rules of the id map.
 11. **Host model discovery** — ships in the runner's PR: `<id>-model-catalog.ts` exports
     `discover<Id>Models`, and `loadModelCatalog()` imports it. `model-discovery-guard.test.ts`
