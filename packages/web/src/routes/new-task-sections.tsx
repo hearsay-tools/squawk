@@ -31,7 +31,7 @@ type DraftUpdate = (patch: Partial<NewTaskDraft>) => void
 
 export function NewTaskHeader() {
   return (
-    <header className="mb-7 max-md:mb-5">
+    <header className="mb-7 max-md:mb-4">
       <p data-slot="page-eyebrow" className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-[var(--accent-text)] uppercase">
         NEW TASK
       </p>
@@ -39,7 +39,7 @@ export function NewTaskHeader() {
         What should the agent work on?
       </h1>
       <p data-slot="page-description" className="mt-2 hidden text-[13px] text-muted-foreground md:block">
-        Describe the outcome. Configure the run. Review everything before it lands.
+        Describe the outcome, then configure the run.
       </p>
     </header>
   )
@@ -249,6 +249,30 @@ export function ComposerFooterEnd({
   )
 }
 
+/** The track of a settings toggle, drawn like the shared Switch: the accent fill when on; when off,
+ *  a pale track whose knob is grey on the dark theme and a white knob with a hairline on the light one. */
+function ToggleTrack({ on }: { on: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-slot="toggle-track"
+      className={cn(
+        'flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5',
+        on ? 'border-accent-strong bg-accent-strong' : 'border-muted-foreground/60 bg-muted [.light_&]:border-muted-foreground/35',
+      )}
+    >
+      <span
+        className={cn(
+          'size-[18px] rounded-full',
+          on
+            ? 'ml-auto bg-accent-strong-foreground'
+            : 'bg-muted-foreground [.light_&]:border [.light_&]:border-muted-foreground/30 [.light_&]:bg-card [.light_&]:shadow-sm',
+        )}
+      />
+    </span>
+  )
+}
+
 /** Worktree opt-out toggle (#worktree-toggle): a checkbox-style chip for ordinary runs.
  *  Checked = isolated worktree (the default); unchecked = run in the repo working tree. */
 function WorktreeToggle({
@@ -281,7 +305,7 @@ function WorktreeToggle({
       className="flex items-center justify-between gap-3 px-0 py-3 text-left"
     >
       <span><span className="block text-[13px] font-medium">Worktree</span><span className="block text-[12px] text-muted-foreground">{on ? 'Changes stay in a separate working copy.' : 'Changes are made in the current working directory.'}</span></span>
-      <span aria-hidden="true" className={cn('flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5', on ? 'border-accent-strong bg-accent-strong' : 'border-muted-foreground bg-muted')}><span className={cn('size-[18px] rounded-full', on ? 'ml-auto bg-accent-strong-foreground' : 'bg-foreground')} /></span>
+      <ToggleTrack on={on} />
     </button>
   )
 }
@@ -316,7 +340,7 @@ function AutonomousToggle({
       className="flex items-center justify-between gap-3 px-0 py-3 text-left disabled:opacity-50"
     >
       <span><span className="block text-[13px] font-medium">Autonomous</span><span className="block text-[12px] text-muted-foreground">Let the agent proceed without prompts</span></span>
-      <span aria-hidden="true" className={cn('flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5', on ? 'border-accent-strong bg-accent-strong' : 'border-muted-foreground bg-muted')}><span className={cn('size-[18px] rounded-full', on ? 'ml-auto bg-accent-strong-foreground' : 'bg-foreground')} /></span>
+      <ToggleTrack on={on} />
     </button>
   )
 }
@@ -345,7 +369,7 @@ function NotifyWebhookToggle({
       className="flex min-h-11 items-center justify-between gap-3 px-0 py-3 text-left"
     >
       <span className="min-w-0"><span className="block text-[13px] font-medium">Notify webhook</span><span data-slot="notify-webhook-subtitle" className="block truncate text-[12px] text-muted-foreground">Send status changes</span></span>
-      <span aria-hidden="true" className={cn('flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5', on ? 'border-accent-strong bg-accent-strong' : 'border-muted-foreground bg-muted')}><span className={cn('size-[18px] rounded-full', on ? 'ml-auto bg-accent-strong-foreground' : 'bg-foreground')} /></span>
+      <ToggleTrack on={on} />
     </button>
   )
 }

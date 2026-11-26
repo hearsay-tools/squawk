@@ -245,7 +245,7 @@ describe('TasksOverview — the table', () => {
 
     const diff = tableRow('reviewer')?.querySelector('[data-slot="diff-stat"]')
     // The numbers stay the numbers — the column still reads as a diff pair.
-    expect(diff?.textContent).toBe('+1 −0')
+    expect(diff?.textContent).toBe('+1')
     expect(diff?.getAttribute('data-repointed')).toBe('true')
     expect(diff?.getAttribute('title')).toBe(
       "+1 −0 across 1 file — measured against another branch checked out in this task's worktree, as this task found it"

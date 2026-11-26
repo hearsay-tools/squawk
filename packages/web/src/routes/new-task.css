@@ -45,7 +45,7 @@
   .new-task-editor [data-slot='composer-footer-start'] { padding-inline: 0; }
   .new-task-editor > p { padding-inline: 0; }
 }
-.new-task-agent-options button { border-radius: 10px; padding: 10px; background: var(--card); }
+.new-task-agent-options button { border-radius: 9px; padding: 10px; background: var(--card); }
 .new-task-agent-options button > svg:last-child { margin-inline-start: auto; }
 .new-task-editor [data-slot='prompt-template-trigger'], .new-task-editor [data-slot='source-pill'] { border-radius: 9px; padding-inline: 14px; font-family: inherit; }
 .new-task-submission [data-slot='composer-footer-end'] { flex: 1; margin-inline-end: 0; }
@@ -103,7 +103,6 @@
 [data-route='new'] .new-task-run-settings > button { min-block-size: 48px; padding-block: 8px; }
 [data-route='new'] .new-task-run-settings > div { min-block-size: 52px; }
 [data-route='new'] .new-task-run-settings > button > span:first-child > span:last-child { line-height: 1.6; }
-[data-route='new'] .new-task-run-settings > button[aria-checked='false'] > span:last-child > span { background: var(--muted-foreground); }
 @container new-task-layout (min-width: 60rem) {
   [data-route='new'] [data-slot='execution-options'][open] { padding: 16px; }
   [data-route='new'] [data-slot='execution-options'][open] > summary { margin-block-end: 8px; padding: 0; }
@@ -149,3 +148,19 @@
 }
 
 [data-route='new'] [data-slot='run-mode-note'] { margin-block-start: 2px; }
+
+/* One radius for every chip in the composer toolbar row. */
+.new-task-editor [data-slot='composer-footer-start'] :is(button, [data-slot$='pill']) { border-radius: 9px; }
+/* Start task uses the 13px call-to-action label. While it cannot start, it keeps a faint gold
+ * tint, so it reads as the primary action next to the teal Run now instead of a dead grey slab. */
+[data-route='new'] [data-slot='composer-submit-row'] > button { font-size: 13px; }
+[data-route='new'] [data-slot='composer-submit-row'] > button:disabled {
+  border-color: color-mix(in oklch, var(--action) 35%, var(--border));
+  background: color-mix(in oklch, var(--action) 14%, var(--card));
+  color: var(--muted-foreground);
+}
+@media (max-width: 767px) {
+  /* Phones: a slightly tighter stack keeps Execution settings above the bottom tab bar. */
+  [data-route='new'] .new-task-composer { gap: 8px; }
+  [data-route='new'] .new-task-editor textarea { min-block-size: 80px; }
+}

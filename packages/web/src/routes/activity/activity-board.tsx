@@ -100,6 +100,7 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
   const dense = project.tasks.length > DENSE_AFTER
   const ctx: NowContext = { now, titleOf: (runId) => nameOf(index, runId) }
   const placement = columns.map((column) => column.join(',')).join('|')
+  const columnGap = narrow ? 0 : drawnRequests.length + drawnWaits.length > 0 ? COLUMN_GAP : COMPACT_COLUMN_GAP
   const layoutKey = `${project.tasks.length}:${count}:${dense}:${placement}:${drawnRequests.map((request) => request.requestId).join(',')}:${drawnWaits.map((wait) => wait.id).join(',')}`
   useFlip(hostRef, 'data-flip', placement, !still && !paused)
 
@@ -115,7 +116,7 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
           data-columns={count}
           data-dense={dense ? 'true' : undefined}
           className="relative grid items-start"
-          style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, columnGap: narrow ? 0 : drawnRequests.length + drawnWaits.length > 0 ? COLUMN_GAP : COMPACT_COLUMN_GAP }}
+          style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, columnGap }}
         >
           {columns.map((column, i) => (
             <div key={i} data-slot="activity-column" className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-[30px] max-md:gap-4">
@@ -144,7 +145,8 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
           <ActivityLines requests={drawnRequests} waits={drawnWaits} active={highlight.active} index={index} peers={!narrow} layoutKey={layoutKey} now={now} motion={motion} paused={paused || still} />
         </div>
       </div>
-      <ActivityRail requests={project.requests} closing={ghosts.folding} index={index} now={now} watchingSince={watchingSince} feed={feed} motion={motion} />
+      {/* Two card columns share the rail's column gap, so card and panel edges line up. */}
+      <ActivityRail columnGap={count === 2 ? columnGap : undefined} requests={project.requests} closing={ghosts.folding} index={index} now={now} watchingSince={watchingSince} feed={feed} motion={motion} />
     </div>
   )
 }

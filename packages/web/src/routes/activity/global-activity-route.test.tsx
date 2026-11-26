@@ -94,7 +94,7 @@ describe('GlobalActivityRoute', () => {
     expect(back.getAttribute('href')).toBe(`/p/${projectId}/activity`)
     fireEvent.click(back)
     expect(await screen.findByRole('heading', { level: 1, name: `Activity · ${projectId}` })).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'This project' }).getAttribute('aria-current')).toBe('page')
+    expect(projectLink(projectId).getAttribute('aria-current')).toBe('page')
   })
 
   it('restores the originating project from the global history entry', async () => {
@@ -145,6 +145,7 @@ describe('GlobalActivityRoute', () => {
     const scope = screen.getByRole('navigation', { name: 'Activity scope' })
     expect(within(scope).getByRole('link', { name: 'All projects' }).getAttribute('aria-current')).toBe('page')
     expect(within(scope).getByRole('link', { name: 'alpha' }).getAttribute('href')).toBe('/p/alpha/activity')
+    // The project segment reads as the project's name on every view, never as 'This project'.
     expect(within(scope).queryByRole('link', { name: 'This project' })).toBeNull()
   })
 

@@ -17,7 +17,8 @@ import { queryKeys, useArchivedRuns, useAutomationNames, useHealth, usePinRun, u
 import type { ArchivedRunsResponse, RunSummary } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { DiffStatLabel } from '@/components/diff-stat'
-import { Dash, TaskPageHeader, ViewTab, fullTime, headingTone, ResultCount, taskTitleClass } from './task-list-parts'
+import { canonicalRunnerName } from '@/routes/settings/agent-descriptors'
+import { BranchChip, Dash, TaskPageHeader, ViewTab, fullTime, headingTone, ResultCount, taskTitleClass } from './task-list-parts'
 import { DirectionalUsage, directionalUsageLabel } from '@/components/directional-usage'
 import { TitleEditInput } from '@/components/editable-title'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -558,7 +559,7 @@ function ProjectTaskResults({ view, query, origin, onShowAll, groups, folds, gro
           )
         })}
       </div>
-      <p className="mt-4 text-[11px] text-muted-foreground">Resource details—including tokens, cost, CPU and peak memory—are available when a task row is expanded.</p>
+      <p data-slot="tasks-resource-note" className="mt-4 pb-8 text-xs text-muted-foreground">Resource details—including tokens, cost, CPU and peak memory—are available when a task row is expanded.</p>
     </>
   )
 }
@@ -767,8 +768,8 @@ function GroupedTasks({
         </TooltipProvider>
       </div> : null}
       {/* Phones mount cards only, regardless of saved desktop columns. */}
-      {!desktop ? <div data-slot="task-cards" className="flex flex-col rounded-lg border border-border bg-card p-5">
-        <TaskListItems itemSize={178} items={rows} itemKey={({ run }) => run.id}>{({ run, queuePosition }) => (
+      {!desktop ? <div data-slot="task-cards" className="flex flex-col rounded-lg border border-border bg-card px-4 py-3">
+        <TaskListItems itemSize={104} items={rows} itemKey={({ run }) => run.id}>{({ run, queuePosition }) => (
           <TaskCard key={run.id} resourcesOpen={expandedRuns.has(run.id)} onToggleResources={toggleExpandedRun} run={run} queuePosition={queuePosition} now={now} showTokens={showTokens} showCost={showCost} onTogglePin={onTogglePin} automationName={automationName} />
         )}</TaskListItems>
       </div> : null}
@@ -1306,17 +1307,15 @@ const TaskCard = React.memo(function TaskCard({
         if ((event.target as Element).closest('a, button')) return
         navigate(to)
       }}
-      className="cursor-pointer border-b border-border py-5"
+      className="cursor-pointer border-b border-border py-3"
     >
-      <div className="flex flex-wrap items-start gap-2.5">
-        <button data-slot="mobile-resources-toggle" data-task-control="resources" type="button" aria-controls={`mobile-resources-${run.id}`} aria-describedby={`mobile-status-${run.id}`} aria-label={resourcesOpen ? 'Hide resources' : 'Show resources'} title={resourcesOpen ? 'Hide resources' : 'Show resources'} aria-expanded={resourcesOpen} onClick={() => onToggleResources(run.id)}><Pill id={`mobile-status-${run.id}`} dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="mt-px shrink-0" title={scheduled?.title}>
-          {attention.label}
-          {scheduled ? <span className="tabular-nums">{scheduled.label}</span> : null}
-        </Pill></button>
+      {/* Three tight rows on a phone: the title, then status · workflow · origin, then runner,
+          reference, diff and age. The branch stays behind the resources toggle. */}
+      <div data-slot="mobile-task-title-row" className="flex items-start gap-2">
         <Link data-task-control="title"
           to={to}
           className={cn(
-            'order-first w-full min-w-0 rounded-sm text-[14px] leading-[1.35] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground',
+            'line-clamp-2 min-w-0 flex-1 rounded-sm text-[14px] leading-[1.35] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground',
             unread ? 'font-semibold text-foreground' : readDone ? 'font-normal text-foreground' : 'font-medium'
           )}
         >
@@ -1333,23 +1332,31 @@ const TaskCard = React.memo(function TaskCard({
             className="mt-1.5 shrink-0"
           />
         ) : null}
-        <div className="order-first w-full"><RunOriginLine run={run} automationName={automationName} /></div>
         {/* Always visible here, not hover-revealed: a card has no hover to speak of on the
             device it exists for, and it is the only place a pin can be set or seen on mobile. */}
         {onTogglePin ? (
           <PinToggle
             pinned={Boolean(run.pinned)}
             onToggle={(pinned) => onTogglePin(run, pinned)}
-            className="mt-px"
+            className="-mt-0.5"
           />
         ) : null}
       </div>
-      <div data-slot="mobile-task-meta" className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 text-xs text-muted-foreground">
-        <span>{workflowLabel(run)}</span>
-        {queuePosition !== null ? <span data-slot="queue-note">#{queuePosition} in queue</span> : run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}
-        <span title={fullTime(run.startedAt ?? run.createdAt)}>{shortAge(run.startedAt ?? run.createdAt, now)}</span>
+      <div data-slot="mobile-task-status-row" className="mt-1.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+        <button data-slot="mobile-resources-toggle" data-task-control="resources" type="button" aria-controls={`mobile-resources-${run.id}`} aria-describedby={`mobile-status-${run.id}`} aria-label={resourcesOpen ? 'Hide resources' : 'Show resources'} title={resourcesOpen ? 'Hide resources' : 'Show resources'} aria-expanded={resourcesOpen} onClick={() => onToggleResources(run.id)} className="shrink-0"><Pill id={`mobile-status-${run.id}`} dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="shrink-0" title={scheduled?.title}>
+          {attention.label}
+          {scheduled ? <span className="tabular-nums">{scheduled.label}</span> : null}
+        </Pill></button>
+        <span data-slot="mobile-task-workflow" className="min-w-0 truncate">{workflowLabel(run)}</span>
+        <span aria-hidden="true">·</span>
+        <span className="min-w-0 truncate"><RunOriginLine run={run} automationName={automationName} /></span>
       </div>
-      {reference ? <div className="mt-3"><TaskReferenceChip run={run} reference={reference} /></div> : null}
+      <div data-slot="mobile-task-meta" className="mt-1.5 flex min-w-0 items-center gap-3 text-xs text-muted-foreground">
+        <span data-slot="mobile-task-runner" className="min-w-0 flex-1 truncate">{run.runner ? canonicalRunnerName(run.runner) : null}</span>
+        {reference ? <TaskReferenceChip run={run} reference={reference} /> : null}
+        {queuePosition !== null ? <span data-slot="queue-note">#{queuePosition} in queue</span> : run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}
+        <span className="tabular-nums" title={fullTime(run.startedAt ?? run.createdAt)}>{shortAge(run.startedAt ?? run.createdAt, now)}</span>
+      </div>
       {resourcesOpen ? <>
         <div className="mt-3"><TaskPreview runId={run.id} status={attention.label} error={run.error} open={<Button asChild variant="outline" className="min-h-11"><Link data-task-control="open" to={to}>Open task<span className="sr-only">: {runTitle(run)}</span></Link></Button>} /></div>
         <MobileResources run={run} showTokens={showTokens} showCost={showCost} />
@@ -1368,18 +1375,6 @@ function MobileResources({ run, showTokens, showCost }: { run: RunSummary; showT
     {showTokens ? <div><dt>IN / OUT</dt><dd><DirectionalUsage inputTokens={run.inputTokens} outputTokens={run.outputTokens} /></dd></div> : null}
     {showCost ? <div><dt>Cost</dt><dd>{formatCost(run.costUsd) || '—'}</dd></div> : null}
   </dl>
-}
-
-/** An honest em dash: this cell has nothing true to show. */
-function BranchChip({ branch }: { branch: string }) {
-  return (
-    <span
-      title={branch}
-      className="block truncate rounded-[6px] bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-muted-foreground"
-    >
-      {branch}
-    </span>
-  )
 }
 
 /**

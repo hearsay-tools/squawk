@@ -25,6 +25,8 @@
   /* A soft edge above the sticky dock: a card scrolled behind it fades out instead of leaving a
    * sliced top border peeking over the Activity row. */
   [data-route='task-thread'] [data-slot='thread-dock']::before { content: ''; position: absolute; inset-inline: 0; inset-block-end: 100%; block-size: 16px; background: linear-gradient(to bottom, transparent, var(--background)); pointer-events: none; }
+  /* A pending question is the thing to act on: no fade may cover its Send row. */
+  [data-route='task-thread'] [data-slot='thread-dock'][data-pending-ask]::before { content: none; }
   [data-route='task-thread'] [data-slot='thread-jump'] { position: absolute; inset-inline: 0; inset-block-end: 100%; margin-block-end: 8px; padding-inline: 64px; }
   /* Expanded details yield space to the composer on short desktop viewports. */
   [data-route='task-thread'] [data-slot='thread-footer-content'] { --thread-footer-limit: min(60dvh, calc(var(--thread-viewport-height, 100dvh) - var(--thread-header-height, 0px) - var(--spacing) * 5.5)); max-block-size: var(--thread-footer-limit); }
@@ -108,6 +110,10 @@
 [data-slot='task-split'][data-pane='open'] [data-route='task-thread'] [data-slot='thread-dock'] > div { padding-inline: 18px; }
 
 [data-route='task-thread'] [data-slot='ask-card'] { scroll-margin-block: 24px; }
+/* The pinned pending ask keeps clear space above the dock, so its last row never meets the dock edge. */
+[data-route='task-thread'] [data-slot='ask-card'][data-resolved='false'][data-pinned='true'] { margin-block-end: calc(var(--spacing) * 2); }
+/* The composer's Continue/Send label matches the 13px primary call to action. */
+[data-route='task-thread'] [data-slot='composer-submit-row'] > button { font-size: 13px; }
 
 @media (max-width: 767px) {
   /* Pending answers keep the jump control in flow, clear of the ask options. */

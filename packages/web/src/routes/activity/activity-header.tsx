@@ -18,16 +18,16 @@ import type { MotionState } from './activity-motion'
 
 const SEGMENT = 'inline-flex min-w-0 items-center rounded-md border px-3 py-1 text-[12px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring max-md:min-h-11'
 
-/** "This project / All projects". The project link names the project; the global one is outside
- *  every project, so it is a plain router link. On the global view no project is "this" one, so
- *  the project segment reads as that project's name. */
+/** "<project> / All projects". The project segment always reads as the project's name, on the
+ *  project view and the global one alike, so the label never changes under the user. The global
+ *  link is outside every project, so it is a plain router link. */
 export function ScopeSwitch({ scope, projectId, projectName }: { scope: 'project' | 'all'; projectId: string | null; projectName?: string | undefined }) {
   const segment = (active: boolean) => cn(SEGMENT, active ? 'border-border bg-card text-foreground shadow-xs' : 'border-transparent text-muted-foreground hover:text-foreground')
   return (
     <nav aria-label="Activity scope" data-slot="activity-scope" className="ml-auto inline-flex max-w-full rounded-lg border border-border bg-muted/60 p-1">
       {projectId === null ? null : (
         <RouterLink to={`/p/${encodeURIComponent(projectId)}/activity`} aria-current={scope === 'project' ? 'page' : undefined} className={segment(scope === 'project')}>
-          <span className="max-w-40 truncate">{scope === 'project' ? 'This project' : projectName ?? projectId}</span>
+          <span className="max-w-40 truncate" title={projectName ?? projectId}>{projectName ?? projectId}</span>
         </RouterLink>
       )}
       <RouterLink to="/activity" state={{ activityProjectId: projectId }} aria-current={scope === 'all' ? 'page' : undefined} className={segment(scope === 'all')}>

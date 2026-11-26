@@ -69,7 +69,7 @@ describe('ProjectActivityRoute', () => {
     expect(document.querySelector('[data-slot="activity-summary"]')?.getAttribute('aria-live')).toBe('polite')
     expect(document.querySelectorAll('[data-activity-card]')).toHaveLength(4)
     const scope = screen.getByRole('navigation', { name: 'Activity scope' })
-    expect(within(scope).getByRole('link', { name: 'This project' }).getAttribute('aria-current')).toBe('page')
+    expect(within(scope).getByRole('link', { name: 'cezarion' }).getAttribute('aria-current')).toBe('page')
     expect(within(scope).getByRole('link', { name: 'All projects' }).getAttribute('href')).toBe('/activity')
   })
 

@@ -126,11 +126,13 @@ interface RailProps {
   watchingSince: string
   feed?: readonly FeedEntry[] | undefined
   motion?: MotionState
+  /** The graph's column gap when it shows two columns, so the panels line up under the cards. */
+  columnGap?: number | undefined
 }
 
-export function ActivityRail({ requests, closing = [], index, now, watchingSince, feed = [], motion = EMPTY_MOTION }: RailProps) {
+export function ActivityRail({ requests, closing = [], index, now, watchingSince, feed = [], motion = EMPTY_MOTION, columnGap }: RailProps) {
   return (
-    <aside data-slot="activity-rail" aria-label="Activity details" className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start items-start gap-4 md:grid-cols-2">
+    <aside data-slot="activity-rail" aria-label="Activity details" style={columnGap === undefined ? undefined : { columnGap }} className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start items-start gap-4 md:grid-cols-2">
       <section data-slot="activity-open-requests" className={PANEL}>
         <h2 className={PANEL_TITLE}>Open requests <b className="text-foreground">{requests.length}</b></h2>
         {requests.length === 0 && closing.length === 0 ? (

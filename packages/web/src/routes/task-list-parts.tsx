@@ -98,3 +98,15 @@ export function ResultCount({ count, incomplete, needle }: { count: number; inco
     </span>
   )
 }
+
+/** A task's branch name as a muted mono chip, cut with an ellipsis; the full name is its tooltip. */
+export function BranchChip({ branch }: { branch: string }) {
+  return (
+    <span
+      title={branch}
+      className="block truncate rounded-[6px] bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-muted-foreground"
+    >
+      {branch}
+    </span>
+  )
+}

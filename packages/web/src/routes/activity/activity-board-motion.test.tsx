@@ -109,7 +109,7 @@ describe('the board in motion', () => {
   it('lists the feed in the rail, newest first, with ages', () => {
     renderBoard(project({ tasks: [A] }), EMPTY_MOTION, [{ id: 2, at: NOW - 12_000, tone: 'success', text: 'Review branch finished' }, { id: 1, at: NOW - 90_000, tone: 'success', text: 'PR 7: check “lint” passed' }])
     const feed = screen.getByRole('complementary', { name: 'Activity details' }).querySelector('[data-slot="activity-just-now"]') as HTMLElement
-    expect(Array.from(within(feed).getAllByRole('listitem')).map((li) => li.textContent)).toEqual(['Review branch finished12 s', 'PR 7: check “lint” passed1 min'])
+    expect(Array.from(within(feed).getAllByRole('listitem')).map((li) => li.textContent)).toEqual(['Review branch finished12s', 'PR 7: check “lint” passed1m'])
     expect(feed.textContent).toMatch(/Watching since \d{2}:\d{2}/)
   })
 

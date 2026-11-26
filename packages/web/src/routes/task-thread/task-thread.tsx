@@ -635,6 +635,7 @@ function ThreadFooterDock({
   return (
     <div
       data-slot="thread-dock"
+      data-pending-ask={needsAnswer || undefined}
       className="relative z-10 bg-background pt-1 pb-2 md:pt-1.5 md:pb-4"
     >
       {/* Desktop places Jump above the sticky footer; phones keep it in the viewport. */}

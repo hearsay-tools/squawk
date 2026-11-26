@@ -15,7 +15,7 @@
 [data-slot="global-tasks-filters"] { gap: 20px; }
 [data-slot="global-tasks-filters"] button { min-height: 40px; }
 @media (max-width: 767px) {
-  [data-slot="global-task-row"] { padding: 16px; }
+  [data-slot="global-task-row"] { padding: 12px; margin-block-end: 12px; }
   [data-slot="global-task-row"] [data-slot="global-task-workflow"] { display: block; }
   [data-slot="global-task-row"] [data-action] { min-height: 44px; }
   [data-slot="task-card"] { overflow-wrap: anywhere; }
@@ -66,8 +66,8 @@
 
 @media (max-width: 767px) {
   [data-slot="tasks-toolbar"] [data-slot="archive-finished"] { min-height: 44px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); }
-  [data-slot="task-card"] { position: relative; padding-block-start: 14px; padding-block-end: 16px; }
-  [data-slot="task-card"] > div:first-child { align-items: center; }
+  /* Phones: three tight rows per card, so three or four tasks sit above the fold at 390×844. */
+  [data-slot="task-card"] { position: relative; padding-block: 12px; }
   [data-slot="task-card"] [data-slot="pin-toggle"] { margin-inline-start: auto; }
   [data-slot="task-card"] [data-slot="mobile-resources-toggle"] { min-height: 26px; border-radius: 4px; padding: 0; }
   [data-slot="mobile-task-meta"] { font-family: inherit; font-size: 12px; font-weight: 400; }
@@ -84,7 +84,7 @@
 [data-presentation="cards"] [data-slot="global-task-title"] [data-slot="pill"] { padding: 0; background: transparent; color: var(--muted-foreground); font-size: 12px; font-weight: 400; text-transform: capitalize; }
 [data-presentation="cards"] [data-slot="global-task-actions"] [data-slot="button"] { font-weight: 400; }
 @media (max-width: 767px) {
-  [data-presentation="cards"] [data-slot="global-task-row"] { grid-template-columns: auto minmax(0, 1fr); }
+  [data-presentation="cards"] [data-slot="global-task-row"] { grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; }
   [data-presentation="cards"] [data-slot="global-task-references"] { grid-column: 1; grid-row: 3; }
   [data-presentation="cards"] [data-slot="global-task-age"] { grid-column: 2; grid-row: 3; }
   [data-presentation="cards"] [data-slot="global-task-actions"] { grid-row: 4; }
@@ -97,8 +97,8 @@
 }
 
 @media (max-width: 767px) {
-  [data-presentation="summary"] [data-slot="global-tasks-table"] { border: 1px solid var(--border); border-radius: 12px; padding: 20px; background: var(--card); }
-  [data-presentation="summary"] [data-slot="global-task-row"] { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; margin: 0; padding-block: 20px 30px; padding-inline: 0; border: 0; border-block-start: 1px solid var(--border); border-radius: 0; }
+  [data-presentation="summary"] [data-slot="global-tasks-table"] { border: 1px solid var(--border); border-radius: 12px; padding-block: 4px; padding-inline: 16px; background: var(--card); }
+  [data-presentation="summary"] [data-slot="global-task-row"] { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 12px; margin: 0; padding-block: 12px; padding-inline: 0; border: 0; border-block-start: 1px solid var(--border); border-radius: 0; }
   [data-presentation="summary"] [data-slot="global-task-title"] { grid-column: 1 / -1; }
   [data-presentation="summary"] [data-slot="global-task-title"] > span > a { line-height: 1.5; }
   [data-presentation="summary"] [data-slot="global-task-workflow"] { grid-column: 1; grid-row: 2; }
@@ -112,8 +112,7 @@
 [data-slot="tasks-toolbar"] [data-slot="button"] { font-size: 12px; font-weight: 500; }
 @media (max-width: 767px) {
   [data-slot="tasks-toolbar"] { align-items: start; }
-  [data-slot="task-card"] > div:first-child > a { font-size: 13px; line-height: 1.6; }
-  [data-slot="mobile-task-meta"] { margin-block-start: 6px; }
+  [data-slot="task-card"] [data-slot="mobile-task-title-row"] > a { font-size: 13px; line-height: 1.4; }
   /* Phones: a tighter header, so two or three task cards sit above the fold. */
   :is([data-route="tasks"], [data-route="global-tasks"]) > header { gap: 10px; }
   [data-route="tasks"] [data-slot="tasks-toolbar"] { row-gap: 8px; }

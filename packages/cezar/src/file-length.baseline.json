@@ -8,6 +8,6 @@
     "packages/web/e2e/agent-browser.ts": 1139,
     "packages/web/src/routes/github/github.tsx": 1242,
     "packages/web/src/routes/global-tasks.tsx": 1045,
-    "packages/web/src/routes/tasks-overview.tsx": 1589
+    "packages/web/src/routes/tasks-overview.tsx": 1584
   }
 }
