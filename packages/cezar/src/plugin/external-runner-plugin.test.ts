@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { healthResponseSchema } from '@open-mercato/cezar-contract/health';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { runtimeImports } from '../core/module-imports.testkit.ts';
 import { Home } from '../home/home.ts';
 import { projectPaths } from '../project-paths.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
@@ -160,9 +161,9 @@ describe('an external plain-JS runner plugin in <config>/plugins/', { timeout: 2
     mkdirSync(home.plugins, { recursive: true });
     cpSync(fixture, plugin, { recursive: true });
     expect(relative(fileURLToPath(new URL('../../../..', import.meta.url)), plugin).startsWith('..')).toBe(true);
-    // Every specifier in the plugin: static and re-export `from`, bare `import '...'` and `import(...)`.
+    // Every module the plugin loads: static and re-export `from`, bare `import '...'` and `import(...)`.
     const specifiers = ['index.mjs', 'adapter.mjs', 'agent.mjs'].flatMap(file =>
-      [...readFileSync(join(plugin, file), 'utf8').matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)(['"`])([^'"`]+)\1/g)].map(match => match[2]!));
+      runtimeImports(readFileSync(join(plugin, file), 'utf8'), file));
     expect(specifiers).toEqual(expect.arrayContaining(['@hearsay-tools/squawk/plugin', '@hearsay-tools/squawk/plugin/runtime', './adapter.mjs']));
     expect(specifiers.filter(specifier => !specifier.startsWith('node:') && !specifier.startsWith('./') && !/^@hearsay-tools\/squawk\/plugin(?:\/runtime)?$/.test(specifier))).toEqual([]);
 

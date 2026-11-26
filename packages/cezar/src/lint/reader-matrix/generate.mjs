@@ -7,6 +7,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { parse } from '@babel/parser';
+import { traverse } from '@babel/types';
 import { transformSync } from 'esbuild';
 import { factProbes, historyProbes } from './probes.ts';
 import { factDocumentedLimits } from './review-probes.ts';
@@ -25,11 +27,18 @@ try {
       if (seen.has(file)) continue;
       seen.add(file);
       const source = execFileSync('git', ['show', `${revision}:${lint}${file}`], { encoding: 'utf8' });
-      const imports = [...source.matchAll(/from ['"]\.\/([^'"]+)['"]/g)].map(match => match[1]);
-      pending.push(...imports);
+      // The `from` specifiers of import and export declarations, type-only ones too.
+      const specifiers = [];
+      traverse(parse(source, { sourceType: 'module', plugins: ['typescript'] }), (node) => {
+        if ((node.type === 'ImportDeclaration' || node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') && node.source) specifiers.push(node.source);
+      });
+      pending.push(...specifiers.filter(literal => literal.value.startsWith('./')).map(literal => literal.value.slice(2)));
       // Resolve dependencies here; transpiled modules live outside this repository.
-      const resolved = source.replace(/from (['"])(@[^'"]+|\.\/[^'"]+)\1/g, (_match, _quote, specifier) =>
-        `from ${JSON.stringify(specifier.startsWith('./') ? specifier.replace(/\.ts$/, '.mjs') : import.meta.resolve(specifier))}`);
+      let resolved = source;
+      for (const { value, start, end } of specifiers.reverse()) {
+        if (!value.startsWith('./') && !value.startsWith('@')) continue;
+        resolved = `${resolved.slice(0, start)}${JSON.stringify(value.startsWith('./') ? value.replace(/\.ts$/, '.mjs') : import.meta.resolve(value))}${resolved.slice(end)}`;
+      }
       writeFileSync(join(directory, file.replace(/\.ts$/, '.mjs')), transformSync(
         resolved, { loader: 'ts', format: 'esm' }).code);
     }
