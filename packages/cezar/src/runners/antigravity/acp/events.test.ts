@@ -99,37 +99,48 @@ const texts = (events: AcpEvents, chunks: string[]): void => {
   for (const text of chunks) events.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } });
 };
 
-function v1Texts(): { events: AcpEvents; v1: string[] } {
+function v1Texts(): { events: AcpEvents; v1: string[]; order: string[] } {
   const v1: string[] = [];
-  const events = new AcpEvents({ event: event => { if (event.type === 'text') v1.push(event.text); } }, hooks);
+  const order: string[] = [];
+  const events = new AcpEvents({
+    event: event => { if (event.type === 'text') { v1.push(event.text); order.push(`text:${event.text}`); } },
+    uiEvent: event => { if (event.type === 'item.started' || event.type === 'item.completed') order.push(`${event.type}:${event.item.id}`); },
+  }, {});
   events.begin();
-  return { events, v1 };
+  return { events, v1, order };
 }
 
-it('streams v1 text per chunk but holds a line that may become a marker until it is whole', () => {
-  const { events, v1 } = v1Texts();
+it('holds message chunks as one v1 text and emits it after the v2 item completes', () => {
+  const { events, v1, order } = v1Texts();
   texts(events, ['Opened the PR.\n\nCEZ:PR=4', '104\n\n- done', '.\n']);
-  expect(v1).toEqual(['Opened the PR.\n\n', 'CEZ:PR=4104\n\n- done', '.\n']);
+  expect(v1).toEqual([]);
+  events.finish('end_turn');
+  expect(v1).toEqual(['Opened the PR.\n\nCEZ:PR=4104\n\n- done.\n']);
+  expect(order.slice(-2)).toEqual([expect.stringMatching(/^item\.completed:/), 'text:Opened the PR.\n\nCEZ:PR=4104\n\n- done.\n']);
+});
+
+it('keeps a marker split across chunks whole in one v1 text', () => {
+  const { events, v1 } = v1Texts();
   texts(events, ['All done. C', 'E', 'Z:DONE']);
-  expect(v1).toHaveLength(3);
   events.finish('end_turn');
-  expect(v1.slice(3)).toEqual(['All done. CEZ:DONE']);
+  expect(v1).toEqual(['All done. CEZ:DONE']);
 });
 
-it('keeps prose and a marker on one line in one v1 text', () => {
-  const { events, v1 } = v1Texts();
-  texts(events, ['I will emit CEZ:PR=442']);
+it('releases held text on a usage update without closing the item, and never re-emits it', () => {
+  const { events, v1, order } = v1Texts();
+  texts(events, ['Working']);
+  events.update({ sessionUpdate: 'usage_update', used: 1, size: 10 });
+  expect(v1).toEqual(['Working']);
+  expect(order.filter(entry => entry.startsWith('item.completed'))).toEqual([]);
+  texts(events, [' on it.']);
+  events.update({ sessionUpdate: 'usage_update', used: 2, size: 10 });
   events.finish('end_turn');
-  expect(v1).toEqual(['I will emit CEZ:PR=442']);
+  expect(v1).toEqual(['Working', ' on it.']);
+  const items = order.filter(entry => entry.startsWith('item.'));
+  expect(items).toEqual([items[0], items[0]!.replace('started', 'completed')]);
 });
 
-it('releases a held prefix once the line grows past it', () => {
-  const { events, v1 } = v1Texts();
-  texts(events, ['See C', 'I logs']);
-  expect(v1).toEqual(['See CI logs']);
-});
-
-it('emits held text once when a text listener flushes again', () => {
+it('emits held text and the completed item once when a text listener flushes again', () => {
   const v1: string[] = [];
   const completed: UiEvent[] = [];
   const events: AcpEvents = new AcpEvents({

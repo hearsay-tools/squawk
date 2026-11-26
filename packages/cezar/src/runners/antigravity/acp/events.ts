@@ -143,7 +143,6 @@ export class AcpEvents {
     }
     this.block!.text += content.text;
     this.sink.uiEvent?.({ type: 'item.delta', itemId: this.block!.id, field: kind === 'message' ? 'text' : 'reasoning', delta: content.text });
-    if (kind === 'message') this.release(markerSafeEnd(this.block!.text, this.released));
   }
 
   private plan(value: unknown): void {
@@ -154,21 +153,24 @@ export class AcpEvents {
     this.sink.uiEvent?.({ type: 'plan.updated', entries });
   }
 
-  /** Close the open block and release its held v1 text. The session also flushes when the
-   *  wire closes: an agent-started turn has no prompt response to finish it. */
+  /** Close the open block, then release its held v1 text: the cockpit has the whole v2 item
+   *  before its v1 twin lands. The session also flushes when the wire closes: an agent-started
+   *  turn has no prompt response to finish it. */
   flush(): void {
-    if (this.block?.kind === 'message') this.release(this.block.text.length);
     const block = this.block;
+    const held = block?.kind === 'message' ? block.text.slice(this.released) : '';
     // State settles before the sinks run: a listener may close the session, which flushes again.
     this.block = undefined; this.released = 0;
     if (block) this.sink.uiEvent?.({ type: 'item.completed', item: { ...block } });
+    if (held) this.sink.event?.({ type: 'text', text: held });
   }
 
-  /** v1 `text` follows the stream chunk by chunk: each event is a progress signal. */
-  private release(end: number): void {
-    if (this.block?.kind !== 'message' || end <= this.released) return;
-    const text = this.block.text.slice(this.released, end);
-    this.released = end;
+  /** v1 `text` carries a message block whole, not chunk by chunk: the server strips markers per
+   *  event. A usage update releases the open block's text early and keeps the block open. */
+  private release(): void {
+    if (this.block?.kind !== 'message' || this.block.text.length <= this.released) return;
+    const text = this.block.text.slice(this.released);
+    this.released = this.block.text.length;
     this.sink.event?.({ type: 'text', text });
   }
 
@@ -190,6 +192,7 @@ export class AcpEvents {
       cost: z.object({ amount: z.number().nonnegative(), currency: z.string() }).optional(),
     }).parse(update);
     const cost = usage.cost?.currency === 'USD' ? usage.cost.amount : undefined;
+    this.release();
     this.sink.event?.({ type: 'token-usage', tokensUsed: usage.used });
     if (cost !== undefined) this.sink.event?.({ type: 'cost', usd: cost });
     this.sink.uiEvent?.({ type: 'usage.updated', usage: { input: 0, output: 0, total: usage.used, contextWindow: usage.size }, ...(cost === undefined ? {} : { costUsd: cost }) });
@@ -222,24 +225,6 @@ export class AcpEvents {
       this.sink.uiEvent?.({ type: 'image', itemId, mediaType: content.mimeType, data: content.data });
     }
   }
-}
-
-const MARKER = 'CEZ:';
-
-/**
- * Where v1 text may end now. The server strips protocol markers per v1 event, line by line
- * (`stripTaskMarkers`), and joins events into the turn text with a newline (`appendTurnText`).
- * So an open line that holds, or may still grow into, `CEZ:` is held whole until it ends: a
- * split would leak a marker's tail, or turn prose before `CEZ:` into a marker line.
- */
-function markerSafeEnd(text: string, released: number): number {
-  const lineStart = text.lastIndexOf('\n') + 1;
-  const line = text.slice(lineStart);
-  let at = line.indexOf(MARKER);
-  for (let length = MARKER.length - 1; at < 0 && length > 0; length--) {
-    if (line.endsWith(MARKER.slice(0, length))) at = line.length - length;
-  }
-  return at < 0 ? text.length : Math.max(released, lineStart);
 }
 
 function toolItem(wire: AcpTool, previous: UiToolItem | undefined): UiToolItem {

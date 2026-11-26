@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest';
 import type { UiEvent } from '../../core/ui-events.ts';
 import type { UiEventSink } from '../../runs/ui-event-sink.ts';
 import { unused } from '../unused.testkit.ts';
@@ -87,4 +87,27 @@ it('child-only content persists and tracks the child without invalidating the pa
   expect(f.log).toEqual(['usage', 'persist-ui', 'children', 'reply-content', 'nudge-activity']);
   expect(f.state.boundary.atTurnBoundary).toBe(f.wire);
   expect(f.state.boundary.nudge).toEqual({ session: f.wire, cause: 'autonomous', state: 'refused' });
+});
+
+it('top-level streamed model work clears the unread and held input timers; nested work does not', () => {
+  const f = activityFixture();
+  const input = f.state.inputState;
+  // The timers are never meant to fire: the test reads only whether the handler cleared them.
+  const arm = (): void => { input.retainUnreadTimer(setTimeout(() => {}, 60_000).unref()); input.retainHeldTimer(setTimeout(() => {}, 60_000).unref()); };
+  onTestFinished(() => { input.clearUnreadTimer(); input.clearHeldTimer(); });
+  const armed = (): boolean[] => [!!input.unreadInputTimer, !!input.heldHumanInputTimer];
+  const send = (event: UiEvent): void => handleRunnerUiEvent(f.context, f.host, f.run.id, f.state, f.sink, event, f.wire);
+  arm();
+  send({ type: 'item.started', item: { kind: 'message', id: 'child', role: 'assistant', text: '', parentItemId: 'task' } });
+  send({ type: 'item.delta', itemId: 'child', field: 'text', delta: 'child' });
+  expect(armed()).toEqual([true, true]);
+  send({ type: 'item.started', item: { kind: 'message', id: 'reply', role: 'assistant', text: '' } });
+  expect(armed()).toEqual([false, false]);
+  arm();
+  send({ type: 'item.delta', itemId: 'reply', field: 'text', delta: 'answer' });
+  expect(armed()).toEqual([false, false]);
+  send({ type: 'item.completed', item: { kind: 'message', id: 'reply', role: 'assistant', text: 'answer' } });
+  arm();
+  send({ type: 'item.delta', itemId: 'reply', field: 'text', delta: 'late' });
+  expect(armed()).toEqual([true, true]);
 });
