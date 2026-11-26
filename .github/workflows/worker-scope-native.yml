@@ -12,6 +12,7 @@ on:
       - 'packages/cezar/scripts/windows-worker-job.*'
       - 'packages/cezar/src/core/os-cgroup.ts'
       - 'packages/cezar/src/core/os-win-job.ts'
+      - 'packages/cezar/src/core/process-ownership.ts'
       - 'packages/cezar/src/core/session-containment*'
       - 'packages/cezar/src/core/session-process.ts'
       - 'packages/cezar/src/core/session-process.test.ts'
