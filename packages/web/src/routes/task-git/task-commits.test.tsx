@@ -89,8 +89,10 @@ describe('the Commits tab route', () => {
     expect(links).toEqual([`/tasks/r1/commits/${'a'.repeat(40)}`, `/tasks/r1/commits/${'b'.repeat(40)}`])
     await waitFor(() => expect(document.querySelector('[data-slot="task-commit-preview"]')).not.toBeNull())
     await waitFor(() => expect(document.querySelector('[data-slot="task-commit-preview"] [data-slot="diff-file"]')).not.toBeNull())
-    expect(document.querySelector('[data-slot="task-commit-preview"]')?.textContent).toContain('+3')
-    expect(document.querySelector('[data-slot="task-commit-preview"]')?.textContent).toContain('−1')
+    const previewText = document.querySelector('[data-slot="task-commit-preview"]')?.textContent ?? ''
+    expect(previewText).toContain('2h·aaaaaaaa')
+    expect(previewText).toContain('+3')
+    expect(previewText).toContain('−1')
     await waitFor(() => expect(screen.getByRole('heading', { name: '1 changed files' })).toBeTruthy())
   })
 

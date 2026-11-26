@@ -60,7 +60,7 @@ export function GithubFields({ draft, onChange, disabledReason }: { draft: Autom
   return (
     <div className="grid gap-4">
       {disabledReason ? <p className="text-xs text-pending-strong">{`GitHub unavailable · ${disabledReason}`}</p> : null}
-      <div role="group" aria-label="GitHub events" className="flex flex-wrap gap-2">
+      <div role="group" aria-label="GitHub events" className="inline-flex w-fit max-w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/60 p-1">
         {EVENTS.map((event) => (
           <ChipButton key={event} pressed={draft.events.includes(event)} onClick={() => toggleEvent(event)}>{event}</ChipButton>
         ))}

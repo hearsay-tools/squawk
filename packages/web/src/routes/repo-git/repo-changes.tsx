@@ -27,7 +27,7 @@ export function RepoChangesSection() {
   const desktop = useIsDesktop()
 
   const [mode, setMode] = useState<DiffMode>('unified')
-  const [wrap, setWrap] = useState(false)
+  const [wrap, setWrap] = useState(true)
   const [preview, setPreview] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const diffRef = useRef<DiffHandle | null>(null)
@@ -52,7 +52,7 @@ export function RepoChangesSection() {
     <section data-slot="repo-changes" className="flex min-h-0 flex-1 flex-col">
       <div
         data-slot="repo-changes-toolbar"
-        className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 py-4 md:px-9"
+        className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 pt-0 pb-4 md:px-9"
       >
         {changes.data ? (
           <AnimatedDiffStat stat={changes.data.stat} />
@@ -108,7 +108,7 @@ export function RepoChangesSection() {
             // No file route serves the main checkout, so the preview shows the patch's new side
             // and no image: `loadFileText` and `imageSrc` stay unwired here.
             preview={preview}
-            className="min-w-0 flex-1"
+            className="min-w-0 flex-1 [&_[data-slot=diff-totals]]:hidden"
           />
         </div>
       )}

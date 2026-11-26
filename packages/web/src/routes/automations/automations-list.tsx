@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button'
 import { dayTime, relativeIn } from '@/lib/automation-format'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
-import { ChipButton } from './chip-button'
 import { InlineLog } from './log'
 import { PageFrame, PageState } from './page-frame'
 
@@ -81,14 +80,43 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
         <div className="grid justify-items-start gap-3"><PageState text={error} /><Button variant="outline" onClick={() => void refresh()}>Retry</Button></div>
       ) : !data ? <PageState text="Loading automations…" /> : (
         <>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-border">
             {onArchivedChange ? (
-              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter automations">
-                <ChipButton pressed={!archived} onClick={() => onArchivedChange(false)}>Active</ChipButton>
-                <ChipButton pressed={archived} onClick={() => onArchivedChange(!archived)}>Archived</ChipButton>
+              <div className="flex gap-6" role="group" aria-label="Filter automations">
+                <button
+                  type="button"
+                  data-slot="automations-tab"
+                  data-view="active"
+                  aria-pressed={!archived}
+                  onClick={() => onArchivedChange(false)}
+                  className={cn(
+                    '-mb-px flex min-h-11 items-center justify-center gap-1.5 border-b-2 border-transparent text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground',
+                    !archived && 'border-accent-text font-semibold text-foreground',
+                  )}
+                >
+                  Active
+                  {!archived && data.automations.length > 0 ? (
+                    <span className="tabular-nums text-muted-foreground">· {data.automations.length}</span>
+                  ) : null}
+                </button>
+                <button
+                  type="button"
+                  data-slot="automations-tab"
+                  data-view="archived"
+                  aria-pressed={archived}
+                  onClick={() => onArchivedChange(!archived)}
+                  className={cn(
+                    '-mb-px flex min-h-11 items-center justify-center gap-1.5 border-b-2 border-transparent text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground',
+                    archived && 'border-accent-text font-semibold text-foreground',
+                  )}
+                >
+                  Archived
+                </button>
               </div>
             ) : <span />}
-            <SchedulerStatus data={data} />
+            <div className="pb-2.5">
+              <SchedulerStatus data={data} />
+            </div>
           </div>
           {archived && data.automations.length === 0 ? (
             <PageState text="No archived one-time schedules." />

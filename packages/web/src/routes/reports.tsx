@@ -8,6 +8,7 @@ import { SearchIcon } from '@/components/design-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Link } from '@/lib/project-router'
+import { shortAge } from '@/lib/format'
 import { reportTitle } from '@/lib/report-title'
 import { useSearchParamsWriter } from '@/lib/use-search-params-writer'
 import './reports.css'
@@ -15,19 +16,21 @@ import './reports.css'
 // Keep the source entry through both native Back and the reader's fallback navigation.
 const positions = new Map<string, { scroll: number; row: string; pages: number }>()
 
-/** Human-friendly short date/time for report cards (e.g. "Nov 26, 16:28"), never raw US locale strings. */
-function formatReportTimestamp(iso: string): string {
+/** Concise relative timestamp for report rows (e.g. "2h ago", "57m ago", "just now"). */
+function formatRelativeReportTimestamp(iso: string): string {
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return ''
+  const seconds = Math.max(0, (Date.now() - then) / 1000)
+  if (seconds < 60) return 'just now'
+  const age = shortAge(iso)
+  return age ? `${age} ago` : ''
+}
+
+/** Localized full date/time for the timestamp tooltip. */
+function formatFullReportTimestamp(iso: string): string {
   const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  const sameYear = date.getFullYear() === new Date().getFullYear()
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    ...(sameYear ? {} : { year: 'numeric' }),
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(date)
+  if (Number.isNaN(date.getTime())) return iso
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
 
 export function ReportsRoute() {
@@ -68,7 +71,7 @@ export function ReportsRoute() {
   })
   return (
     <section data-route="reports" className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 px-4 pt-7 pb-4 [scrollbar-gutter:stable] md:px-9">
+      <div className="shrink-0 px-4 pt-7 pb-4 md:px-9">
         <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-[26px] font-semibold tracking-tight leading-[1.2] text-foreground md:text-[28px]">Reports</h1>
@@ -87,7 +90,7 @@ export function ReportsRoute() {
           />
         </div>
       </div>
-      <div ref={scroller} data-slot="reports-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-9 [scrollbar-gutter:stable] md:px-9">
+      <div ref={scroller} data-slot="reports-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-9 md:px-9">
         {result.isPending ? (
           <p role="status" className="py-4 text-sm text-muted-foreground">Loading reports…</p>
         ) : result.isError ? (
@@ -108,11 +111,11 @@ export function ReportsRoute() {
             )}
           </div>
         ) : (
-          <ul className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-2">
             {reports.map(report => (
-              <li key={report.id} data-slot="report-row" className="reports-row flex flex-col gap-1.5 rounded-xl border border-border bg-card px-5 py-4 transition-colors">
-                <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-                  <h2 className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-foreground [overflow-wrap:anywhere]">
+              <li key={report.id} data-slot="report-row" className="reports-row flex items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3 transition-colors">
+                <div className="min-w-0 flex-1">
+                  <h2 className="min-w-0 text-[14px] font-semibold leading-snug text-foreground [overflow-wrap:anywhere]">
                     <Link
                       data-report-id={report.id}
                       className="reports-open text-foreground no-underline"
@@ -124,22 +127,22 @@ export function ReportsRoute() {
                       <span>{reportTitle(report)}</span>
                     </Link>
                   </h2>
-                  <time
-                    className="shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground"
-                    dateTime={report.createdAt}
-                    title={report.createdAt}
-                  >
-                    {formatReportTimestamp(report.createdAt)}
-                  </time>
+                  <div className="mt-0.5 pl-6 text-xs text-muted-foreground">
+                    <Link
+                      className="reports-task text-xs text-muted-foreground no-underline hover:text-foreground hover:underline [overflow-wrap:anywhere]"
+                      to={`/tasks/${report.runId}`}
+                    >
+                      {report.taskTitle}
+                    </Link>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                  <Link
-                    className="reports-task text-xs text-muted-foreground no-underline hover:text-foreground hover:underline [overflow-wrap:anywhere]"
-                    to={`/tasks/${report.runId}`}
-                  >
-                    {report.taskTitle}
-                  </Link>
-                </div>
+                <time
+                  className="shrink-0 text-xs tabular-nums text-muted-foreground"
+                  dateTime={report.createdAt}
+                  title={formatFullReportTimestamp(report.createdAt)}
+                >
+                  {formatRelativeReportTimestamp(report.createdAt)}
+                </time>
               </li>
             ))}
           </ul>

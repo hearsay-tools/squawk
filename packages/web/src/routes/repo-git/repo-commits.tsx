@@ -38,7 +38,7 @@ export function RepoCommitsSection({ repo, info }: { repo: RepoResponse; info: R
   if (log.length === 0) {
     return (
       <>
-        {incoming ? <div className="px-4 pt-5 md:px-9">{incoming}</div> : null}
+        {incoming ? <div className="px-4 pt-0 md:px-9">{incoming}</div> : null}
         <CenteredState
           icon={<GitCommitHorizontalIcon size={16} />}
           tone="neutral"
@@ -50,7 +50,7 @@ export function RepoCommitsSection({ repo, info }: { repo: RepoResponse; info: R
     )
   }
   return (
-    <div data-slot="repo-commits" className="flex flex-col gap-4 px-4 pt-5 pb-9 md:px-9">
+    <div data-slot="repo-commits" className="flex flex-col gap-4 px-4 pt-0 pb-9 md:px-9">
       {incoming}
       {days.map((day) => (
         <section key={day.label} data-slot="repo-commit-day" aria-label={day.label} className="flex flex-col gap-1.5">
@@ -66,7 +66,7 @@ export function RepoCommitsSection({ repo, info }: { repo: RepoResponse; info: R
                 >
                   <span data-slot="commit-row-subject" className="truncate text-[13px] font-medium text-foreground">{commit.subject}</span>
                   <span data-slot="commit-row-meta" className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <span className="shrink-0 font-mono">{commit.hash}</span>
+                    <span className="shrink-0 font-mono" title={commit.hash}>{commit.hash.slice(0, 8)}</span>
                     <span className="truncate">· {commit.author} · {shortGitAge(commit.when)}</span>
                   </span>
                 </Link>

@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronLeftIcon, ExternalLinkIcon, MessageSquareIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronLeftIcon, ExternalLinkIcon, MessageSquareIcon } from 'lucide-react'
 import { ArrowLeftIcon, ChevronRightIcon } from '@/components/design-icons'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
@@ -334,9 +334,12 @@ function GithubPrChanges({ item }: { item: GithubItem }) {
       <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="min-w-0">
           <input aria-label="Filter changed files" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter files…" className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm" />
-          <select aria-label="Select changed file" value={selected ?? ''} onChange={(e) => setSelected(e.target.value)} className="mt-2 min-h-11 w-full rounded-md border border-input bg-background px-2 text-sm lg:hidden">
-            {files.map((file) => <option key={file.path}>{file.path}</option>)}
-          </select>
+          <div className="relative mt-2 lg:hidden">
+            <select aria-label="Select changed file" value={selected ?? ''} onChange={(e) => setSelected(e.target.value)} className="min-h-11 w-full appearance-none rounded-md border border-input bg-background py-2 pr-8 pl-3 text-sm">
+              {files.map((file) => <option key={file.path}>{file.path}</option>)}
+            </select>
+            <ChevronDownIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          </div>
           <ul className="mt-2 hidden max-h-[60vh] overflow-auto lg:block">
             {files.map((file) => <li key={file.path}><button type="button" onClick={() => setSelected(file.path)} className={cn('min-h-11 w-full truncate rounded px-2 text-left text-xs', selected === file.path && 'bg-muted font-medium')} title={file.path}>{file.status} · {file.path} <span className="text-success">+{file.additions}</span> <span className="text-danger">−{file.deletions}</span></button></li>)}
           </ul>
@@ -406,7 +409,7 @@ function GithubThread({ item, colors }: { item: GithubItem; colors: Record<strin
   if (!data || !data.available) {
     const reason = data?.reason ?? (thread.error instanceof Error ? thread.error.message : 'could not load comments')
     return (
-      <section data-slot="gh-thread-error" className="mt-6 border-t border-border pt-5 text-xs text-soft-foreground">
+      <section data-slot="gh-thread-error" className="mt-6 border-t border-border pt-5 text-xs text-muted-foreground">
         <span>Couldn’t load comments — {reason}. </span>
         <a
           href={item.url}
@@ -458,7 +461,7 @@ function GithubThread({ item, colors }: { item: GithubItem; colors: Record<strin
           target="_blank"
           rel="noopener noreferrer"
           data-slot="gh-thread-truncated"
-          className="mt-4 inline-flex items-center gap-0.5 text-xs text-soft-foreground hover:text-foreground hover:underline"
+          className="mt-4 inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground hover:underline"
         >
           thread truncated — open on GitHub
           <ExternalLinkIcon aria-hidden="true" className="size-2.5" />
@@ -537,7 +540,7 @@ function CommitGroup({ commits, colors }: { commits: GithubTimelineEvent[]; colo
             type="button"
             aria-expanded={true}
             onClick={() => setOpen(false)}
-            className="flex items-center gap-1.5 font-mono text-[11px] text-soft-foreground hover:text-foreground"
+            className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground"
           >
             <span aria-hidden="true">{EVENT_GLYPH.committed}</span>
             <span className="font-sans font-medium text-foreground">{actor}</span>
@@ -557,7 +560,7 @@ function CommitGroup({ commits, colors }: { commits: GithubTimelineEvent[]; colo
         type="button"
         aria-expanded={false}
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 font-mono text-[11px] text-soft-foreground hover:text-foreground"
+        className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground"
       >
         <span aria-hidden="true">{EVENT_GLYPH.committed}</span>
         <span className="font-sans font-medium text-foreground">{actor}</span>
@@ -596,7 +599,7 @@ function EventRow({ event, colors }: { event: GithubTimelineEvent; colors: Recor
       data-slot="gh-event-row"
       data-kind={event.kind}
       className={cn(
-        'flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-soft-foreground',
+        'flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-muted-foreground',
         event.kind === 'merged' && 'text-accent-foreground',
       )}
     >

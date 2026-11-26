@@ -47,8 +47,7 @@
   [data-slot="skill-row"][aria-current="page"] { background: transparent; border-color: var(--border); }
 }
 [data-route="skills"] h1, [data-route="workflows"] h1 { line-height: 1.2; letter-spacing: -.7px; }
-[data-route="skills"] header p, [data-route="workflows"] header p { line-height: 1.6; color: var(--soft-foreground); }
-[data-slot="skill-row"] { padding-block: 14px; gap: 8px; }
+[data-route="skills"] header p, [data-route="workflows"] header p { line-height: 1.6; color: var(--muted-foreground); }
 [data-slot="skill-row"]::before { display: none; }
 [data-slot="skill-row"]:has([data-source="team"]) > span:first-child > span { font-weight: 500; line-height: 1.6; }
 [data-slot="skill-row"] [data-source="team"] { font-weight: 400; }

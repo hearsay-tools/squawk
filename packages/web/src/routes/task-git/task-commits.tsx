@@ -14,10 +14,12 @@ import { CommitDiffPanel } from '@/components/diff/commit-diff-panel'
 import { useIsDesktop } from '@/lib/use-desktop'
 
 import { engineOwnsRun } from '@open-mercato/cezar-api-client/contract/run-predicates'
+import { shortGitAge } from '../repo-git/git-sections'
 import { RunHeader } from '../task-thread/run-header'
 import { CommitList } from './commit-list'
 import { DiffViewToggles } from './diff-controls'
 import { GitTabLoadError, GitTabLoading } from './git-tab-loading'
+import { loadWorktreeText } from './task-changes'
 
 /**
  * `/tasks/:id/commits` — the run's own commits (`<base>..HEAD`), auto-selecting the newest
@@ -86,7 +88,7 @@ function CommitsWorkspace({
   const activeCommit = useRunCommit(run.id, selectedSha)
   const desktop = useIsDesktop()
   const [mode, setMode] = useState<DiffMode>('unified')
-  const [wrap, setWrap] = useState(false)
+  const [wrap, setWrap] = useState(true)
   const effectiveMode: DiffMode = desktop ? mode : 'unified'
   const effectiveWrap = desktop ? wrap : true
 
@@ -130,16 +132,24 @@ function CommitsWorkspace({
             />
           ) : (
             <>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-4 py-3">
+              <div className="flex flex-wrap items-start gap-x-3 gap-y-2 border-b border-border px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-sm font-semibold text-foreground">{activeCommit.data.subject}</h3>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
-                    <span>{activeCommit.data.author} · {activeCommit.data.when}</span>
-                    <span className="font-mono select-all">{(activeCommit.data.sha ?? selectedSha).slice(0, 8)}</span>
-                    {activeCommit.data.stat ? <DiffStatLabel stat={activeCommit.data.stat} /> : null}
+                  <h3 className="break-words text-sm leading-snug font-semibold text-foreground">{activeCommit.data.subject}</h3>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+                    <span>{activeCommit.data.author}</span>
+                    <span aria-hidden="true">·</span>
+                    <span title={activeCommit.data.when}>{shortGitAge(activeCommit.data.when)}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="font-mono select-all" title={activeCommit.data.sha ?? selectedSha}>{(activeCommit.data.sha ?? selectedSha).slice(0, 8)}</span>
+                    {activeCommit.data.stat ? (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <DiffStatLabel stat={activeCommit.data.stat} />
+                      </>
+                    ) : null}
                   </p>
                 </div>
-                <span className="hidden items-center gap-1.5 md:flex">
+                <span className="hidden shrink-0 items-center gap-1.5 md:flex">
                   <DiffViewToggles mode={mode} wrap={wrap} onModeChange={setMode} onWrapChange={setWrap} />
                 </span>
               </div>
@@ -153,7 +163,13 @@ function CommitsWorkspace({
                 />
               ) : (
                 <div className="p-4 [--diff-sticky-top:0px] md:[--diff-sticky-top:1rem]">
-                  <Diff files={activeCommit.data.files} mode={effectiveMode} wrap={effectiveWrap} className="min-w-0" />
+                  <Diff
+                    files={activeCommit.data.files}
+                    mode={effectiveMode}
+                    wrap={effectiveWrap}
+                    loadFileText={(path) => loadWorktreeText(run.id, path)}
+                    className="min-w-0"
+                  />
                 </div>
               )}
             </>

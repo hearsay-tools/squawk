@@ -100,7 +100,7 @@ export function RepoNotLandedSection() {
   const groups = notLandedGroups(branches.data.branches)
   const retained = retainedFinishedTasks(branches.data.branches)
   const retainedNote = retained > 0 ? (
-    <p data-slot="not-landed-retained" className="flex max-w-4xl items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+    <p data-slot="not-landed-retained" className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
       <InfoIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
       <span>
         {retained} finished task{retained === 1 ? ' still has its' : 's still have their'} worktree and commits not on the base, so {retained === 1 ? 'it is' : 'they are'} not listed here.
@@ -115,7 +115,7 @@ export function RepoNotLandedSection() {
 
   return (
     <ReferenceStatusProvider projectId={scope} repoBase={repoBase} requests={requests}>
-      <div data-slot="repo-not-landed" className="flex flex-col gap-4 px-4 pt-5 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pb-9">
+      <div data-slot="repo-not-landed" className="flex flex-col gap-4 px-4 pt-0 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pb-9">
         {!branches.data.prStateKnown ? <ForgeNote /> : null}
         {retainedNote}
         {groups.length === 0 ? (
@@ -129,7 +129,7 @@ export function RepoNotLandedSection() {
               : 'Every finished task\'s commits are on the base branch, or it made none.'}
           />
         ) : (
-          <div className="flex max-w-4xl flex-col gap-5">
+          <div className="flex flex-col gap-5">
             {groups.map((group) => (
               <section key={group.key} data-slot="not-landed-group" data-group={group.key} aria-label={group.title} className="flex flex-col gap-1.5">
                 <h2 className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground">
@@ -164,7 +164,7 @@ export function RepoNotLandedSection() {
 /** The squash-merge caveat, shown when `prStateKnown` is false. Information, never an error. */
 export function ForgeNote({ className }: { className?: string | undefined }) {
   return (
-    <p data-slot="git-no-forge" className={cn('flex max-w-4xl items-start gap-2 text-xs leading-relaxed text-muted-foreground', className)}>
+    <p data-slot="git-no-forge" className={cn('flex items-start gap-2 text-xs leading-relaxed text-muted-foreground', className)}>
       <InfoIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
       {NO_FORGE_NOTE}.
     </p>
@@ -371,7 +371,7 @@ export function DeleteBranchDialog({ entry, onClose }: { entry: RepoBranchEntry 
               </p>
               <p data-slot="delete-branch-dropped">
                 {commits} will be dropped{entry?.diffStat ? ` (+${entry.diffStat.additions} −${entry.diffStat.deletions})` : ''}, the latest “{entry?.lastCommit.subject}”
-                {' '}(<span className="font-mono">{entry?.lastCommit.sha.slice(0, 7)}</span>).
+                {' '}(<span className="font-mono" title={entry?.lastCommit.sha}>{entry?.lastCommit.sha.slice(0, 8)}</span>).
               </p>
             </div>
           </AlertDialogDescription>

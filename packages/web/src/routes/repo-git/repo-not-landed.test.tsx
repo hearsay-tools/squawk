@@ -163,9 +163,9 @@ describe('DeleteBranchDialog', () => {
   })
 
   it.each([
-    { entry: BRANCH, text: 'This drops the work of Useful work. It is not on the base branch and no pull request carries it.', detail: '2 commits will be dropped (+12 −3), the latest “Save useful work” (abcdef1).' },
-    { entry: { ...BRANCH, title: null, ahead: 1, diffStat: null, pr: { number: 1, url: 'https://github.com/acme/repo/pull/1', state: 'open' as const } }, text: `This drops the work of ${BRANCH.name}. It is not on the base branch.`, detail: '1 commit will be dropped, the latest “Save useful work” (abcdef1).' },
-    { entry: { ...BRANCH, class: 'orphan' as const }, text: 'Its task was deleted, so this branch is the only copy of the work.', detail: '2 commits will be dropped (+12 −3), the latest “Save useful work” (abcdef1).' },
+    { entry: BRANCH, text: 'This drops the work of Useful work. It is not on the base branch and no pull request carries it.', detail: '2 commits will be dropped (+12 −3), the latest “Save useful work” (abcdef12).' },
+    { entry: { ...BRANCH, title: null, ahead: 1, diffStat: null, pr: { number: 1, url: 'https://github.com/acme/repo/pull/1', state: 'open' as const } }, text: `This drops the work of ${BRANCH.name}. It is not on the base branch.`, detail: '1 commit will be dropped, the latest “Save useful work” (abcdef12).' },
+    { entry: { ...BRANCH, class: 'orphan' as const }, text: 'Its task was deleted, so this branch is the only copy of the work.', detail: '2 commits will be dropped (+12 −3), the latest “Save useful work” (abcdef12).' },
   ])('names the work at risk: $text', ({ entry, text, detail }) => {
     showDialog(entry)
     expect(screen.getByRole('heading', { name: `Delete ${BRANCH.name}?` })).toBeTruthy()

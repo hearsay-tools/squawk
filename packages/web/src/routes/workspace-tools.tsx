@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useHealth, useProjects } from '@/api/queries'
+import { runnerEntry, useRunners } from '@/api/runners'
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import { AddProjectDialog } from '@/components/add-project-dialog'
 import { CloneProjectDialog } from '@/components/clone-project-dialog'
 import { CreateProjectDialog } from '@/components/create-project-dialog'
@@ -43,25 +45,45 @@ function renderToolHint(raw: string): ReactNode {
   })
 }
 
-/** The Add project launchers: what exists (local folder, repository, checkout folder) and the
- *  three ways to add one. */
+/** Capitalize an all-lowercase runner display name while preserving mixed-case and acronym names. */
+function formatRunnerLabel(label: string): string {
+  if (!label) return label
+  return label === label.toLowerCase() ? `${label[0]!.toUpperCase()}${label.slice(1)}` : label
+}
+
+/** Display label for a tool check: registered coding-agent runners show their canonical display
+ *  name from `GET /api/v1/runners`; non-agent CLI tools stay raw monospace. */
+function toolDisplayName(name: string, runners: RunnersResponse | undefined): { label: string; isAgent: boolean } {
+  const entry = runnerEntry(runners, name)
+  if (!entry) return { label: name, isAgent: false }
+  return { label: formatRunnerLabel(entry.displayName), isAgent: true }
+}
+
+/** The Add project launchers: active project context (local folder, repository, checkout folder)
+ *  and the three ways to add one. */
 function AddProjectSection({ health, projects, repository, onAction }: {
   health: HealthQuery
   projects: ProjectsQuery
   repository: string | undefined
   onAction: (action: ProjectAction) => void
 }) {
+  const hasContext = Boolean(health.data?.repoRoot || repository || projects.data?.projectsDir)
   return (
     <section className="space-y-4 rounded-xl border border-border bg-card p-6 max-md:p-4" aria-labelledby="add-project-heading">
       <div>
         <h2 id="add-project-heading" className="text-base font-semibold text-foreground">Add project</h2>
         <p className="mt-1 text-[13px] leading-[1.5] text-muted-foreground">Start a new repository, open an existing local folder, or clone a GitHub repository.</p>
       </div>
-      <dl className="space-y-2.5 text-[13px] leading-[1.5] text-muted-foreground">
-        {health.data?.repoRoot ? <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-[160px_minmax(0,1fr)]"><dt className="font-medium text-foreground">Local folder</dt><dd className="min-w-0 font-mono text-xs break-all">{health.data.repo?.root ?? health.data.repoRoot}</dd></div> : null}
-        {repository ? <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-[160px_minmax(0,1fr)]"><dt className="font-medium text-foreground">Repository</dt><dd className="min-w-0 font-mono text-xs break-all">{repository.replace(/^https:\/\//, '')}</dd></div> : null}
-        {projects.data?.projectsDir ? <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-[160px_minmax(0,1fr)]"><dt className="font-medium text-foreground">Checkout folder</dt><dd className="min-w-0 font-mono text-xs break-all">{projects.data.projectsDir}</dd></div> : null}
-      </dl>
+      {hasContext ? (
+        <div className="border-y border-border py-3.5">
+          <h3 className="mb-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Active project</h3>
+          <dl className="space-y-2 text-[13px] leading-[1.5] text-muted-foreground">
+            {health.data?.repoRoot ? <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-[160px_minmax(0,1fr)]"><dt className="font-medium text-foreground">Local folder</dt><dd className="min-w-0 font-mono text-xs break-all">{health.data.repo?.root ?? health.data.repoRoot}</dd></div> : null}
+            {repository ? <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-[160px_minmax(0,1fr)]"><dt className="font-medium text-foreground">Repository</dt><dd className="min-w-0 font-mono text-xs break-all">{repository.replace(/^https:\/\//, '')}</dd></div> : null}
+            {projects.data?.projectsDir ? <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-[160px_minmax(0,1fr)]"><dt className="font-medium text-foreground">Checkout folder</dt><dd className="min-w-0 font-mono text-xs break-all">{projects.data.projectsDir}</dd></div> : null}
+          </dl>
+        </div>
+      ) : null}
       <div className="flex flex-wrap gap-2.5">
         <Button variant="outline" className="h-10 rounded-lg px-3.5 text-xs font-medium max-md:h-11" data-action="new-project" onClick={() => onAction('new')}>New project</Button>
         <Button variant="outline" className="h-10 rounded-lg px-3.5 text-xs font-medium max-md:h-11" onClick={() => onAction('local')}>Open local folder</Button>
@@ -72,8 +94,9 @@ function AddProjectSection({ health, projects, repository, onAction }: {
 }
 
 /** The tools diagnostics panel: one row per check in an aligned fixed-tool-column grid, plus recheck and copy. */
-function ToolsDiagnosticsSection({ health, copying, onCopy }: {
+function ToolsDiagnosticsSection({ health, runners, copying, onCopy }: {
   health: HealthQuery
+  runners: RunnersResponse | undefined
   copying: boolean
   onCopy: () => Promise<void>
 }) {
@@ -91,10 +114,11 @@ function ToolsDiagnosticsSection({ health, copying, onCopy }: {
       {health.data ? <dl className="divide-y divide-border border-y border-border text-[13px] leading-[1.5] text-muted-foreground">
         {health.data.checks.map((check) => {
           const hint = toolHint(check)
+          const tool = toolDisplayName(check.name, runners)
           return <div key={check.name} data-slot="tool-row" data-tool={check.name} data-available={check.available} className="grid grid-cols-1 gap-x-4 gap-y-1 py-3 sm:grid-cols-[160px_minmax(0,1fr)] sm:items-center">
             <dt className="flex items-center gap-2.5">
               <StatusDot tone={toolTone(check)} />
-              <span className="font-mono text-[13px] font-medium text-foreground">{check.name}</span>
+              <span className={tool.isAgent ? 'text-[13px] font-medium text-foreground' : 'font-mono text-[13px] font-medium text-foreground'}>{tool.label}</span>
             </dt>
             <dd className="flex min-w-0 items-center gap-x-3 text-muted-foreground">
               <span className="min-w-0 break-words">{toolStateLabel(check)}{check.version ? ` · ${check.version}` : ''}</span>
@@ -117,6 +141,7 @@ function ToolsDiagnosticsSection({ health, copying, onCopy }: {
 export function WorkspaceToolsRoute() {
   const health = useHealth()
   const projects = useProjects()
+  const runners = useRunners().data
   const repository = githubRepoBase(health.data?.repo?.remote)
   const [projectAction, setProjectAction] = useState<'new' | 'local' | 'clone' | null>(null)
   const [copying, setCopying] = useState(false)
@@ -142,7 +167,7 @@ export function WorkspaceToolsRoute() {
         </div>
       </header>
       <AddProjectSection health={health} projects={projects} repository={repository} onAction={setProjectAction} />
-      <ToolsDiagnosticsSection health={health} copying={copying} onCopy={copyDiagnostics} />
+      <ToolsDiagnosticsSection health={health} runners={runners} copying={copying} onCopy={copyDiagnostics} />
       {projectAction === 'new' ? <CreateProjectDialog open onOpenChange={(open) => { if (!open) setProjectAction(null) }} /> : null}
       {projectAction === 'local' ? <AddProjectDialog open onOpenChange={(open) => { if (!open) setProjectAction(null) }} /> : null}
       {projectAction === 'clone' ? <CloneProjectDialog open onOpenChange={(open) => { if (!open) setProjectAction(null) }} /> : null}

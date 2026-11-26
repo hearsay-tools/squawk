@@ -3,20 +3,25 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { productCommand } from '@/lib/product-name'
-import { cliOf } from '@/lib/automation-cli'
+import { cliOf, shellQuote } from '@/lib/automation-cli'
 import { useActiveProjectId } from '@/lib/project-router'
 
 import type { AutomationDraft } from './editor-draft'
 
 /**
- * "Copy as CLI" (#774, port of upstream #985): what the form holds, as the `cez automation` line
+ * "Copy as CLI" (#774, port of upstream #985): what the form holds, as the `hsq automation` line
  * that would create it — the flag form when every key has a flag, the JSON form otherwise. Built
  * from the body Save sends (`cliOf` → `toCreateBody`), so the two cannot disagree.
  */
 export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
   const projectId = useActiveProjectId()
   const origin = window.location.origin
-  const line = useMemo(() => cliOf(draft, projectId ? { origin, projectId } : undefined), [draft, origin, projectId])
+  const line = useMemo(() => {
+    const command = cliOf(draft)
+    return projectId
+      ? `HSQ_COCKPIT_URL=${shellQuote(origin)} HSQ_PROJECT_ID=${shellQuote(projectId)} ${command}`
+      : command
+  }, [draft, origin, projectId])
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   useEffect(() => () => clearTimeout(timer.current), [])

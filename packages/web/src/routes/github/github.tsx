@@ -290,7 +290,7 @@ export function GithubRoute({
     // The route ends with one scrollport-height workspace, with no bottom padding:
     // at maximum page scroll its tabs align with main's top without sticky overlap.
     // Phone stays stacked document-flow. (#523)
-    <div ref={layout.routeRef} data-route="github" className="flex min-h-full flex-col gap-3 px-4 pt-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:gap-5 md:px-9 md:pt-5 md:pb-4">
+    <div ref={layout.routeRef} data-route="github" className="flex min-h-full flex-col gap-3 px-4 pt-7 pb-[calc(90px+env(safe-area-inset-bottom))] md:gap-5 md:px-9 md:pt-7 md:pb-4">
       <GithubMasthead view={view} activeFilter={activeFilter} isDesktop={isDesktop} rawFilterParam={rawFilterParam} n={n} gh={gh} />
       <div ref={layout.workspaceRef} data-slot="gh-workspace" data-stacked={layout.panesStacked} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:h-[calc(var(--gh-workspace-height,calc(100dvh-4rem))-1rem)] md:flex-none md:gap-5">
         <header data-slot="gh-header" className="flex shrink-0 flex-col gap-3 bg-background md:gap-4">
@@ -597,12 +597,12 @@ function GithubMasthead({ view, activeFilter, isDesktop, rawFilterParam, n, gh }
   gh: GithubData
 }) {
   return (
-    <div data-slot="gh-masthead" className="flex min-w-0 shrink-0 flex-col gap-1 md:flex-row md:items-baseline md:gap-3">
-      <h1 className="text-[20px] font-semibold tracking-tight text-foreground">
+    <div data-slot="gh-masthead" className="flex min-w-0 shrink-0 flex-col">
+      <h1 className="text-[26px] leading-[1.2] font-semibold tracking-tight text-foreground md:text-[28px]">
         {isDesktop ? `${view === 'issues' ? 'Issues' : 'Pull requests'} · ${ACTIVE_FILTER_LABEL[activeFilter]}` : 'GitHub'}
       </h1>
       {rawFilterParam !== null && n === undefined ? (
-        <div data-slot="gh-filter-context" className="flex min-w-0 items-center gap-3 md:hidden">
+        <div data-slot="gh-filter-context" className="mt-1 flex min-w-0 items-center gap-3 md:hidden">
           <Link to="/github" data-slot="gh-back-filters" className="inline-flex min-h-11 items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
             <ArrowLeftIcon size={16} aria-hidden="true" className="size-3.5" />
             Back to filters
@@ -615,10 +615,10 @@ function GithubMasthead({ view, activeFilter, isDesktop, rawFilterParam, n, gh }
         </div>
       ) : null}
       {gh.repo ? (
-        <span className="min-w-0 truncate text-xs text-muted-foreground">
+        <p className="mt-1 min-w-0 truncate text-[13px] text-muted-foreground">
           <span data-slot="gh-repo">{gh.repo}</span>
           <span data-slot="gh-synced"> · {gh.syncedAt ? `Synced ${shortAge(gh.syncedAt)} ago` : 'Not synced yet'}</span>
-        </span>
+        </p>
       ) : null}
     </div>
   )
@@ -703,7 +703,7 @@ function GithubFilterToolbar({ view, gh, filters, labelOptions, labelColors, sea
         type="button"
         disabled={!filters.filtering}
         data-slot="gh-clear-filters"
-        className="min-h-11 min-w-11 rounded-md border border-border bg-card px-3.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:text-muted-foreground disabled:opacity-70"
+        className="min-h-11 min-w-11 rounded-md border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:text-muted-foreground disabled:opacity-60"
         onClick={filters.clearFilters}
       >
         Clear filters
@@ -780,7 +780,7 @@ function GithubListPane({
         // search found, is finding, or could not do. No verdict to report (the hits below are
         // the answer) means no wrapper at all, so its padding cannot leave a gap.
         verdict && (
-          <div data-slot="gh-empty" className="px-4 py-4 text-sm text-soft-foreground">
+          <div data-slot="gh-empty" className="px-4 py-4 text-sm text-muted-foreground">
             {verdict}
           </div>
         )
@@ -795,7 +795,7 @@ function GithubListPane({
       <GithubExpandList view={view} n={n} count={items.length} expanded={expanded} onExpandedChange={onExpandedChange} />
 
       {items.length > 0 && search.searchWanted && verdict ? (
-        <div data-slot="gh-search-status" role="status" className="px-4 py-4 text-sm text-soft-foreground">
+        <div data-slot="gh-search-status" role="status" className="px-4 py-4 text-sm text-muted-foreground">
           {verdict}
         </div>
       ) : null}
@@ -1202,12 +1202,12 @@ function LabelFilter({
           data-slot="gh-label-filter"
           disabled={options.length === 0}
           className={cn(
-            'flex min-h-11 min-w-11 shrink-0 items-center gap-1 rounded-md border border-input bg-card px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50',
+            'inline-flex min-h-11 min-w-11 shrink-0 items-center gap-1.5 rounded-md border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60',
             selected.length > 0 && 'border-accent-strong/60 text-foreground',
           )}
         >
           {selected.length > 0 ? `Labels · ${selected.length}` : 'Labels'}
-          <ChevronDownIcon size={12} aria-hidden="true" className="size-3 shrink-0 text-soft-foreground" />
+          <ChevronDownIcon size={12} aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={6} className="w-60 p-0">

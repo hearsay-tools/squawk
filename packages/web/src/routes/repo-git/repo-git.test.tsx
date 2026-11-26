@@ -801,7 +801,7 @@ describe('the Git view Not landed section', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete branch…' }))
     const dialog = await screen.findByRole('alertdialog')
     expect(dialog.textContent).toContain('this branch is the only copy of the work')
-    expect(document.querySelector('[data-slot="delete-branch-dropped"]')?.textContent).toBe('3 commits will be dropped (+140 −22), the latest “feat(git): worktree sizes in the panel” (9d04c1f).')
+    expect(document.querySelector('[data-slot="delete-branch-dropped"]')?.textContent).toBe('3 commits will be dropped (+140 −22), the latest “feat(git): worktree sizes in the panel” (9d04c1f2).')
     const confirm = document.querySelector<HTMLButtonElement>('[data-action="delete-branch-confirm"]')!
     expect(confirm.disabled).toBe(true)
     const input = document.querySelector<HTMLInputElement>('[data-slot="delete-branch-confirm"]')!

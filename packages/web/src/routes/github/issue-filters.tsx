@@ -43,9 +43,9 @@ function IssueAssigneePicker({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className={control} disabled={options.length === 0}>
+        <button type="button" className={`${control} inline-flex items-center gap-1.5`} disabled={options.length === 0}>
           Assignee{assignees.length ? ` · ${assignees.length}` : ''}
-          <ChevronDownIcon size={12} aria-hidden="true" className="ml-1 inline size-3 shrink-0 align-[-1px] text-soft-foreground" />
+          <ChevronDownIcon size={12} aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 max-w-[calc(100vw-2rem)] p-2">

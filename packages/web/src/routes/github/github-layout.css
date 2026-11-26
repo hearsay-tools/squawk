@@ -83,8 +83,8 @@
 @media (min-width: 768px) {
   [data-route='github'] [data-slot='gh-tabs'] { gap: 22px; min-height: 0; margin-inline: -36px; padding-inline: 36px; }
   [data-route='github'] [data-slot='gh-tabs'] > a { min-height: 0; padding-block: 0 10px; padding-inline: 0; }
-  [data-route='github'] [data-slot='gh-tabs'] .gh-utility { min-height: 30px; padding-block: 0; padding-inline: 10px; margin-block-end: 8px; border-radius: 7px; font-size: 12px; }
-  [data-route='github'] [data-slot='gh-filter-toolbar'] { gap: 8px; }
-  [data-route='github'] [data-slot='gh-filter-toolbar'] :is(input, button) { min-height: 34px; height: 34px; padding-block: 0; border-radius: 7px; font-size: 12.5px; }
+  [data-route='github'] [data-slot='gh-tabs'] .gh-utility { height: 32px; min-height: 32px; padding-block: 0; padding-inline: 12px; margin-block-end: 8px; border-radius: 7px; font-size: 12px; line-height: 1; white-space: nowrap; }
+  [data-route='github'] [data-slot='gh-filter-toolbar'] { gap: 10px; }
+  [data-route='github'] [data-slot='gh-filter-toolbar'] :is(input, button) { min-height: 36px; height: 36px; padding-block: 0; border-radius: 7px; font-size: 12.5px; }
   [data-route='github'] [data-slot='gh-filter-toolbar'] [data-slot='gh-search'] { padding-inline-start: 32px; color: var(--foreground); }
 }

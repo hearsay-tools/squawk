@@ -71,16 +71,22 @@ function SkillsResult({ skills, search, openId, runner, account, unchecked }: {
   return <SkillGroups groups={groupRunnerSkills(matches)} openId={openId} searching={search.trim() !== ''} runner={runner} account={account} />
 }
 
-/** Renders once the runners list has answered, so every button shows the runner's name. */
+/** Capitalize an all-lowercase runner display name while preserving mixed-case and acronym names. */
+function formatRunnerLabel(label: string): string {
+  if (!label) return label
+  return label === label.toLowerCase() ? `${label[0]!.toUpperCase()}${label.slice(1)}` : label
+}
+
+/** Renders once the runners list has answered, so every button shows the runner's canonical name. */
 function RunnerSwitch({ runner, onChange }: { runner: Runner; onChange: (runner: Runner) => void }) {
   const runners = useRunners().data
   if (!runners) return null
   return (
-    <div role="group" aria-label="Runner" className="flex max-w-full gap-0.5 overflow-x-auto rounded-[10px] border border-border bg-card p-[3px]">
+    <div role="group" aria-label="Runner" className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-border bg-muted/60 p-1">
       {runners.runners.map((entry) => (
         <button key={entry.id} type="button" aria-pressed={entry.id === runner} onClick={() => onChange(entry.id)}
-          className="h-8 shrink-0 rounded-[7px] px-3 text-[13px] text-muted-foreground focus-visible:outline-2 aria-pressed:bg-muted aria-pressed:font-semibold aria-pressed:text-foreground pointer-hover:text-foreground">
-          {runnerDisplayName(runners, entry.id)}
+          className="h-8 shrink-0 rounded-md border border-transparent px-3 text-[13px] font-medium text-muted-foreground transition-colors focus-visible:outline-2 aria-pressed:border-border aria-pressed:bg-card aria-pressed:font-semibold aria-pressed:text-foreground aria-pressed:shadow-xs pointer-hover:text-foreground max-md:h-11">
+          {formatRunnerLabel(runnerDisplayName(runners, entry.id))}
         </button>
       ))}
     </div>

@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import type { AutomationDefinition, AutomationKind, Runner } from '@open-mercato/cezar-api-client'
 
 import { ApiError, createAutomation, deleteAutomation, setAutomationEnabled, updateAutomation } from '@/api/client'
@@ -53,12 +53,17 @@ function Section({
   section: Section
   children: ReactNode
 }) {
+  const headingId = useId()
   return (
-    <fieldset className="grid min-w-0 gap-3 rounded-xl border border-border bg-card p-4">
-      <legend className={hideLegend ? 'sr-only' : 'mb-1 text-sm font-semibold text-foreground'}>{title}</legend>
+    <section
+      role={hideLegend ? undefined : 'group'}
+      aria-labelledby={hideLegend ? undefined : headingId}
+      className="grid min-w-0 gap-3.5 rounded-xl border border-border bg-card p-5"
+    >
+      {hideLegend ? null : <h2 id={headingId} className="text-sm font-semibold text-foreground">{title}</h2>}
       {children}
       {failure?.section === section && !failure.conflict ? <p role="alert" className="text-sm break-words text-destructive">{failure.message}</p> : null}
-    </fieldset>
+    </section>
   )
 }
 
@@ -117,7 +122,14 @@ function TaskFields({ draft, patch, saving, automation }: {
     <>
       <div className="grid gap-1.5">
         <Label htmlFor="automation-prompt">Prompt</Label>
-        <Textarea id="automation-prompt" value={draft.prompt} onChange={(event) => patch({ prompt: event.target.value })} rows={3} required />
+        <Textarea
+          id="automation-prompt"
+          value={draft.prompt}
+          onChange={(event) => patch({ prompt: event.target.value })}
+          rows={3}
+          className="[field-sizing:fixed] min-h-[88px] resize-y bg-background"
+          required
+        />
         <p className="text-xs break-words text-muted-foreground">
           {draft.kind === 'schedule'
             ? <>Available: {'{{date}}'} {'{{time}}'} {'{{project}}'} {'{{automation}}'}. A run-context block is appended automatically.</>
@@ -230,14 +242,21 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
     }
   }
 
+  const formId = useId()
   const saveLabel = automation ? 'Save changes' : draft.enabled ? 'Save and enable' : 'Save paused'
   const isSchedule = draft.kind === 'schedule'
   return (
     <PageFrame
       title={automation ? 'Edit automation' : 'New automation'}
       subtitle="Define when it runs and the ordinary task it launches."
+      action={
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" asChild><Link to="/automations">Cancel</Link></Button>
+          <Button type="submit" form={formId} variant="primary" disabled={saving}>{saving ? 'Saving…' : saveLabel}</Button>
+        </div>
+      }
     >
-      <form className="automation-editor grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_320px] md:items-start" onSubmit={submit}>
+      <form id={formId} className="automation-editor grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_320px] md:items-start" onSubmit={submit}>
         <div className="grid min-w-0 gap-3.5">
           <Section title="Name" hideLegend section="name" failure={failure}>
             <div className="grid gap-1.5">
@@ -265,10 +284,6 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
               {failure.conflict && onReload ? <Button type="button" variant="outline" onClick={onReload}>Reload</Button> : null}
             </div>
           ) : null}
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" variant="primary" disabled={saving}>{saving ? 'Saving…' : saveLabel}</Button>
-            <Button type="button" variant="outline" asChild><Link to="/automations">Cancel</Link></Button>
-          </div>
           {automation ? (
             <div className="grid justify-items-start gap-2 border-t pt-4">
               {confirmingDelete ? (

@@ -98,10 +98,10 @@ function SkillRow({ skill, open, runner, account }: { skill: RunnerSkill; open: 
   return (
     <details data-slot="skill-row" data-skill={skill.id} data-skill-path={skill.path} name="skill-details" open={open || undefined}
       className="group/skill border-t border-border/60 open:bg-sidebar-row-selected">
-      <summary className="grid min-h-11 cursor-pointer list-none grid-cols-1 items-start gap-x-4 gap-y-1 py-2.5 pr-3.5 pl-9 focus-visible:outline-2 focus-visible:-outline-offset-2 pointer-hover:bg-sidebar-row-hover sm:grid-cols-[minmax(10rem,15rem)_minmax(0,1fr)] [&::-webkit-details-marker]:hidden">
+      <summary className="grid min-h-11 cursor-pointer list-none grid-cols-1 items-start gap-x-4 gap-y-1 py-2.5 pr-4 pl-9 focus-visible:outline-2 focus-visible:-outline-offset-2 pointer-hover:bg-sidebar-row-hover sm:grid-cols-[minmax(10rem,15rem)_minmax(0,1fr)] [&::-webkit-details-marker]:hidden">
         <span className="truncate pt-0.5 text-[13.5px] font-semibold text-foreground" title={skill.name}>{shortSkillName(skill)}</span>
         {skill.description
-          ? <span className="line-clamp-2 text-[13px] leading-snug text-muted-foreground group-open/skill:hidden">{skill.description}</span>
+          ? <span className="min-w-0 line-clamp-2 text-[13px] leading-[1.45] text-muted-foreground [overflow-wrap:anywhere] group-open/skill:hidden">{skill.description}</span>
           : null}
       </summary>
       <div className="pr-3.5 pb-4 pl-9">

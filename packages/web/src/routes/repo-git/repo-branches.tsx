@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { CircleCheckIcon, CircleXIcon, Clock3Icon } from 'lucide-react'
 import { GitBranchIcon, GitPullRequestIcon, PlusIcon, SearchIcon } from '@/components/design-icons'
 import { useState, type FormEvent } from 'react'
 
@@ -75,7 +76,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
   }
 
   return (
-    <section data-slot="repo-branches" className="grid min-w-0 grid-cols-1 gap-5 px-4 py-5 md:grid-cols-[minmax(0,1fr)_290px] md:px-9">
+    <section data-slot="repo-branches" className="grid min-w-0 grid-cols-1 gap-5 px-4 pt-0 pb-9 md:grid-cols-[minmax(0,1fr)_290px] md:px-9">
       <div className="min-w-0 rounded-xl border border-border bg-card p-5">
         <h2 className="sr-only">Branches</h2>
         <label className="relative block">
@@ -93,7 +94,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
             const current = name === info.branch
             const entry = byName.get(name)
             return (
-              <li key={name} data-slot="branch-row" data-branch={name} data-branch-class={entry?.class} className="flex min-h-12 flex-col items-start justify-center gap-1.5 py-2 md:flex-row md:items-center md:justify-start md:gap-2.5 md:py-2">
+              <li key={name} data-slot="branch-row" data-branch={name} data-branch-class={entry?.class} className="flex min-h-[52px] flex-col items-start justify-center gap-1.5 py-2.5 md:flex-row md:items-center md:justify-start md:gap-2.5">
                 <span className="flex min-w-0 items-center gap-[8px]">
                   {entry?.runId ? (
                     <Link
@@ -113,7 +114,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
                 {name.startsWith('cez/') && !current ? null : current ? (
                   <span
                     data-slot="branch-current"
-                    className="md:ml-auto flex shrink-0 items-center rounded-md bg-accent-strong/10 px-2 py-1 text-[12px] font-medium text-accent-text"
+                    className="flex h-8 shrink-0 items-center rounded-md bg-accent-strong/10 px-2.5 text-[12px] font-medium text-accent-text md:ml-auto"
                   >
                     Current
                   </span>
@@ -212,7 +213,7 @@ function PullRequestRow({ pr }: { pr: GithubItem }) {
       {pr.checks ? <ChecksBadge checks={pr.checks} /> : null}
     </>
   )
-  const rowClass = 'flex min-w-0 items-center gap-2 rounded-sm px-1.5 py-2'
+  const rowClass = 'flex min-h-11 min-w-0 items-center gap-2 rounded-sm px-1.5 py-2'
   return (
     <li data-slot="pr-row" data-number={pr.number}>
       {/* href protocol guard (#431): link only for http(s) URLs, else inert row. */}
@@ -227,19 +228,21 @@ function PullRequestRow({ pr }: { pr: GithubItem }) {
   )
 }
 
-/** The checks badge — the same three words the GitHub tab uses, tinted by outcome. */
+/** The checks badge — the same three words the GitHub tab uses, paired with crisp status icons. */
 function ChecksBadge({ checks }: { checks: 'passing' | 'failing' | 'pending' }) {
+  const Icon = checks === 'passing' ? CircleCheckIcon : checks === 'failing' ? CircleXIcon : Clock3Icon
   return (
     <span
       data-slot="pr-checks"
       data-checks={checks}
       className={cn(
-        'shrink-0 text-[12px] font-medium',
+        'inline-flex shrink-0 items-center gap-1 text-[12px] font-medium',
         checks === 'passing' && 'text-success',
         checks === 'failing' && 'text-danger',
         checks === 'pending' && 'text-muted-foreground',
       )}
     >
+      <Icon aria-hidden="true" className="size-3.5 shrink-0" />
       {checks}
     </span>
   )

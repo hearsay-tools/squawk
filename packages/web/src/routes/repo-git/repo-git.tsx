@@ -86,14 +86,16 @@ function RepoView({ repo, info, section }: { repo: RepoResponse; info: RepoInfo;
       <RepoBackLink />
       <header
         data-slot="repo-header"
-        className="flex flex-col gap-1 border-b border-border px-4 py-4 md:min-h-[64px] md:flex-row md:items-center md:gap-3 md:px-9"
+        className="flex flex-wrap items-start justify-between gap-4 px-4 pt-7 pb-5 md:px-9"
       >
-        <h1 className="min-w-0 flex-1 truncate text-[20px] font-semibold tracking-tight text-foreground">
-          {gitSectionLabel(section, info.branch)}
-        </h1>
-        <p data-slot="repo-meta" className="min-w-0 truncate text-xs text-muted-foreground">
-          <SectionMeta repo={repo} info={info} section={section} />
-        </p>
+        <div className="min-w-0">
+          <h1 className="text-[26px] leading-[1.2] font-semibold tracking-tight text-foreground md:text-[28px]">
+            {gitSectionLabel(section, info.branch)}
+          </h1>
+          <p data-slot="repo-meta" className="mt-1 text-[13px] text-muted-foreground">
+            <SectionMeta repo={repo} info={info} section={section} />
+          </p>
+        </div>
       </header>
 
       {section === 'main' ? (
@@ -101,7 +103,7 @@ function RepoView({ repo, info, section }: { repo: RepoResponse; info: RepoInfo;
       ) : section === 'not-landed' ? (
         <RepoNotLandedSection />
       ) : section === 'cleanup' ? (
-        <div data-slot="repo-cleanup" className="flex flex-col gap-4 px-4 pt-5 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pb-9">
+        <div data-slot="repo-cleanup" className="flex flex-col gap-4 px-4 pt-0 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pb-9">
           <WorktreesPanel />
           <CleanupBranchesCard base={repo.baseBranch ?? info.branch} />
         </div>

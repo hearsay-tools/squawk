@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
 
-import { chipClass } from '@/components/picker-pill'
 import { cn } from '@/lib/utils'
 
-/** A toggle chip at form size: the composer's pill grammar on a 44 px target. `aria-pressed`
- *  carries the state for assistive tech; the fill carries it for everyone else. */
+/** A calm segmented-control button at touch-safe form size (44 px target): neutral surface when
+ *  active inside a muted track, matching Skills and Agent Config. `aria-pressed` carries the state
+ *  for assistive tech. */
 export function ChipButton({ pressed, onClick, disabled, children }: { pressed: boolean; onClick: () => void; disabled?: boolean; children: ReactNode }) {
   return (
     <button
@@ -13,9 +13,10 @@ export function ChipButton({ pressed, onClick, disabled, children }: { pressed: 
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        chipClass,
-        'h-11 px-4 text-[13px]',
-        pressed && 'border-transparent bg-accent-strong text-accent-strong-foreground hover:bg-accent-strong hover:text-accent-strong-foreground',
+        'inline-flex min-h-11 items-center justify-center rounded-md border px-3.5 text-[13px] font-medium transition-colors outline-hidden focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50',
+        pressed
+          ? 'border-border bg-card font-semibold text-foreground shadow-xs'
+          : 'border-transparent bg-transparent text-muted-foreground hover:text-foreground',
       )}
     >
       {children}

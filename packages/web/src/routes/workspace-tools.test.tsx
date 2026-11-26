@@ -2,12 +2,17 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router'
 import { WorkspaceToolsRoute } from './workspace-tools'
+import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 const mocks = vi.hoisted(() => ({ refetch: vi.fn(), copy: vi.fn(), allAvailable: false, hint: 'Install the Codex CLI' }))
 vi.mock('@/api/queries', () => ({
   useHealth: () => ({ data: { version: '1.2.3', repoRoot: '/local/repo', checks: [{ name: 'git', available: true, version: '2.50' }, mocks.allAvailable ? { name: 'codex', available: true, version: '0.9' } : { name: 'codex', available: false, hint: mocks.hint }], capabilities: {} }, refetch: mocks.refetch, isFetching: false, isError: false }),
   useProjects: () => ({ data: { projectsDir: '/local/projects' } }),
 }))
+vi.mock('@/api/runners', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/runners')>()
+  return { ...actual, useRunners: () => ({ data: RUNNERS_RESPONSE }) }
+})
 vi.mock('@/components/add-project-dialog', () => ({ AddProjectDialog: () => <div role="dialog" aria-label="Choose local folder" /> }))
 vi.mock('@/components/clone-project-dialog', () => ({ CloneProjectDialog: () => <div role="dialog" aria-label="Clone repository" /> }))
 vi.mock('@/components/create-project-dialog', () => ({ CreateProjectDialog: () => <div role="dialog" aria-label="New project" /> }))
@@ -40,7 +45,10 @@ describe('Workspace tools', () => {
     const git = container.querySelector('[data-slot="tool-row"][data-tool="git"]')!
     const codex = container.querySelector('[data-slot="tool-row"][data-tool="codex"]')!
     expect(git.textContent).toContain('Installed')
+    expect(git.textContent).toContain('git')
+    expect(codex.textContent).toContain('Codex')
     expect(codex.textContent).toContain('Not installed')
+    expect(screen.getByRole('heading', { name: 'Active project' })).toBeTruthy()
     expect(codex.querySelector('[data-slot="tool-hint"]')?.textContent).toBe('Install the Codex CLI')
     expect(git.querySelector('[data-slot="tool-hint"]')).toBeNull()
     for (const row of container.querySelectorAll('[data-slot="tool-row"]')) {

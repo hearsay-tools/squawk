@@ -152,7 +152,7 @@ function CommitRow({ commit, selected }: { commit: CommitListItem; selected: boo
             {commit.stat ? <DiffStatLabel stat={commit.stat} /> : null}
           </span>
         </span>
-        <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">{commit.shaLabel}</span>
+        <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground" title={commit.sha}>{commit.shaLabel}</span>
       </Link>
     </div>
   )

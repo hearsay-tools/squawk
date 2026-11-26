@@ -52,7 +52,7 @@ function ChangesView({ run }: { run: ApiRun }) {
   const desktop = useIsDesktop()
 
   const [mode, setMode] = useState<DiffMode>('unified')
-  const [wrap, setWrap] = useState(false)
+  const [wrap, setWrap] = useState(true)
   const [preview, setPreview] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [commitOpen, setCommitOpen] = useState(false)
@@ -312,7 +312,7 @@ function ChangesLayout({
 
 /** The facade's expandable-context source: the file's current text from the worktree, or
  *  null wherever the server can't honestly serve it (dir, binary, too large, gone). */
-async function loadWorktreeText(runId: string, path: string): Promise<string | null> {
+export async function loadWorktreeText(runId: string, path: string): Promise<string | null> {
   try {
     const entry = await getRunFile(runId, path)
     if (entry.type !== 'file' || entry.binary || entry.tooLarge) return null

@@ -26,14 +26,14 @@ export function ScheduleFields({ value, stored, onChange, timeZone }: { value: N
     : { type })
   return (
     <div className="grid gap-4">
-      <div role="group" aria-label="Repeat" className="flex flex-wrap gap-2">
+      <div role="group" aria-label="Repeat" className="inline-flex w-fit max-w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/60 p-1">
         {SHAPES.map((shape) => (
           <ChipButton key={shape.type} pressed={value.type === shape.type} onClick={() => choose(shape.type)}>{shape.label}</ChipButton>
         ))}
       </div>
       {value.type === 'once' ? <OnceFields value={value} stored={stored} onChange={onChange} /> : null}
       {value.type === 'weekly' ? (
-        <div role="group" aria-label="Day of the week" className="flex flex-wrap gap-2">
+        <div role="group" aria-label="Day of the week" className="inline-flex w-fit max-w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/60 p-1">
           {WEEKDAY_NAMES.map((name, index) => (
             <ChipButton key={name} pressed={value.day === index + 1} onClick={() => set({ day: index + 1 })}>{name}</ChipButton>
           ))}

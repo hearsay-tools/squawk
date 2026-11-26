@@ -333,15 +333,29 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
             Portable skill chains. Steps run from top to bottom.
           </p>
         </div>
-        <Button
-          variant="primary"
-          data-slot="wb-new"
-          className="min-h-11"
-          onClick={() => setDraft(emptyDraft())}
-        >
-          <PlusIcon aria-hidden="true" className="size-4" />
-          New workflow
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            data-slot="wb-new"
+            className="min-h-11"
+            onClick={() => setDraft(emptyDraft())}
+          >
+            <PlusIcon aria-hidden="true" className="size-4" />
+            New workflow
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            data-slot="wb-save"
+            className="min-h-11"
+            disabled={save.isPending}
+            onClick={runSave}
+          >
+            <CheckIcon aria-hidden="true" className="size-4" />
+            Save workflow
+          </Button>
+        </div>
       </header>
 
       <DndContext
@@ -437,23 +451,6 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
                 <span className="hidden @min-[900px]:inline">Drag to reorder. The agent follows this sequence from top to bottom.</span>
                 <span className="@min-[900px]:hidden">Use Move up / Move down to reorder without dragging.</span>
               </p>
-              <footer className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  Review the name and steps, then save to a workflow file.
-                </p>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  className="min-h-11 max-sm:w-full"
-                  data-slot="wb-save"
-                  disabled={save.isPending}
-                  onClick={runSave}
-                >
-                  <CheckIcon aria-hidden="true" className="size-3" />
-                  Save
-                </Button>
-              </footer>
             </section>
 
             {/* ---- palette + YAML preview ------------------------------------------------- */}
