@@ -3,6 +3,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { readFileSync, readdirSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { resolve } from 'node:path'
+import { parse } from '@babel/parser'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { FIXTURE_BOOT_BUDGET_MS, captureFixtureServer, spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from '../../e2e/fixture-server'
@@ -45,11 +46,19 @@ afterEach(async () => {
 })
 
 const serveStarts = (source: string) => [...source.matchAll(/\b(spawnFixtureServer|spawn)\(\s*(?:process\.execPath,\s*)?\[([^\]]*'serve'[^\]]*)\]/g)]
+// True when line `index` (0-based) is a line comment and the last import ends on the line before it,
+// read from the syntax tree, so a copy inside a string or a block comment does not count.
+const followsLastImport = (source: string, index: number) => {
+  // Error recovery accepts the synthetic sources below, which declare one const twice.
+  const tree = parse(source, { sourceType: 'module', plugins: ['typescript'], errorRecovery: true })
+  const imports = tree.program.body.filter(node => node.type === 'ImportDeclaration' || node.type === 'TSImportEqualsDeclaration')
+  const comment = tree.comments?.some(node => node.type === 'CommentLine' && node.loc?.start.line === index + 1)
+  return Boolean(comment) && imports.length > 0 && Math.max(...imports.map(node => node.loc?.end.line ?? 0)) === index
+}
 // hearsay-tools/cezarion#1084: each spec declares its own start count, so a PR that adds a
 // fixture-server spec edits only that spec, never a shared total (see e2e/fixture-server.md).
 // Any indentation or spacing is a candidate, so a near-miss is reported instead of ignored; the
-// line before the one declaration must end an import and no import may follow it, which also
-// rules out a copy inside a string or a block comment.
+// one declaration must follow the last import directly (followsLastImport).
 const startDeclarationProblems = (file: string, source: string): string[] => {
   const starts = serveStarts(source).length
   const lines = source.split('\n')
@@ -61,8 +70,7 @@ const startDeclarationProblems = (file: string, source: string): string[] => {
   if (!candidate) return starts ? problem(`starts ${starts} fixture server(s) but declares none; add ${line} on its own line directly after the imports`) : []
   const { raw, text, index } = candidate
   if (!starts) return problem(`declares \`${text}\` but starts no fixture server; remove that line`)
-  const endsImport = /(?:\bfrom|^import)[ \t]+(['"])[^'"]+\1;?\s*$/.test(lines[index - 1] ?? '')
-  if (!endsImport || lines.slice(index + 1).some(later => /^import\b(?![(.])/.test(later))) return problem(`\`${text}\` is not directly after the imports; put ${line} on its own line directly after the last import and remove this one`)
+  if (!followsLastImport(source, index)) return problem(`\`${text}\` is not directly after the imports; put ${line} on its own line directly after the last import and remove this one`)
   const value = /^\/\/ fixture-server starts: ([1-9]\d*)$/.exec(raw)?.[1]
   if (value === undefined) return problem(`\`${text}\` is not \`// fixture-server starts: N\` at column 0 with N a positive integer; replace it with ${line}`)
   if (Number(value) !== starts) return problem(`declares \`${text}\` but starts ${starts}; change it to ${line}`)

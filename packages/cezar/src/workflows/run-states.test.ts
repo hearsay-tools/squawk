@@ -1,6 +1,8 @@
 import '../built-in-wait-kinds.testkit.ts';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { parse } from '@babel/parser';
+import { traverse } from '@babel/types';
 import { describe, expect, it } from 'vitest';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { WAIT_PHASE, makeHumanWait, makePeerWait, makeSubagentWait, makeTimerWait } from '@open-mercato/cezar-contract/wait-factories.testkit';
@@ -12,6 +14,17 @@ import {
 
 const src = resolve(import.meta.dirname, '..');
 const blanked = (file: string) => blank(readFileSync(resolve(src, file), 'utf8'));
+/** The names of the functions and methods the files declare, read from their syntax trees. */
+const declared = (files: readonly string[]) => {
+  const names = new Set<string>();
+  for (const file of files) {
+    traverse(parse(readFileSync(resolve(src, file), 'utf8'), { sourceType: 'module', plugins: ['typescript'] }), (node) => {
+      if ((node.type === 'FunctionDeclaration' || node.type === 'TSDeclareFunction') && node.id) names.add(node.id.name);
+      if ((node.type === 'ClassMethod' || node.type === 'TSDeclareMethod' || node.type === 'ObjectMethod') && node.key.type === 'Identifier') names.add(node.key.name);
+    });
+  }
+  return names;
+};
 const runSources = () => {
   const dir = resolve(src, 'workflows/run');
   return ['workflows/run.ts', ...(existsSync(dir)
@@ -71,13 +84,11 @@ describe('run states and their exits (hearsay-tools/cezarion#1804)', () => {
   });
 
   it('names only functions that exist', () => {
-    const files = { run: runSources().map(blanked).join('\n'), store: [blanked('runs/store.ts'), blanked('runs/legacy-waits.ts'), blanked('runs/loaded-run-exits.ts')].join('\n'), server: [blanked('server/server.ts'), blanked('server/runs-routes.ts')].join('\n'), exits: blanked('runs/run-exits.ts'), rules: blanked('runs/record-write-rules.ts') };
+    const server = [blanked('server/server.ts'), blanked('server/runs-routes.ts')].join('\n');
+    const files = { run: declared(runSources()), store: declared(['runs/store.ts', 'runs/legacy-waits.ts', 'runs/loaded-run-exits.ts']), exits: declared(['runs/run-exits.ts']), rules: declared(['runs/record-write-rules.ts']) };
     const missing = [...new Set(RUN_TRIGGERS.flatMap((row) => row.via))].filter((name) => {
       const [file, fn] = name.includes(':') ? name.split(':') as ['store' | 'server' | 'exits' | 'rules', string] : ['run' as const, name];
-      const defined = file === 'server'
-        ? new RegExp(`\\b${fn}\\(`)
-        : new RegExp(`^\\s*(?:export\\s+)?(?:function\\s+|(?:private|public|protected|static|async|readonly)\\s+)*${fn}\\s*[(<]`, 'm');
-      return !defined.test(files[file]);
+      return file === 'server' ? !new RegExp(`\\b${fn}\\(`).test(server) : !files[file].has(fn);
     });
     expect(missing).toEqual([]);
   });

@@ -13,6 +13,8 @@ import { createRequire } from 'node:module';
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse } from '@babel/parser';
+import { traverse } from '@babel/types';
 import { build } from 'esbuild';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -44,7 +46,17 @@ scan(dist);
 // specifiers (`from`, `import(...)`, side-effect `import`) to the sibling `dist/plugin/<stem>.js`
 // declaration without touching string-literal type constants; `.js` runtime imports stay on the
 // package specifier and resolve through `installPluginResolveHook()`.
-const PLUGIN_SPEC = /(from\s+|import\s*\(\s*|import\s+)(['"])@hearsay-tools\/squawk\/plugin(?:\/(runtime|model-settings|managed-cli|pi-rpc))?\2/g;
+const PLUGIN_PACKAGE = '@hearsay-tools/squawk/plugin';
+const PLUGIN_SPEC = /^@hearsay-tools\/squawk\/plugin(?:\/(runtime|model-settings|managed-cli|pi-rpc))?$/;
+/** The module specifier literals of a declaration file: `from`, side-effect `import` and `import(...)` types. */
+function declarationSpecifiers(text) {
+  const found = [];
+  traverse(parse(text, { sourceType: 'module', plugins: [['typescript', { dts: true }]] }), (node) => {
+    if ((node.type === 'ImportDeclaration' || node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration'
+      || node.type === 'TSImportType' || node.type === 'ImportExpression') && node.source?.type === 'StringLiteral') found.push(node.source);
+  });
+  return found;
+}
 const pluginDir = join(dist, 'plugin');
 function repointPluginDecls() {
   if (!existsSync(join(pluginDir, 'index.d.ts'))) return 0;
@@ -56,13 +68,19 @@ function repointPluginDecls() {
         if (p !== outdir) walk(p);
       } else if (item.name.endsWith('.d.ts')) {
         const text = readFileSync(p, 'utf8');
-        PLUGIN_SPEC.lastIndex = 0;
-        if (!PLUGIN_SPEC.test(text)) continue;
-        const next = text.replace(PLUGIN_SPEC, (_match, prefix, _quote, sub) => {
+        if (!text.includes(PLUGIN_PACKAGE)) continue;
+        const targets = declarationSpecifiers(text).flatMap((literal) => {
+          const match = PLUGIN_SPEC.exec(literal.value);
+          return match ? [{ literal, sub: match[1] }] : [];
+        });
+        if (targets.length === 0) continue;
+        let next = text;
+        // Replace from the end, so the offsets of earlier literals stay valid.
+        for (const { literal, sub } of targets.reverse()) {
           let rel = relative(dirname(p), join(pluginDir, `${sub ?? 'index'}.js`)).replaceAll('\\', '/');
           if (!rel.startsWith('.')) rel = `./${rel}`;
-          return `${prefix}'${rel}'`;
-        });
+          next = `${next.slice(0, literal.start)}'${rel}'${next.slice(literal.end)}`;
+        }
         writeFileSync(p, next, 'utf8');
         count++;
       }
@@ -97,8 +115,12 @@ const bundled = await build({
 // root bundle's unrelated exports (hearsay-tools/cezarion#1813).
 const rootExports = new Set(Object.values(bundled.metafile.outputs).flatMap((output) => output.exports));
 for (const file of referrers.filter((name) => name.endsWith('.js'))) {
-  for (const match of readFileSync(file, 'utf8').matchAll(/export\s+\*\s+from\s+['"](@open-mercato\/cezar-contract\/([^'"]+))['"]/g)) {
-    const source = join(contractRoot, 'src', `${match[2]}.ts`);
+  const wildcards = [];
+  traverse(parse(readFileSync(file, 'utf8'), { sourceType: 'module' }), (node) => {
+    if (node.type === 'ExportAllDeclaration' && node.source.value.startsWith('@open-mercato/cezar-contract/')) wildcards.push(node.source.value);
+  });
+  for (const specifier of wildcards) {
+    const source = join(contractRoot, 'src', `${specifier.slice('@open-mercato/cezar-contract/'.length)}.ts`);
     const original = await build({
       entryPoints: [source], bundle: true, write: false, metafile: true,
       format: 'esm', platform: 'neutral', external: ['zod'],
@@ -106,7 +128,7 @@ for (const file of referrers.filter((name) => name.endsWith('.js'))) {
     const missing = Object.values(original.metafile.outputs).flatMap((output) => output.exports)
       .filter((name) => !rootExports.has(name));
     if (missing.length) {
-      console.error(`inline-contract: ${relative(dist, file)} wildcard re-export of "${match[1]}" loses root exports: ${missing.join(', ')}`);
+      console.error(`inline-contract: ${relative(dist, file)} wildcard re-export of "${specifier}" loses root exports: ${missing.join(', ')}`);
       process.exit(1);
     }
   }
@@ -147,6 +169,7 @@ const gaps = importers.length === 0 ? [] : await build({
 if (gaps.length > 0) {
   for (const { text, location } of gaps) {
     const where = location ? `${join(basename(dist), location.file)}:${location.line}` : basename(dist);
+    // oxlint-disable-next-line cez/regex-module-syntax -- reads esbuild's error message text, not module source.
     const name = /import "([^"]+)"/i.exec(text)?.[1];
     const subpath = /"contract:([^"]+)"/.exec(text)?.[1];
     console.error(name && subpath

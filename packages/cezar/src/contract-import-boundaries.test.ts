@@ -5,7 +5,8 @@ import { contractModules, contractRootImport, hint, scanRootImports as scanOrigi
 
 import { checkRule } from './lint/ast-rule.testkit.ts';
 
-/** Every retained snippet exercises the AST rule as well as the runner's baseline reader. */
+/** Every snippet runs through the oxlint rule and through `scanRootImports`, the runner's exemption reader, which share
+ *  one set of visitors under two harnesses; both must report the same sites. */
 function scanRootImports(file: string, source: string) {
   const expected = scanOriginalRootImports(file, source);
   const findings = checkRule(contractRootImport, `packages/cezar/src/${file}`, source);

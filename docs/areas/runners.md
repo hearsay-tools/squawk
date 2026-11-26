@@ -316,7 +316,8 @@ runner, so built-in wait files load no other built-in runner adapter; an owned-w
 one other built-in runner for R14's mixed chain, and an automation-tools file loads Claude. Every
 fixture parity file under `runners/fixture/` loads `FixtureAdapter` and no built-in runner adapter
 or definition. `core/runner-closure.test.ts` enforces this
-(hearsay-tools/cezarion#2939, hearsay-tools/squawk#4177).
+(hearsay-tools/cezarion#2939, hearsay-tools/squawk#4177). A guard like it reads imports through
+`core/module-imports.testkit.ts`, never a regex: [lint.md § Syntax scans read a syntax tree](../sdlc/lint.md#syntax-scans-read-a-syntax-tree).
 
 The binding limit on a parity test file is CI's per-file cap: `FILE_DURATION_LIMIT_MS`
 (60 s) in `.github/scripts/vitest-file-duration.mjs`. CI enforces it on every Vitest

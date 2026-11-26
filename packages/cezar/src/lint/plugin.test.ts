@@ -114,6 +114,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'mock-scenario-boundary': ['packages/cezar/scripts/mock-scenario-violation.mjs', "import { play } from './mock-scenario.mjs';\nconst x = 'mock:hold';\n"],
   'native-mock-source': ['packages/cezar/test/b.test.ts', "const text = readFileSync(adapter.mockBin, 'utf8');\n"],
   'parity-runner-subset': ['packages/cezar/src/core/runner-group-parity.test.ts', "const held = new Set(['opencode', 'omp']);\n"],
+  'regex-module-syntax': ['packages/cezar/src/lint/import-scan.testkit.ts', "const imports = /^import\\s+\\{/;\n"],
   'raw-query-setter': ['packages/web/src/c.tsx', "import { useSearchParams } from 'react-router';\nconst [p, setP] = useSearchParams();\n"],
   'run-fact-reader': ['packages/web/src/lib/d.ts', "const held = attention.label === 'usage limit';\n"],
   'run-history-reader': ['packages/cezar/src/raw-history.ts', 'const text = readFileSync(historyPaths(dir, id).plain);\n'],
@@ -131,6 +132,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
 
 /** Each approved exception, by the rule it exercises. None may produce a finding. */
 const APPROVED: Record<string, string> = {
+  'packages/cezar/src/lint/plain-text.test.ts': "const prose = /264 test files import the changed files/;\n",
   'packages/cezar/src/port-approved.test.ts': '// oxlint-disable-next-line cez/probe-release-port -- deliberate syntax fixture\nfunction port() { const s = createServer(); s.listen(0); const { port } = s.address(); s.close(); return port; }',
   'packages/cezar/src/workflows/run/launch-read-resolver.ts': 'const skills = state.skills.catalog;\n',
   'packages/cezar/src/env-approved.ts': "productEnv('DRY_RUN'); delete process.env.CEZ_DRY_RUN;",

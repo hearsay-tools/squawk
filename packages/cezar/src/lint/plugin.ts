@@ -17,6 +17,7 @@ import { mockLifecycleBoundary } from './mock-lifecycle-boundary.ts';
 import { mockScenarioBoundary } from './mock-scenario-boundary.ts';
 import { nativeMockSource } from './native-mock-source.ts';
 import { rawQuerySetter } from './raw-query-setter.ts';
+import { regexModuleSyntax } from './regex-module-syntax.ts';
 import { runFactReader } from './run-fact-reader.ts';
 import { runHistoryReader } from './run-history-reader.ts';
 import { runnerFactCombination } from './runner-fact-combination.ts';
@@ -41,7 +42,7 @@ import { testUnpinnedClockDate } from './test-unpinned-clock-date.ts';
 export const AST_RULES: AstRule[] = [
   probeReleasePort, productEnvRead, homeBoundary, testHomeWrite, card2Contrast, contractRootImport,
   designGuardian, layerImport, mockLifecycleBoundary, mockScenarioBoundary, nativeMockSource,
-  parityRunnerSubset, rawQuerySetter, runFactReader, runHistoryReader, runnerFactCombination,
+  parityRunnerSubset, rawQuerySetter, regexModuleSyntax, runFactReader, runHistoryReader, runnerFactCombination,
   runnerIdBranch, runnerRosterLiteral, undocumentedEnvName,
   childKilledRead, runStoreTestkitImport, runnerCoreImport, runnerFolderEscape, launchReadOutsideResolver,
   attentionBucketCompareOutsideOwner, automationsCapabilityReadOutsideOwner,

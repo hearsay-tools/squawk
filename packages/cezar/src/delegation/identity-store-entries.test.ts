@@ -1,7 +1,9 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { parse } from '@babel/parser';
 import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
+import { visit } from '../lint/babel-walk.ts';
 
 // The ownership policy in workspace-record.ts has no store on Windows until a process entry installs one,
 // and only entries may import the Windows store, so the policy's importers never load it
@@ -19,6 +21,21 @@ const isTest = (file: string) => /\.test\.|\.testkit\.|\.d\.ts$/.test(file);
 const slashes = (path: string) => path.split(sep).join('/');
 const fromPkg = (path: string) => slashes(relative(pkg, join(pkg, path)));
 
+// A top-level statement that reads both `process.argv[1]` and `import.meta`: the main guard.
+function hasMainGuard(file: string, source: string): boolean {
+  const tree = parse(source, { sourceType: 'module', plugins: file.endsWith('.tsx') ? ['typescript', 'jsx'] : ['typescript'] });
+  return tree.program.body.some(statement => {
+    let argv = false;
+    let meta = false;
+    visit(statement, node => {
+      if (node.type === 'MetaProperty' && node.meta.name === 'import' && node.property.name === 'meta') meta = true;
+      if (node.type === 'MemberExpression' && node.computed && node.property.type === 'NumericLiteral' && node.property.value === 1
+        && node.object.type === 'MemberExpression' && node.object.object.type === 'Identifier' && node.object.object.name === 'process'
+        && node.object.property.type === 'Identifier' && node.object.property.name === 'argv') argv = true;
+    });
+    return argv && meta;
+  });
+}
 function sourceFiles(dir: string): string[] {
   return readdirSync(join(pkg, dir), { recursive: true, encoding: 'utf8' })
     .filter(name => /\.tsx?$/.test(name) && !isTest(name)).map(name => slashes(join(dir, name)));
@@ -26,7 +43,11 @@ function sourceFiles(dir: string): string[] {
 function processEntries(): string[] {
   const bins = Object.values((JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8')) as { bin: Record<string, string> }).bin)
     .map(bin => bin.replace(/^dist\//, 'src/').replace(/\.js$/, '.ts'));
-  const guarded = sourceFiles('src').filter(file => /^#!|process\.argv\[1\][^\n]*import\.meta/.test(readFileSync(join(pkg, file), 'utf8')));
+  const guarded = sourceFiles('src').filter(file => {
+    const source = readFileSync(join(pkg, file), 'utf8');
+    // Plain-text pre-filter: only a file that names process.argv can hold the main guard.
+    return source.startsWith('#!') || (source.includes('process.argv') && hasMainGuard(file, source));
+  });
   const scripts = SCRIPT_DIRS.flatMap(dir => readdirSync(join(pkg, dir))
     .filter(name => /\.(?:ts|mjs)$/.test(name) && !isTest(name)).map(name => `${dir}/${name}`));
   return [...new Set([...bins, ...guarded, ...scripts])].sort();
