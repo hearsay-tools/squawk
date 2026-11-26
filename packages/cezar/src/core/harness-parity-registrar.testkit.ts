@@ -25,6 +25,15 @@ export interface SeamCriterion<T = SeamObservation> {
   readonly assert: (obs: T) => void;
 }
 
+/** One cell's test body, as a part's name-only groups receive it from its cells module. */
+export type CellBody = () => Promise<void>;
+
+/** One `parityRow` cell's body: what it observes and how it judges the observation. */
+export interface ObservedCell<T> {
+  readonly assert: (obs: T) => void;
+  readonly observe: () => Promise<T>;
+}
+
 /** What this kit adds to each plain row of `harness-parity-rows.testkit.ts`, by row id. */
 export type Cells<Rows extends readonly { readonly id: string }[], Criterion> =
   Readonly<Record<Rows[number]['id'], Omit<Criterion, 'id' | 'name' | 'scenario'>>>;
