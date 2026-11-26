@@ -7,12 +7,10 @@ import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
 import { queryZodValidator } from './validators.ts';
 
 export function createModelsRoutes(options: {
-  capabilities(): { localHandoff: boolean };
   resolveWorkspaceProfile(provider: string, profileId?: string): Promise<{ profile: ResolvedAgentProfile } | { error: string }>;
   modelCatalog: RunnerModelCatalog;
-  hostedProfileRefusal: { error: string };
 }) {
-  const { capabilities, resolveWorkspaceProfile, modelCatalog, hostedProfileRefusal } = options;
+  const { resolveWorkspaceProfile, modelCatalog } = options;
   return new Hono()
     // `modelDiscoveryRunnerSchema` is the contract's own list of the runners with an
     // authoritative host-local catalog (hearsay-tools/cezarion#794), so the client compiles against exactly what this
@@ -23,7 +21,6 @@ export function createModelsRoutes(options: {
       if (query.data.profileId === undefined || query.data.profileId === DEFAULT_AGENT_ACCOUNT_ID) {
         return c.json(await modelCatalog.get(runner));
       }
-      if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
       const resolved = await resolveWorkspaceProfile(runner, query.data.profileId);
       if ('error' in resolved) return c.json({ error: resolved.error }, 400);
       return c.json(await modelCatalog.get(runner, { accountHome: resolved.profile.path }));

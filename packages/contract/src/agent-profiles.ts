@@ -39,10 +39,11 @@ export const agentProfileSchema = z.object({
   id: z.string(),
   provider: providerIdSchema,
   label: z.string(),
-  /** As the user wrote it — a literal `~` is preserved, matching `browseRoot`/`projectsDir`. */
-  configDir: z.string(),
-  /** Expanded absolute path. Same-origin route, like `ProjectListEntry.root`. */
-  path: z.string(),
+  /** As the user wrote it — a literal `~` is preserved, matching `browseRoot`/`projectsDir`.
+   *  Omitted on a remote cockpit without `settingsAdmin` so host paths are not disclosed. */
+  configDir: z.string().optional(),
+  /** Expanded absolute path. Omitted on a remote cockpit without `settingsAdmin`. */
+  path: z.string().optional(),
   /** False for a dir the CLI has not created yet — legitimate, and NOT a reason to fall back
    *  to another account at run time (that would silently bill the wrong subscription). */
   exists: z.boolean(),
@@ -82,9 +83,10 @@ export type AgentAccountSelection = z.infer<typeof agentAccountSelectionSchema>;
 /**
  * `GET /api/v1/workspace/agent-profiles` — every account, discovered defaults first.
  *
- * `editable` is false in hosted mode (`CEZ_REMOTE`), where the whole family is refused: defining
- * a profile points an agent at a local directory, and the listing echoes absolute paths carrying
- * the username. Same posture as `PUT /api/v1/agent-config/:id`.
+ * `editable` mirrors `settingsAdmin` (true locally, or on a remote cockpit with a host grant).
+ * Without `settingsAdmin`, accounts are still listed so users can choose configured logins, while
+ * host paths (`configDir`, `path`, and raw repo roots in `selections`) are withheld and project
+ * choices ride on `projectSelections` keyed by project id.
  */
 export const agentProfilesResponseSchema = z.object({
   editable: z.boolean(),
@@ -98,8 +100,11 @@ export const agentProfilesResponseSchema = z.object({
    *  Served here rather than on `GET /api/v1/projects` because it is stored beside the accounts it
    *  names (`~/.cezar/agent-accounts.json`) — one file, so deleting an account and scrubbing every
    *  reference to it is one atomic write, and neither can be dropped by a Squawk version that never
-   *  heard of accounts. Empty in hosted mode, where the whole family is withheld. */
+   *  heard of accounts. Empty without `settingsAdmin` so host paths are not disclosed. */
   selections: z.record(z.string(), agentAccountSelectionSchema),
+  /** Which account each project uses, keyed by canonical project id (plus `'default'` for the boot
+   *  project). Always populated without disclosing host filesystem paths. */
+  projectSelections: z.record(z.string(), agentAccountSelectionSchema),
 });
 export type AgentProfilesResponse = z.infer<typeof agentProfilesResponseSchema>;
 
@@ -118,9 +123,10 @@ export const selectAgentProfileInputSchema = z.object({
 });
 export type SelectAgentProfileInput = z.infer<typeof selectAgentProfileInputSchema>;
 
-/** The selection map after the write — the same shape the listing carries. */
+/** The selection maps after the write — the same shape the listing carries. */
 export const agentProfileSelectionsResponseSchema = z.object({
   selections: z.record(z.string(), agentAccountSelectionSchema),
+  projectSelections: z.record(z.string(), agentAccountSelectionSchema),
 });
 export type AgentProfileSelectionsResponse = z.infer<typeof agentProfileSelectionsResponseSchema>;
 

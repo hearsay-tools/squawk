@@ -405,8 +405,8 @@ export interface RunnerAccountChoice {
   provider: Runner
   id: string
   label: string
-  /** The folder, as written. The labels are Squawk's invention; the folder IS the account. */
-  configDir: string
+  /** The folder, as written. Omitted on a remote cockpit without `settingsAdmin`. */
+  configDir?: string | undefined
   /** True for the discovered account, whose sign-in state is the provider-status row. */
   isDefault?: boolean | undefined
   /** A named account's own sign-in state; absent until the server has probed it. */
@@ -481,8 +481,8 @@ export function RunnerPill({
     return logins.map((login) => ({
       value: choiceValue(runner.id, login.id),
       label: `${runner.id} · ${login.label}`,
-      // The folder, because the label is Squawk's invention and the folder is the account.
-      desc: login.configDir,
+      // The folder when available (omitted on a non-admin remote cockpit).
+      ...(login.configDir ? { desc: login.configDir } : {}),
     }))
   })
 

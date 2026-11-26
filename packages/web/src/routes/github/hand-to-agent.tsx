@@ -479,7 +479,7 @@ function AccountPicker({
     ...(logins.some((a) => a.id === DEFAULT_AGENT_ACCOUNT_ID)
       ? []
       : [{ value: DEFAULT_AGENT_ACCOUNT_ID, label: 'Default' }]),
-    ...logins.map((a) => ({ value: a.id, label: a.label, desc: a.configDir })),
+    ...logins.map((a) => ({ value: a.id, label: a.label, ...(a.configDir ? { desc: a.configDir } : {}) })),
   ]
   // What is in force right now: the override, else the repo's selection, else the discovered
   // account. A value matching no row (the repo names a since-deleted login) displays as
