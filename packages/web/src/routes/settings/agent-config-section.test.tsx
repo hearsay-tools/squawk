@@ -1,13 +1,14 @@
 import { productCommand } from '@/lib/product-name'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '@/api/queries'
 import { seedRunners } from '@/test/runners.testkit'
 import { createQueryClient } from '@/api/query-client'
 import type { AgentConfigFile, AgentConfigListing } from '@open-mercato/cezar-api-client'
-import { Toaster } from '@/components/ui/toaster'
+import { Toaster, resetToasts } from '@/components/ui/toaster'
+import { hasUnsentInput, trackTyping } from '@/lib/version-reload'
 import { AgentConfigSection } from './agent-config-section'
 
 /**
@@ -53,6 +54,8 @@ const HEALTH = {
 const REMOTE_ADMIN = { localHandoff: false, settingsAdmin: true, remoteSettingsAdmin: true }
 
 function serve(listing: AgentConfigListing, fileContent = '{"a":1}', capabilities: object = HEALTH.capabilities) {
+  let content = fileContent
+  let version = 'v1'
   const json = (payload: unknown, status = 200) =>
     new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } })
   vi.stubGlobal(
@@ -63,10 +66,13 @@ function serve(listing: AgentConfigListing, fileContent = '{"a":1}', capabilitie
       if (url.endsWith('/api/v1/health')) return json({ ...HEALTH, capabilities })
       if (url.endsWith('/api/v1/agent-config')) return json(listing)
       if (url.includes('/api/v1/agent-config/') && method === 'GET') {
-        return json({ id: 'x', path: '/repo/x', exists: true, content: fileContent, version: 'v1' })
+        return json({ id: 'x', path: '/repo/x', exists: true, content, version })
       }
       if (url.includes('/api/v1/agent-config/') && method === 'PUT') {
-        return json({ id: 'x', path: '/repo/x', exists: true, content: '{"a":2}', version: 'v2' })
+        const body = init?.body ? (JSON.parse(String(init.body)) as { content?: string }) : undefined
+        content = body?.content ?? '{"a":2}'
+        version = 'v2'
+        return json({ id: 'x', path: '/repo/x', exists: true, content, version })
       }
       return json({ error: 'unexpected' }, 500)
     }),
@@ -119,6 +125,7 @@ function agentTab(agent: string): HTMLElement {
 }
 
 afterEach(() => {
+  act(() => resetToasts())
   cleanup()
   vi.unstubAllGlobals()
 })
@@ -422,5 +429,43 @@ describe('AgentConfigSection', () => {
     fireEvent.change(editor, { target: { value: '{"a":2}' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save file' }))
     await waitFor(() => expect(screen.getByText(/Saved/)).toBeTruthy())
+  })
+
+  it('reports dirty state to the reload guard across edit, Save, and typing the old content back', async () => {
+    const stop = trackTyping()
+    try {
+      serve({
+        editable: true,
+        files: [fileOf({ id: 'claude.project.settings', label: '.claude/settings.json' })],
+        userMcp: null,
+      })
+      renderSection()
+      fireEvent.click(await screen.findByText('.claude/settings.json'))
+      const editor = (await screen.findByLabelText('.claude/settings.json contents')) as HTMLTextAreaElement
+      await waitFor(() => expect(editor.value).toBe('{"a":1}'))
+      expect(hasUnsentInput()).toBe(false)
+
+      editor.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      fireEvent.change(editor, { target: { value: '{"a":2}' } })
+      editor.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save file' }))
+      await waitFor(() => {
+        expect(screen.queryByText('Unsaved changes')).toBeNull()
+        expect(editor.value).toBe('{"a":2}')
+      })
+      expect(hasUnsentInput()).toBe(false)
+
+      // Typing the original text back after Save is an unsaved edit.
+      fireEvent.change(editor, { target: { value: '{"a":1}' } })
+      editor.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+      expect(hasUnsentInput()).toBe(false)
+    } finally {
+      stop()
+    }
   })
 })

@@ -7,6 +7,7 @@ import { queryKeys, workspaceQueryKeys } from '@/api/queries'
 import { createQueryClient } from '@/api/query-client'
 import type { WorkspaceConfigResponse } from '@open-mercato/cezar-api-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
+import { hasUnsentInput, trackTyping } from '@/lib/version-reload'
 import { AppRoutes } from '@/routes'
 
 /**
@@ -440,5 +441,51 @@ describe('Global settings → Resources', () => {
       expect(select.value).toBe(option)
     }
     expect(puts()).toHaveLength(3)
+  })
+
+  it('reports wake interval and memory limit dirty state to the reload guard across edit, Save, and C6 revert', async () => {
+    const stop = trackTyping()
+    try {
+      serve({ monitoringWakeIntervalMinutes: 10, memoryLimitMb: 1024 })
+      renderResources()
+      await waitFor(() => expect(wakeInterval()).not.toBeNull())
+      expect(hasUnsentInput()).toBe(false)
+
+      // Wake interval: edit -> Save -> type old value back -> revert.
+      wakeInterval()!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      fireEvent.change(wakeInterval()!, { target: { value: '20' } })
+      wakeInterval()!.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.click(saveWake()!)
+      await waitFor(() => expect(saveWake()!.disabled).toBe(true))
+      expect(hasUnsentInput()).toBe(false)
+
+      fireEvent.change(wakeInterval()!, { target: { value: '10' } })
+      wakeInterval()!.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.change(wakeInterval()!, { target: { value: '20' } })
+      expect(hasUnsentInput()).toBe(false)
+
+      // Memory limit: edit -> Save -> type old value back -> revert.
+      memoryInput()!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      fireEvent.change(memoryInput()!, { target: { value: '2048' } })
+      memoryInput()!.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.click(saveMemory()!)
+      await waitFor(() => expect(saveMemory()!.disabled).toBe(true))
+      expect(hasUnsentInput()).toBe(false)
+
+      fireEvent.change(memoryInput()!, { target: { value: '1024' } })
+      memoryInput()!.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.change(memoryInput()!, { target: { value: '2048' } })
+      expect(hasUnsentInput()).toBe(false)
+    } finally {
+      stop()
+    }
   })
 })

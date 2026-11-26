@@ -5,6 +5,7 @@ import { sidebarLimitsSchema, normalizeSidebarLimits, type SidebarLimits } from 
 import { putUiState } from '@/api/client'
 import { useProjectUiState } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { useUnsentDraft } from '@/lib/version-reload'
 
 const fields = [
   ['overall', 'Overall'], ['needsYou', 'Needs You'], ['finished', 'Finished'], ['working', 'Working'],
@@ -31,6 +32,7 @@ function SidebarForm({ scope, initial }: { scope: string; initial: SidebarLimits
   const parsed = sidebarLimitsSchema.safeParse(Object.fromEntries(fields.map(([key]) => [key, values[key] === null ? null : Number(values[key])])))
   const invalid = (key: keyof SidebarLimits) => values[key] !== null && (values[key]!.trim() === '' || !Number.isSafeInteger(Number(values[key])) || Number(values[key]) <= 0)
   const dirty = fields.some(([key]) => values[key] !== saved[key])
+  useUnsentDraft(dirty)
   const save = useMutation({
     onMutate: () => queryClient.cancelQueries({ queryKey: [scope, 'ui-state'], exact: true }),
     mutationFn: (limits: SidebarLimits) => putUiState({ sidebarLimits: limits }, scope),
@@ -47,7 +49,7 @@ function SidebarForm({ scope, initial }: { scope: string; initial: SidebarLimits
   if (!save.isPending && !sameValues(form.received, incoming)) {
     setForm({ values: dirty ? values : incoming, saved: incoming, received: incoming })
   }
-  return <form data-slot="sidebar-settings" className="flex w-full max-w-2xl flex-col gap-5 p-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-6" onSubmit={event => {
+  return <form data-slot="sidebar-settings" data-reports-dirty="" className="flex w-full max-w-2xl flex-col gap-5 p-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-6" onSubmit={event => {
     event.preventDefault()
     if (parsed.success && !fields.some(([key]) => invalid(key)) && !save.isPending) save.mutate(parsed.data)
   }}>

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient } from '@/api/query-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { DEFAULT_PROMPT_TEMPLATES } from '@/lib/prompt-templates'
+import { hasUnsentInput, trackTyping } from '@/lib/version-reload'
 import { PromptTemplatesSection } from './prompt-templates-section'
 import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
@@ -204,6 +205,82 @@ describe('the prompt templates section', () => {
     fireEvent.click(rows()[0]!.querySelector('[data-action="prompt-template-remove"]')!)
     fireEvent.click(saveButton())
     expect(await screen.findByText('disk full')).toBeTruthy()
+  })
+
+  it('reports dirty state to the reload guard for edits, saves, C6 reverts, and unsent new-template text', async () => {
+    const stop = trackTyping()
+    try {
+      serve({ promptTemplates: [{ id: 'custom-1', label: 'My snippet', text: 'Custom instructions.' }] })
+      renderSection()
+      await waitFor(() => expect(rows()).toHaveLength(1))
+      expect(hasUnsentInput()).toBe(false)
+
+      const labelInput = rows()[0]!.querySelector<HTMLInputElement>('[data-slot="prompt-template-label-input"]')!
+      labelInput.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      fireEvent.change(labelInput, { target: { value: 'Updated snippet' } })
+      labelInput.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.click(saveButton())
+      await waitFor(() => expect(saveButton().disabled).toBe(true))
+      expect(hasUnsentInput()).toBe(false)
+
+      // Typing the old label back after Save is still an unsaved edit.
+      fireEvent.change(labelInput, { target: { value: 'My snippet' } })
+      labelInput.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.change(labelInput, { target: { value: 'Updated snippet' } })
+      expect(hasUnsentInput()).toBe(false)
+
+      // Typing into the "New template" fields before clicking Add also holds the reload.
+      const newLabel = screen.getByLabelText<HTMLInputElement>('New template label')
+      fireEvent.change(newLabel, { target: { value: 'Draft' } })
+      newLabel.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.change(newLabel, { target: { value: '' } })
+      expect(hasUnsentInput()).toBe(false)
+    } finally {
+      stop()
+    }
+  })
+
+  it('a saved trailing newline does not leave the form dirty or hold a reload', async () => {
+    serve({ promptTemplates: [{ id: 'custom-1', label: 'My snippet', text: 'Custom instructions.' }] })
+    renderSection()
+    await waitFor(() => expect(rows()).toHaveLength(1))
+
+    const textInput = rows()[0]!.querySelector<HTMLTextAreaElement>('[data-slot="prompt-template-text-input"]')!
+    fireEvent.change(textInput, { target: { value: 'Custom instructions.\n' } })
+    expect(hasUnsentInput()).toBe(true)
+
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(saveButton().disabled).toBe(true))
+    expect(hasUnsentInput()).toBe(false)
+  })
+
+  it('keeps an edit made while Save is pending, and it still holds a reload', async () => {
+    serve({ promptTemplates: [{ id: 'custom-1', label: 'My snippet', text: 'A' }] })
+    const served = vi.mocked(fetch).getMockImplementation()!
+    let answer!: () => void
+    vi.mocked(fetch).mockImplementation(async (input, init) =>
+      init?.method === 'PUT' ? new Promise<Response>((resolve) => { answer = () => void served(input, init).then(resolve) }) : served(input, init),
+    )
+    renderSection()
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    const textInput = () => rows()[0]!.querySelector<HTMLTextAreaElement>('[data-slot="prompt-template-text-input"]')!
+
+    fireEvent.change(textInput(), { target: { value: 'B' } })
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(answer).toBeTypeOf('function'))
+    fireEvent.change(textInput(), { target: { value: 'C' } })
+    await act(async () => answer())
+
+    await waitFor(() => expect(putBody()?.promptTemplates).toEqual([{ id: 'custom-1', label: 'My snippet', text: 'B' }]))
+    await waitFor(() => expect(saveButton().disabled).toBe(false))
+    expect(textInput().value).toBe('C')
+    expect(hasUnsentInput()).toBe(true)
   })
 })
 

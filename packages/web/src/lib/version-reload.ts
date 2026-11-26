@@ -14,15 +14,17 @@
  *   the notice with a manual Reload button instead.
  * - **No lost input.** While unsent input exists that no draft store keeps, the reload waits and
  *   the notice says why. Two sources answer:
- *   - A message composer reports its own state through `useUnsentDraft`: text, attachments and a
- *     dictation in progress. Dictation and attachments change React state with no input event,
- *     so the composer is the only place that knows. Text a host stores (the new-task draft writes
- *     localStorage on every change) does not count; attachments always do, no store keeps them.
+ *   - Composers and explicit-save forms report their own state through `useUnsentDraft`. A message
+ *     composer reports text, attachments and a dictation in progress (dictation and attachments
+ *     change React state with no input event; text a host stores in localStorage does not count,
+ *     attachments always do). An explicit-save form reports its dirty state and marks its container
+ *     with `[data-reports-dirty]` so the generic DOM check skips its fields — after a Save the form
+ *     is clean, and typing the original value back counts as dirty again (hearsay-tools/squawk#4096).
  *   - Any other field counts when the user typed into it and its text differs from what it
  *     showed at first focus, so clearing a saved value counts too. A field that only shows a
- *     saved value was never typed into, so it does not block. Fields inside a
- *     composer answer through the composer, and fields inside `[data-persisted-draft]` are kept
- *     by their draft store, so neither counts here.
+ *     saved value was never typed into, so it does not block. Fields inside a composer or
+ *     `[data-reports-dirty]` answer through `useUnsentDraft`, and fields inside
+ *     `[data-persisted-draft]` are kept by their draft store, so none of those count here.
  */
 
 import { useEffect } from 'react'
@@ -76,7 +78,7 @@ const EDITABLE = [
 
 const typedInto = new WeakSet<EventTarget>()
 
-/** One token per mounted composer that holds unsent input. */
+/** One token per mounted component that holds unsent input. */
 const unsentDrafts = new Set<symbol>()
 
 /** Report that this component holds input a reload would lose, for as long as `unsent` is true. */
@@ -120,14 +122,14 @@ export function trackTyping(target: Document = document): () => void {
 /** A typed field that differs from what it showed at first focus, a cleared saved value too.
  *  Without a recorded first value, any text counts. */
 function holdsEdit(element: HTMLElement): boolean {
-  if (!typedInto.has(element) || element.closest('[data-persisted-draft], [data-slot="composer"]')) return false
+  if (!typedInto.has(element) || element.closest('[data-persisted-draft], [data-slot="composer"], [data-reports-dirty]')) return false
   if ((element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) && (element.disabled || element.readOnly)) return false
   const text = fieldText(element).trim()
   const shown = shownValues.get(element)
   return shown === undefined ? text !== '' : text !== shown.trim()
 }
 
-/** True when a reload would lose input: a composer's unsent draft, or a typed field's edit. */
+/** True when a reload would lose input: a self-reported draft, or a typed field's edit. */
 export function hasUnsentInput(root: ParentNode = document): boolean {
   if (unsentDrafts.size > 0) return true
   return Array.from(root.querySelectorAll<HTMLElement>(EDITABLE)).some(holdsEdit)

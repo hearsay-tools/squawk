@@ -1,11 +1,12 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ProjectListEntry, ProjectWebhook } from '@open-mercato/cezar-api-client'
 import { WEBHOOK_TRIGGERS } from '@open-mercato/cezar-api-client/contract/attention'
 import { useProjects, workspaceQueryKeys } from '@/api/queries'
 import { createQueryClient } from '@/api/query-client'
+import { hasUnsentInput, trackTyping } from '@/lib/version-reload'
 import { ProjectWebhooksField } from './webhooks-section'
 
 /**
@@ -18,6 +19,8 @@ let webhooks: ProjectWebhook[] = []
 let requests: Array<{ method: string; url: string; body?: unknown }> = []
 /** When set, the next webhook write answers 409 with this error. */
 let refuse: string | null = null
+/** The query client of the last `renderSection`, to push a registry refresh from another tab. */
+let lastClient: ReturnType<typeof createQueryClient>
 
 const entry = (): ProjectListEntry => ({
   id: 'demo',
@@ -106,6 +109,7 @@ function Live() {
 function renderSection() {
   const client = createQueryClient()
   client.setQueryData(workspaceQueryKeys.projects, { projects: [entry()], bootProject: 'demo', projectsDir: '~/cezar/projects' })
+  lastClient = client
   return render(
     <QueryClientProvider client={client}>
       <Live />
@@ -254,5 +258,61 @@ describe('Webhooks', () => {
     await waitFor(() => expect(screen.queryByText('Team bot')).toBeNull())
     expect(requests.some((r) => r.method === 'DELETE' && r.url === '/api/v1/projects/demo/webhooks/w1')).toBe(true)
     expect(card('Release notes')).toBeTruthy()
+  })
+
+  it('reports dirty state to the reload guard for existing and new webhook forms', async () => {
+    const stop = trackTyping()
+    try {
+      webhooks = [hook('w1')]
+      renderSection()
+      expect(hasUnsentInput()).toBe(false)
+
+      const first = open('Team bot')
+      const nameInput = first.getByLabelText<HTMLInputElement>('Name')
+      nameInput.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      fireEvent.change(nameInput, { target: { value: 'Ops bot' } })
+      nameInput.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.click(first.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(card('Ops bot').getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true))
+      expect(hasUnsentInput()).toBe(false)
+
+      // Typing the old name back after Save still holds the reload.
+      fireEvent.change(nameInput, { target: { value: 'Team bot' } })
+      nameInput.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.change(nameInput, { target: { value: 'Ops bot' } })
+      expect(hasUnsentInput()).toBe(false)
+
+      // New webhook draft starts clean, becomes dirty on edit, and clears on Cancel.
+      fireEvent.click(screen.getByRole('button', { name: 'Add webhook' }))
+      expect(hasUnsentInput()).toBe(false)
+      const draft = within(screen.getByRole('form', { name: 'New webhook' }))
+      const draftName = draft.getByLabelText<HTMLInputElement>('Name')
+      fireEvent.change(draftName, { target: { value: 'Alerts' } })
+      draftName.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.click(draft.getByRole('button', { name: 'Cancel' }))
+      expect(hasUnsentInput()).toBe(false)
+    } finally {
+      stop()
+    }
+  })
+
+  it('an untouched card takes a webhook another tab changed, and does not hold a reload', async () => {
+    webhooks = [hook('w1')]
+    renderSection()
+    expect(hasUnsentInput()).toBe(false)
+
+    webhooks = [hook('w1', { name: 'Renamed elsewhere' })]
+    act(() => {
+      lastClient.setQueryData(workspaceQueryKeys.projects, { projects: [entry()], bootProject: 'demo', projectsDir: '~/cezar/projects' })
+    })
+    await waitFor(() => expect(card('Renamed elsewhere')).toBeTruthy())
+    expect(hasUnsentInput()).toBe(false)
+    expect(open('Renamed elsewhere').getByLabelText<HTMLInputElement>('Name').value).toBe('Renamed elsewhere')
   })
 })

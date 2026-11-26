@@ -8,6 +8,7 @@ import { queryKeys, workspaceQueryKeys } from '@/api/queries'
 import { createQueryClient } from '@/api/query-client'
 import type { ConfigResponse } from '@open-mercato/cezar-api-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
+import { hasUnsentInput, trackTyping } from '@/lib/version-reload'
 import { AppRoutes } from '@/routes'
 
 /**
@@ -430,5 +431,69 @@ describe('Project settings → Worktrees: worktree teardown commands (hearsay-to
     )
     expect(document.querySelector('[data-slot="worktree-setup-issue"]')).toBeNull()
     expect(screen.queryByText(EMPTY)).toBeNull()
+  })
+})
+
+describe('Project settings → Worktrees: reload guard dirty reporting (hearsay-tools/squawk#4096)', () => {
+  const LOCAL = { localHandoff: true }
+
+  it('reports retention and setup commands dirty state across edit, Save, and C6 revert', async () => {
+    const stop = trackTyping()
+    try {
+      serve({ worktreeRetention: 10, worktreeSetup: { commands: ['npm ci'], timeoutSeconds: 900 } })
+      renderAt('/settings/worktrees', LOCAL)
+      await waitFor(() => expect(retentionInput()).not.toBeNull())
+      expect(hasUnsentInput()).toBe(false)
+
+      // Retention: edit -> Save -> type old value back -> revert.
+      retentionInput()!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      fireEvent.change(retentionInput()!, { target: { value: '4' } })
+      retentionInput()!.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.click(saveButton()!)
+      await waitFor(() => expect(saveButton()!.disabled).toBe(true))
+      expect(hasUnsentInput()).toBe(false)
+
+      fireEvent.change(retentionInput()!, { target: { value: '10' } })
+      retentionInput()!.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.change(retentionInput()!, { target: { value: '4' } })
+      expect(hasUnsentInput()).toBe(false)
+
+      // Setup commands: edit -> Save -> type old command back -> revert.
+      const setupBox = document.querySelector<HTMLTextAreaElement>('[data-slot="worktree-setup-commands"]')!
+      const saveSetup = document.querySelector<HTMLButtonElement>('[data-action="worktree-setup-save"]')!
+      setupBox.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      fireEvent.change(setupBox, { target: { value: 'pnpm install' } })
+      setupBox.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.click(saveSetup)
+      await waitFor(() => expect(saveSetup.disabled).toBe(true))
+      expect(hasUnsentInput()).toBe(false)
+
+      fireEvent.change(setupBox, { target: { value: 'npm ci' } })
+      setupBox.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(hasUnsentInput()).toBe(true)
+
+      fireEvent.change(setupBox, { target: { value: 'pnpm install' } })
+      expect(hasUnsentInput()).toBe(false)
+    } finally {
+      stop()
+    }
+  })
+
+  it('does not hold the reload for a pre-existing invalid config issue with no user edit', async () => {
+    const stop = trackTyping()
+    try {
+      serve({ worktreeSetup: null, worktreeSetupIssue: 'commands: Invalid input' })
+      renderAt('/settings/worktrees', LOCAL)
+      await waitFor(() => expect(document.querySelector('[data-slot="worktree-setup-issue"]')).not.toBeNull())
+      expect(hasUnsentInput()).toBe(false)
+    } finally {
+      stop()
+    }
   })
 })

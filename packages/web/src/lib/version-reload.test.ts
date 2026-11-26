@@ -121,4 +121,15 @@ describe('hasUnsentInput', () => {
     type(document.querySelector('textarea')!, 'kept in localStorage')
     expect(hasUnsentInput()).toBe(false)
   })
+
+  it('skips fields inside a form that reports its own dirty state', () => {
+    document.body.innerHTML = '<form data-reports-dirty><textarea>saved</textarea><input value="10"></form>'
+    const textarea = document.querySelector('textarea')!
+    const input = document.querySelector('input')!
+    textarea.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    type(textarea, 'edited and saved')
+    input.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    type(input, '20')
+    expect(hasUnsentInput()).toBe(false)
+  })
 })

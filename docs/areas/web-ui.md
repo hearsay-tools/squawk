@@ -69,7 +69,9 @@ in `sessionStorage` and never reloads twice for one version. It waits while unse
 and says so in the notice (`packages/web/src/lib/version-reload.ts`). A message composer reports
 its own state through `useUnsentDraft`: text, attachments and a dictation in progress, which change
 React state with no input event. Text the host stores (`draftPersisted`, true on /new only while the
-last draft write reached localStorage) does not count; attachments always do. Any other field counts
+last draft write reached localStorage) does not count; attachments always do. An explicit-save form
+reports its own dirty state through `useUnsentDraft` and marks its container `[data-reports-dirty]`
+so the generic DOM check skips its fields (`hearsay-tools/squawk#4096`). Any other field counts
 when the user typed into it and its text differs from what it showed at first focus (clearing a saved
 value counts), except inside `[data-persisted-draft]` (a draft store that writes on every change).
 
