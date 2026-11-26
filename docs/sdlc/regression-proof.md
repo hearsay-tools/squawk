@@ -74,8 +74,8 @@ other than a named test. Product files go as `--source`, so a break in a file th
 read at runtime or spawn is proven the same way as a break in an imported file. Files that
 Squeal counts as test code (under a `test`, `fixtures` or similar folder, or named
 `*.test.*` or `*.spec.*`) go as `--with` and stay at `HEAD`. It also passes
-`--env SQUAWK_REGRESSION_PROOF=1`. Under a condition, Squeal runs each side fresh and
-stores no result, because a stored result never belongs to a break commit. Squeal also
+`--env SQUAWK_REGRESSION_PROOF=1`, because a stored result never belongs to a break
+commit. Squeal runs a side under a condition fresh and never stores it. Squeal also
 runs the red side once without the condition, as a control. A file can take three runs,
 so give `--timeout` room for them. Its exit code is Squeal's: 0 when
 every file is proven. `--revert` reverts one non-merge commit on top of `HEAD` and stops

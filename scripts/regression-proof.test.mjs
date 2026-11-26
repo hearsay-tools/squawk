@@ -186,6 +186,9 @@ test('the CLI names product files the break changes as --source, test-side files
   assert.deepEqual(named('--source'), ['scripts/reader.sh', 'src/guard.ts']);
   assert.deepEqual(named('--with'), ['src/fixtures/data.json', 'src/helper.spec.ts']);
   assert.ok(args.includes('SQUAWK_REGRESSION_PROOF=1'));
+  // A --test path is repo-relative from any directory, as Squeal reads it from the root.
+  assert.equal(run(join(cwd, 'src'), ['--patch', join(cwd, 'break.patch'), '--test', 'src/guard.test.ts'], squeal.bin).status, 0);
+  assert.equal(squeal.args()[1], 'src/guard.test.ts');
 });
 
 test('a break that deletes or renames a file names the old and the new path as --source', (t) => {

@@ -25,7 +25,8 @@ A recipe is scripts/regression-proofs/<recipe>.json: { description, fixedBy, bre
 Each break entry replaces one exact text, found exactly once, in one file; entries for
 the same file apply in order, each to the text the earlier ones left.
 --revert reverts one non-merge commit on top of HEAD. --patch applies a patch file that
-introduces the break. The break commit is HEAD plus the break; it is never checked out.
+introduces the break. --test paths are relative to the repository root, from any
+directory. The break commit is HEAD plus the break; it is never checked out.
 \`squeal proof <tests> --base <break> --case source\` then runs red (the tests over the break)
 and green (HEAD) outside this worktree. Every file the break changes, other than a named
 test, goes to Squeal as --source, so a file the tests read at runtime or spawn counts as
@@ -264,14 +265,14 @@ function runSquealProof(cwd, breakCommit, tests, inputs, timeout) {
   return { report, status: result.status ?? 3 };
 }
 
-function sourceFor(cwd, options, from) {
+function sourceFor(cwd, options) {
   if (options.mode === 'recipe') {
     const recipe = loadRecipe(options.value);
     return { source: { recipe, label: recipe.name }, tests: recipe.tests };
   }
   const label = options.mode === 'revert' ? `revert ${git(cwd, ['rev-parse', '--short=12', `${options.value}^{commit}`])}` : `patch ${options.value}`;
-  // Squeal runs from the repository root and names files by repo-relative path.
-  return { source: { [options.mode]: options.value, label }, tests: options.tests.map(test => relative(cwd, resolve(from, test))) };
+  // Squeal reads a --test path from the repository root; normalize it (./x) to match the diff.
+  return { source: { [options.mode]: options.value, label }, tests: options.tests.map(test => relative(cwd, resolve(cwd, test))) };
 }
 
 function checkAll(cwd, out) {
@@ -292,7 +293,7 @@ export function main(argv, cwd = process.cwd(), out = console) {
     return 0;
   }
   if (options.mode === 'check') return checkAll(root, out);
-  const { source, tests } = sourceFor(root, options, cwd);
+  const { source, tests } = sourceFor(root, options);
   if (git(root, ['status', '--porcelain', '--untracked-files=no'])) out.error('Note: uncommitted changes are not part of the proof; it runs over committed HEAD.');
   const head = git(root, ['rev-parse', 'HEAD^{commit}']);
   const breakCommit = buildBreak(root, source, head);
