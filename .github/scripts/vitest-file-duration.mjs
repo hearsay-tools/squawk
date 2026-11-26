@@ -79,6 +79,7 @@ export default class FileDurationReporter {
     this.watching = true;
   }
 
+  /** @param {ReadonlyArray<{ project: { name: string }, moduleId: string }>} [specifications] */
   onTestRunStart(specifications = []) {
     this.pending.clear();
     this.results = [];
