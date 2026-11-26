@@ -6,7 +6,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // A condition makes Squeal run each side fresh: a stored result never belongs to a break commit,
@@ -29,7 +29,7 @@ introduces the break. The break commit is HEAD plus the break; it is never check
 \`squeal proof <tests> --base <break> --case source\` then runs red (the tests over the break)
 and green (HEAD) outside this worktree. Every file the break changes, other than a named
 test, goes to Squeal as --source, so a file the tests read at runtime or spawn counts as
-product code. --env ${FRESH_RUN} makes Squeal run both sides fresh, never from its store.
+product code; a test-side file (a fixture or a *.test.* helper) goes as --with and stays at HEAD. --env ${FRESH_RUN} makes Squeal run both sides fresh, never from its store.
 Uncommitted changes are not part of the proof.
 --check validates every recipe at HEAD without running tests.
 Exit codes: 0 every file proven, 1 a file not red or not green, 3 a result unknown,
@@ -231,16 +231,29 @@ export function parseArgs(argv) {
   return options;
 }
 
-/** Files the break changes that are not named tests: Squeal compares an unchanged test only
- * when every changed file is named, and --source names it as product code on both sides. */
-export function breakSources(cwd, head, breakCommit, tests) {
-  const named = new Set(tests);
-  return gitRaw(cwd, ['diff', '--name-only', '-z', '--no-renames', head, breakCommit]).split('\0').filter(file => file && !named.has(file));
+// Squeal's test-side rule (TEST_FOLDERS and TEST_NAME): such a file is test code.
+const TEST_FOLDERS = new Set(['test', 'tests', '__tests__', 'spec', 'specs', '__mocks__', 'fixtures', '__fixtures__', '__snapshots__', 'testdata']);
+const TEST_NAME = /(\.(test|spec)\.[^/]+|_test\.[^/.]+|^test_[^/]+\.py)$/;
+
+export function isTestSide(path) {
+  const parts = path.split('/');
+  const name = parts.pop() ?? '';
+  return parts.some(part => TEST_FOLDERS.has(part)) || TEST_NAME.test(name);
 }
 
-function runSquealProof(cwd, breakCommit, tests, sources, timeout) {
+/** Files the break changes that are not named tests. Squeal compares an unchanged test only
+ * when every changed file is named: --source takes a product file from the break on red,
+ * --with keeps a test-side file (fixture, helper) at HEAD on both sides. */
+export function breakInputs(cwd, head, breakCommit, tests) {
+  const named = new Set(tests);
+  const changed = gitRaw(cwd, ['diff', '--name-only', '-z', '--no-renames', head, breakCommit]).split('\0').filter(file => file && !named.has(file));
+  return { sources: changed.filter(file => !isTestSide(file)), withs: changed.filter(isTestSide) };
+}
+
+function runSquealProof(cwd, breakCommit, tests, inputs, timeout) {
   const args = ['proof', ...tests, '--base', breakCommit, '--case', 'source',
-    ...sources.flatMap(file => ['--source', file]), '--env', FRESH_RUN, '--json'];
+    ...inputs.sources.flatMap(file => ['--source', file]), ...inputs.withs.flatMap(file => ['--with', file]),
+    '--env', FRESH_RUN, '--json'];
   if (timeout) args.push('--timeout', timeout);
   const result = spawnSync('squeal', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'inherit'] });
   if (result.error?.code === 'ENOENT') throw new ProofError('no squeal command on PATH: red proofs run through `squeal proof`; install Squeal, then run this again');
@@ -251,13 +264,14 @@ function runSquealProof(cwd, breakCommit, tests, sources, timeout) {
   return { report, status: result.status ?? 3 };
 }
 
-function sourceFor(cwd, options) {
+function sourceFor(cwd, options, from) {
   if (options.mode === 'recipe') {
     const recipe = loadRecipe(options.value);
     return { source: { recipe, label: recipe.name }, tests: recipe.tests };
   }
   const label = options.mode === 'revert' ? `revert ${git(cwd, ['rev-parse', '--short=12', `${options.value}^{commit}`])}` : `patch ${options.value}`;
-  return { source: { [options.mode]: options.value, label }, tests: options.tests };
+  // Squeal runs from the repository root and names files by repo-relative path.
+  return { source: { [options.mode]: options.value, label }, tests: options.tests.map(test => relative(cwd, resolve(from, test))) };
 }
 
 function checkAll(cwd, out) {
@@ -278,12 +292,11 @@ export function main(argv, cwd = process.cwd(), out = console) {
     return 0;
   }
   if (options.mode === 'check') return checkAll(root, out);
-  const { source, tests } = sourceFor(root, options);
+  const { source, tests } = sourceFor(root, options, cwd);
   if (git(root, ['status', '--porcelain', '--untracked-files=no'])) out.error('Note: uncommitted changes are not part of the proof; it runs over committed HEAD.');
   const head = git(root, ['rev-parse', 'HEAD^{commit}']);
   const breakCommit = buildBreak(root, source, head);
-  const sources = breakSources(root, head, breakCommit, tests);
-  const { report, status } = runSquealProof(root, breakCommit, tests, sources, options.timeout);
+  const { report, status } = runSquealProof(root, breakCommit, tests, breakInputs(root, head, breakCommit, tests), options.timeout);
   // Squeal reads HEAD itself: a commit between the two reads proves a different pair.
   if (report.head !== head || report.base !== breakCommit) throw new ProofError(`HEAD moved from ${head.slice(0, 12)} to ${String(report.head).slice(0, 12)} during the proof; run it again`);
   out.log(summarize(report, source.label));

@@ -31,7 +31,9 @@ When the test is unchanged since `--base`, Squeal compares nothing until every o
 changed since `--base` is named. Imported files, files the test reads at runtime (through
 `readFileSync` or `git ls-files`) and scripts it spawns count the same. Without the names,
 the verdict is `not comparable`, with the reason `changed files not named: <paths>`. Name
-every path that reason lists with `--source <path>`.
+each path that reason lists. Use `--source <path>` for product code, which red takes from
+`--base`. Use `--with <path>` for test code, such as a fixture or a test helper, which both
+sides take from `HEAD`.
 
 A new test that imports an export the fix adds cannot run over the code from before the
 fix: the import fails, and the verdict is `red for another reason`. Prove such a test with
@@ -68,8 +70,10 @@ node scripts/regression-proof.mjs --patch <file> --test <test file>...
 The script builds the break as a commit object over `HEAD` (a temporary index, never
 checked out), runs `squeal proof <tests> --base <break> --case source`, and prints each
 file's verdict, its failing tests and `proven X/Y`. It names every file the break changes,
-other than a named test, with `--source`. A break in a file the tests read at runtime or
-spawn is therefore proven the same way as a break in an imported file. It also passes
+other than a named test. Product files go as `--source`, so a break in a file the tests
+read at runtime or spawn is proven the same way as a break in an imported file. Files that
+Squeal counts as test code (under a `test`, `fixtures` or similar folder, or named
+`*.test.*` or `*.spec.*`) go as `--with` and stay at `HEAD`. It also passes
 `--env SQUAWK_REGRESSION_PROOF=1`. Under a condition, Squeal runs each side fresh and
 stores no result, because a stored result never belongs to a break commit. Squeal also
 runs the red side once without the condition, as a control. A file can take three runs,

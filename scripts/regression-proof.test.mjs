@@ -162,22 +162,29 @@ test('the CLI passes the break and the tests to squeal proof, prints the counts 
 
 // A break never changes the test, so Squeal compares nothing until every file the break
 // changes is named; a runtime-read or spawned file counts the same as an imported one.
-test('the CLI names every file the break changes, except a named test, as --source', (t) => {
+// Squeal takes a --with file from HEAD on both sides, so a changed fixture or helper stays test code.
+test('the CLI names product files the break changes as --source, test-side files as --with, and no named test', (t) => {
   const { cwd, git, put } = fixture(t);
   put('scripts/reader.sh', 'echo ok\n');
+  put('src/fixtures/data.json', '{}\n');
+  put('src/helper.spec.ts', 'helper\n');
   git('add', '.');
   git('commit', '-m', 'reader');
   put('scripts/reader.sh', 'echo broken\n');
   put('src/guard.ts', 'export function guard() {\n  return false;\n}\n');
   put('src/guard.test.ts', 'test changed\n');
+  put('src/fixtures/data.json', '[]\n');
+  put('src/helper.spec.ts', 'helper changed\n');
   writeFileSync(join(cwd, 'break.patch'), execFileSync('git', ['diff'], { cwd, encoding: 'utf8' }));
   git('checkout', '--', '.');
   const squeal = fakeSqueal(t, proofReport('__BASE__', git('rev-parse', 'HEAD'), [['src/guard.test.ts', 'proven', ['x']]]));
-  const result = run(cwd, ['--patch', join(cwd, 'break.patch'), '--test', 'src/guard.test.ts'], squeal.bin);
+  const result = run(cwd, ['--patch', join(cwd, 'break.patch'), '--test', './src/guard.test.ts'], squeal.bin);
   assert.equal(result.status, 0, result.stderr);
   const args = squeal.args();
-  const sources = args.flatMap((arg, index) => (args[index - 1] === '--source' ? [arg] : []));
-  assert.deepEqual(sources, ['scripts/reader.sh', 'src/guard.ts']);
+  const named = (flag) => args.flatMap((arg, index) => (args[index - 1] === flag ? [arg] : []));
+  assert.equal(args[1], 'src/guard.test.ts');
+  assert.deepEqual(named('--source'), ['scripts/reader.sh', 'src/guard.ts']);
+  assert.deepEqual(named('--with'), ['src/fixtures/data.json', 'src/helper.spec.ts']);
   assert.ok(args.includes('SQUAWK_REGRESSION_PROOF=1'));
 });
 
@@ -197,6 +204,7 @@ test('a break that deletes or renames a file names the old and the new path as -
   const args = squeal.args();
   const sources = args.flatMap((arg, index) => (args[index - 1] === '--source' ? [arg] : []));
   assert.deepEqual(sources, ['scripts/gone.sh', 'scripts/new-name.sh', 'scripts/old-name.sh']);
+  assert.equal(args.includes('--with'), false);
 });
 
 test('the break is built over the pinned head, and a proof over another HEAD is refused', (t) => {
