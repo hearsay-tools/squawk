@@ -75,8 +75,8 @@ describe('buildClaudeArgs hook events (#961)', () => {
       const count = join(dir, 'count');
       writeFileSync(bin, `#!/bin/sh\necho x >> '${count}'\necho '  --replay-user-messages  Re-emit user messages'\n`);
       chmodSync(bin, 0o755);
-      expect(claudeHelpFeatures(bin)).toEqual({ replayUserMessages: true, includeHookEvents: false });
-      expect(claudeHelpFeatures(bin)).toEqual({ replayUserMessages: true, includeHookEvents: false });
+      expect(claudeHelpFeatures(bin)).toEqual({ replayUserMessages: true, includeHookEvents: false, includePartialMessages: false });
+      expect(claudeHelpFeatures(bin)).toEqual({ replayUserMessages: true, includeHookEvents: false, includePartialMessages: false });
       expect(readFileSync(count, 'utf8').trim().split('\n')).toHaveLength(1);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -1182,5 +1182,27 @@ describe('Claude output loop side-effect order (hearsay-tools/cezarion#1954)', (
     fake.finish([], { code: -2 });
     await expect(session.result).rejects.toThrow('`claude` not found on PATH');
     expect(log).toEqual([]);
+  });
+});
+
+describe('Claude partial-message feature detection', () => {
+  it('passes partial messages only when supported, without adding print mode', () => {
+    const spec = { userPrompt: 'p', cwd: '/tmp', toolGrant: UNSET_TOOL_GRANT };
+    const args = buildClaudeArgs(spec, {}, { replayUserMessages: true, includePartialMessages: true });
+    expect(args).toContain('--include-partial-messages');
+    expect(args).not.toContain('-p');
+    expect(args).not.toContain('--print');
+    expect(buildClaudeArgs(spec)).not.toContain('--include-partial-messages');
+    expect(buildClaudeArgs(spec, {}, { replayUserMessages: false, includePartialMessages: false })).not.toContain('--include-partial-messages');
+  });
+
+  it('detects partial-message support in CLI help', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cez-claude-partial-help-'));
+    try {
+      const bin = join(dir, 'claude');
+      writeFileSync(bin, '#!/bin/sh\necho --include-partial-messages\n');
+      chmodSync(bin, 0o755);
+      expect(claudeHelpFeatures(bin).includePartialMessages).toBe(true);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 });

@@ -34,7 +34,9 @@ import {
   type ForkedCommandState,
 } from './claude-forked-command.ts';
 
-export interface ClaudeUiMapperState extends ForkedCommandState {
+import { mapClaudePartial, completeClaudeStreams, reconcileClaudeAssistant, type ClaudePartialState } from './claude-partial-messages.ts';
+
+export interface ClaudeUiMapperState extends ForkedCommandState, ClaudePartialState {
   /** Used when `system/init` lacks `session_id` (the dry-run mock does). */
   readonly fallbackSessionId?: string | undefined;
   /** True once `system/init` produced `session.started`. */
@@ -79,6 +81,9 @@ export interface ClaudeUiMapping {
 
 export function createClaudeUiState(opts: { fallbackSessionId?: string | undefined } = {}): ClaudeUiMapperState {
   return {
+    streamMessageId: undefined,
+    streamBlocks: new Map(),
+    stoppedStreamBlocks: new Map(),
     fallbackSessionId: opts.fallbackSessionId,
     sessionStarted: false,
     pendingTurnIds: [],
@@ -131,8 +136,12 @@ function mapWireMessage(msg: Record<string, unknown>, state: ClaudeUiMapperState
       if (msg.subtype === 'task_started') return mapTaskStarted(msg, state);
       if (msg.subtype === 'task_notification') return mapTaskNotification(msg, state);
       return { events: [], state };
-    case 'assistant':
-      return mapAssistant(msg, state);
+    case 'stream_event':
+      return mapClaudePartial(msg, state);
+    case 'assistant': {
+      const reconciled = reconcileClaudeAssistant(msg, state);
+      return mapAssistant(reconciled.msg, reconciled.state);
+    }
     case 'user':
       return mapToolResults(msg, state);
     case 'result':
@@ -761,6 +770,7 @@ function samePlan(a: ReadonlyMap<string, PlanEntry>, b: ReadonlyMap<string, Plan
 
 function mapResult(msg: Record<string, unknown>, state: ClaudeUiMapperState): ClaudeUiMapping {
   const events: UiEvent[] = [];
+  events.push(...completeClaudeStreams(state));
   const denials = completePermissionDenials(msg, state);
   events.push(...denials.events);
   let itemSeq = denials.itemSeq;
@@ -778,6 +788,9 @@ function mapResult(msg: Record<string, unknown>, state: ClaudeUiMapperState): Cl
       itemSeq,
       turnSeq,
       currentTurnId: null,
+      streamMessageId: undefined,
+      streamBlocks: new Map(),
+      stoppedStreamBlocks: new Map(),
       forkedCommandStarts: new Map(),
       openForkedCommands: new Map(),
       openTools: denials.openTools ?? state.openTools,

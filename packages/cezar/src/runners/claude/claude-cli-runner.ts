@@ -28,6 +28,8 @@ import {
   type ClaudeUiMapping,
 } from './claude-ui-mapper.ts';
 
+import { closeClaudeStreams } from './claude-partial-messages.ts';
+
 export interface ClaudeCliRunnerOptions {
   /** Override the binary name/path; defaults to `claude` on PATH. */
   bin?: string;
@@ -319,7 +321,7 @@ export class ClaudeCliRunner implements AgentRunner {
     };
 
     const announceQueuedTurn = (msg: ClaudeStreamMessage): void => {
-      if (queuedTurnPending && (msg.type === 'assistant' || msg.type === 'user' || msg.type === 'result')) {
+      if (queuedTurnPending && (isParentAssistantFrame(msg) || msg.type === 'assistant' || msg.type === 'user' || msg.type === 'result')) {
         queuedTurnPending = false;
         emitUi(claudeTurnStarted);
       } else if (nativeTurn === 'possible' && isParentAssistantFrame(msg)) {
@@ -524,6 +526,7 @@ export class ClaudeCliRunner implements AgentRunner {
     // ---- process cleanup -----------------------------------------------------
 
     const closeOutput = (): void => {
+      emitUi(closeClaudeStreams);
       if (deadline) clearTimeout(deadline);
       if (autoEndTimer) clearTimeout(autoEndTimer);
       if (refusalRetry && stdinOpen && !terminatedBySquawk && !timedOut) {
@@ -680,6 +683,7 @@ export class ClaudeCliRunner implements AgentRunner {
 export interface ClaudeHelpFeatures {
   replayUserMessages: boolean;
   includeHookEvents: boolean;
+  includePartialMessages: boolean;
 }
 
 /** Read the installed CLI's own `--help` once per binary. */
@@ -694,6 +698,7 @@ export function claudeHelpFeatures(bin: string): ClaudeHelpFeatures {
   const features = {
     replayUserMessages: help.includes('--replay-user-messages'),
     includeHookEvents: help.includes('--include-hook-events'),
+    includePartialMessages: help.includes('--include-partial-messages'),
   };
   helpFeatures.set(bin, features);
   return features;
@@ -702,7 +707,7 @@ export function claudeHelpFeatures(bin: string): ClaudeHelpFeatures {
 export function buildClaudeArgs(
   spec: AgentRunSpec,
   env: NodeJS.ProcessEnv = process.env,
-  features: { replayUserMessages: boolean; includeHookEvents?: boolean } = { replayUserMessages: true },
+  features: { replayUserMessages: boolean; includeHookEvents?: boolean; includePartialMessages?: boolean } = { replayUserMessages: true },
 ): string[] {
   const args: string[] = [
     '--input-format',
@@ -715,6 +720,7 @@ export function buildClaudeArgs(
   if (features.replayUserMessages) args.push('--replay-user-messages');
   // Every hook's lifecycle, so the transcript can show what hooks told the agent (#961).
   if (features.includeHookEvents) args.push('--include-hook-events');
+  if (features.includePartialMessages) args.push('--include-partial-messages');
   args.push(...claudePermissionArgs(env));
   // Refuse other Claude sessions' SendMessage on every launch; fails open (spec 2026-10-27-task-communication-protocol § 11).
   args.push('--settings', JSON.stringify({ crossSessionInbound: 'refuse' }));
