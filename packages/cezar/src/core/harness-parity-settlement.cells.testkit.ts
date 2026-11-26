@@ -396,6 +396,8 @@ export const SETTLEMENT_GROUPS = {
                 const choice = options.find(option => option.label.toLowerCase().includes(decision));
                 expect(choice).toBeDefined();
                 expect(manager.sendMessage(runId, [{ type: 'text', text: 'accept' }])).toBe(false);
+                const live = [...fixtureWork(manager).liveSessions].find(session => session.open);
+                expect(live?.sendAgentMessage([{ type: 'text', text: 'steer during open permission' }])).toBe(false);
                 expect(manager.respondPermission(runId, request.requestId as string, 'not-offered')).toBe(false);
                 const app = createApp({ home: testHome(), repoRoot, store, manager, version: 'test' });
                 const response = await apiRequest(app, `/api/v1/runs/${runId}/permissions`, {

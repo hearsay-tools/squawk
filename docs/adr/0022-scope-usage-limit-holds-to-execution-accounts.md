@@ -1,13 +1,15 @@
 # Scope usage-limit holds to the executing account
 
-A provider limit closes an account, not just one task. Derive holds from durable records
-and share them through the workspace semaphore. Resolve the executing step or continuation
+A provider limit closes an account, not just one task. When the account's runner names quota
+pools (`RunnerModelData.quotaPool`), the limit closes only the pool of the model that met it, and
+holds only queued work that draws on that pool or on an unknown pool (hearsay-tools/squawk#4343).
+Derive holds from durable records and share them through the workspace semaphore. Resolve the executing step or continuation
 account before using the run-level fallback, so mixed-runner workflows do not block the
 wrong provider or login.
 
 ## Consequences
 
-A future reset deadline blocks fresh work and resumes on that account. An in-flight resume
+A future reset deadline blocks fresh work and resumes on that account, or on that pool. An in-flight resume
 blocks fresh work but permits other resumes, avoiding a mutual hold with no future wake.
 Reconcile timers from records on pump and recovery; disabling automatic resume retires durable
 appointments too. Expired, archived or spent appointments must not become permanent holds.
@@ -16,6 +18,6 @@ A watchdog repairs queued records missing their process-local jobs. It only chal
 queue when no running work or real future appointment explains the pause, then uses ordinary
 capacity rules. It is a fallback for lost wakeups, not a second scheduler.
 
-Implementation: [execution-account.ts](../../packages/cezar/src/workflows/execution-account.ts), [run-scheduling.ts](../../packages/cezar/src/workflows/run-scheduling.ts), [run-line.ts](../../packages/cezar/src/workflows/run/run-line.ts), [auto-resume.ts](../../packages/cezar/src/workflows/run/auto-resume.ts), [run.ts](../../packages/cezar/src/workflows/run.ts), [semaphore.ts](../../packages/cezar/src/workspace/semaphore.ts).
+Implementation: [execution-account.ts](../../packages/cezar/src/workflows/execution-account.ts), [runner-registry.ts](../../packages/cezar/src/core/runner-registry.ts), [run-scheduling.ts](../../packages/cezar/src/workflows/run-scheduling.ts), [run-line.ts](../../packages/cezar/src/workflows/run/run-line.ts), [auto-resume.ts](../../packages/cezar/src/workflows/run/auto-resume.ts), [run.ts](../../packages/cezar/src/workflows/run.ts), [semaphore.ts](../../packages/cezar/src/workspace/semaphore.ts).
 
-Coverage: [execution-account.test.ts](../../packages/cezar/src/workflows/execution-account.test.ts), [execution-account-engine.test.ts](../../packages/cezar/src/workflows/execution-account-engine.test.ts), [auto-resume.test.ts](../../packages/cezar/src/workflows/auto-resume.test.ts).
+Coverage: [execution-account.test.ts](../../packages/cezar/src/workflows/execution-account.test.ts), [execution-account-engine.test.ts](../../packages/cezar/src/workflows/execution-account-engine.test.ts), [auto-resume.test.ts](../../packages/cezar/src/workflows/auto-resume.test.ts), [run-scheduling.test.ts](../../packages/cezar/src/workflows/run-scheduling.test.ts).

@@ -138,7 +138,7 @@ entity was not found.\n"`, and a broken custom agent as `"\n⚠ failed to constr
 | `transport` | `stdio` | same | every `cli-*` fixture |
 | `sessionIdSource` | `native` | same | `session/new` returns an agent UUID (`cli-handshake.ndjson`) |
 | `systemPromptOnResume` | `resent` | **changes**: the prompt is saved with the session, and a resent one is added to the saved one, not put in its place. Neither value names this exactly. Resending duplicates the prompt, which is the case `in-thread` guards against: with `in-thread`, Squawk does not resend the skill prefix on a same-session resume. A changed prompt cannot replace the saved one; hearsay-tools/squawk#4060 chooses the value. | A plain `session/resume` in a new process answered the secret word; the word was only in the `session/new` request (`cli-resume-without-system-prompt.ndjson`). A resume that sent a different prompt answered both words, "ORCA-3, ORCA-4" (`cli-resume-changed-system-prompt.ndjson`). |
-| `inputDelivery.mode` | `steer` | same, with a new acknowledgement order | A second `session/prompt` during a command ends the **first** prompt with `end_turn` 4 ms later. The running work goes on, and the second prompt's response ends the turn; the answer obeyed the steer (`cli-midturn-prompt.ndjson`). 1.5.0 answered the steer early instead. |
+| `inputDelivery.mode` | `steer` | same, with a new acknowledgement order and permission-wait rejection | A second `session/prompt` during a command ends the **first** prompt with `end_turn` 4 ms later. The running work goes on, and the second prompt's response ends the turn; the answer obeyed the steer (`cli-midturn-prompt.ndjson`). 1.5.0 answered the steer early instead. If the running prompt is waiting for a permission or question answer, CLI 1.5.14 rejects the steer with an ACP RPC error instead of accepting it (hearsay-tools/squawk#4181). |
 | `inputDelivery.consumption` | `unobservable` | same | no frame echoes the steer |
 | `inputDelivery.acknowledgement` | `response` | same field, other prompt: the steer's response is the end of the turn. A prompt that opens a turn has no response before the turn ends, so Squawk takes that turn's first agent update as its acknowledgement, and the response only for a turn without one. | `cli-midturn-prompt.ndjson`, `cli-prompt-command.ndjson` |
 | `inputDelivery.humanInputAtTurnEnd` | `held-when-late` | not probed on the CLI | — |
@@ -300,6 +300,18 @@ hearsay-tools/squawk#4060 maps the CLI frames as follows. The fixtures' expected
     `The following system message was injected by a <Event> hook:`) are read from the same
     transcript and emitted as `item.completed` `UiHookItem` events; internal `source: "SYSTEM"`
     reminders are ignored.
+11. Mid-turn `session/prompt` steers are rejected by CLI 1.5.14 while the running prompt waits for
+    a permission or question answer (`Can't add this prompt to session <session-id>: the running
+    prompt is waiting for a permission or question answer; answer it or send session/cancel, then
+    send this prompt again`, hearsay-tools/squawk#4181). While an ACP permission stays open,
+    `AntigravitySession.sendAgentMessage` returns `false` and invokes `onAgentInputReady` after the
+    permission response is written to the wire, and `sendMessage` defers behind the open permission.
+    When an in-flight steer races on the full-duplex pipe with an unread `session/request_permission`
+    (including auto-approved permissions) or `ask_question` and receives that rejection,
+    `AntigravitySession` keeps the running prompt's turn ownership intact, defers the steer, and
+    retries it once the permission or question settles (or when the turn ends) instead of failing
+    delivery or closing the session. Unrelated ACP RPC rejections on `session/prompt` still fail
+    delivery.
 
 ### Native subagents and tool results (hearsay-tools/squawk#4098, hearsay-tools/squawk#4099)
 
