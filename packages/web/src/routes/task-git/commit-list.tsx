@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 
-import { shortGitAge } from '../repo-git/git-sections'
+import { gitAge, gitAgeTitle } from '../repo-git/git-sections'
 
 /**
  * The commit log list, shared by the task Commits tab and the repo Commits segment — one
@@ -43,6 +43,8 @@ export interface CommitListItem {
   subject: string
   author: string
   when: string
+  /** The committer date as ISO 8601 when the payload has it: the age and its tooltip read it first. */
+  at?: string | undefined
   /** Where the row links to — the two consumers have different route prefixes. */
   href: string
   /** The sha as displayed; the task list abbreviates, the repo log is already short. */
@@ -149,12 +151,14 @@ function CommitRow({ commit, selected }: { commit: CommitListItem; selected: boo
         <GitCommitHorizontalIcon size={16} aria-hidden="true" className="mt-px size-4 shrink-0 text-accent-text" />
         <span className="min-w-0 flex-1">
           <span data-slot="commit-row-subject" title={commit.subject} className="line-clamp-2 text-[13px] leading-snug font-medium break-words text-foreground">{commit.subject}</span>
-          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
-            <span className="truncate">{commit.author} · <span title={commit.when}>{shortGitAge(commit.when)}</span></span>
+          {/* The sha rides in the meta line, not beside the subject: the subject keeps the row's
+              full width and wraps less beside a wide diff pane. */}
+          <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+            <span className="shrink-0 rounded-md bg-muted px-1.5 py-px font-mono text-[11px] text-muted-foreground" title={commit.sha}>{commit.shaLabel}</span>
+            <span className="min-w-0 truncate">{commit.author} · <span title={gitAgeTitle(commit.when, commit.at)}>{gitAge(commit.when, commit.at)}</span></span>
             {commit.stat ? <DiffStatLabel stat={commit.stat} /> : null}
           </span>
         </span>
-        <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground" title={commit.sha}>{commit.shaLabel}</span>
       </Link>
     </div>
   )

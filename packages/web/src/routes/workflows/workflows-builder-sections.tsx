@@ -188,19 +188,22 @@ export function WbActionsRow({
         size="sm"
         data-slot="wb-auto"
         aria-expanded={autoOpen}
-        title="Describe a chain — the agent builds it"
+        aria-describedby="wb-auto-hint"
+        title="Auto-build: describe the chain in words and an agent drafts its steps for you to review"
         onClick={onAutoToggle}
       >
         <WandSparklesIcon aria-hidden="true" className="size-3" />
-        Auto
+        Auto-build
       </Button>
+      <span id="wb-auto-hint" className="sr-only">Describe the chain in words and an agent drafts its steps for you to review.</span>
       {savedFile ? (
         <Button
           type="button"
           variant="ghost"
           size="sm"
           data-slot="wb-delete"
-          className="text-danger hover:text-danger"
+          // Set apart from the neutral file actions by a rule and a gap: the one destructive action.
+          className="relative text-danger hover:text-danger sm:ms-3 sm:before:absolute sm:before:-start-[13px] sm:before:top-1/2 sm:before:h-5 sm:before:w-px sm:before:-translate-y-1/2 sm:before:bg-border sm:before:content-['']"
           title="Delete the saved workflow file"
           onClick={onDeleteRequest}
         >

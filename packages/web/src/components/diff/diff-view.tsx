@@ -14,6 +14,7 @@ import {
   fileKey,
   widestLineChars,
 } from './diff-scroll'
+import { DiffTotals } from './diff-totals'
 import { ImagePreview, shouldPreviewImage } from './image-preview'
 import { canPreviewMarkdown } from './markdown'
 import { MarkdownPreview } from './markdown-preview'
@@ -75,6 +76,8 @@ export function DiffView({
   imageSrc,
   onOpenInApp,
   viewRef,
+  totals = true,
+  actions,
   className,
 }: DiffProps) {
   const stat: DiffStat = useMemo(
@@ -187,12 +190,10 @@ export function DiffView({
       data-mode={mode}
       className={cn('flex min-w-0 flex-col', className)}
     >
-      <p data-slot="diff-totals" className="flex items-center gap-2 px-1 pb-3 text-xs text-muted-foreground">
-        <span>
-          {stat.files} {stat.files === 1 ? 'file' : 'files'} changed
-        </span>
-        <DiffStatLabel stat={stat} />
-      </p>
+      <div data-slot="diff-header" hidden={!totals && !actions} className="flex min-h-9 flex-wrap items-center gap-x-2 gap-y-1.5 px-1 pb-3">
+        <DiffTotals stat={stat} hidden={!totals} />
+        {actions ? <div data-slot="diff-actions" className="ms-auto flex items-center gap-1.5">{actions}</div> : null}
+      </div>
       {renderMode === 'virtual' ? (
         <VirtualFiles files={files} handleRef={virtualizerRef} scrollElRef={scrollElRef} card={card} />
       ) : (

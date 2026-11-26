@@ -19,7 +19,7 @@ import { BrushIcon } from 'lucide-react'
 import { FolderOpenIcon } from '@/components/design-icons'
 import { toast } from '@/components/ui/toaster'
 import { formatMem } from '@/lib/tasks-table'
-import { shortAge } from '@/lib/format'
+import { shortAge, withAgo } from '@/lib/format'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 
@@ -220,7 +220,7 @@ function WorktreeRow({
 }) {
   const state = retentionState(worktree, keep)
   const age = shortAge(worktree.finishedAt ?? undefined)
-  const status = worktree.status === 'review' ? 'at review' : age ? `${worktree.status} ${age} ago` : worktree.status
+  const status = worktree.status === 'review' ? 'at review' : age ? `${worktree.status} ${withAgo(age)}` : worktree.status
   const stateLabel = (
     <span
       data-slot="worktree-state"

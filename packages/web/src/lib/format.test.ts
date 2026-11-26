@@ -2,21 +2,27 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { compactTokens, resumeLabel, shortAge } from '@/lib/format'
+import { compactTokens, resumeLabel, shortAge, withAgo } from '@/lib/format'
 
 describe('shortAge', () => {
   const now = Date.parse('2026-07-14T12:00:00.000Z')
   const ago = (ms: number) => new Date(now - ms).toISOString()
 
   it.each([
-    [0, '0s'],
-    [4_000, '4s'],
+    [0, 'just now'],
+    [9_999, 'just now'],
+    [10_000, '10s'],
+    [34_000, '34s'],
     [59_999, '59s'],
     [60_000, '1m'],
     [26 * 60_000, '26m'],
     [3_599_000, '59m'],
     [3_600_000, '1h'],
+    [66 * 60_000, '1h 6m'],
+    [76 * 60_000, '1h 16m'],
     [2 * 3_600_000, '2h'],
+    [5 * 3_600_000 + 59 * 60_000, '5h 59m'],
+    [6 * 3_600_000 + 30 * 60_000, '6h'],
     [86_399_000, '23h'],
     [86_400_000, '1d'],
     [3 * 86_400_000, '3d'],
@@ -25,9 +31,17 @@ describe('shortAge', () => {
     expect(shortAge(ago(ms), now)).toBe(expected)
   })
 
-  it('clamps a future timestamp to 0s rather than printing a negative age', () => {
+  it('clamps a future timestamp to just now rather than printing a negative age', () => {
     // The server stamps the time; the browser's clock may be behind it.
-    expect(shortAge(new Date(now + 5_000).toISOString(), now)).toBe('0s')
+    expect(shortAge(new Date(now + 5_000).toISOString(), now)).toBe('just now')
+  })
+
+  it.each([
+    ['6m', '6m ago'],
+    ['just now', 'just now'],
+    ['', ''],
+  ])('withAgo(%j) → %j', (age, expected) => {
+    expect(withAgo(age)).toBe(expected)
   })
 
   it.each([undefined, '', 'not a date'])('renders nothing for %s', (iso) => {

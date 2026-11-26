@@ -6,7 +6,6 @@ import { useRepoChanges } from '@/api/queries'
 import { CenteredState } from '@/components/centered-state'
 import { canPreviewMarkdown, Diff, type DiffHandle, type DiffMode } from '@/components/diff'
 import { useIsDesktop } from '@/lib/use-desktop'
-import { cn } from '@/lib/utils'
 
 import { ChangesTree } from '../task-git/changes-tree'
 import { DiffViewToggles, MarkdownPreviewToggle } from '../task-git/diff-controls'
@@ -51,22 +50,6 @@ export function RepoChangesSection() {
 
   return (
     <section data-slot="repo-changes" className="flex min-h-0 flex-1 flex-col">
-      <div
-        data-slot="repo-changes-toolbar"
-        // The total ± sits beside the Changed files heading; this row holds only the view toggles,
-        // so a phone without a Markdown file has nothing to show here.
-        className={cn('flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 pt-0 pb-4 md:flex md:px-9', hasMarkdown ? 'flex' : 'hidden')}
-      >
-        <span className="ml-auto flex items-center gap-1.5">
-          {/* Same rule as the task toolbar: these toggles exist ≥md only — phones force unified+wrap. */}
-          <span className="hidden items-center gap-1.5 md:flex">
-            <DiffViewToggles mode={mode} wrap={wrap} onModeChange={setMode} onWrapChange={setWrap} />
-          </span>
-          {/* Every width, like the task toolbar's — see `MarkdownPreviewToggle`. */}
-          {hasMarkdown ? <MarkdownPreviewToggle preview={preview} onPreviewChange={setPreview} /> : null}
-        </span>
-      </div>
-
       {changes.isPending ? (
         <p data-slot="changes-loading" className="px-4 py-6 text-center text-xs text-muted-foreground md:px-9">
           Loading changes…
@@ -109,7 +92,21 @@ export function RepoChangesSection() {
             // No file route serves the main checkout, so the preview shows the patch's new side
             // and no image: `loadFileText` and `imageSrc` stay unwired here.
             preview={preview}
-            className="min-w-0 flex-1 [&_[data-slot=diff-totals]]:hidden"
+            // The total sits beside the Changed files heading; the diff's header row carries the
+            // view toggles at its right end instead of a row of their own.
+            totals={false}
+            // A phone without a Markdown file has no control to show, so no empty row either.
+            actions={desktop || hasMarkdown ? (
+              <span data-slot="repo-changes-toolbar" className="flex items-center gap-1.5">
+                {/* Same rule as the task toolbar: these toggles exist ≥md only — phones force unified+wrap. */}
+                <span className="hidden items-center gap-1.5 md:flex">
+                  <DiffViewToggles mode={mode} wrap={wrap} onModeChange={setMode} onWrapChange={setWrap} />
+                </span>
+                {/* Every width, like the task toolbar's — see `MarkdownPreviewToggle`. */}
+                {hasMarkdown ? <MarkdownPreviewToggle preview={preview} onPreviewChange={setPreview} /> : null}
+              </span>
+            ) : undefined}
+            className="min-w-0 flex-1"
           />
         </div>
       )}

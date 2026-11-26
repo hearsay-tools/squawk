@@ -304,6 +304,8 @@ function ChangesLayout({
         loadFileText={(path) => loadWorktreeText(runId, path)}
         imageSrc={(path) => runFileRawUrl(runId, path)}
         onOpenInApp={localHandoff ? (path) => onOpenInApp(path) : undefined}
+        // The toolbar above already shows the animated total; the diff does not repeat it.
+        totals={false}
         className="min-w-0 flex-1"
       />
     </div>

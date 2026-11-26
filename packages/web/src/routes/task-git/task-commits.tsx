@@ -14,7 +14,7 @@ import { CommitDiffPanel } from '@/components/diff/commit-diff-panel'
 import { useIsDesktop } from '@/lib/use-desktop'
 
 import { engineOwnsRun } from '@open-mercato/cezar-api-client/contract/run-predicates'
-import { shortGitAge } from '../repo-git/git-sections'
+import { gitAge } from '../repo-git/git-sections'
 import { RunHeader } from '../task-thread/run-header'
 import { CommitList } from './commit-list'
 import { DiffViewToggles } from './diff-controls'
@@ -138,7 +138,7 @@ function CommitsWorkspace({
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
                     <span>{activeCommit.data.author}</span>
                     <span aria-hidden="true">·</span>
-                    <span title={activeCommit.data.when}>{shortGitAge(activeCommit.data.when)}</span>
+                    <span title={activeCommit.data.when}>{gitAge(activeCommit.data.when)}</span>
                     <span aria-hidden="true">·</span>
                     <span className="font-mono select-all" title={activeCommit.data.sha ?? selectedSha}>{(activeCommit.data.sha ?? selectedSha).slice(0, 8)}</span>
                     {activeCommit.data.stat ? (
@@ -168,6 +168,7 @@ function CommitsWorkspace({
                     mode={effectiveMode}
                     wrap={effectiveWrap}
                     loadFileText={(path) => loadWorktreeText(run.id, path)}
+                    totals={false}
                     className="min-w-0"
                   />
                 </div>

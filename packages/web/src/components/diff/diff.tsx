@@ -4,6 +4,7 @@ import type { DiffStat } from '@open-mercato/cezar-api-client'
 import { DiffStatLabel } from '@/components/diff-stat'
 import { cn } from '@/lib/utils'
 
+import { DiffTotals } from './diff-totals'
 import { ImagePreview, shouldPreviewImage } from './image-preview'
 import type { DiffFileChange, DiffProps } from './types'
 
@@ -54,7 +55,7 @@ export function Diff(props: DiffProps) {
  * the engine chunk can. Split mode degrades to unified and Markdown `preview` to the plain
  * patch; that is documented degradation, not a bug.
  */
-export function DiffFallback({ files, wrap = false, imageSrc, onOpenInApp, viewRef, className }: DiffProps) {
+export function DiffFallback({ files, wrap = false, imageSrc, onOpenInApp, viewRef, totals = true, actions, className }: DiffProps) {
   const stat: DiffStat = {
     adds: files.reduce((sum, file) => sum + file.adds, 0),
     dels: files.reduce((sum, file) => sum + file.dels, 0),
@@ -79,12 +80,10 @@ export function DiffFallback({ files, wrap = false, imageSrc, onOpenInApp, viewR
   }))
   return (
     <div ref={root} data-slot="diff" data-fallback="true" className={cn('flex min-w-0 flex-col gap-3', className)}>
-      <p data-slot="diff-totals" className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
-        <span>
-          {stat.files} {stat.files === 1 ? 'file' : 'files'} changed
-        </span>
-        <DiffStatLabel stat={stat} />
-      </p>
+      <div data-slot="diff-header" hidden={!totals && !actions} className="flex min-h-9 flex-wrap items-center gap-x-2 gap-y-1.5 px-1">
+        <DiffTotals stat={stat} hidden={!totals} />
+        {actions ? <div data-slot="diff-actions" className="ms-auto flex items-center gap-1.5">{actions}</div> : null}
+      </div>
       {files.map((file) => (
         <FallbackFile
           key={`${file.oldPath ?? ''}→${file.path}`}

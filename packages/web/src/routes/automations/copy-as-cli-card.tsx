@@ -40,17 +40,17 @@ export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
   }
 
   return (
-    <section aria-labelledby="copy-as-cli-heading" data-slot="copy-as-cli" className="mbs-4 rounded-xl border bg-card p-4">
-      <div className="mbe-2 flex items-center gap-2">
-        <h2 id="copy-as-cli-heading" className="text-[15px] font-medium">Copy as CLI</h2>
-        <Button type="button" variant="ghost" size="sm" className="ms-auto" onClick={() => void copy()}>
+    <section aria-labelledby="copy-as-cli-heading" data-slot="copy-as-cli" className="rounded-xl border bg-card px-4 py-3.5">
+      <div className="mbe-2 flex min-h-8 items-center gap-2">
+        <h2 id="copy-as-cli-heading" className="text-[13px] font-medium text-muted-foreground">Copy as CLI</h2>
+        <Button type="button" variant="outline" size="sm" className="ms-auto max-md:h-11 no-hover:h-11" onClick={() => void copy()}>
           {state === 'copied' ? <CheckIcon aria-hidden="true" /> : <CopyIcon aria-hidden="true" />}
           {state === 'copied' ? 'Copied' : 'Copy'}
         </Button>
       </div>
-      {/* Wrapped, not a sideways scroll: a long line reads in full, and a very long one scrolls down
-          inside its own box with the thin bar as the cue. */}
-      <pre data-slot="copy-as-cli-line" className="m-0 max-h-48 max-w-full overflow-y-auto rounded-lg border border-border bg-muted px-3 py-2.5 font-mono text-xs/relaxed whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere] [scrollbar-width:thin]">{line}</pre>
+      {/* One line that scrolls sideways: no token breaks mid-word and no line is cut off below.
+          The bottom padding leaves room for the thin scrollbar, so it never covers a glyph. */}
+      <pre data-slot="copy-as-cli-line" tabIndex={0} aria-label="Command line" className="m-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-lg border border-border bg-muted px-3 pt-2.5 pb-3 font-mono text-xs leading-5 whitespace-pre text-muted-foreground [scrollbar-width:thin] focus-visible:outline-2 focus-visible:outline-ring">{line}</pre>
       <p role="status" className="mbs-2 text-xs break-words text-muted-foreground">
         {state === 'failed'
           ? 'Could not copy — select the line and copy it by hand.'

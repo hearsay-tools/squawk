@@ -271,7 +271,7 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
           <Section title="Name" hideLegend section="name" failure={failure}>
             <div className="grid gap-1.5">
               <Label htmlFor="automation-name" className="text-sm font-semibold text-foreground">Name</Label>
-              <Input id="automation-name" value={draft.name} onChange={(event) => patch({ name: event.target.value })} required />
+              <Input id="automation-name" value={draft.name} placeholder="Daily dependency audit" onChange={(event) => patch({ name: event.target.value })} required />
             </div>
           </Section>
 
@@ -312,12 +312,12 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
           ) : null}
         </div>
 
-        <aside className="min-w-0 md:sticky md:top-4">
+        <aside className="grid min-w-0 gap-4 md:sticky md:top-4">
           {isSchedule
             ? <NextRunsPreview schedule={draft.schedule} timeZone={timeZone} />
             : (
-              <section className="rounded-xl border bg-card p-4">
-                <h2 className="mb-2 text-[15px] font-medium">How it polls</h2>
+              <section className="rounded-xl border bg-card p-5">
+                <h2 className="mb-2 text-base font-semibold">How it polls</h2>
                 <p className="text-sm break-words text-muted-foreground">{pollSentence(draft)}</p>
               </section>
             )}

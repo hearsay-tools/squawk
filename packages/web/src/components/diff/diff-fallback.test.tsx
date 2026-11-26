@@ -41,6 +41,14 @@ describe('Diff fallback path', () => {
     expect(screen.getByText('-const two = 2')).toBeTruthy()
   })
 
+  it('keeps the totals line hidden when the consumer header shows the total, with its actions in the header row', async () => {
+    render(<Diff files={[FILE]} totals={false} actions={<button type="button">Split</button>} />)
+
+    await screen.findByText('src/a.ts')
+    expect(document.querySelector<HTMLElement>('[data-slot="diff-totals"]')?.hidden).toBe(true)
+    expect(document.querySelector('[data-slot="diff-header"] [data-slot="diff-actions"]')?.textContent).toBe('Split')
+  })
+
   it('still renders the empty state without an engine', () => {
     render(<Diff files={[]} />)
 

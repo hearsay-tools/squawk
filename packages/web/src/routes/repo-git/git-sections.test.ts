@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { LogEntry } from '@open-mercato/cezar-api-client'
 
-import { commitDayLabel, commitsToday, fetchedAgo, groupCommitsByDay } from './git-sections'
+import { commitDayLabel, commitsToday, fetchedAgo, gitAge, groupCommitsByDay } from './git-sections'
 
 const commit = (hash: string, at: string, when: string): LogEntry => ({ hash, subject: hash, author: 'Ada', when, at })
 
@@ -34,3 +34,28 @@ describe('fetchedAgo', () => {
     expect(fetchedAgo({ ref: 'origin/main', ahead: 0, behind: 0, fetchedAt: null }, now)).toBe('never fetched')
   })
 })
+
+describe('gitAge', () => {
+  // Every age here is measured from this explicit `now`, never from the system clock.
+  const now = Date.UTC(2026, 8, 30, 12)
+
+  it.each([
+    ['5 seconds ago', 'just now'],
+    ['34 seconds ago', '34s'],
+    ['12 minutes ago', '12m'],
+    ['66 minutes ago', '1h 6m'],
+    ['76 minutes ago', '1h 16m'],
+    ['23 hours ago', '23h'],
+    ['5 days ago', '5d'],
+    ['2 weeks ago', '14d'],
+    ['1 year, 2 months ago', '425d'],
+    ['in the future', 'in the future'],
+  ])('reads git %j as %j', (when, expected) => {
+    expect(gitAge(when, undefined, now)).toBe(expected)
+  })
+
+  it('prefers the ISO committer date when the payload has it', () => {
+    expect(gitAge('2 hours ago', new Date(now - 64 * 60_000).toISOString(), now)).toBe('1h 4m')
+  })
+})
+

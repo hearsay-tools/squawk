@@ -18,6 +18,9 @@ export const PAGE_TITLE_ROUTES = [
   { pattern: '/activity', pageLabel: 'Activity' },
   { pattern: '/git/*', pageLabel: 'Git' },
   { pattern: '/github/*', pageLabel: 'GitHub' },
+  // The editor names what it edits; `new` is listed before `:id` so it is not read as an id.
+  { pattern: '/automations/new', pageLabel: 'Automations / New automation' },
+  { pattern: '/automations/:automationId', pageLabel: 'Automations / Edit automation' },
   { pattern: '/automations/*', pageLabel: 'Automations' },
   { pattern: '/skills', pageLabel: 'Skills' },
   { pattern: '/reports', pageLabel: 'Reports' },

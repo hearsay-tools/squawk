@@ -40,7 +40,7 @@
 
 [data-route='github'] [data-slot='gh-tabs'] { flex-direction: row; flex-wrap: wrap; gap: 20px; border-block-end: 1px solid var(--border); }
 [data-route='github'] [data-slot='gh-tabs'] > a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; border: none; border-block-end: 2px solid transparent; border-radius: 0; background: transparent; padding-block: 8px; padding-inline: 0; margin-block-end: -1px; font-size: 13px; font-weight: 500; color: var(--muted-foreground); }
-[data-route='github'] [data-slot='gh-tabs'] > a[aria-current='page'] { color: var(--foreground); font-weight: 600; border-color: var(--accent-text); }
+[data-route='github'] [data-slot='gh-tabs'] > a[aria-current='page'] { color: var(--foreground); font-weight: 500; border-color: var(--accent-text); }
 
 [data-slot='gh-merge-box']:not([data-eligibility='ready']) h3 { color: var(--pending-strong); }
 
@@ -81,9 +81,11 @@
 /* Desktop workspace header: full-bleed tab rule aligned to the 36px (md:px-9) page gutter,
    active tab underlined with --accent-text, and compact 34px filter toolbar controls. */
 @media (min-width: 768px) {
-  [data-route='github'] [data-slot='gh-tabs'] { gap: 22px; min-height: 0; margin-inline: -36px; padding-inline: 36px; }
-  [data-route='github'] [data-slot='gh-tabs'] > a { min-height: 0; padding-block: 0 10px; padding-inline: 0; }
-  [data-route='github'] [data-slot='gh-tabs'] .gh-utility { height: 32px; min-height: 32px; padding-block: 0; padding-inline: 12px; margin-block-end: 8px; border-radius: 7px; font-size: 12px; line-height: 1; white-space: nowrap; }
+  /* The tab row has the Tasks and Automations geometry: 44px tabs 24px apart on one rule, so
+     the three pages' tab baselines sit at the same height; the 32px utilities center in it. */
+  [data-route='github'] [data-slot='gh-tabs'] { gap: 24px; min-height: 0; margin-inline: -36px; padding-inline: 36px; }
+  [data-route='github'] [data-slot='gh-tabs'] > a { min-height: 44px; padding-block: 0; padding-inline: 0; }
+  [data-route='github'] [data-slot='gh-tabs'] .gh-utility { height: 32px; min-height: 32px; padding-block: 0; padding-inline: 12px; margin-block: 6px; border-radius: 7px; font-size: 12px; line-height: 1; white-space: nowrap; }
   [data-route='github'] [data-slot='gh-filter-toolbar'] { gap: 10px; }
   [data-route='github'] [data-slot='gh-filter-toolbar'] :is(input, button) { min-height: 36px; height: 36px; padding-block: 0; border-radius: 7px; font-size: 12.5px; }
   [data-route='github'] [data-slot='gh-filter-toolbar'] [data-slot='gh-search'] { padding-inline-start: 32px; color: var(--foreground); }

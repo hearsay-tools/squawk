@@ -6,6 +6,7 @@ import { ApiError, createRunPr, deleteRepoBranches } from '@/api/client'
 import { queryKeys, useProjectRepoBase, useRepoBranches, useRuns } from '@/api/queries'
 import type { RepoBranchEntry } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
+import { ChangeCounts } from '@/components/diff/change-counts'
 import { BranchKeptReason } from './branch-kept-reason'
 import { CopyIcon, EllipsisIcon, TriangleAlertIcon } from '@/components/design-icons'
 import { ReferenceChip } from '@/components/reference-chip'
@@ -129,7 +130,8 @@ export function RepoNotLandedSection() {
               : 'Every finished task\'s commits are on the base branch, or it made none.'}
           />
         ) : (
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-5">
             {groups.map((group) => (
               <section key={group.key} data-slot="not-landed-group" data-group={group.key} aria-label={group.title} className="flex flex-col gap-1.5">
                 <h2 className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground">
@@ -149,9 +151,11 @@ export function RepoNotLandedSection() {
                 </ul>
               </section>
             ))}
-            <p data-slot="not-landed-note" className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
-              <InfoIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-              Delete branch is in each row's … menu. It confirms and names the commits it drops. Nothing on this list can be bulk-deleted.
+            </div>
+            {/* A quiet footnote under the list, not a second block: the rows stay the focal point. */}
+            <p data-slot="not-landed-note" className="flex items-start gap-1.5 px-1 text-[11.5px] leading-snug text-soft-foreground">
+              <InfoIcon aria-hidden="true" className="mt-px size-3 shrink-0" />
+              Delete a branch from its row's … menu. It confirms and names the commits it drops; nothing here is bulk-deleted.
             </p>
           </div>
         )}
@@ -305,12 +309,7 @@ function NotLandedTitleAndMeta({ entry, finishedAt }: {
         <span data-slot="not-landed-meta" className="flex min-w-0 items-center gap-[6px] text-[11px] text-muted-foreground">
           <span className="shrink-0 font-mono text-muted-foreground">{entry.name}</span>
           <span className="shrink-0">· {entry.ahead} commit{entry.ahead === 1 ? '' : 's'}</span>
-          {entry.diffStat ? (
-            <span className="flex shrink-0 gap-[4px] tabular-nums">
-              <span className={entry.diffStat.additions === 0 ? 'text-muted-foreground' : 'text-success'}>+{entry.diffStat.additions}</span>
-              <span className={entry.diffStat.deletions === 0 ? 'text-muted-foreground' : 'text-danger'}>−{entry.diffStat.deletions}</span>
-            </span>
-          ) : null}
+          {entry.diffStat ? <ChangeCounts adds={entry.diffStat.additions} dels={entry.diffStat.deletions} /> : null}
           {when ? <span className="truncate" title={whenTitle}>· {when}</span> : null}
         </span>
         {entry.parentRunId ? (

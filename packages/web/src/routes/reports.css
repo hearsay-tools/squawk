@@ -12,4 +12,5 @@
 .reports-row:active { background: var(--sidebar-row-selected); }
 @media (hover: hover) and (pointer: fine) {
   .reports-row:hover { background: var(--sidebar-row-hover); }
+  .reports-row:hover .reports-cue { color: var(--foreground); }
 }

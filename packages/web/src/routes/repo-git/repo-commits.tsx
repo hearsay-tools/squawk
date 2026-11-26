@@ -15,7 +15,7 @@ import { useIsDesktop } from '@/lib/use-desktop'
 import { cn } from '@/lib/utils'
 
 import { PullConfirmDialog } from './git-checkout-block'
-import { checkoutTracking, GIT_PHONE_MAIN_PATH, groupCommitsByDay, shortGitAge } from './git-sections'
+import { checkoutTracking, GIT_PHONE_MAIN_PATH, gitAge, gitAgeTitle, groupCommitsByDay } from './git-sections'
 import { useGitCheckout } from './use-git-checkout'
 
 /**
@@ -67,7 +67,7 @@ export function RepoCommitsSection({ repo, info }: { repo: RepoResponse; info: R
                   <span data-slot="commit-row-subject" className="truncate text-[13px] font-medium text-foreground">{commit.subject}</span>
                   <span data-slot="commit-row-meta" className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
                     <span className="shrink-0 font-mono" title={commit.hash}>{commit.hash.slice(0, 8)}</span>
-                    <span className="truncate">· {commit.author} · <span title={fullTime(commit.at, commit.when)}>{shortGitAge(commit.when)}</span></span>
+                    <span className="truncate">· {commit.author} · <span title={gitAgeTitle(commit.when, commit.at)}>{gitAge(commit.when, commit.at)}</span></span>
                   </span>
                 </Link>
                 <CommitSource source={commit.source} />
@@ -78,13 +78,6 @@ export function RepoCommitsSection({ repo, info }: { repo: RepoResponse; info: R
       ))}
     </div>
   )
-}
-
-/** The full local date and time for a compact age's tooltip; git's own relative words when the
- *  ISO date does not parse. */
-function fullTime(at: string, fallback: string): string {
-  const time = Date.parse(at)
-  return Number.isFinite(time) ? new Date(time).toLocaleString() : fallback
 }
 
 /** `⑂ PR #698 🤖 Picker pill prefixes`, linking to the task; `no task found` otherwise. An absent

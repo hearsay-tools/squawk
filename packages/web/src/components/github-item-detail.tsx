@@ -14,6 +14,7 @@ import type {
   GithubTimelineEventKind,
 } from '@open-mercato/cezar-api-client'
 import { Diff, type DiffFileChange } from '@/components/diff'
+import { ChangeCounts } from '@/components/diff/change-counts'
 import { GithubMergeBox } from '@/components/github-merge-box'
 import { TabLink } from '@/components/tab-link'
 import { Button } from '@/components/ui/button'
@@ -72,6 +73,9 @@ const GH_MARKDOWN_CLASS = cn(
   '[&_[data-streamdown="code-block-header"][data-language=""]]:hidden [&_[data-streamdown="code-block-header"]:not([data-language])]:hidden [&_[data-streamdown="code-block-header"]:has(>span:empty)]:hidden',
   '[&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:absolute [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:top-1 [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:right-1.5 [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:mt-0 [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:h-auto',
   '[&_[data-streamdown="code-block-actions"]]:border-0 [&_[data-streamdown="code-block-actions"]]:bg-transparent [&_[data-streamdown="code-block-actions"]]:p-0 [&_[data-streamdown="code-block-actions"]]:backdrop-blur-none',
+  // Streamdown's own failed-image line (private attachments need a GitHub session): a calm box
+  // that says where the picture can still be seen, instead of a bare italic "Image not available".
+  '[&_[data-streamdown="image-fallback"]]:inline-flex [&_[data-streamdown="image-fallback"]]:rounded-md [&_[data-streamdown="image-fallback"]]:border [&_[data-streamdown="image-fallback"]]:border-dashed [&_[data-streamdown="image-fallback"]]:border-border [&_[data-streamdown="image-fallback"]]:bg-muted/40 [&_[data-streamdown="image-fallback"]]:px-3 [&_[data-streamdown="image-fallback"]]:py-2 [&_[data-streamdown="image-fallback"]]:not-italic [&_[data-streamdown="image-fallback"]]:after:content-["_—_open_on_GitHub_to_view"]',
   '[&_[data-streamdown="code-block-body"]]:rounded-none [&_[data-streamdown="code-block-body"]]:border-0 [&_[data-streamdown="code-block-body"]]:bg-transparent [&_[data-streamdown="code-block-body"]]:px-3.5 [&_[data-streamdown="code-block-body"]]:py-2.5 [&_[data-streamdown="code-block-body"]]:pr-10',
 )
 
@@ -108,10 +112,7 @@ function GithubItemMeta({
       {hasDiffStat ? (
         <>
           ·
-          <span data-slot="gh-diffstat">
-            <span className={(additions ?? 0) === 0 ? 'text-muted-foreground' : 'text-success'}>+{additions ?? 0}</span>{' '}
-            <span className={(deletions ?? 0) === 0 ? 'text-muted-foreground' : 'text-danger'}>−{deletions ?? 0}</span>
-          </span>
+          <span data-slot="gh-diffstat"><ChangeCounts adds={additions ?? 0} dels={deletions ?? 0} /></span>
         </>
       ) : null}
       ·
@@ -223,6 +224,7 @@ export function GithubItemDetail({
   subNav,
   onRunAgent,
   afterHeading,
+  headerAction,
   children,
 }: {
   item: GithubItem
@@ -242,6 +244,9 @@ export function GithubItemDetail({
   onRunAgent?: (() => void) | undefined
   /** Optional context beneath the heading, supplied by the owning surface. */
   afterHeading?: ReactNode
+  /** The primary action, at the right end of the pane's first line (the PR title, the issue's
+   *  `#142 · issue …` line), so it is in view without scrolling. */
+  headerAction?: ReactNode
   children?: ReactNode
 }) {
   const changes = subNav?.changes ?? false
@@ -260,15 +265,21 @@ export function GithubItemDetail({
       <GithubItemBackLink backLink={backLink} />
 
       <div data-slot="gh-description-card" className={item.kind === 'pr' ? 'rounded-xl border border-border bg-card p-6' : undefined}>
-      {item.kind === 'pr' ? <h2 className="mb-4 text-[22px] leading-snug font-semibold tracking-tight">#{item.number} {item.title}</h2> : null}
-      <GithubItemMeta
-        item={item}
-        kindWord={kindWord}
-        commentCount={commentCount}
-        hasDiffStat={hasDiffStat}
-        additions={additions}
-        deletions={deletions}
-      />
+      {item.kind === 'pr' ? (
+        <GithubItemHeaderRow action={headerAction} className="mb-4">
+          <h2 className="min-w-0 text-[22px] leading-snug font-semibold tracking-tight">#{item.number} {item.title}</h2>
+        </GithubItemHeaderRow>
+      ) : null}
+      <GithubItemHeaderRow action={item.kind === 'pr' ? undefined : headerAction}>
+        <GithubItemMeta
+          item={item}
+          kindWord={kindWord}
+          commentCount={commentCount}
+          hasDiffStat={hasDiffStat}
+          additions={additions}
+          deletions={deletions}
+        />
+      </GithubItemHeaderRow>
 
       {item.kind !== 'pr' ? <h2 className="mt-2 text-[22px] leading-snug font-semibold tracking-tight">{item.title}</h2> : null}
 
@@ -285,6 +296,17 @@ export function GithubItemDetail({
       {item.kind === 'pr' ? <GithubMergeBox number={item.number} onRunAgent={onRunAgent} /> : null}
       {children}
     </article>
+  )
+}
+
+/** A header line with the pane's primary action at its right end; just the line without one. */
+function GithubItemHeaderRow({ action, className, children }: { action: ReactNode; className?: string | undefined; children: ReactNode }) {
+  if (!action) return className ? <div className={className}>{children}</div> : <>{children}</>
+  return (
+    <div data-slot="gh-header-row" className={cn('flex flex-wrap items-center gap-x-3 gap-y-2', className)}>
+      <div className="min-w-0 flex-1">{children}</div>
+      <div data-slot="gh-header-action" className="flex shrink-0 items-center gap-2">{action}</div>
+    </div>
   )
 }
 
@@ -331,8 +353,7 @@ function GithubPrChanges({ item }: { item: GithubItem }) {
     <section data-slot="gh-pr-changes" className="mt-5 min-w-0">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <strong>{data.files.length} changed files</strong>
-        <span className="text-success">+{data.additions}</span>
-        <span className="text-danger">−{data.deletions}</span>
+        <ChangeCounts adds={data.additions} dels={data.deletions} />
         <span className="font-mono text-muted-foreground" title={data.headSha}>head {data.headSha.slice(0, 8)}</span>
         <Button type="button" variant="outline" size="sm" className="ml-auto min-h-11" onClick={() => void refresh()}>Refresh</Button>
       </div>
@@ -347,7 +368,7 @@ function GithubPrChanges({ item }: { item: GithubItem }) {
             <ChevronDownIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           </div>
           <ul className="mt-2 hidden max-h-[60vh] overflow-auto lg:block">
-            {files.map((file) => <li key={file.path}><button type="button" onClick={() => setSelected(file.path)} className={cn('min-h-11 w-full truncate rounded px-2 text-left text-xs', selected === file.path && 'bg-muted font-medium')} title={file.path}>{file.status} · {file.path} <span className="text-success">+{file.additions}</span> <span className="text-danger">−{file.deletions}</span></button></li>)}
+            {files.map((file) => <li key={file.path}><button type="button" onClick={() => setSelected(file.path)} className={cn('min-h-11 w-full truncate rounded px-2 text-left text-xs', selected === file.path && 'bg-muted font-medium')} title={file.path}>{file.status} · {file.path} <ChangeCounts adds={file.additions} dels={file.deletions} /></button></li>)}
           </ul>
         </aside>
         <div className="min-w-0">

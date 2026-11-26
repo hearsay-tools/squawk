@@ -91,7 +91,7 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
                   onClick={() => onArchivedChange(false)}
                   className={cn(
                     '-mb-px flex min-h-11 items-center justify-center gap-1.5 border-b-2 border-transparent text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground',
-                    !archived && 'border-accent-text font-semibold text-foreground',
+                    !archived && 'border-accent-text text-foreground',
                   )}
                 >
                   Active
@@ -107,7 +107,7 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
                   onClick={() => onArchivedChange(!archived)}
                   className={cn(
                     '-mb-px flex min-h-11 items-center justify-center gap-1.5 border-b-2 border-transparent text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground',
-                    archived && 'border-accent-text font-semibold text-foreground',
+                    archived && 'border-accent-text text-foreground',
                   )}
                 >
                   Archived
@@ -248,7 +248,10 @@ function FailureNotice({ automation, timeZone }: { automation: AutomationListEnt
   )
 }
 
-/** The actions row of a live card: edit, log, toggle, run/preview, and the cancel entry. */
+/** A card action: 32px where a pointer hovers, the 44px touch target where it cannot. */
+const CARD_ACTION = 'h-8 px-3 max-md:h-11 no-hover:h-11'
+
+/** The actions row of a live card: edit, run/preview, toggle, log, and the cancel entry. */
 function CardActions({ automation, busy, confirmingCancel, cancelRef, onToggle, onRun, onPreview, onOpenCancel }: {
   automation: AutomationListEntry
   busy: boolean
@@ -262,15 +265,16 @@ function CardActions({ automation, busy, confirmingCancel, cancelRef, onToggle, 
   const isSchedule = automation.kind === 'schedule'
   const isOnce = automation.schedule?.type === 'once'
   return (
-    <div className="mt-4 flex flex-wrap gap-1.5">
-      {/* One outlined action, the state change; the rest stay quiet so the row reads in order. */}
-      <Button variant="ghost" asChild><Link to={`/automations/${automation.id}`}>Edit</Link></Button>
-      <Button variant="ghost" asChild><Link to={`/automations/${automation.id}/log`}>Execution log</Link></Button>
-      <Button variant="outline" data-action="automation-toggle" disabled={busy} onClick={onToggle}>{automation.enabled ? 'Pause' : 'Enable'}</Button>
+    // One button grammar: compact bordered buttons whose left edge lines up with the card's text,
+    // where a borderless first button would sit indented by its own padding.
+    <div data-slot="automation-actions" className="mt-4 flex flex-wrap items-center gap-2">
+      <Button variant="outline" size="sm" className={CARD_ACTION} asChild><Link to={`/automations/${automation.id}`}>Edit</Link></Button>
       {isSchedule
-        ? <Button variant="ghost" data-action="automation-run" disabled={busy} onClick={onRun}>Run now</Button>
-        : <Button variant="ghost" data-action="automation-preview" disabled={busy} onClick={onPreview}>Test filter</Button>}
-      {isOnce && !confirmingCancel ? <Button variant="ghost" ref={cancelRef} data-action="automation-cancel" disabled={busy} onClick={onOpenCancel}>Cancel</Button> : null}
+        ? <Button variant="outline" size="sm" className={CARD_ACTION} data-action="automation-run" disabled={busy} onClick={onRun}>Run now</Button>
+        : <Button variant="outline" size="sm" className={CARD_ACTION} data-action="automation-preview" disabled={busy} onClick={onPreview}>Test filter</Button>}
+      <Button variant="outline" size="sm" className={CARD_ACTION} data-action="automation-toggle" disabled={busy} onClick={onToggle}>{automation.enabled ? 'Pause' : 'Enable'}</Button>
+      <Button variant="outline" size="sm" className={CARD_ACTION} asChild><Link to={`/automations/${automation.id}/log`}>Execution log</Link></Button>
+      {isOnce && !confirmingCancel ? <Button variant="outline" size="sm" className={cn(CARD_ACTION, 'text-destructive')} ref={cancelRef} data-action="automation-cancel" disabled={busy} onClick={onOpenCancel}>Cancel</Button> : null}
     </div>
   )
 }

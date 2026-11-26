@@ -3,7 +3,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { useLocation, useNavigationType } from 'react-router'
 import { useReports } from '@/api/reports'
 import { REPORTS_QUERY_MAX } from '@open-mercato/cezar-api-client/contract/reports'
-import { FileTextIcon } from 'lucide-react'
+import { ChevronRightIcon, FileTextIcon } from 'lucide-react'
 import { SearchIcon } from '@/components/design-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,15 +15,6 @@ import './reports.css'
 
 // Keep the source entry through both native Back and the reader's fallback navigation.
 const positions = new Map<string, { scroll: number; row: string; pages: number }>()
-
-/** The compact age every list shows (`just now`, `57m`, `2h`, `5d`); the tooltip has the date. */
-function formatRelativeReportTimestamp(iso: string): string {
-  const then = new Date(iso).getTime()
-  if (Number.isNaN(then)) return ''
-  const seconds = Math.max(0, (Date.now() - then) / 1000)
-  if (seconds < 60) return 'just now'
-  return shortAge(iso)
-}
 
 /** Localized full date/time for the timestamp tooltip. */
 function formatFullReportTimestamp(iso: string): string {
@@ -112,7 +103,7 @@ export function ReportsRoute() {
         ) : (
           <ul className="flex flex-col gap-1.5">
             {reports.map(report => (
-              <li key={report.id} data-slot="report-row" className="reports-row flex items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3 transition-colors">
+              <li key={report.id} data-slot="report-row" className="reports-row flex items-center justify-between gap-3 rounded-xl border border-border bg-card py-2.5 pr-3 pl-4 transition-colors">
                 <div className="min-w-0 flex-1">
                   <h2 className="flex min-w-0 text-[14px] leading-5 font-semibold text-foreground" title={reportTitle(report)}>
                     <Link
@@ -126,7 +117,7 @@ export function ReportsRoute() {
                       <span className="min-w-0 truncate">{reportTitle(report)}</span>
                     </Link>
                   </h2>
-                  <div className="mt-0.5 flex min-w-0 pl-6 text-xs leading-4 text-muted-foreground">
+                  <div className="flex min-w-0 pl-6 text-xs leading-4 text-muted-foreground">
                     <Link
                       className="reports-task min-w-0 truncate text-xs text-muted-foreground no-underline hover:text-foreground hover:underline"
                       to={`/tasks/${report.runId}`}
@@ -136,12 +127,14 @@ export function ReportsRoute() {
                   </div>
                 </div>
                 <time
-                  className="shrink-0 self-start pt-0.5 text-xs tabular-nums text-muted-foreground"
+                  className="shrink-0 text-xs tabular-nums text-muted-foreground"
                   dateTime={report.createdAt}
                   title={formatFullReportTimestamp(report.createdAt)}
                 >
-                  {formatRelativeReportTimestamp(report.createdAt)}
+                  {shortAge(report.createdAt)}
                 </time>
+                {/* The whole card opens the report (the title link's overlay); the chevron says so. */}
+                <ChevronRightIcon aria-hidden="true" data-slot="report-open-cue" className="reports-cue size-4 shrink-0 text-soft-foreground" />
               </li>
             ))}
           </ul>

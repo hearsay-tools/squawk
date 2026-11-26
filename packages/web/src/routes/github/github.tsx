@@ -59,6 +59,7 @@ import {
 } from './github-sidebar-model'
 import { useIsDesktop } from '@/lib/use-desktop'
 import { HandToAgent } from './hand-to-agent'
+import { focusHandToAgentPrompt, HandoffHeaderAction } from './handoff-header-action'
 import { useHandToAgentState } from './use-hand-to-agent-state'
 import { useGithubBadges, type GithubBadges } from './use-github-badges'
 import {
@@ -617,7 +618,7 @@ function GithubMasthead({ view, activeFilter, isDesktop, rawFilterParam, n, gh }
       {gh.repo ? (
         <p className="mt-1 min-w-0 truncate text-[13px] text-muted-foreground">
           <span data-slot="gh-repo">{gh.repo}</span>
-          <span data-slot="gh-synced"> · {gh.syncedAt ? `Synced ${shortAge(gh.syncedAt)} ago` : 'Not synced yet'}</span>
+          <span data-slot="gh-synced" title={gh.syncedAt ? new Date(gh.syncedAt).toLocaleString() : undefined}> · {gh.syncedAt ? `Synced ${shortAge(gh.syncedAt)}` : 'Not synced yet'}</span>
         </p>
       ) : null}
     </div>
@@ -1010,6 +1011,7 @@ function GithubSelectedDetail({ item, n, repo, rows, listPath, changes, handToAg
       backLink={{ to: listPath }}
       subNav={{ filter: rows.filter, changes }}
       onRunAgent={focusHandToAgentPrompt}
+      headerAction={<HandoffHeaderAction item={item} queuedRunId={queued.get(item.url) ?? null} />}
       colors={rows.colors}
       checks={resolvedChecks(item, rows.checksMap)}
     >
@@ -1074,13 +1076,6 @@ function GithubNothingSelected({ view, number }: { view: GithubView; number: num
       }
     />
   )
-}
-
-/** The merge box's conflict action: bring the hand-to-agent prompt below it into view. */
-function focusHandToAgentPrompt() {
-  const prompt = document.querySelector<HTMLTextAreaElement>('[data-slot="gh-detail-inner"] [data-slot="gh-custom-prompt"]')
-  prompt?.scrollIntoView({ block: 'center' })
-  prompt?.focus({ preventScroll: true })
 }
 
 function GithubRow({
@@ -1158,7 +1153,7 @@ function GithubRow({
       <span data-slot="gh-row-meta" className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[22px] font-mono text-[11px] text-muted-foreground md:flex-nowrap md:gap-y-0">
         <span>#{item.number}</span>
         <span data-slot="gh-row-author" className="max-w-full shrink-0 truncate md:min-w-0 md:shrink">{item.author}</span>
-        <span>{shortAge(item.createdAt)}</span>
+        <time dateTime={item.createdAt} title={new Date(item.createdAt).toLocaleString()}>{shortAge(item.createdAt)}</time>
         <CommentCount count={comments} />
         {checks ? <ChecksGlyph checks={checks} /> : null}
         {queued ? (

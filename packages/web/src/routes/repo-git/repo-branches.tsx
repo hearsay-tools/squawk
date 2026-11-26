@@ -94,7 +94,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
             const current = name === info.branch
             const entry = byName.get(name)
             return (
-              <li key={name} data-slot="branch-row" data-branch={name} data-branch-class={entry?.class} className="flex min-h-[52px] flex-col items-start justify-center gap-1.5 py-2.5 md:flex-row md:items-center md:justify-start md:gap-2.5">
+              <li key={name} data-slot="branch-row" data-branch={name} data-branch-class={entry?.class} className="flex min-h-[56px] flex-col items-start justify-center gap-1.5 py-2 md:flex-row md:items-center md:justify-start md:gap-2.5">
                 <span className="flex min-w-0 items-center gap-[8px]">
                   {entry?.runId ? (
                     <Link

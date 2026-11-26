@@ -251,14 +251,18 @@ export function CodeLines({ path, text }: { path: string; text: string }) {
     <div
       data-slot="file-preview-code"
       data-lang={langForPath(path) ?? 'plaintext'}
-      className="overflow-x-auto py-2 font-mono text-xs leading-[1.7]"
+      className="overflow-x-auto overscroll-x-contain py-2 font-mono text-xs leading-[1.7] [scrollbar-width:thin]"
     >
+      {/* Rows as wide as the longest line (`w-max`, at least the pane): a long line scrolls with
+          its right padding intact instead of running into the pane edge, and the sticky gutter
+          keeps the line numbers in view while the code scrolls under it. */}
+      <div className="w-max min-w-full">
       {tokens.map((line, index) => (
-        <div key={index} className="flex px-4">
-          <span className="w-10 shrink-0 select-none pr-3 text-right tabular-nums text-soft-foreground">
+        <div key={index} className="flex">
+          <span className="sticky left-0 w-14 shrink-0 select-none bg-card pr-3 pl-4 text-right tabular-nums text-soft-foreground">
             {index + 1}
           </span>
-          <span className="min-w-0 flex-1 whitespace-pre pr-4">
+          <span className="flex-1 whitespace-pre pr-6">
             {line.map((token, tokenIndex) => (
               <span
                 key={tokenIndex}
@@ -270,6 +274,7 @@ export function CodeLines({ path, text }: { path: string; text: string }) {
           </span>
         </div>
       ))}
+      </div>
     </div>
   )
 }

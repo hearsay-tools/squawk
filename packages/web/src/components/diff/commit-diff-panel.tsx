@@ -11,7 +11,7 @@ import { DiffStatLabel } from '@/components/diff-stat'
 import { Button } from '@/components/ui/button'
 import { Link } from '@/lib/project-router'
 import { useIsDesktop } from '@/lib/use-desktop'
-import { shortGitAge } from '@/routes/repo-git/git-sections'
+import { gitAge } from '@/routes/repo-git/git-sections'
 import { DiffViewToggles } from '@/routes/task-git/diff-controls'
 
 type CommitDiffPanelProps = {
@@ -70,7 +70,7 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
             <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
               <span>{commit.data.author}</span>
               <span aria-hidden="true">·</span>
-              <span title={commit.data.when}>{shortGitAge(commit.data.when)}</span>
+              <span title={commit.data.when}>{gitAge(commit.data.when)}</span>
               <span aria-hidden="true">·</span>
               <span className="font-mono select-all" title={commit.data.sha}>{commit.data.sha.slice(0, 8)}</span>
             </p>
@@ -85,7 +85,7 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
             />
           ) : (
             <div className={diffClassName}>
-              <Diff files={commit.data.files} mode={effectiveMode} wrap={effectiveWrap} className="min-w-0" />
+              <Diff files={commit.data.files} mode={effectiveMode} wrap={effectiveWrap} totals={false} className="min-w-0" />
             </div>
           )}
         </>

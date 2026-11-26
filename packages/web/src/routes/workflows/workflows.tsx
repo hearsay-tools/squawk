@@ -423,8 +423,8 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
 
           <div className="grid min-w-0 items-start gap-[22px] @min-[700px]:grid-cols-[minmax(0,1fr)_300px]">
             <section data-slot="wb-main" className="min-w-0 rounded-xl border border-border bg-card p-5">
-              <p className="text-xs text-muted-foreground">
-                Steps · {steps.length} of {WB_MAX_STEPS}
+              <p className="text-xs text-muted-foreground" title={`A workflow holds at most ${WB_MAX_STEPS} steps`}>
+                Steps · {steps.length} of {WB_MAX_STEPS} max
                 <span data-slot="wb-count" className="sr-only">
                   {stepCountLabel(steps)}
                 </span>

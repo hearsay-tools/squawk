@@ -163,8 +163,8 @@ describe('detail metadata and discussion fallbacks', () => {
   })
 
   it.each([
-    ['pr', 6, undefined, '+6 −0'], ['pr', undefined, 4, '+0 −4'], ['issue', 6, 4, null],
-  ] as const)('renders %s diff counts %s/%s with zero for the absent side', (kind, additions, deletions, expected) => {
+    ['pr', 6, undefined, '+6'], ['pr', undefined, 4, '−4'], ['pr', 6, 4, '+6 −4'], ['issue', 6, 4, null],
+  ] as const)('renders %s diff counts %s/%s without a zero side', (kind, additions, deletions, expected) => {
     renderDetail({ ...PR_42, kind, ...(additions === undefined ? {} : { additions }), ...(deletions === undefined ? {} : { deletions }) })
     expect(document.querySelector('[data-slot="gh-diffstat"]')?.textContent ?? null).toBe(expected)
   })
