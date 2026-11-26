@@ -5,6 +5,7 @@ import type { RawUsage } from '@hearsay-tools/squawk/plugin';
 
 export interface ClaudeStreamMessage {
   type?: string;
+  event?: unknown;
   subtype?: string;
   model?: string;
   session_id?: string;
@@ -60,6 +61,7 @@ export function claudeFrameDidWork(msg: ClaudeStreamMessage, reportedModel: stri
   // Background tasks and hooks can start work without assistant content
   // or token usage. Only init is known to be identity-only metadata.
   if ((msg.type === 'system' && msg.subtype !== 'init') || msg.type === 'tool_progress') return true;
+  if (msg.type === 'stream_event') return claudePartialDidWork(msg.event);
   if (msg.type !== 'assistant' && msg.type !== 'user') return false;
   // A refusal's own visible text is diagnostic, not model work. Any
   // other output, tool call/result, reasoning or nonzero usage forbids replay.
@@ -101,5 +103,31 @@ export function normalizeIntentionalTeardownResult(
  * a child's nested output (a non-null `parent_tool_use_id`) are not parent work.
  */
 export function isParentAssistantFrame(msg: ClaudeStreamMessage): boolean {
-  return msg.type === 'assistant' && (msg.parent_tool_use_id === undefined || msg.parent_tool_use_id === null || msg.parent_tool_use_id === '');
+  return (msg.type === 'assistant' || (msg.type === 'stream_event' && claudePartialStartsTurn(msg.event))) && (msg.parent_tool_use_id === undefined || msg.parent_tool_use_id === null || msg.parent_tool_use_id === '');
+}
+
+function claudePartialStartsTurn(event: unknown): boolean {
+  if (!event || typeof event !== 'object') return false;
+  const type = (event as { type?: unknown }).type;
+  return type === 'message_start' || type === 'content_block_start' || type === 'content_block_delta';
+}
+
+function claudePartialDidWork(event: unknown): boolean {
+  if (!event || typeof event !== 'object') return false;
+  const e = event as { type?: unknown; message?: { usage?: unknown }; usage?: unknown; content_block?: { type?: unknown; text?: unknown; thinking?: unknown }; delta?: { type?: unknown; text?: unknown; thinking?: unknown; partial_json?: unknown } };
+  const usage = e.type === 'message_start' ? e.message?.usage : e.type === 'message_delta' ? e.usage : undefined;
+  if (hasNonzeroClaudeTokenCount(usage)) return true;
+  if (e.type === 'content_block_start' && e.content_block?.type === 'tool_use') return true;
+  const data = e.type === 'content_block_delta' ? e.delta : e.type === 'content_block_start' ? e.content_block : undefined;
+  return [data?.text, data?.thinking, e.type === 'content_block_delta' ? e.delta?.partial_json : undefined].some(value => typeof value === 'string' && value.length > 0);
+}
+
+/** Partial usage need not include input_tokens. Count only actual token counters,
+ * including cache/thinking details, rather than treating a missing field as work. */
+function hasNonzeroClaudeTokenCount(usage: unknown): boolean {
+  if (!usage || typeof usage !== 'object') return false;
+  return Object.entries(usage).some(([key, value]) => {
+    if (typeof value === 'number') return key.endsWith('_tokens') && Number.isFinite(value) && value !== 0;
+    return hasNonzeroClaudeTokenCount(value);
+  });
 }
