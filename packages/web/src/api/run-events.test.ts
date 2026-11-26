@@ -236,18 +236,3 @@ describe('useRunEvents — lifecycle', () => {
     expect(onReset).toHaveBeenCalled()
   })
 })
-
-it('admits snapshots below the cursor, replaces duplicate sequences, and keeps newer events', () => {
-  const { result } = renderHook(() => useRunEvents('run-1', { afterSeq: 12 }))
-  const source = FakeFeed.last
-  const snapshot = (text: string) => {
-    source.handlers.frame?.({ type: 'snapshot', projectId: 'default', runId: 'run-1', name: 'ui-event',
-      event: { seq: 11, ts: '', type: 'item.updated', item: { id: 'i', kind: 'message', text } } })
-  }
-  act(() => { snapshot('before'); flushAnimationFrames() })
-  source.emit('ui-event', line(13, 'item.delta', { itemId: 'i', field: 'text', delta: ' after' }))
-  act(() => { snapshot('replacement'); flushAnimationFrames() })
-  source.emit('ui-event', line(14, 'item.completed', { item: { id: 'i', kind: 'message', text: 'done' } }))
-  expect(result.current.map(event => event.seq)).toEqual([11, 13, 14])
-  expect(result.current[0]).toMatchObject({ item: { text: 'replacement' } })
-})

@@ -75,6 +75,43 @@ describe('shared live ownership', () => {
     owner.dispose()
     expect(vi.getTimerCount()).toBe(0)
   })
+  it.each([false, true])('bounds snapshot bytes and releases them on ack-snapshot (%s)', async acknowledge => {
+    const owner = createLiveOwner(deps)
+    const port = new Port(); owner.attach(port); port.sync('a', [run()])
+    await vi.advanceTimersByTimeAsync(0)
+    const stream = streams.at(-1)!
+    const snapshot = { type: 'snapshot', projectId: 'boot', runId: 'one', name: 'ui-event',
+      event: { seq: 2, type: 'item.updated', ts: '', item: { id: 'i', kind: 'message', text: 'x'.repeat(600 * 1024) } } }
+    try {
+      stream.frame(snapshot)
+      if (acknowledge) port.onmessage?.({ data: { type: 'ack-snapshot', version: LIVE_PROTOCOL, documentId: 'a', epoch: 1, id: 'run' } })
+      stream.frame(snapshot)
+      expect(port.frames.filter(frame => frame.type === 'reset')).toHaveLength(acknowledge ? 0 : 1)
+      expect(port.frames.filter(frame => frame.type === 'frame')).toHaveLength(acknowledge ? 2 : 1)
+      if (acknowledge) {
+        // Snapshot acknowledgments must not acknowledge the ordinary event cursor.
+        stream.frame({ type: 'event', projectId: 'boot', runId: 'one', name: 'run-event', event: { seq: 1, type: 'note', ts: '' } })
+        expect(port.frames.filter(frame => frame.type === 'frame')).toHaveLength(3)
+      }
+    } finally { owner.dispose() }
+  })
+
+  it('delivers snapshots to both shared-worker tabs with different event cursors', async () => {
+    const owner = createLiveOwner(deps)
+    const a = new Port(), b = new Port()
+    owner.attach(a); a.sync('a', [run(0)])
+    owner.attach(b); b.sync('b', [run(3)])
+    await vi.advanceTimersByTimeAsync(0)
+    try {
+      const stream = streams.at(-1)!
+      expect(stream.demand[0].afterSeq).toBe(0)
+      const snapshot = { type: 'snapshot', projectId: 'boot', runId: 'one', name: 'ui-event',
+        event: { seq: 2, type: 'item.updated', ts: '', item: { id: 'i', kind: 'message', text: 'live' } } }
+      stream.frame(snapshot)
+      for (const port of [a, b]) expect(port.frames.filter(frame => frame.type === 'frame').map(frame => frame.frame)).toEqual([snapshot])
+    } finally { owner.dispose() }
+  })
+
   it('expires dead ports within 15 seconds while a renewed port survives', async () => {
     const owner = createLiveOwner(deps)
     const a = new Port(), b = new Port(); owner.attach(a); owner.attach(b)

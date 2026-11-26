@@ -5,9 +5,10 @@ import { liveRunDemandSchema, liveRunFrameSchema } from './live.ts'
  *  the workspace lane reads `?runs=summary` (hearsay-tools/cezarion#2730), so an old worker that
  *  still streams full records never feeds a new document. Version 3: the worker sends a late or
  *  rejoining workspace subscriber the stream's `ready`, and the runs index applies only frames of
- *  a known generation (hearsay-tools/cezarion#2729); a version-2 worker sends no such `ready`. */
-export const LIVE_PROTOCOL = 3
-export const LIVE_WORKER_NAME = 'cezar-live-v3'
+ *  a known generation (hearsay-tools/cezarion#2729); a version-2 worker sends no such `ready`.
+ *  Version 4: snapshot frames and snapshot acks preserve cursors and bound subscriber buffers. */
+export const LIVE_PROTOCOL = 4
+export const LIVE_WORKER_NAME = 'cezar-live-v4'
 export const LEASE_MS = 15_000
 export const RENEW_MS = 5_000
 
@@ -35,6 +36,7 @@ export const ownerInputSchema = z.discriminatedUnion('type', [
     workspaceReady: z.literal(true).optional(),
   }).refine(value => new Set(value.entries.map(e => e.id)).size === value.entries.length),
   envelope.extend({ type: z.literal('ack'), id: z.string(), seq: z.number().int().nonnegative() }),
+  envelope.extend({ type: z.literal('ack-snapshot'), id: z.string() }),
   envelope.extend({ type: z.literal('refresh'), id: z.string() }),
 ])
 export type OwnerInput = z.infer<typeof ownerInputSchema>

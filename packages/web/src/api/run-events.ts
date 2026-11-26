@@ -83,7 +83,7 @@ export function useRunEvents(runId: string | undefined, options: RunEventStreamO
       const batch = pending
       pending = []
       setEvents((current) => {
-        const next = [...new Map([...current, ...batch].map(event => [event.seq, event])).values()].sort((a, b) => a.seq - b.seq)
+        const next = [...current, ...batch]
         if (
           !compactionRequested &&
           compactAt !== undefined &&
@@ -108,11 +108,8 @@ export function useRunEvents(runId: string | undefined, options: RunEventStreamO
 
     const release = subscribeLive({ kind: 'run', projectId: scope, runId, afterSeq, ...(cursor ? { cursor } : {}) }, {
       frame: frame => {
-        if (!('type' in frame) || (frame.type !== 'event' && frame.type !== 'snapshot')) return
-        if (frame.type === 'event') {
-          if (frame.event.seq <= maxSeq) return
-          maxSeq = frame.event.seq
-        }
+        if (!('type' in frame) || frame.type !== 'event' || frame.event.seq <= maxSeq) return
+        maxSeq = frame.event.seq
         pending.push(frame.event)
         scheduleFlush()
       },

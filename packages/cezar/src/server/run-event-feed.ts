@@ -165,16 +165,14 @@ export async function readFiniteRunFeed(
 }
 
 /** Snapshot delivery restores open items without acknowledging any event sequence. */
-async function replayLowSnapshots(
-  snapshot: ReturnType<ProjectContext['store']['liveReadSnapshot']>, afterSeq: number,
+async function replaySnapshots(
+  snapshot: ReturnType<ProjectContext['store']['liveReadSnapshot']>,
   write: ((event: RunEvent) => Promise<void>) | undefined, stopped: Promise<void>, signal: AbortSignal,
 ): Promise<void> {
   for (const event of snapshot.events) {
-    if (event.seq > afterSeq) continue;
     await Promise.race([write?.(event), stopped]);
     signal.throwIfAborted();
   }
-  snapshot.events = snapshot.events.filter(event => event.seq > afterSeq);
 }
 
 /** Attach before reading; serialize replay and live writes; bound slow-client memory. */
@@ -202,7 +200,7 @@ export async function subscribeRunFeed(
   const reset = (reason: string, status: 409 | 413 = 409) => { if (!controller.signal.aborted) { stop(); handlers.reset(reason, status); } };
   const onEvent = ({ runId, event }: { runId: string; event: RunEvent }) => {
     if (runId !== demand.runId || controller.signal.aborted) return;
-    liveSnapshot.throughSeq = Math.min(liveSnapshot.throughSeq, event.seq - 1);
+    diskSnapshot.throughSeq = Math.min(diskSnapshot.throughSeq, event.seq - 1);
     if (event.seq <= maxSeq) return;
     const bytes = Buffer.byteLength(JSON.stringify(event));
     pendingBytes += bytes;
@@ -216,6 +214,7 @@ export async function subscribeRunFeed(
     'run.deleted': ({ runId }) => { if (runId === demand.runId) reset('run removed'); },
   });
   const liveSnapshot = context.store.liveReadSnapshot(demand.runId);
+  const diskSnapshot = { throughSeq: liveSnapshot.throughSeq, events: [] };
   const detached = () => {
     unsubscribe();
     pending = [];
@@ -224,11 +223,9 @@ export async function subscribeRunFeed(
   controller.signal.addEventListener('abort', detached, { once: true });
   try {
     if (demand.cursor) maxSeq = Math.max(maxSeq, decodeLiveCursor(demand.cursor).boundarySeq);
-    await replayLowSnapshots(liveSnapshot, maxSeq, handlers.snapshot, stopped, controller.signal);
     let cursor = demand.cursor;
     do {
-      liveSnapshot.events = liveSnapshot.events.filter(event => event.seq > maxSeq);
-      const { batch, sizeLimited } = await scanRunEventBatch(context.store.claims.sourceDataDir(demand.runId), { ...demand, ...(cursor ? { cursor } : {}), afterSeq: maxSeq }, controller.signal, byteLimit, liveSnapshot);
+      const { batch, sizeLimited } = await scanRunEventBatch(context.store.claims.sourceDataDir(demand.runId), { ...demand, ...(cursor ? { cursor } : {}), afterSeq: maxSeq }, controller.signal, byteLimit, diskSnapshot);
       for (const event of batch.events) {
         controller.signal.throwIfAborted();
         if (event.seq <= maxSeq) continue;
@@ -239,6 +236,7 @@ export async function subscribeRunFeed(
       cursor = batch.cursor;
       if (!sizeLimited) break;
     } while (!controller.signal.aborted);
+    await replaySnapshots(liveSnapshot, handlers.snapshot, stopped, controller.signal);
     while (!controller.signal.aborted) {
       // RunStore assigns one monotonic clock per run; ignore duplicate/reordered replays.
       const next = pending[head];

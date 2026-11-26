@@ -205,6 +205,7 @@ describe('active item replay', () => {
     const controller = new AbortController();
     const seen: number[] = [];
     const snapshots: RunEvent[] = [];
+    const order: string[] = [];
     let complete!: () => void;
     const received = new Promise<void>(resolve => { complete = resolve; });
     const capture = store.liveReadSnapshot.bind(store);
@@ -219,14 +220,15 @@ describe('active item replay', () => {
       return snapshot;
     };
     const task = subscribeRunFeed(context, { ...demand(), afterSeq }, {
-      snapshot: async event => { snapshots.push(event); },
-      event: async event => { seen.push(event.seq); if (event.seq === 5) complete(); },
+      snapshot: async event => { snapshots.push(event); order.push(`snapshot:${event.seq}`); },
+      event: async event => { seen.push(event.seq); order.push(`event:${event.seq}`); if (event.seq === 5) complete(); },
       reset: reason => { throw new Error(reason); },
     }, controller.signal);
     try {
       await received;
-      expect(seen).toEqual(afterSeq === 0 ? [1, 2, 3, 4, 5] : [4, 5]);
-      expect(snapshots.map(event => event.seq)).toEqual(afterSeq === 0 ? [] : [2]);
+      expect(seen).toEqual(afterSeq === 0 ? [1, 3, 4, 5] : [4, 5]);
+      expect(snapshots.map(event => event.seq)).toEqual([2]);
+      expect(order).toEqual(afterSeq === 0 ? ['event:1', 'event:3', 'snapshot:2', 'event:4', 'event:5'] : ['snapshot:2', 'event:4', 'event:5']);
     } finally { controller.abort(); await task; }
   });
 });
