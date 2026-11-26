@@ -71,6 +71,8 @@ ruleCases(regexModuleSyntax, {
     "const imports = runtimeImports(source, file)",
     'const merge = /^Merge pull request #(\\d+) from [^/\\s]+\\/(\\S+)/',
     'const word = /superbfrom\\s/',
+    'const prose = /^from the start/',
+    'const prose = /^Remove demo-project from the workspace/',
   ],
   invalid: [
     'const named = /^import\\s+\\{/',
@@ -91,6 +93,9 @@ ruleCases(regexModuleSyntax, {
     'const raw = new RegExp(String.raw`^export\\s+\\*`)',
     'const either = /(?:\\bfrom|^import)[ \\t]+/',
     "const quoted = /\\bfrom\\s*$/",
+    'const line = /^import /',
+    'const line = /^export /m',
+    'const line = /^\\s*import$/',
   ],
 });
 

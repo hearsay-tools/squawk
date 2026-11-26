@@ -12,7 +12,8 @@ import { child, children, nameOf, stringOf, type AstRule, type EsNode } from './
  * pattern in which `import`, `export`, `require` or `from` stands as a whole word next to a regex
  * token or code punctuation: `\s`, `\b`, a group, a brace, `*`, a quote, a character class,
  * `\.meta`, or after one space a quote, a brace, `*`, `(` or a declaration keyword. A keyword that
- * is one alternative of a group, as in `(?:import|export)`, is syntax too.
+ * is one alternative of a group, as in `(?:import|export)`, or that follows a line start (`^`, `^\s*`)
+ * is syntax too.
  *
  * It leaves out prose (the keyword, one space and a word, as in "files import the changed files"),
  * a keyword after `-` or `@` (`--import`, CSS `@import`) or before `-` (`require-e2e`), and a
@@ -27,7 +28,7 @@ const MESSAGE =
   'Regular expressions are for plain text only (hearsay-tools/squawk#4296).';
 
 const KEYWORDS = ['import', 'export', 'require', 'from'];
-const KEYWORD = new RegExp(`(?:${KEYWORDS.join('|')})(?![\\w$])`, 'g');
+const KEYWORD = new RegExp(`(?:${KEYWORDS.join('|')})(?!\\w)`, 'g');
 /** A character class that holds a quote or white space, such as `['"]` or `[ \t]`. */
 const CLASS = String.raw`\[\^?(?:[^\]]*['"\x60]|[ \\]\\?[st ])`;
 /** What makes the keyword code when it follows with no space. */
@@ -51,6 +52,8 @@ function keywordIsSyntax(source: string, at: number, length: number): boolean {
   if (before === '-' || before === '@' || next.startsWith('-')) return false;
   // One alternative of a group, such as `(?:import|load)` or `(?:\bfrom|^import)`.
   if (/^[|)]/.test(next) && /[|(:]$/.test(source.slice(0, at).replace(LEADING_TOKENS, ''))) return true;
+  // A keyword at a line start, such as `^import ` or `^\s*export$`, is a statement keyword.
+  if (/^ ?\$?$/.test(next) && /^\^(?:\\s[*+]?)?$|[^\\]\^(?:\\s[*+]?)?$/.test(source.slice(0, at))) return true;
   return SYNTAX_NEXT.test(next) || SYNTAX_AFTER_SPACE.test(next);
 }
 
