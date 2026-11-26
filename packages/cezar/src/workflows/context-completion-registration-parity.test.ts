@@ -1,14 +1,10 @@
-import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PARITY_ROSTER, runsOn, type ParityFamilyName } from '../core/parity-classes.testkit.ts';
-import { registrationGroups } from '../core/registration-coverage.testkit.ts';
+import { registrationGroupsIn } from '../core/registration-coverage.testkit.ts';
 import { collectSessionContextTitles, SESSION_CONTEXT_GROUPS } from './session-context-rows.testkit.ts';
 
 function registeredGroups(callee: string, catalog: string, known: string[]): string[] {
-  const guard = 'context-completion-registration-parity.test.ts';
-  return readdirSync(new URL('.', import.meta.url))
-    .filter(file => file.endsWith('.ts') && file !== guard)
-    .flatMap(file => registrationGroups(readFileSync(new URL(file, import.meta.url), 'utf8'), file, callee, catalog, known));
+  return registrationGroupsIn(new URL('.', import.meta.url), 'session-context-', callee, catalog, known);
 }
 
 function titlePair(title: string): string {
