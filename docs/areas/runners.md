@@ -10,10 +10,14 @@
 
 Shared code outside `packages/cezar/src/core/` and `packages/cezar/src/runners/` reads a runner's declared facts (`RUNNER_FACTS`, `inputDelivery`, `systemPromptOnResume`; `AGENT_PROTOCOL.md` §1) to decide what a runner can do, never a runner id. Every backend implements `AgentRunner`/`AgentSession` and must pass both parity matrices: `ui-parity.test.ts` (mappers) and `harness-parity.test.ts` (runners, including each runner's `specSupport`). Runner prose never counts runners. `HSQ_DRY_RUN=1` (`CEZ_DRY_RUN` fallback) must keep working. The zero-config default includes unrestricted `Bash`, and each runner's `specSupport.toolGrant` says whether its wire honors the list (open-mercato/cezar#430).
 
-Explicit-shutdown parity reads the declared `shutdownDescendants` scope: `process-group` retains
-the detached-survivor checks, while `observed-tree` requires observed detached children to die
-after Stop, end escalation and EOF exit after end (S27/S28/S30). It makes no wider claim
-about abrupt leader exits before a snapshot (S31). Antigravity declares `observed-tree`: a CLI command runs in its own session and survives the ACP process.
+Explicit-shutdown parity reads the declared `shutdownDescendants` scope and host containment
+(`isSessionContained()`, hearsay-tools/squawk#1345): on contained hosts (Linux delegated cgroup v2,
+Windows Job Objects), abnormal exits (S27 Stop, S28 forced `end()` escalation, S31 outside kill)
+reap detached descendants while normal `end()` (S30) keeps detached daemons alive for
+`process-group` runners. On non-contained hosts, `process-group` retains the detached-survivor
+checks while `observed-tree` requires observed detached children to die after Stop, end escalation
+and EOF exit after end (S27/S28/S30), with no S31 snapshot guarantee. Antigravity declares
+`observed-tree`: a CLI command runs in its own session and survives the ACP process.
 
 ## Runner definitions
 

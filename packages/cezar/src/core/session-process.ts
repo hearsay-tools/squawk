@@ -2,20 +2,39 @@ import { ChildProcess, execFile, spawn, spawnSync, type ChildProcessWithoutNullS
 import { readdirSync, readFileSync } from 'node:fs';
 import { afterExitDrain, exitDrainBudget, DEFAULT_RUNNER_TIMINGS, type RunnerTimings } from './runner-runtime.ts';
 import { exitedStat, statFields } from './process-stat.ts';
+import {
+  discardSessionContainer,
+  executableReachable,
+  prepareSessionContainer,
+  reapSessionContainer,
+  releaseSessionContainer,
+  signalSessionContainer,
+  type SessionContainer,
+} from './session-containment.ts';
 import type { SpawnScope } from '../worker-scope/scope.ts';
 
 /**
- * Own POSIX session process groups and track member incarnations before signalling after leader
- * exit. Drain output before reaping; use the owned child tree on Windows. Escaped or unprovable
- * descendants may survive rather than risk signalling reused identities.
+ * Own POSIX session process groups and per-session OS containers (hearsay-tools/squawk#1345),
+ * and track member incarnations before signalling after leader exit. Drain output before reaping;
+ * use the owned child tree on Windows. On non-contained hosts, escaped or unprovable descendants
+ * may survive rather than risk signalling reused identities.
  */
 
 type Member = { pid: number; token: string };
-type Leader = { child: ChildProcess; timings?: Partial<RunnerTimings> | undefined; signalledAt?: number; members?: Member[] };
+type ExitState = { gracefulEnd?: boolean; forcedKill?: boolean };
+type Leader = ExitState & {
+  child: ChildProcess;
+  timings?: Partial<RunnerTimings> | undefined;
+  signalledAt?: number;
+  members?: Member[];
+  container?: SessionContainer | undefined;
+};
 /** Grouped leaders this process spawned, keyed by pgid (= the leader's pid). */
 const leaders = new Map<number, Leader>();
 /** Every child `spawnSessionLeader` returned, on any platform: win32's taskkill is for these only. */
 const spawned = new WeakSet<ChildProcess>();
+/** Exit-classification flags for every child `spawnSessionLeader` returned (POSIX and Windows). */
+const exitStates = new WeakMap<ChildProcess, ExitState>();
 
 const exited = (child: ChildProcess) => child.exitCode !== null || child.signalCode !== null;
 
@@ -255,6 +274,71 @@ function reap(pgid: number, leader: Leader): void {
   scheduleKill(pgid, leader, leader.signalledAt);
 }
 
+/** Whether a session exit is normal (detached daemons survive) vs abnormal (reap session container). */
+export function isNormalSessionExit(
+  code: number | null,
+  signal: NodeJS.Signals | null,
+  state: ExitState = {},
+): boolean {
+  if (state.forcedKill) return false;
+  if (code === 0 && signal === null) return true;
+  if (!state.gracefulEnd) return false;
+  return signal === 'SIGTERM' || (signal === null && code === 143);
+}
+
+/** Mark that a runner's normal `end()` teardown is signalling `child` (for example OpenCode's
+ * HTTP server SIGTERM on `end()`). Cleared if escalation sends `SIGKILL`. */
+export function markGracefulEnd(child: ChildProcess): void {
+  const state = exitStates.get(child);
+  if (state) state.gracefulEnd = true;
+}
+
+function finalizeContainerOnExit(
+  container: SessionContainer,
+  code: number | null,
+  signal: NodeJS.Signals | null,
+  state: ExitState,
+  timings: Partial<RunnerTimings> | undefined,
+  signalledAt: number | undefined,
+): void {
+  if (isNormalSessionExit(code, signal, state)) {
+    releaseSessionContainer(container);
+    return;
+  }
+  const graceMs = timings?.killGraceMs ?? DEFAULT_RUNNER_TIMINGS.killGraceMs;
+  if (signalledAt !== undefined) {
+    const remaining = Math.max(0, signalledAt + graceMs - Date.now());
+    reapSessionContainer(container, remaining);
+    return;
+  }
+  afterExitDrain(() => reapSessionContainer(container, graceMs), exitDrainBudget(code), true);
+}
+
+/** Build the wrapped spawn command, nesting inside `options.scope` without double-wrapping. */
+function prepareSpawn(
+  bin: string,
+  args: readonly string[],
+  options: { cwd: string; env: NodeJS.ProcessEnv; scope?: SpawnScope | undefined },
+): { file: string; argv: string[]; container: SessionContainer | undefined } {
+  const parentCgroup = options.scope?.cgroupDir?.();
+  const parentJob = options.scope?.jobName?.();
+  if (options.scope && parentCgroup === undefined && parentJob === undefined) {
+    const [file, argv] = options.scope.command(bin, args);
+    return { file, argv, container: undefined };
+  }
+  const prepared = prepareSessionContainer(bin, args, {
+    cwd: options.cwd,
+    env: options.env,
+    parentCgroup,
+    parentJob,
+  });
+  if (prepared.container === undefined && options.scope && executableReachable(bin, options.cwd, options.env)) {
+    const [file, argv] = options.scope.command(bin, args);
+    return { file, argv, container: undefined };
+  }
+  return prepared;
+}
+
 /** Spawn an agent session leader. Only a real detached `ChildProcess` with a pid is registered,
  * so a test's fake child (made-up pid) never reaches `process.kill(-pid)`. */
 export function spawnSessionLeader(
@@ -263,28 +347,45 @@ export function spawnSessionLeader(
   options: { cwd: string; env: NodeJS.ProcessEnv; timings?: Partial<RunnerTimings> | undefined; scope?: SpawnScope | undefined },
 ): ChildProcessWithoutNullStreams {
   const grouped = process.platform !== 'win32';
-  const [file, argv] = options.scope ? options.scope.command(bin, args) : [bin, [...args]];
-  const child = spawn(file, argv, { cwd: options.cwd, env: options.env, detached: grouped });
+  const { file, argv, container } = prepareSpawn(bin, args, options);
+  let child: ChildProcessWithoutNullStreams;
+  try {
+    child = spawn(file, argv, { cwd: options.cwd, env: options.env, detached: grouped });
+  } catch (error) {
+    discardSessionContainer(container);
+    throw error;
+  }
   spawned.add(child);
   const pid = child.pid;
-  // A process the scope could not record is not owned: end it before anything relies on it.
-  if (pid !== undefined && child instanceof ChildProcess) {
-    // Its whole group: a descendant forked before the refusal must not escape.
-    try { options.scope?.started(pid); } catch (error) {
-      try { if (grouped) process.kill(-pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch { /* already gone */ }
-      throw error;
-    }
+  const realChild = child instanceof ChildProcess && pid !== undefined;
+  if (!realChild) {
+    discardSessionContainer(container);
+    return child;
   }
-  if (!grouped || !(child instanceof ChildProcess) || pid === undefined || !groupId(pid)) return child;
+  // A process the scope could not record is not owned: end it before anything relies on it.
+  try { options.scope?.started(pid); } catch (error) {
+    try { if (grouped) process.kill(-pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch { /* already gone */ }
+    discardSessionContainer(container);
+    throw error;
+  }
+  const exitState: ExitState = {};
+  exitStates.set(child, exitState);
+  if (!grouped || !groupId(pid)) {
+    if (container) {
+      child.once('exit', (code, signal) => finalizeContainerOnExit(container, code, signal, exitState, options.timings, undefined));
+    }
+    return child;
+  }
   prune();
-  const leader: Leader = { child, timings: options.timings };
+  const leader: Leader = Object.assign(exitState, { child, timings: options.timings, container });
   leaders.set(pid, leader);
   // Runners clear their own SIGKILL timers when the leader exits. A member that ignored the
   // SIGTERM Squawk sent outlives it, so the follow-up SIGKILL for the group lives here. A leader
   // Squawk never signalled is reaped after the exit drain, so a descendant's final crash
   // diagnostic still lands first (harness row S19). The drain is referenced, and bounded by
   // EXIT_DRAIN_CAP_MS, so a host with nothing else to do stays up to reap.
-  child.once('exit', (code) => {
+  child.once('exit', (code, signal) => {
+    if (container) finalizeContainerOnExit(container, code, signal, leader, options.timings, leader.signalledAt);
     if (leaders.get(pid) !== leader) return;
     leader.members = processGroupAlive(pid) ? groupMembers(pid) : [];
     if (stale(pid, leader)) { drop(pid, leader); return; }
@@ -294,13 +395,23 @@ export function spawnSessionLeader(
   return child;
 }
 
+function registeredLeaderForSignal(child: ChildProcess, signal: NodeJS.Signals): Leader | undefined {
+  const state = exitStates.get(child);
+  // Any explicit Stop / non-graceful signal or SIGKILL escalation marks the exit abnormal even
+  // if the leader handles SIGTERM and exits with code 0 (hearsay-tools/squawk#1345).
+  if (state && (signal === 'SIGKILL' || !state.gracefulEnd)) state.forcedKill = true;
+  const pid = child.pid;
+  const leader = pid === undefined ? undefined : leaders.get(pid);
+  return leader?.child === child ? leader : undefined;
+}
+
 /** Signal a session: its whole group on POSIX, its tree on win32, else the leader alone. A
  * leader that already exited on its own is not group-signalled here: its exit scheduled the reap
  * of what it left behind (hearsay-tools/cezarion#1286). */
 export function signalSession(child: ChildProcess, signal: NodeJS.Signals, platform: NodeJS.Platform = process.platform): void {
+  const leader = registeredLeaderForSignal(child, signal);
   const pid = child.pid;
-  const leader = pid === undefined ? undefined : leaders.get(pid);
-  if (leader?.child === child && !leaderExited(child)) {
+  if (leader && !leaderExited(child)) {
     leader.signalledAt ??= Date.now();
     signalProcessGroup(pid!, signal);
     return;
@@ -318,11 +429,13 @@ export function signalSession(child: ChildProcess, signal: NodeJS.Signals, platf
 /** Immediate cleanup for a no-turn probe, including members left by an exited leader.
  * Keep the same recorded-member guard as the deferred runner reap; never signal a reused group. */
 export function signalOwnedSessionGroup(child: ChildProcess, signal: NodeJS.Signals): void {
-  const pid = child.pid;
-  const leader = pid === undefined ? undefined : leaders.get(pid);
-  if (!leader || leader.child !== child || stale(pid!, leader)) return;
+  const leader = registeredLeaderForSignal(child, signal);
+  if (!leader) return;
+  if (leader.container) signalSessionContainer(leader.container, signal);
+  const pid = child.pid!;
+  if (stale(pid, leader)) return;
   leader.signalledAt ??= Date.now();
-  signalProcessGroup(pid!, signal);
+  signalProcessGroup(pid, signal);
 }
 
 /** The pgid of a registered, still-running grouped leader, for the worker process ledger. */
@@ -340,6 +453,7 @@ export function sessionGroupOf(pid: number): number | undefined {
 /** Squawk's own SIGINT/SIGTERM, passed to every agent group that still has members. */
 export function forwardToSessionGroups(signal: NodeJS.Signals): void {
   for (const [pgid, leader] of [...leaders]) {
+    if (leader.container) signalSessionContainer(leader.container, signal);
     if (stale(pgid, leader)) drop(pgid, leader);
     else if (processGroupAlive(pgid)) signalProcessGroup(pgid, signal);
   }
