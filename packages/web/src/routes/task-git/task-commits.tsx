@@ -94,7 +94,7 @@ function CommitsWorkspace({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 px-4 py-5 md:px-9 lg:flex-row lg:items-start">
-      <div className="w-full shrink-0 lg:w-[360px]">
+      <div className="w-full shrink-0 lg:w-[380px] xl:w-[420px]">
         <CommitList
           slot="task-commits"
           selectedSha={selectedSha}

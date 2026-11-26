@@ -6,7 +6,7 @@ import type { AutomationListEntry, AutomationsResponse, OnceStatus } from '@open
 
 import { cancelAutomation, checkAutomation, getAutomationCheck, runAutomationNow, setAutomationEnabled } from '@/api/client'
 import { CenteredState } from '@/components/centered-state'
-import { GithubIcon, RefreshCwIcon, ZapIcon } from '@/components/design-icons'
+import { GithubIcon, PlusIcon, RefreshCwIcon, ZapIcon } from '@/components/design-icons'
 import { Pill } from '@/components/pill'
 import { Button } from '@/components/ui/button'
 import { dayTime, relativeIn } from '@/lib/automation-format'
@@ -74,7 +74,7 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
     <PageFrame
       title="Automations"
       subtitle={`Schedules and GitHub checks run while Squawk is open.`}
-      action={<Button variant="primary" asChild><Link to="/automations/new">New automation</Link></Button>}
+      action={<Button variant="primary" asChild><Link to="/automations/new"><PlusIcon aria-hidden="true" className="size-4" />New automation</Link></Button>}
     >
       {error && !data ? (
         <div className="grid justify-items-start gap-3"><PageState text={error} /><Button variant="outline" onClick={() => void refresh()}>Retry</Button></div>
@@ -127,7 +127,7 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
               title="No automations yet"
               subtitle="Create one paused, preview it, then enable it."
               heading="h2"
-              actions={<Button variant="primary" asChild><Link to="/automations/new">New automation</Link></Button>}
+              actions={<Button variant="primary" asChild><Link to="/automations/new"><PlusIcon aria-hidden="true" className="size-4" />New automation</Link></Button>}
             />
           ) : (
             <ul className="grid gap-3" aria-label="Automations">
@@ -262,14 +262,15 @@ function CardActions({ automation, busy, confirmingCancel, cancelRef, onToggle, 
   const isSchedule = automation.kind === 'schedule'
   const isOnce = automation.schedule?.type === 'once'
   return (
-    <div className="mt-4 flex flex-wrap gap-2">
-      <Button variant="outline" asChild><Link to={`/automations/${automation.id}`}>Edit</Link></Button>
-      <Button variant="outline" asChild><Link to={`/automations/${automation.id}/log`}>Execution log</Link></Button>
+    <div className="mt-4 flex flex-wrap gap-1.5">
+      {/* One outlined action, the state change; the rest stay quiet so the row reads in order. */}
+      <Button variant="ghost" asChild><Link to={`/automations/${automation.id}`}>Edit</Link></Button>
+      <Button variant="ghost" asChild><Link to={`/automations/${automation.id}/log`}>Execution log</Link></Button>
       <Button variant="outline" data-action="automation-toggle" disabled={busy} onClick={onToggle}>{automation.enabled ? 'Pause' : 'Enable'}</Button>
       {isSchedule
-        ? <Button variant="outline" data-action="automation-run" disabled={busy} onClick={onRun}>Run now</Button>
-        : <Button variant="outline" data-action="automation-preview" disabled={busy} onClick={onPreview}>Test filter</Button>}
-      {isOnce && !confirmingCancel ? <Button variant="outline" ref={cancelRef} data-action="automation-cancel" disabled={busy} onClick={onOpenCancel}>Cancel</Button> : null}
+        ? <Button variant="ghost" data-action="automation-run" disabled={busy} onClick={onRun}>Run now</Button>
+        : <Button variant="ghost" data-action="automation-preview" disabled={busy} onClick={onPreview}>Test filter</Button>}
+      {isOnce && !confirmingCancel ? <Button variant="ghost" ref={cancelRef} data-action="automation-cancel" disabled={busy} onClick={onOpenCancel}>Cancel</Button> : null}
     </div>
   )
 }

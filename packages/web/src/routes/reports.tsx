@@ -16,14 +16,13 @@ import './reports.css'
 // Keep the source entry through both native Back and the reader's fallback navigation.
 const positions = new Map<string, { scroll: number; row: string; pages: number }>()
 
-/** Concise relative timestamp for report rows (e.g. "2h ago", "57m ago", "just now"). */
+/** The compact age every list shows (`just now`, `57m`, `2h`, `5d`); the tooltip has the date. */
 function formatRelativeReportTimestamp(iso: string): string {
   const then = new Date(iso).getTime()
   if (Number.isNaN(then)) return ''
   const seconds = Math.max(0, (Date.now() - then) / 1000)
   if (seconds < 60) return 'just now'
-  const age = shortAge(iso)
-  return age ? `${age} ago` : ''
+  return shortAge(iso)
 }
 
 /** Localized full date/time for the timestamp tooltip. */
@@ -111,11 +110,11 @@ export function ReportsRoute() {
             )}
           </div>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-col gap-1.5">
             {reports.map(report => (
               <li key={report.id} data-slot="report-row" className="reports-row flex items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3 transition-colors">
                 <div className="min-w-0 flex-1">
-                  <h2 className="min-w-0 text-[14px] font-semibold leading-snug text-foreground [overflow-wrap:anywhere]">
+                  <h2 className="flex min-w-0 text-[14px] leading-5 font-semibold text-foreground" title={reportTitle(report)}>
                     <Link
                       data-report-id={report.id}
                       className="reports-open text-foreground no-underline"
@@ -123,21 +122,21 @@ export function ReportsRoute() {
                       state={{ readerFrom: key, filesRestoreKey: key }}
                       onClick={() => positions.set(key, { scroll: scroller.current?.scrollTop ?? 0, row: report.id, pages: result.data?.pages.length ?? 1 })}
                     >
-                      <FileTextIcon aria-hidden="true" className="mr-2 inline-block size-4 shrink-0 text-accent-text" />
-                      <span>{reportTitle(report)}</span>
+                      <FileTextIcon aria-hidden="true" className="mr-2 size-4 shrink-0 text-accent-text" />
+                      <span className="min-w-0 truncate">{reportTitle(report)}</span>
                     </Link>
                   </h2>
-                  <div className="mt-0.5 pl-6 text-xs text-muted-foreground">
+                  <div className="mt-0.5 flex min-w-0 pl-6 text-xs leading-4 text-muted-foreground">
                     <Link
-                      className="reports-task text-xs text-muted-foreground no-underline hover:text-foreground hover:underline [overflow-wrap:anywhere]"
+                      className="reports-task min-w-0 truncate text-xs text-muted-foreground no-underline hover:text-foreground hover:underline"
                       to={`/tasks/${report.runId}`}
                     >
-                      {report.taskTitle}
+                      <span className="min-w-0 truncate" title={report.taskTitle}>{report.taskTitle}</span>
                     </Link>
                   </div>
                 </div>
                 <time
-                  className="shrink-0 text-xs tabular-nums text-muted-foreground"
+                  className="shrink-0 self-start pt-0.5 text-xs tabular-nums text-muted-foreground"
                   dateTime={report.createdAt}
                   title={formatFullReportTimestamp(report.createdAt)}
                 >

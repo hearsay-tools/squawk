@@ -48,11 +48,13 @@ export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
           {state === 'copied' ? 'Copied' : 'Copy'}
         </Button>
       </div>
-      <pre className="m-0 max-w-full overflow-x-auto rounded-lg border border-border bg-muted px-3 py-2.5 font-mono text-xs/relaxed whitespace-pre text-muted-foreground">{line}</pre>
+      {/* Wrapped, not a sideways scroll: a long line reads in full, and a very long one scrolls down
+          inside its own box with the thin bar as the cue. */}
+      <pre data-slot="copy-as-cli-line" className="m-0 max-h-48 max-w-full overflow-y-auto rounded-lg border border-border bg-muted px-3 py-2.5 font-mono text-xs/relaxed whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere] [scrollbar-width:thin]">{line}</pre>
       <p role="status" className="mbs-2 text-xs break-words text-muted-foreground">
         {state === 'failed'
           ? 'Could not copy — select the line and copy it by hand.'
-          : <>The definition Save would create. <code>{productCommand()} automation schema</code> prints its shape.</>}
+          : <>The definition Save would create. <code className="rounded-sm bg-muted px-1 py-px font-mono text-[11px] whitespace-nowrap text-foreground [word-spacing:-0.2em]">{`${productCommand()} automation schema`}</code> prints its shape.</>}
       </p>
     </section>
   )

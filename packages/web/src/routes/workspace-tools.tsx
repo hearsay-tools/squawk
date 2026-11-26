@@ -11,6 +11,7 @@ import { toast } from '@/components/ui/toaster'
 import { Link as RouterLink } from 'react-router'
 import { TOOL_LINK_CLASS, TOOL_SETTINGS_PATH, toolHint, toolSetupPath, toolStateLabel, toolTone } from '@/lib/tool-status'
 import { githubRepoBase } from '@/lib/tasks-table'
+import { canonicalRunnerName } from './settings/agent-descriptors'
 
 type HealthQuery = ReturnType<typeof useHealth>
 type ProjectsQuery = ReturnType<typeof useProjects>
@@ -54,9 +55,11 @@ function formatRunnerLabel(label: string): string {
 /** Display label for a tool check: registered coding-agent runners show their canonical display
  *  name from `GET /api/v1/runners`; non-agent CLI tools stay raw monospace. */
 function toolDisplayName(name: string, runners: RunnersResponse | undefined): { label: string; isAgent: boolean } {
+  // One canonical name per agent (`Pi`, never `PI` or `pi`), the one Settings shows.
   const entry = runnerEntry(runners, name)
-  if (!entry) return { label: name, isAgent: false }
-  return { label: formatRunnerLabel(entry.displayName), isAgent: true }
+  const canonical = canonicalRunnerName(name, '')
+  if (!entry) return canonical ? { label: canonical, isAgent: true } : { label: name, isAgent: false }
+  return { label: canonicalRunnerName(name, formatRunnerLabel(entry.displayName)), isAgent: true }
 }
 
 /** The Add project launchers: active project context (local folder, repository, checkout folder)

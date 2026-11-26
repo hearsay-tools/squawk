@@ -11,6 +11,7 @@ import { DiffStatLabel } from '@/components/diff-stat'
 import { Button } from '@/components/ui/button'
 import { Link } from '@/lib/project-router'
 import { useIsDesktop } from '@/lib/use-desktop'
+import { shortGitAge } from '@/routes/repo-git/git-sections'
 import { DiffViewToggles } from '@/routes/task-git/diff-controls'
 
 type CommitDiffPanelProps = {
@@ -26,7 +27,8 @@ type CommitDiffPanelProps = {
 export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, className, diffClassName }: CommitDiffPanelProps) {
   const desktop = useIsDesktop()
   const [mode, setMode] = useState<DiffMode>('unified')
-  const [wrap, setWrap] = useState(false)
+  // Wrap on by default, like the Changes views, so the toggle reads the same on every diff.
+  const [wrap, setWrap] = useState(true)
 
   // 409 = the server's answer (unknown sha, not a hash) — a dead link, not an outage.
   const refused = commit.isError && commit.error instanceof ApiError && commit.error.status === 409
@@ -36,7 +38,7 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
 
   return (
     <section data-slot={slot} data-sha={sha} className={className}>
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-border px-4 py-2 md:px-6">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-border px-4 py-2 md:px-9">
         <Button asChild variant="ghost" size="sm" data-slot="commit-back">
           <Link to={backTo}>
             <ArrowLeftIcon size={16} aria-hidden="true" />
@@ -50,7 +52,7 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
       </div>
 
       {commit.isPending ? (
-        <p data-slot="commit-loading" className="px-4 py-6 text-center text-xs text-soft-foreground md:px-6">
+        <p data-slot="commit-loading" className="px-4 py-6 text-center text-xs text-muted-foreground md:px-9">
           Loading commit…
         </p>
       ) : commit.isError ? (
@@ -63,11 +65,14 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
         />
       ) : (
         <>
-          <div data-slot="commit-meta" className="border-b border-border px-4 py-3 md:px-6">
+          <div data-slot="commit-meta" className="border-b border-border px-4 py-3 md:px-9">
             <h2 className="text-sm font-semibold">{commit.data.subject}</h2>
-            <p className="mt-0.5 text-[11px] text-soft-foreground">
-              {commit.data.author} · {commit.data.when} ·{' '}
-              <span className="font-mono select-all">{commit.data.sha}</span>
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+              <span>{commit.data.author}</span>
+              <span aria-hidden="true">·</span>
+              <span title={commit.data.when}>{shortGitAge(commit.data.when)}</span>
+              <span aria-hidden="true">·</span>
+              <span className="font-mono select-all" title={commit.data.sha}>{commit.data.sha.slice(0, 8)}</span>
             </p>
           </div>
           {commit.data.files.length === 0 ? (

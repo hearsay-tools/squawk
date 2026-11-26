@@ -121,18 +121,18 @@ function SectionMeta({ repo, info, section }: { repo: RepoResponse; info: RepoIn
   const base = repo.baseBranch ?? info.branch
   switch (section) {
     case 'main': {
-      const count = repo.log.length === 0 ? 'no commits yet' : `latest ${repo.log.length} commit${repo.log.length === 1 ? '' : 's'} in the main checkout`
+      const count = repo.log.length === 0 ? 'No commits yet' : `Latest ${repo.log.length} commit${repo.log.length === 1 ? '' : 's'} in the main checkout`
       return <>{count}{repo.tracking ? ` · ${fetchedAgo(repo.tracking)}` : ''}</>
     }
     case 'not-landed':
-      return <>finished tasks whose commits are not on {base}</>
+      return <>Finished tasks whose commits are not on {base}</>
     case 'branches':
       return <BranchesMeta repo={repo} info={info} />
     case 'changes':
       return <>{repo.status.length} uncommitted file{repo.status.length === 1 ? '' : 's'} in the main checkout</>
     case 'cleanup':
       // The section's invariant, stated where it applies; the server enforces it (issue 08 §C).
-      return <>nothing here can delete work that is not on {base}</>
+      return <>Nothing here can delete work that is not on {base}</>
   }
 }
 

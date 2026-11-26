@@ -278,9 +278,12 @@ function NotLandedTitleAndMeta({ entry, finishedAt }: {
 }) {
   const orphan = entry.class === 'orphan'
   const title = orphan ? `No task · last commit “${entry.lastCommit.subject}”` : entry.title ?? entry.name
-  // "done 3d ago" is the task's own finish when the runs list has it, else the last commit's age.
-  const age = shortAge(finishedAt ?? entry.lastCommit.at)
-  const when = orphan || !entry.runStatus ? (age ? `${age} ago` : '') : `${entry.runStatus}${age ? ` ${age} ago` : ''}`
+  // "done 3d" is the task's own finish when the runs list has it, else the last commit's age; the
+  // compact age every list uses, with the full local time in its tooltip.
+  const at = finishedAt ?? entry.lastCommit.at
+  const age = shortAge(at)
+  const when = orphan || !entry.runStatus ? age : `${entry.runStatus}${age ? ` ${age}` : ''}`
+  const whenTitle = Number.isFinite(Date.parse(at)) ? new Date(at).toLocaleString() : undefined
 
   return (
     <>
@@ -299,19 +302,19 @@ function NotLandedTitleAndMeta({ entry, finishedAt }: {
         ) : (
           <span data-slot="not-landed-title" className="min-w-0 truncate text-[13px] text-muted-foreground" title={title}>{title}</span>
         )}
-        <span data-slot="not-landed-meta" className="flex min-w-0 items-center gap-[6px] text-[11px] text-soft-foreground">
+        <span data-slot="not-landed-meta" className="flex min-w-0 items-center gap-[6px] text-[11px] text-muted-foreground">
           <span className="shrink-0 font-mono text-muted-foreground">{entry.name}</span>
           <span className="shrink-0">· {entry.ahead} commit{entry.ahead === 1 ? '' : 's'}</span>
           {entry.diffStat ? (
             <span className="flex shrink-0 gap-[4px] tabular-nums">
-              <span className="text-success">+{entry.diffStat.additions}</span>
-              <span className="text-danger">−{entry.diffStat.deletions}</span>
+              <span className={entry.diffStat.additions === 0 ? 'text-muted-foreground' : 'text-success'}>+{entry.diffStat.additions}</span>
+              <span className={entry.diffStat.deletions === 0 ? 'text-muted-foreground' : 'text-danger'}>−{entry.diffStat.deletions}</span>
             </span>
           ) : null}
-          {when ? <span className="truncate">· {when}</span> : null}
+          {when ? <span className="truncate" title={whenTitle}>· {when}</span> : null}
         </span>
         {entry.parentRunId ? (
-          <Link to={`/tasks/${entry.parentRunId}`} data-slot="not-landed-parent" className="w-fit rounded-[2px] text-[11px] text-soft-foreground hover:underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring">
+          <Link to={`/tasks/${entry.parentRunId}`} data-slot="not-landed-parent" className="w-fit rounded-[2px] text-[11px] text-muted-foreground hover:underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring">
             Worker of its parent task
           </Link>
         ) : null}

@@ -6,6 +6,7 @@ import { useRepoChanges } from '@/api/queries'
 import { CenteredState } from '@/components/centered-state'
 import { canPreviewMarkdown, Diff, type DiffHandle, type DiffMode } from '@/components/diff'
 import { useIsDesktop } from '@/lib/use-desktop'
+import { cn } from '@/lib/utils'
 
 import { ChangesTree } from '../task-git/changes-tree'
 import { DiffViewToggles, MarkdownPreviewToggle } from '../task-git/diff-controls'
@@ -52,13 +53,10 @@ export function RepoChangesSection() {
     <section data-slot="repo-changes" className="flex min-h-0 flex-1 flex-col">
       <div
         data-slot="repo-changes-toolbar"
-        className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 pt-0 pb-4 md:px-9"
+        // The total ± sits beside the Changed files heading; this row holds only the view toggles,
+        // so a phone without a Markdown file has nothing to show here.
+        className={cn('flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 pt-0 pb-4 md:flex md:px-9', hasMarkdown ? 'flex' : 'hidden')}
       >
-        {changes.data ? (
-          <AnimatedDiffStat stat={changes.data.stat} />
-        ) : (
-          <span className="text-sm text-muted-foreground">Uncommitted changes</span>
-        )}
         <span className="ml-auto flex items-center gap-1.5">
           {/* Same rule as the task toolbar: these toggles exist ≥md only — phones force unified+wrap. */}
           <span className="hidden items-center gap-1.5 md:flex">
@@ -97,7 +95,10 @@ export function RepoChangesSection() {
             data-slot="changes-tree-pane"
             className="md:sticky md:top-4 md:max-h-[calc(100dvh_-_64px_-_var(--diff-sticky-top)_-_1rem)] w-full md:w-60 shrink-0 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-3.5 lg:w-[250px]"
           >
-            <h2 className="mb-3 border-b border-border pb-3 text-xs font-semibold">Changed files</h2>
+            <div data-slot="changes-tree-heading" className="mb-3 flex items-center justify-between gap-2 border-b border-border pb-3">
+              <h2 className="text-xs font-semibold">Changed files</h2>
+              {changes.data ? <AnimatedDiffStat stat={changes.data.stat} /> : null}
+            </div>
             <ChangesTree root={tree} selected={selected} onSelect={selectFile} />
           </aside>
           <Diff

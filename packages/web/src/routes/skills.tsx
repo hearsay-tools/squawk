@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toaster'
 import { searchSkills } from '@/lib/skills'
 import { cn } from '@/lib/utils'
+import { canonicalRunnerName } from './settings/agent-descriptors'
 import { groupRunnerSkills, SkillGroups } from './skills-list'
 import type { Runner } from '@open-mercato/cezar-api-client'
 import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
@@ -86,7 +87,7 @@ function RunnerSwitch({ runner, onChange }: { runner: Runner; onChange: (runner:
       {runners.runners.map((entry) => (
         <button key={entry.id} type="button" aria-pressed={entry.id === runner} onClick={() => onChange(entry.id)}
           className="h-8 shrink-0 rounded-md border border-transparent px-3 text-[13px] font-medium text-muted-foreground transition-colors focus-visible:outline-2 aria-pressed:border-border aria-pressed:bg-card aria-pressed:font-semibold aria-pressed:text-foreground aria-pressed:shadow-xs pointer-hover:text-foreground max-md:h-11">
-          {formatRunnerLabel(runnerDisplayName(runners, entry.id))}
+          {canonicalRunnerName(entry.id, formatRunnerLabel(runnerDisplayName(runners, entry.id)))}
         </button>
       ))}
     </div>

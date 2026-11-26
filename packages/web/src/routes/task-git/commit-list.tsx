@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 
+import { shortGitAge } from '../repo-git/git-sections'
+
 /**
  * The commit log list, shared by the task Commits tab and the repo Commits segment — one
  * `sha · subject · author·when` row per commit, deep-linking to that commit's structured diff.
@@ -140,15 +142,15 @@ function CommitRow({ commit, selected }: { commit: CommitListItem; selected: boo
         aria-current={selected ? 'true' : undefined}
         to={commit.href}
         className={cn(
-          'flex min-h-11 min-w-0 items-center gap-2.5 rounded-md px-2 py-2.5 transition-colors hover:bg-muted',
+          'flex min-h-11 min-w-0 items-start gap-2.5 rounded-md px-2 py-2.5 transition-colors hover:bg-muted',
           selected && 'bg-muted/70',
         )}
       >
-        <GitCommitHorizontalIcon size={16} aria-hidden="true" className="size-4 shrink-0 text-accent-text" />
+        <GitCommitHorizontalIcon size={16} aria-hidden="true" className="mt-px size-4 shrink-0 text-accent-text" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium text-foreground">{commit.subject}</span>
+          <span data-slot="commit-row-subject" title={commit.subject} className="line-clamp-2 text-[13px] leading-snug font-medium break-words text-foreground">{commit.subject}</span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
-            <span className="truncate">{commit.author} · {commit.when}</span>
+            <span className="truncate">{commit.author} · <span title={commit.when}>{shortGitAge(commit.when)}</span></span>
             {commit.stat ? <DiffStatLabel stat={commit.stat} /> : null}
           </span>
         </span>

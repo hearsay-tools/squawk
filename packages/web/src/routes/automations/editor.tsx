@@ -243,6 +243,8 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
   }
 
   const formId = useId()
+  // Like Start task on New task: nothing to save until the two required fields hold text.
+  const missing = !draft.name.trim() ? 'Name' : !draft.prompt.trim() ? 'Prompt' : ''
   const saveLabel = automation ? 'Save changes' : draft.enabled ? 'Save and enable' : 'Save paused'
   const isSchedule = draft.kind === 'schedule'
   return (
@@ -252,7 +254,15 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
       action={
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" asChild><Link to="/automations">Cancel</Link></Button>
-          <Button type="submit" form={formId} variant="primary" disabled={saving}>{saving ? 'Saving…' : saveLabel}</Button>
+          <Button
+            type="submit"
+            form={formId}
+            variant="primary"
+            disabled={saving || missing !== ''}
+            title={missing ? `${missing} is required` : undefined}
+          >
+            {saving ? 'Saving…' : saveLabel}
+          </Button>
         </div>
       }
     >

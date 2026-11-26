@@ -577,7 +577,7 @@ function GithubUnavailable({ reason, refreshing, onRetry }: {
           </Button>
         }
       >
-        <p className="text-xs leading-relaxed text-soft-foreground">
+        <p className="text-xs leading-relaxed text-muted-foreground">
           The tab needs the <span className="font-mono">gh</span> CLI, logged in (
           <span className="font-mono">gh auth login</span>), and a repo with a GitHub remote.
           Everything else in Squawk works without it.
@@ -848,7 +848,7 @@ function GithubLoadMore({ view, list, paging }: { view: GithubView; list: Github
     <div
       ref={paging.loadMoreRef}
       data-slot="gh-load-more"
-      className="flex min-h-6 items-center justify-center gap-1.5 px-4 pb-3 text-xs text-soft-foreground"
+      className="flex min-h-6 items-center justify-center gap-1.5 px-4 pb-3 text-xs text-muted-foreground"
     >
       {list.isFetchingNextPage ? (
         <>
@@ -887,7 +887,7 @@ function GithubLoadMore({ view, list, paging }: { view: GithubView; list: Github
 /** A qualifier search (Review requested / Checks failing) that filled the server's cap. */
 function GithubFilterNote({ backedQuery, filterSearch }: Pick<GithubSidebarFilter, 'backedQuery' | 'filterSearch'>) {
   return backedQuery !== null && filterSearch.data?.available && filterSearch.data.truncated ? (
-    <div data-slot="gh-filter-note" role="status" className="px-4 py-3 text-xs text-soft-foreground">
+    <div data-slot="gh-filter-note" role="status" className="px-4 py-3 text-xs text-muted-foreground">
       Showing the first {filterSearch.data.items.length} matches from GitHub search; more may exist.
     </div>
   ) : null
@@ -922,7 +922,7 @@ function GithubSearchHits({ hits, searchPayload, rows }: {
 }) {
   return (
     <div data-slot="gh-search-hits">
-      <p className="px-4 pt-2 pb-1 text-[11px] font-medium tracking-wide text-soft-foreground uppercase">
+      <p className="px-4 pt-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
         Found on GitHub{searchPayload?.truncated ? ' (first matches)' : ''}
       </p>
       <ul className="flex flex-col gap-0.5 px-2 pb-2">

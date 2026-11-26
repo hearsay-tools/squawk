@@ -75,6 +75,12 @@ const GH_MARKDOWN_CLASS = cn(
   '[&_[data-streamdown="code-block-body"]]:rounded-none [&_[data-streamdown="code-block-body"]]:border-0 [&_[data-streamdown="code-block-body"]]:bg-transparent [&_[data-streamdown="code-block-body"]]:px-3.5 [&_[data-streamdown="code-block-body"]]:py-2.5 [&_[data-streamdown="code-block-body"]]:pr-10',
 )
 
+/** The full local date and time behind a compact age. */
+function fullDateTime(iso: string): string {
+  const time = Date.parse(iso)
+  return Number.isFinite(time) ? new Date(time).toLocaleString() : iso
+}
+
 function GithubItemMeta({
   item,
   kindWord,
@@ -93,7 +99,7 @@ function GithubItemMeta({
   return (
     <p data-slot="gh-meta" className="flex flex-wrap items-center gap-x-1.5 font-mono text-[11px] text-muted-foreground">
       <span>#{item.number}</span>·<span>{kindWord}</span>·<span>opened by {item.author}</span>·
-      <span>{shortAge(item.createdAt)} ago</span>
+      <time dateTime={item.createdAt} title={fullDateTime(item.createdAt)}>{shortAge(item.createdAt)}</time>
       {commentCount ? (
         <>
           ·<CommentCount count={commentCount} />
@@ -103,8 +109,8 @@ function GithubItemMeta({
         <>
           ·
           <span data-slot="gh-diffstat">
-            <span className="text-success">+{additions ?? 0}</span>{' '}
-            <span className="text-danger">−{deletions ?? 0}</span>
+            <span className={(additions ?? 0) === 0 ? 'text-muted-foreground' : 'text-success'}>+{additions ?? 0}</span>{' '}
+            <span className={(deletions ?? 0) === 0 ? 'text-muted-foreground' : 'text-danger'}>−{deletions ?? 0}</span>
           </span>
         </>
       ) : null}
@@ -254,7 +260,7 @@ export function GithubItemDetail({
       <GithubItemBackLink backLink={backLink} />
 
       <div data-slot="gh-description-card" className={item.kind === 'pr' ? 'rounded-xl border border-border bg-card p-6' : undefined}>
-      {item.kind === 'pr' ? <h2 className="mb-4 text-[22px] leading-snug font-normal">#{item.number} {item.title}</h2> : null}
+      {item.kind === 'pr' ? <h2 className="mb-4 text-[22px] leading-snug font-semibold tracking-tight">#{item.number} {item.title}</h2> : null}
       <GithubItemMeta
         item={item}
         kindWord={kindWord}
@@ -264,7 +270,7 @@ export function GithubItemDetail({
         deletions={deletions}
       />
 
-      {item.kind !== 'pr' ? <h2 className="mt-2 text-[22px] leading-snug font-normal">{item.title}</h2> : null}
+      {item.kind !== 'pr' ? <h2 className="mt-2 text-[22px] leading-snug font-semibold tracking-tight">{item.title}</h2> : null}
 
       {afterHeading}
 

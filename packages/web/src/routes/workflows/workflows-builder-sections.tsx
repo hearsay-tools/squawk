@@ -12,6 +12,7 @@ import {
   DownloadIcon,
   EllipsisIcon,
   FileCodeIcon,
+  GripVerticalIcon,
   PlusIcon,
   SearchIcon,
   SparklesIcon,
@@ -638,9 +639,11 @@ function StepCardHeading({
         type="button"
         data-slot="wb-step-grip"
         aria-label={`Reorder step ${index + 1}: ${title}`}
-        className="inline-flex size-[26px] shrink-0 cursor-grab items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="group/grip inline-flex h-[26px] shrink-0 cursor-grab items-center justify-center gap-0.5 rounded-md text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:cursor-grabbing"
         {...gripProps}
       >
+        {/* The handle says the card moves before anyone tries to drag it. */}
+        <GripVerticalIcon aria-hidden="true" className="size-3.5 opacity-60 transition-opacity group-hover/grip:opacity-100" />
         <span className="rounded bg-accent-strong/10 px-2 py-1 font-mono text-[12px] text-link-foreground">{String(index + 1).padStart(2, '0')}</span>
       </button>
       <div className="min-w-0 flex-1 break-words text-sm font-medium [overflow-wrap:anywhere]">{title}</div>

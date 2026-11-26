@@ -8,6 +8,7 @@ import { deriveAttention } from '@/lib/attention'
 import { Button } from '@/components/ui/button'
 import { Link } from '@/lib/project-router'
 import { runTitle, withArchivedPages } from '@/lib/task-groups'
+import { cn } from '@/lib/utils'
 import { linkedIssueTasks } from './github-sidebar-model'
 
 /** Shares the project runs cache with the sidebar and its existing live updates. */
@@ -31,14 +32,15 @@ function LinkedTasks({ number, repo, scope }: { number: number; repo?: string | 
     [query.data, archived.data, number, repo, scope],
   )
   return (
-    <section aria-labelledby={headingId} className="mt-4 min-w-0 rounded-lg border border-border p-3">
+    // Collapsed, the section is one compact row; the padded box opens with the list.
+    <section aria-labelledby={headingId} className={cn('mt-4 min-w-0 rounded-lg border border-border', expanded ? 'p-3' : 'p-0.5')}>
       <h3 id={headingId} className="text-xs font-semibold text-muted-foreground">
         <button
           type="button"
           aria-expanded={expanded}
           aria-controls={contentId}
           onClick={() => setExpanded((value) => !value)}
-          className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="flex min-h-11 w-full items-center gap-2 rounded-md px-2.5 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <Chevron aria-hidden="true" className="size-4 shrink-0" />
           {/* `+` while older archived matches exist that this list has not paged in, or could not be

@@ -291,7 +291,7 @@ describe('the Git view Recently on main section', () => {
     renderAt(entry)
     await waitFor(() => expect(document.querySelector('[data-slot="repo-commits"]')).not.toBeNull())
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Recently on main')
-    expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('latest 2 commits in the main checkout')
+    expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('Latest 2 commits in the main checkout')
   })
 
   it('groups the log by the commit’s own day, each row reading subject then sha · author · age', async () => {
@@ -343,7 +343,7 @@ describe('the Git view Recently on main section', () => {
     renderAt('/git')
     await waitFor(() => expect(document.querySelector('[data-slot="git-incoming"]')).not.toBeNull())
     expect(document.querySelector('[data-slot="git-incoming"]')?.textContent).toBe('2 commits on origin/main are not in your checkout yetPull')
-    expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('latest 2 commits in the main checkout · never fetched')
+    expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('Latest 2 commits in the main checkout · never fetched')
     fireEvent.click(document.querySelector('[data-action="repo-pull-incoming"]')!)
     await waitFor(() => expect(document.body.textContent).toContain('Fast-forwarded by 2 commits.'))
     expect(sent.find((request) => request.method === 'POST')).toMatchObject({ path: '/api/v1/repo/pull', body: { branch: 'main' } })
@@ -391,11 +391,11 @@ describe('the Git view Recently on main section', () => {
     fireEvent.click(document.querySelector('[data-slot="commit-row"][data-sha="abc1234"]')!)
     await waitFor(() => expect(document.querySelector('[data-slot="commit-meta"]')).not.toBeNull())
 
-    // The commit's metadata and its full sha, from ?structured=1.
+    // The commit's metadata from ?structured=1: the short sha, the full one in its tooltip.
     const meta = document.querySelector('[data-slot="commit-meta"]')
     expect(meta?.textContent).toContain('feat: add the thing')
     expect(meta?.textContent).toContain('Ada')
-    expect(meta?.textContent).toContain(COMMIT.sha)
+    expect(meta?.querySelector(`[title="${COMMIT.sha}"]`)?.textContent).toBe(COMMIT.sha.slice(0, 8))
     // The same <Diff> facade renders the commit's file.
     await waitFor(() =>
       expect(document.querySelector('[data-slot="diff-file"][data-path="notes.md"]')).not.toBeNull(),
@@ -656,7 +656,7 @@ describe('the Git view Cleanup section', () => {
     renderAt('/git/cleanup')
     await waitFor(() => expect(document.querySelectorAll('[data-slot="worktree-row"]')).toHaveLength(2))
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Cleanup')
-    expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('nothing here can delete work that is not on main')
+    expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('Nothing here can delete work that is not on main')
     expect(screen.getByRole('heading', { level: 2, name: 'Worktrees on disk · 1.2 GB' })).toBeTruthy()
     expect(document.querySelector('[data-action="worktrees-reclaim-now"]')?.textContent).toBe('Reclaim 640 MB now')
     expect(document.querySelector('[data-slot="worktrees-retention-link"]')?.getAttribute('href')).toBe('/settings/worktrees')
@@ -750,7 +750,7 @@ describe('the Git view Not landed section', () => {
     ])
     const noPr = document.querySelector<HTMLElement>('[data-slot="not-landed-row"][data-branch="cez/51ab2d7e"]')!
     expect(noPr.querySelector('[data-slot="not-landed-title"]')?.textContent).toBe('Retention sweep for archived runs')
-    expect(noPr.querySelector('[data-slot="not-landed-meta"]')?.textContent).toMatch(/^cez\/51ab2d7e· 4 commits\+212−40· done \d+d ago$/)
+    expect(noPr.querySelector('[data-slot="not-landed-meta"]')?.textContent).toMatch(/^cez\/51ab2d7e· 4 commits\+212−40· done \d+d$/)
     expect(noPr.querySelector('[data-slot="status-dot"]')?.getAttribute('data-tone')).toBe('success')
     expect(noPr.querySelector('[data-action="not-landed-open"]')?.getAttribute('href')).toBe('/tasks/run-51')
     expect(noPr.querySelector('[data-action="not-landed-create-pr"]')).not.toBeNull()
