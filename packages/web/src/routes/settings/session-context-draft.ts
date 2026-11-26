@@ -50,13 +50,28 @@ function ruleTail(indent: string): string {
   return blockRule('x', indent).slice(indent.length + 'x'.length + '- id: '.length)
 }
 
-/** `rules:`, `rules: null` or `rules: ~`: the key line becomes a block key with the rule under it. */
-function underNullKey(text: string, keyStart: number, id: string): Inserted {
+/** The starter rule as a one-item flow list, valid in block and flow mappings alike. */
+function flowList(): [string, string] {
+  return ['[{ id: ', `, on: session_start, target: both, template: "${STARTER_TEXT}" }]`]
+}
+
+/**
+ * `rules: null`, `rules: ~` or an empty `rules:`. An explicit null becomes a flow list in its place,
+ * so a comment after it and an enclosing flow mapping stay. An empty block key gets the rule on
+ * the lines under it, after any comment on its line.
+ */
+function underNullKey(text: string, keyStart: number, value: Ranged | null, flowRoot: boolean, id: string): Inserted {
+  const [open, close] = flowList()
+  if (value?.range && value.range[1] > value.range[0]) {
+    return placed(`${text.slice(0, value.range[0])}${open}`, id, close + text.slice(value.range[1]))
+  }
+  const colon = text.indexOf(':', keyStart) + 1
+  if (flowRoot) return placed(`${text.slice(0, colon)} ${open}`, id, close + text.slice(colon))
   const lineStart = text.lastIndexOf('\n', keyStart - 1) + 1
   const lineEnd = text.indexOf('\n', keyStart)
   const indent = text.slice(lineStart, keyStart)
-  const lead = `${text.slice(0, lineStart)}${indent}rules:\n${indent}  - id: `
-  return placed(lead, id, ruleTail(`${indent}  `) + (lineEnd === -1 ? '\n' : text.slice(lineEnd)))
+  const head = lineEnd === -1 ? `${text}\n` : text.slice(0, lineEnd + 1)
+  return placed(`${head}${indent}  - id: `, id, ruleTail(`${indent}  `) + (lineEnd === -1 ? '\n' : text.slice(lineEnd)))
 }
 
 /** Right after the last item, or right after `[`: a trailing comma or a comment stays after it. */
@@ -93,7 +108,9 @@ export function addRule(text: string): Inserted {
   const pair = root?.items.find((item) => isScalar(item.key) && item.key.value === 'rules')
   const rules = pair?.value
   const keyStart = isScalar(pair?.key) ? pair.key.range?.[0] : undefined
-  if (keyStart !== undefined && (rules === null || (isScalar(rules) && rules.value === null))) return underNullKey(text, keyStart, id)
+  if (keyStart !== undefined && (rules === null || (isScalar(rules) && rules.value === null))) {
+    return underNullKey(text, keyStart, rules as Ranged | null, root?.flow === true, id)
+  }
   if (isSeq(rules) && rules.range) {
     const last = rules.items.at(-1) as Ranged | undefined
     if (rules.flow) return intoFlowList(text, rules.range[0], last, id)

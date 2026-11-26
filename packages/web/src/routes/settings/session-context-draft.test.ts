@@ -30,6 +30,18 @@ describe('session context draft edits', () => {
     expect(text.slice(...select)).toBe('new-rule')
   })
 
+  it('keeps the comment after rules: null', () => {
+    const { text } = addRule('version: 1\nrules: null # filled later\n')
+    expect((parse(text) as { rules: { id: string }[] }).rules.map((r) => r.id)).toEqual(['new-rule'])
+    expect(text).toContain('# filled later')
+  })
+
+  it('adds the first rule when the whole file is a flow mapping', () => {
+    const { text, select } = addRule('{version: 1, rules: null}\n')
+    expect(parse(text)).toMatchObject({ version: 1, rules: [{ id: 'new-rule' }] })
+    expect(text.slice(...select)).toBe('new-rule')
+  })
+
   it('picks a free id when an existing id is quoted', () => {
     const { text } = addRule('version: 1\nrules:\n  - id: "new-rule"\n    on: session_start\n    template: x\n')
     expect((parse(text) as { rules: { id: string }[] }).rules.map((r) => r.id)).toEqual(['new-rule', 'new-rule-2'])

@@ -125,6 +125,14 @@ describe('session context: budget', () => {
     expect(byId(context, 'small')?.status).toBe('applied');
   });
 
+  it('counts what the includes render to, not the token text, so many empty includes still fit', () => {
+    writeFileSync(join(worktree, 'empty.txt'), '');
+    rules(`version: 1\nrules:\n${rule('empties', `ok${'{{file:empty.txt}}'.repeat(4000)}`)}`);
+    const context = buildSessionContext(input());
+    expect(byId(context, 'empties')?.status).toBe('applied');
+    expect(context.prefix).toContain('\nok\n');
+  });
+
   it('counts UTF-8 bytes, not characters', () => {
     // 4-byte characters: the prefix is within the limit in characters but over it in bytes.
     const fourByte = '😀';
