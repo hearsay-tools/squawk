@@ -7,6 +7,7 @@ import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contrac
 import { useAgentAccounts } from '@/api/agent-accounts'
 import { useProviderStatus } from '@/api/queries'
 import { runnerDisplayName, useRunners } from '@/api/runners'
+import { canonicalRunnerName } from '@/routes/settings/agent-descriptors'
 import type { RunnerAccountChoice } from '@/components/picker-pill'
 import { providerStatusFor } from '@/lib/provider-status'
 
@@ -114,7 +115,7 @@ function providerAvailability(
     return {
       provider,
       usable: false,
-      reason: `${runnerDisplayName(runners, provider)} is disabled. Enable it in ${controlLocation('providers')}.`,
+      reason: `${canonicalRunnerName(provider, runnerDisplayName(runners, provider))} is disabled. Enable it in ${controlLocation('providers')}.`,
     }
   }
   // A named account answers for itself: the provider row describes the default account only
@@ -124,14 +125,14 @@ function providerAvailability(
     return {
       provider,
       usable: false,
-      reason: `${runnerDisplayName(runners, provider)} account "${account.label}" is not signed in. Sign in in ${controlLocation('providers')}.`,
+      reason: `${canonicalRunnerName(provider, runnerDisplayName(runners, provider))} account "${account.label}" is not signed in. Sign in in ${controlLocation('providers')}.`,
     }
   }
   if (row?.status !== 'connected') {
     return {
       provider,
       usable: false,
-      reason: `${runnerDisplayName(runners, provider)} credentials are unavailable. Authorize it in ${controlLocation('providers')}.`,
+      reason: `${canonicalRunnerName(provider, runnerDisplayName(runners, provider))} credentials are unavailable. Authorize it in ${controlLocation('providers')}.`,
     }
   }
   return { provider, usable: true }

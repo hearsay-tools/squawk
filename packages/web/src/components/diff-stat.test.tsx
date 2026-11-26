@@ -33,6 +33,20 @@ describe('DiffStatLabel', () => {
     expect(renderStat({ adds: 1, dels: 0, files: 1 }).title).toBe('+1 −0 across 1 file')
   })
 
+  it('mutes a zero half instead of colouring it as a change', () => {
+    const el = renderStat({ adds: 12, dels: 0, files: 1 })
+    const [adds, dels] = [...el.children] as HTMLElement[]
+    expect(adds!.className).toContain('text-success')
+    expect(dels!.className).toContain('text-muted-foreground')
+    expect(dels!.className).not.toContain('text-danger')
+    cleanup()
+    const removed = renderStat({ adds: 0, dels: 7, files: 1 })
+    const [noAdds, someDels] = [...removed.children] as HTMLElement[]
+    expect(noAdds!.className).toContain('text-muted-foreground')
+    expect(noAdds!.className).not.toContain('text-success')
+    expect(someDels!.className).toContain('text-danger')
+  })
+
   it('bounds large table counts while retaining their exact accessible value', () => {
     const el = renderStat({ adds: 12_345, dels: 1_234, files: 37 }, true)
     expect(el.textContent).toBe('+12k −1k')

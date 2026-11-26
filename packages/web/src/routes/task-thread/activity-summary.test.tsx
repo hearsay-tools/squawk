@@ -138,6 +138,7 @@ it('separates visible metadata without a leading dot on a standalone summary', (
     { id: 'model', priority: 4, content: 'opus' },
     { id: 'effort', priority: 3, content: 'high' },
   ]} />)
-  expect(document.querySelector('[data-slot="activity-summary"]')?.textContent).toBe('Claude Code·opus·high')
+  // CSS draws each dot, so the text holds the values alone and no value carries a stray `·`.
+  expect(document.querySelector('[data-slot="activity-summary"]')?.textContent).toBe('Claude Codeopushigh')
   expect(document.querySelectorAll('[data-slot="activity-separator"][aria-hidden="true"]')).toHaveLength(2)
 })

@@ -51,7 +51,7 @@ describe('ProviderAuthRequiredCard', () => {
     ['claude', 'Claude Code'],
     ['codex', 'Codex'],
     ['opencode', 'OpenCode'],
-    ['pi', 'pi'],
+    ['pi', 'Pi'],
     ['omp', 'OMP'],
   ] as const)('renders accessible fixed recovery guidance for %s', (provider, label) => {
     render(

@@ -1,18 +1,39 @@
 import type { ReactNode } from 'react'
 
-import type { ListView } from '@/lib/task-groups'
+import type { RunSummary } from '@open-mercato/cezar-api-client'
+
+import type { AttentionTone } from '@/lib/attention'
+import type { BucketLabel, ListView } from '@/lib/task-groups'
+import { groupTone } from '@/lib/task-origin'
 import { cn } from '@/lib/utils'
 
-/** The page header of the two task lists: title and subtitle at the left, the primary action at the right. */
+/**
+ * The page header of the two task lists: the title with the primary action on its row, and the
+ * subtitle below. On a phone the action stays on the title row, so it costs no row of its own.
+ */
 export function TaskPageHeader({ title, subtitle, action }: { title: string; subtitle: ReactNode; action: ReactNode }) {
   return (
-    <div data-slot="page-header" className="flex flex-wrap items-start justify-between gap-4 pt-7">
-      <div className="min-w-0">
-        <h1 className="text-[26px] leading-[1.2] font-semibold tracking-tight text-foreground md:text-[28px]">{title}</h1>
-        <p className="mt-1 text-[13px] text-muted-foreground">{subtitle}</p>
-      </div>
-      {action}
+    <div data-slot="page-header" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 pt-5 md:pt-7">
+      <h1 className="col-start-1 row-start-1 min-w-0 truncate text-[24px] leading-[1.2] font-semibold tracking-tight text-foreground md:text-[28px]">{title}</h1>
+      <div className="col-start-2 row-start-1 flex justify-end md:row-span-2 md:self-start">{action}</div>
+      <p className="col-span-2 row-start-2 text-[13px] text-muted-foreground md:col-span-1">{subtitle}</p>
     </div>
+  )
+}
+
+/**
+ * A status group heading's dot. Finished holds successful and failed tasks alike, so its heading
+ * stays neutral; each row's own status dot reports the outcome. Every other group keeps its tone.
+ */
+export function headingTone(label: BucketLabel, members: readonly RunSummary[]): AttentionTone {
+  return label === 'Finished' ? 'neutral' : groupTone(label, members)
+}
+
+/** A task title link's type in a list row: one size, line height and weight rule on both lists. */
+export function taskTitleClass(unread: boolean, readDone: boolean): string {
+  return cn(
+    'min-w-0 truncate rounded-sm text-[13px] leading-[18px]',
+    unread ? 'font-semibold text-foreground' : readDone ? 'font-normal text-foreground' : 'font-medium text-foreground',
   )
 }
 
@@ -63,4 +84,17 @@ export function ViewTab({
 /** The honest absent value of a list cell. */
 export function Dash() {
   return <span className="text-xs text-soft-foreground">—</span>
+}
+
+export function resultCaption(count: number, incomplete: boolean, needle: string): string {
+  return `${count} ${count === 1 ? 'task' : 'tasks'}${incomplete ? ' loaded' : ''}${needle ? ` matching “${needle}”` : ''}`
+}
+/** The list's count, where All tasks puts its own: at the end of the tab row. Below `md` a plain
+ *  count repeats the group headings, so it shows only when it says more. */
+export function ResultCount({ count, incomplete, needle }: { count: number; incomplete: boolean; needle: string }) {
+  return (
+    <span data-slot="tasks-result-count" className={cn('ml-auto self-center truncate text-[13px] text-soft-foreground tabular-nums', needle === '' && !incomplete && 'max-md:hidden')}>
+      {resultCaption(count, incomplete, needle)}
+    </span>
+  )
 }

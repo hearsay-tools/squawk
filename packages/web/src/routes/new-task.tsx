@@ -173,9 +173,19 @@ export function NewTaskRoute() {
           onSubmit={submit}
           retainDraftUntilSuccess
           idleFeedback={
-            <div data-slot="new-task-mode-note" className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
-              <span>{mode.note}</span>
-              <kbd className="hidden font-sans md:inline">{submitShortcutHint()}</kbd>
+            // Inside the composer grid, so the notes sit right under the Start button on every
+            // width instead of after the tallest card.
+            <div data-slot="new-task-idle-feedback" className="flex flex-col gap-1.5">
+              <div data-slot="new-task-mode-note" className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+                <span>{mode.note}</span>
+                <kbd className="hidden font-sans md:inline">{submitShortcutHint()}</kbd>
+              </div>
+              {providersReady && !starting && draft.text.trim() === '' ? (
+                <p data-slot="new-task-start-hint" className="text-[11px] text-soft-foreground">Describe a task above to start.</p>
+              ) : null}
+              <p data-slot="run-mode-note" className="text-[13px] text-muted-foreground">
+                {composerRunModeNote({ worktree: runMode.worktree, hasGit })}
+              </p>
             </div>
           }
           pendingLabel={mode.pendingLabel}
@@ -235,10 +245,6 @@ export function NewTaskRoute() {
             />
           }
         />
-        <p data-slot="run-mode-note" className="mt-2.5 text-[13px] text-muted-foreground">
-          {composerRunModeNote({ worktree: runMode.worktree, hasGit })}
-        </p>
-
       </div>
 
       {plan !== null ? (

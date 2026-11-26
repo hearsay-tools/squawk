@@ -245,12 +245,14 @@ describe('TasksOverview — status groups and origin (hearsay-tools/cezarion#161
     expect(onMarkAllRead).toHaveBeenCalledWith(false)
   })
 
-  it('heads each group with its name and count, and marks Finished on a failure', () => {
+  it('heads each group with its name and count, with a neutral Finished dot even on a failure', () => {
     renderOverview({ runs: [run({ status: RUN_STATUS.review }), run(), run({ status: RUN_STATUS.failed }), run({ status: RUN_STATUS.running })] }, false)
     expect([...document.querySelectorAll('[data-slot="task-status-group"]')].map((group) => group.getAttribute('data-bucket')))
       .toEqual(['Needs you', 'Finished', 'Working'])
     expect(within(heading('Finished')).getByRole('button', { name: /Finished 2/ }).getAttribute('aria-expanded')).toBe('true')
-    expect(within(heading('Finished')).getByRole('img', { name: 'contains failed tasks' })).toBeTruthy()
+    // Finished holds done and failed tasks alike: its dot is neutral, and each row reports the outcome.
+    expect(heading('Finished').closest('[data-slot="task-status-group"]')?.getAttribute('data-tone')).toBe('neutral')
+    expect(within(heading('Finished')).queryByRole('img', { name: 'contains failed tasks' })).toBeNull()
   })
 
   it('shows one Archived group for history', () => {

@@ -3,7 +3,8 @@ import { cn } from '@/lib/utils'
 
 /**
  * `+128 −14` — a run's aggregate diff numbers, the mockup's `.adds`/`.dels` pair
- * (`tasks-home.html`): mono, tabular, adds in the success token, deletions in the danger token.
+ * (`tasks-home.html`): mono, tabular, adds in the success token, deletions in the danger token,
+ * and a zero half in the muted token.
  * One component so the table's ± column, the sidebar quick-list and the mobile cards can never
  * disagree about what a diff stat looks like.
  *
@@ -65,8 +66,13 @@ export function DiffStatLabel({
         className
       )}
     >
-      <span className="text-success">+{compact ? compactDiffCount(stat.adds) : stat.adds.toLocaleString('en-US')}</span>{' '}
-      <span className="text-danger">−{compact ? compactDiffCount(stat.dels) : stat.dels.toLocaleString('en-US')}</span>
+      {/* A zero half is not a change, so it takes no change colour: `+12 −0` keeps its `−0` muted. */}
+      <span data-zero={stat.adds === 0 || undefined} className={stat.adds === 0 ? 'text-muted-foreground' : 'text-success'}>
+        +{compact ? compactDiffCount(stat.adds) : stat.adds.toLocaleString('en-US')}
+      </span>{' '}
+      <span data-zero={stat.dels === 0 || undefined} className={stat.dels === 0 ? 'text-muted-foreground' : 'text-danger'}>
+        −{compact ? compactDiffCount(stat.dels) : stat.dels.toLocaleString('en-US')}
+      </span>
     </span>
   )
 }

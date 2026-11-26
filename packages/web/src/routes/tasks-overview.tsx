@@ -17,7 +17,7 @@ import { queryKeys, useArchivedRuns, useAutomationNames, useHealth, usePinRun, u
 import type { ArchivedRunsResponse, RunSummary } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { DiffStatLabel } from '@/components/diff-stat'
-import { Dash, TaskPageHeader, ViewTab, fullTime } from './task-list-parts'
+import { Dash, TaskPageHeader, ViewTab, fullTime, headingTone, ResultCount, taskTitleClass } from './task-list-parts'
 import { DirectionalUsage, directionalUsageLabel } from '@/components/directional-usage'
 import { TitleEditInput } from '@/components/editable-title'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -54,7 +54,6 @@ import {
   availableOrigin,
   groupMembers,
   groupProjectRuns,
-  groupTone,
   matchesOrigin,
   originAutomationFlag,
   originCounts,
@@ -223,6 +222,7 @@ export function TasksOverview({
           <ViewTab view="archived" current={view} onSelect={onViewChange} count={derived.archivedCount}>
             Archived
           </ViewTab>
+          {runs !== undefined && groups.length > 0 ? <ResultCount count={derived.visibleCount} incomplete={derived.incomplete} needle={needle} /> : null}
         </div>
         <div data-slot="tasks-toolbar" className="flex flex-wrap items-center gap-2.5">
         <BulkActions
@@ -268,8 +268,6 @@ export function TasksOverview({
             query={query}
             origin={origin}
             onShowAll={() => { setQuery(''); setOrigin('all') }}
-            caption={resultCaption(derived.visibleCount, derived.incomplete, needle)}
-            captionOnPhones={needle !== '' || derived.incomplete}
             groups={groups}
             folds={folds}
             grouped={{
@@ -388,9 +386,6 @@ function deriveProjectTaskGroups({ all, view, query, origin, archivedPages, arch
     finished: finishedRunCount(scoped),
     unread: unreadDoneCount(scoped),
   }
-}
-function resultCaption(count: number, incomplete: boolean, needle: string): string {
-  return `${count} ${count === 1 ? 'task' : 'tasks'}${incomplete ? ' loaded' : ''}${needle ? ` matching “${needle}”` : ''}`
 }
 /**
  * Mark all read and Archive finished, both scoped to the origin by the caller. Below `md` Mark
@@ -528,15 +523,11 @@ function ColumnsPopover({ columns, expandedColumns, columnsPending, onToggleColu
  * What the loaded list leaves on screen: the empty state for how it got empty, or the result
  * caption and each status group with its rows.
  */
-function ProjectTaskResults({ view, query, origin, onShowAll, caption, captionOnPhones, groups, folds, grouped }: {
+function ProjectTaskResults({ view, query, origin, onShowAll, groups, folds, grouped }: {
   view: ListView
   query: string
   origin: TaskOrigin
   onShowAll: () => void
-  caption: string
-  /** Below `md` a plain count repeats the group headings, so the caption shows only when it says
-   *  more: a search's matches, or a list not fully loaded. */
-  captionOnPhones: boolean
   groups: TaskStatusGroup<RunSummary>[]
   folds: ReturnType<typeof useTaskListFoldsFromUrl>
   /** Everything each group's rows take besides the group itself. */
@@ -548,7 +539,6 @@ function ProjectTaskResults({ view, query, origin, onShowAll, caption, captionOn
   const showReference = open.some((group) => group.rows.flatMap(rowTasks).some((run) => taskReference(run) !== undefined))
   return (
     <>
-      <p data-slot="tasks-result-count" className={cn('mb-2 text-[12px] text-muted-foreground tabular-nums', !captionOnPhones && 'max-md:hidden')}>{caption}</p>
       <div className="flex flex-col gap-4">
         {groups.map((group) => {
           const members = groupMembers(group)
@@ -558,7 +548,7 @@ function ProjectTaskResults({ view, query, origin, onShowAll, caption, captionOn
               id={`tasks-group-${view}-${group.label.replaceAll(' ', '-')}`}
               label={group.label}
               count={members.length}
-              tone={groupTone(group.label, members)}
+              tone={headingTone(group.label, members)}
               folded={folds.isFolded(group.label)}
               collapsed={folds.isCollapsed(group.label)}
               onToggle={() => folds.toggle(group.label)}
@@ -1169,15 +1159,14 @@ function TitleCell({
   }
 
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
+    // One 18px line on every device: a touch-sized pin overflows it instead of growing the row.
+    <span className="flex h-[18px] min-w-0 items-center gap-1.5">
       {run.delegation?.role === 'worker' ? <span className="shrink-0 text-xs text-muted-foreground">Worker</span> : null}
       <Link data-task-control="title"
         to={to}
         title={title}
-        className={cn(
-          'min-w-0 flex-1 truncate rounded-sm text-[13px] leading-[18px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground',
-          unread ? 'font-semibold text-foreground' : readDone ? 'font-normal text-foreground' : 'font-medium'
-        )}
+        // No flex-1: the unread dot follows the title's last word, as on All tasks.
+        className={cn(taskTitleClass(unread, readDone), 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground')}
       >
         {title}
       </Link>
@@ -1200,6 +1189,7 @@ function TitleCell({
       >
         <PencilIcon className="size-3" aria-hidden="true" />
       </button>
+      <span aria-hidden="true" className="flex-1" />
       {/* The pin (#935), beside the pencil and revealed the same way — except when the row IS
           pinned, where it stays lit: this table has no `Pinned` header, so the filled pin is the
           whole explanation for why the row sorted to the top.

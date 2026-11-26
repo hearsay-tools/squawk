@@ -304,7 +304,7 @@ describe('submit', () => {
     await pillReady()
     fireEvent.pointerDown(document.querySelector('[data-slot="runner-pill"]') as HTMLElement)
     const options = await screen.findAllByRole('menuitemradio')
-    fireEvent.click(options.find((option) => option.textContent?.includes('codex')) as HTMLElement)
+    fireEvent.click(options.find((option) => option.textContent?.includes('Codex')) as HTMLElement)
     fireEvent.change(textarea(), { target: { value: 'pin codex' } })
     await startTask()
     expect(postedBody()).toMatchObject({ runner: 'codex' })

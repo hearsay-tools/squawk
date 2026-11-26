@@ -39,7 +39,7 @@
   [data-presentation="summary"] [data-reference-column="false"] :is([data-slot="global-summary-head"], [data-slot="global-task-row"]) { grid-template-columns: minmax(0, 1fr) 120px 90px 70px; }
   [data-presentation="summary"] [data-reference-column="false"] [data-slot="global-task-age"] { grid-column: 4; }
   [data-presentation="summary"] [data-slot="global-task-row"] [data-slot="global-task-title"] { grid-column: 1; grid-row: 1; }
-  [data-presentation="summary"] [data-slot="global-task-title"] > span > a { font-size: 13px; }
+  [data-presentation="summary"] [data-slot="global-task-title"] > span > a { font-size: 13px; line-height: 18px; }
   [data-presentation="summary"] [data-slot="global-task-workflow"] { grid-column: 2; grid-row: 1; }
   [data-presentation="summary"] [data-slot="global-task-diff"] { grid-column: 3; grid-row: 1; white-space: pre-wrap; }
   [data-presentation="summary"] [data-slot="global-task-references"] { grid-column: 4; grid-row: 1; }
@@ -66,7 +66,7 @@
 
 @media (max-width: 767px) {
   [data-slot="tasks-toolbar"] [data-slot="archive-finished"] { min-height: 44px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); }
-  [data-slot="task-card"] { position: relative; padding-block-start: 20px; padding-block-end: 30px; }
+  [data-slot="task-card"] { position: relative; padding-block-start: 14px; padding-block-end: 16px; }
   [data-slot="task-card"] > div:first-child { align-items: center; }
   [data-slot="task-card"] [data-slot="pin-toggle"] { margin-inline-start: auto; }
   [data-slot="task-card"] [data-slot="mobile-resources-toggle"] { min-height: 26px; border-radius: 4px; padding: 0; }
@@ -113,12 +113,14 @@
 @media (max-width: 767px) {
   [data-slot="tasks-toolbar"] { align-items: start; }
   [data-slot="task-card"] > div:first-child > a { font-size: 13px; line-height: 1.6; }
-  [data-slot="mobile-task-meta"] { margin-block-start: 10px; }
+  [data-slot="mobile-task-meta"] { margin-block-start: 6px; }
+  /* Phones: a tighter header, so two or three task cards sit above the fold. */
+  :is([data-route="tasks"], [data-route="global-tasks"]) > header { gap: 10px; }
+  [data-route="tasks"] [data-slot="tasks-toolbar"] { row-gap: 8px; }
 }
 
 [data-slot="other-projects"] a { border: 1px solid var(--border); min-height: 44px; color: var(--foreground); }
 [data-slot="other-projects"] > div > div { border: 0; }
-[data-presentation="summary"] [data-slot="global-task-title"] > span > a:not(.font-semibold) { font-weight: 400; color: var(--foreground); }
 @media (max-width: 767px) {
   [data-route="global-tasks"][data-presentation="summary"] > header > div:has(input) > div { width: 100%; }
 }

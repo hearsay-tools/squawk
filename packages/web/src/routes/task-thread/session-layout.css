@@ -22,6 +22,9 @@
 @media (min-width: 768px) {
   [data-slot='main']:has([data-route='task-thread']) { scroll-padding-block: calc(var(--thread-header-height, 0px) + 8px) calc(var(--thread-footer-height, 0px) + 8px); }
   [data-route='task-thread'] [data-slot='thread-dock'] { position: sticky; inset-block-end: 0; }
+  /* A soft edge above the sticky dock: a card scrolled behind it fades out instead of leaving a
+   * sliced top border peeking over the Activity row. */
+  [data-route='task-thread'] [data-slot='thread-dock']::before { content: ''; position: absolute; inset-inline: 0; inset-block-end: 100%; block-size: 16px; background: linear-gradient(to bottom, transparent, var(--background)); pointer-events: none; }
   [data-route='task-thread'] [data-slot='thread-jump'] { position: absolute; inset-inline: 0; inset-block-end: 100%; margin-block-end: 8px; padding-inline: 64px; }
   /* Expanded details yield space to the composer on short desktop viewports. */
   [data-route='task-thread'] [data-slot='thread-footer-content'] { --thread-footer-limit: min(60dvh, calc(var(--thread-viewport-height, 100dvh) - var(--thread-header-height, 0px) - var(--spacing) * 5.5)); max-block-size: var(--thread-footer-limit); }

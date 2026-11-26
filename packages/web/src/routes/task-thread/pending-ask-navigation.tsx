@@ -1,3 +1,5 @@
+import { useEffect, useState, type RefObject } from 'react'
+
 import { Button } from '@/components/ui/button'
 
 /** The section holding the pending ask's answerable copy; its row key is `pending-ask:<askId>`. */
@@ -37,6 +39,51 @@ export function pinnedAskFocus(askId: string, stillPending: () => boolean) {
     const row = [...root.querySelectorAll<HTMLElement>('[data-row-key]')].find((el) => el.dataset.rowKey === key)
     return row ? pinnedAnswerControl(row) : null
   }
+}
+
+const PINNED_ASK_SELECTOR = '[data-slot="ask-card"][data-pinned="true"]'
+
+/**
+ * Whether the pinned ask card shows in the transcript's visible part, above the thread dock.
+ * While it does, the jump pill would float over its options, and the card already is the
+ * latest thing to act on, so the pill stays hidden. The card mounts and unmounts with the
+ * virtualizer, so a mutation observer finds the current one. Without IntersectionObserver
+ * (old browsers, jsdom) the answer is always false: the pill keeps its old behavior.
+ */
+export function usePinnedAskInView(active: boolean, scrollRef: RefObject<HTMLElement | null>): boolean {
+  const [inView, setInView] = useState(false)
+  useEffect(() => {
+    if (!active || typeof IntersectionObserver === 'undefined' || typeof MutationObserver === 'undefined') return
+    const host = scrollRef.current ?? document.body
+    let card: HTMLElement | null = null
+    let intersection: IntersectionObserver | null = null
+    const watch = () => {
+      const next = host.querySelector<HTMLElement>(PINNED_ASK_SELECTOR)
+      if (next === card) return
+      intersection?.disconnect()
+      card = next
+      if (!card) {
+        setInView(false)
+        return
+      }
+      // The sticky dock covers the bottom of the viewport: a card behind it is not visible.
+      const dock = document.querySelector<HTMLElement>('[data-slot="thread-dock"]')
+      const covered = Math.round(dock?.getBoundingClientRect().height ?? 0)
+      intersection = new IntersectionObserver(
+        (entries) => setInView(entries.some((entry) => entry.isIntersecting)),
+        { rootMargin: `0px 0px -${covered}px 0px` },
+      )
+      intersection.observe(card)
+    }
+    watch()
+    const mutations = new MutationObserver(watch)
+    mutations.observe(host, { childList: true, subtree: true })
+    return () => {
+      mutations.disconnect()
+      intersection?.disconnect()
+    }
+  }, [active, scrollRef])
+  return active && inView
 }
 
 /** The jump pill's label: with a question pending, it names how many questions wait. */

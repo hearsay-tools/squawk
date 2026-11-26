@@ -5,7 +5,7 @@ import { TaskListItems, TaskListFocusBoundary } from '@/components/task-list-ite
 import { runAddress } from '@/api/run-address'
 import { useRunCacheWriter } from '@/api/use-run-cache-writer'
 import './task-lists.css'
-import { Dash, TaskPageHeader, ViewTab, fullTime } from './task-list-parts'
+import { Dash, TaskPageHeader, ViewTab, fullTime, headingTone, taskTitleClass } from './task-list-parts'
 import { useMutation } from '@tanstack/react-query'
 import { ArchiveRestoreIcon, EyeIcon, EyeOffIcon } from 'lucide-react'
 import { ArchiveIcon, PlusIcon, SearchIcon, SlidersHorizontalIcon, XIcon } from '@/components/design-icons'
@@ -74,7 +74,7 @@ import { scopeTo } from '@/lib/project-router'
 import { allProjectTags } from '@/lib/project-tags'
 import { canBeUnread, isReadDoneItem, isUnread, unreadMarkerTone } from '@/lib/read-state'
 import { BUCKET_ORDER, runTitle, type BucketLabel, type ListView } from '@/lib/task-groups'
-import { groupIndexedTasks, groupMembers, groupTone, originCounts, rowTasks, type TaskOrigin, type TaskStatusGroup } from '@/lib/task-origin'
+import { groupIndexedTasks, groupMembers, originCounts, rowTasks, type TaskOrigin, type TaskStatusGroup } from '@/lib/task-origin'
 import { useAutomationsAvailable } from '@/lib/capabilities'
 import { useSearchParamsWriter } from '@/lib/use-search-params-writer'
 import { useTaskListFolds } from '@/lib/use-task-list-folds'
@@ -328,7 +328,7 @@ export function GlobalTasksRoute() {
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="min-w-0 basis-full md:flex-1 md:basis-auto">{search}</div>
-          <Button variant="outline" className="max-md:min-h-11" aria-expanded={filterDetailsOpen} onClick={() => setFilterDetailsOpen((open) => !open)}><SlidersHorizontalIcon aria-hidden="true" />Filters</Button>
+          <Button variant="outline" className="max-md:min-h-11 md:h-9" aria-expanded={filterDetailsOpen} onClick={() => setFilterDetailsOpen((open) => !open)}><SlidersHorizontalIcon aria-hidden="true" />Filters</Button>
         </div>
         <TaskOriginRow origin={origin} counts={originTotals} automations={automations} onChange={setOrigin} labels={statusGroups.map((group) => group.label)} onSetAll={folds.setAll} />
       </header>
@@ -435,7 +435,7 @@ function GroupedTaskLists({ groupBy, view, statusGroups, groups, folds, row }: {
             id={`global-group-${view}-${group.label.replaceAll(' ', '-')}`}
             label={group.label}
             count={members.length}
-            tone={groupTone(group.label, members.map((task) => task.run))}
+            tone={headingTone(group.label, members.map((task) => task.run))}
             folded={folds.isFolded(group.label)}
             collapsed={folds.isCollapsed(group.label)}
             onToggle={() => folds.toggle(group.label)}
@@ -872,14 +872,7 @@ function GlobalTaskTitle({ summary, task, showProject, automationName, resources
             to={to}
             title={runTitle(run)}
             data-task-control="title"
-            className={cn(
-              'min-w-0 truncate text-[14px] md:text-[13px]',
-              unread
-                ? 'font-semibold text-foreground'
-                : readDone
-                  ? 'font-medium text-muted-foreground'
-                  : 'font-medium',
-            )}
+            className={taskTitleClass(unread, readDone)}
           >
             {runTitle(run)}
           </Link>

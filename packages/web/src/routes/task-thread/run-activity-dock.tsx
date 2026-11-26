@@ -675,7 +675,7 @@ function WorkflowGlyph({ step, decorative = false }: { step: StepState; decorati
           data-slot="workflow-glyph"
           data-visual={visual}
           // stroke-pending, not text-*: amber is a dot & spinner color only (guardian rule).
-          className={cn(base, 'animate-spin stroke-pending motion-reduce:animate-none')}
+          className={cn(base, 'animate-spin stroke-pending motion-reduce:animate-none [html.light_&]:stroke-pending-strong')}
         />
       )
     case 'failed':

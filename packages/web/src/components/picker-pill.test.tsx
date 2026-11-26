@@ -310,10 +310,10 @@ describe('RunnerPill: runners that are not installed (hearsay-tools/squawk#4094)
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Runner' }))
     const choices = await screen.findAllByRole('menuitemradio')
     expect(choices.map((item) => item.textContent)).toEqual([
-      expect.stringContaining('claude'),
-      expect.stringContaining('codex'),
+      expect.stringContaining('Claude Code'),
+      expect.stringContaining('Codex'),
     ])
-    const link = screen.getByRole('menuitem', { name: /opencode/ })
+    const link = screen.getByRole('menuitem', { name: /OpenCode/ })
     expect(link.textContent).toContain('Not installed')
     expect(link.textContent).toContain('Install in Settings')
     // Global settings live outside every project: no `/p/<id>` prefix.
@@ -323,7 +323,7 @@ describe('RunnerPill: runners that are not installed (hearsay-tools/squawk#4094)
   it('navigates to the card and picks nothing when the missing runner is chosen', async () => {
     const onPick = renderRunnerPill()
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Runner' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /opencode/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /OpenCode/ }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/settings/global/agents#agent-opencode'))
     expect(onPick).not.toHaveBeenCalled()
   })
@@ -335,7 +335,7 @@ describe('RunnerPill: runners that are not installed (hearsay-tools/squawk#4094)
     expect(choices.every((item) => item.getAttribute('aria-disabled') === 'true')).toBe(true)
     fireEvent.click(choices[1]!)
     expect(onPick).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('menuitem', { name: /opencode/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /OpenCode/ }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/settings/global/agents#agent-opencode'))
   })
 

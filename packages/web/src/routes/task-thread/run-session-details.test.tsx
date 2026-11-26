@@ -441,7 +441,7 @@ describe('Usage & agent — metrics', () => {
   })
 })
 
-/** Every line of the opened row, as `{ Tokens: …, Runner: 'codex', … }` — `dt` text to `dd` text. */
+/** Every line of the opened row, as `{ Tokens: …, Runner: 'Codex', … }` — `dt` text to `dd` text. */
 function usageDetails(): Record<string, string> {
   const dl = openRow('usage').querySelector('[data-slot="agent-details"]')!
   const out: Record<string, string> = {}
@@ -459,7 +459,7 @@ describe('Usage & agent — which agent ran (#416, #52, #411)', () => {
   it('lists runner, model and saved effort', () => {
     stubFetch()
     renderCard(run('done', { id: freshId(), runner: 'codex', model: 'gpt-5.2-codex', effort: 'high' }))
-    expect(agentDetails()).toEqual({ Runner: 'codex', Model: 'gpt-5.2-codex', Effort: 'high' })
+    expect(agentDetails()).toEqual({ Runner: 'Codex', Model: 'gpt-5.2-codex', Effort: 'high' })
   })
 
   it('names a runner Squawk no longer ships as removed (hearsay-tools/squawk#3715)', () => {
@@ -478,13 +478,13 @@ describe('Usage & agent — which agent ran (#416, #52, #411)', () => {
   it('reads model and effort auto when the run pinned neither', () => {
     stubFetch()
     renderCard(run('done', { id: freshId(), runner: 'opencode' }))
-    expect(agentDetails()).toEqual({ Runner: 'opencode', Model: 'auto', Effort: 'auto' })
+    expect(agentDetails()).toEqual({ Runner: 'OpenCode', Model: 'auto', Effort: 'auto' })
   })
 
   it('shows the chosen model when a switch wrote the effective settings (#411)', () => {
     stubFetch()
     renderCard(run('done', { id: freshId(), runner: 'claude', model: 'claude-fable-5' }))
-    expect(agentDetails()).toEqual({ Runner: 'claude', Model: 'claude-fable-5', Effort: 'auto' })
+    expect(agentDetails()).toEqual({ Runner: 'Claude Code', Model: 'claude-fable-5', Effort: 'auto' })
   })
 
   // #416: the record keeps only the runner the caller ASKED for; the run executes as
@@ -495,7 +495,7 @@ describe('Usage & agent — which agent ran (#416, #52, #411)', () => {
       '/api/v1/config': () => jsonResponse({ defaultRunner: 'codex', defaultModels: {} }),
     })
     renderCard(run('done', { id: freshId(), runner: undefined }))
-    await waitFor(() => expect(agentDetails().Runner).toBe('codex'))
+    await waitFor(() => expect(agentDetails().Runner).toBe('Codex'))
   })
 })
 
@@ -584,7 +584,7 @@ describe('Usage & agent — the account a task ran under', () => {
     await waitFor(() => expect(sent.map((r) => r.path)).toContain('/api/v1/workspace/agent-profiles'))
     await act(async () => {})
     // The effort pin and the single-account rule are independent — both hold at once.
-    expect(agentDetails()).toEqual({ Runner: 'claude', Model: 'opus', Effort: 'high' })
+    expect(agentDetails()).toEqual({ Runner: 'Claude Code', Model: 'opus', Effort: 'high' })
   })
 
   it('keeps the account out while profiles are still loading — fail closed (#251)', () => {
@@ -593,7 +593,7 @@ describe('Usage & agent — the account a task ran under', () => {
       return jsonResponse({})
     }))
     renderCard(run('done', { id: freshId(), runner: 'claude', model: 'opus', steps: [step({ sessionId: 'sess-1', profileId: 'default' })] }))
-    expect(agentDetails()).toEqual({ Runner: 'claude', Model: 'opus', Effort: 'auto' })
+    expect(agentDetails()).toEqual({ Runner: 'Claude Code', Model: 'opus', Effort: 'auto' })
   })
 
   it('still names a removed account once the runner is down to one login (#251)', async () => {
@@ -643,7 +643,7 @@ describe('Usage & agent — the canonical model identity (#546)', () => {
   it('omits the line when it would only repeat the model', () => {
     stubFetch()
     renderCard(run('done', { id: freshId(), runner: 'claude', model: 'anthropic/claude-opus-4-8', modelIdentity: 'anthropic/claude-opus-4-8' }))
-    expect(agentDetails()).toEqual({ Runner: 'claude', Model: 'anthropic/claude-opus-4-8', Effort: 'auto' })
+    expect(agentDetails()).toEqual({ Runner: 'Claude Code', Model: 'anthropic/claude-opus-4-8', Effort: 'auto' })
   })
 })
 

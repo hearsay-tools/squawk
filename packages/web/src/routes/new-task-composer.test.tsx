@@ -142,7 +142,7 @@ describe('the hero surface', () => {
     const disclosure = summary.closest('details')!
     expect(disclosure).not.toBeNull()
     expect(disclosure.open).toBe(true)
-    expect(summary.parentElement?.textContent).toContain('claude')
+    expect(summary.parentElement?.textContent).toContain('Claude Code')
     const model = screen.getByRole('button', { name: /^Model · / })
     fireEvent.pointerDown(model)
     fireEvent.click(await screen.findByRole('menuitemradio', { name: /sonnet/ }))
@@ -229,7 +229,7 @@ describe('picker data flows', () => {
       return element!
     })
     fireEvent.pointerDown(pill)
-    const link = await screen.findByRole('menuitem', { name: /codex/ })
+    const link = await screen.findByRole('menuitem', { name: /Codex/ })
     expect(link.getAttribute('href')).toBe('/settings/global/agents#agent-codex')
     expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0)
   })
@@ -244,7 +244,7 @@ describe('picker data flows', () => {
       return element!
     })
     fireEvent.pointerDown(pill)
-    const link = await screen.findByRole('menuitem', { name: /opencode/ })
+    const link = await screen.findByRole('menuitem', { name: /OpenCode/ })
     expect(link.getAttribute('href')).toBe('/settings/global/agents#agent-opencode')
     expect(screen.getAllByRole('menuitemradio')).toHaveLength(1)
   })
@@ -269,8 +269,8 @@ describe('picker data flows', () => {
     const runner = document.querySelector('[data-slot="runner-pill"]') as HTMLElement
     fireEvent.pointerDown(runner)
     let options = await screen.findAllByRole('menuitemradio')
-    fireEvent.click(options.find((option) => option.textContent?.includes('codex')) as HTMLElement)
-    await waitFor(() => expect(runner.textContent).toContain('codex'))
+    fireEvent.click(options.find((option) => option.textContent?.includes('Codex')) as HTMLElement)
+    await waitFor(() => expect(runner.textContent).toContain('Codex'))
 
     const model = document.querySelector('[data-slot="model-pill"]') as HTMLElement
     fireEvent.pointerDown(model)
@@ -327,7 +327,7 @@ describe('picker data flows', () => {
     await waitFor(() => expect(requests.some((r) => r.url === '/api/v1/runners')).toBe(true))
 
     act(() => runners.release(RUNNERS_RESPONSE))
-    await waitFor(() => expect(document.querySelector('[data-slot="runner-pill"]')?.textContent).toContain('codex'))
+    await waitFor(() => expect(document.querySelector('[data-slot="runner-pill"]')?.textContent).toContain('Codex'))
   })
 
   it('shows the runner pill with >1 backend, and switching runner swaps the model presets', async () => {
@@ -337,7 +337,7 @@ describe('picker data flows', () => {
 
     const runnerPill = () => document.querySelector('[data-slot="runner-pill"]') as HTMLElement
     await waitFor(() => expect(runnerPill()).not.toBeNull())
-    expect(runnerPill().textContent).toContain('claude')
+    expect(runnerPill().textContent).toContain('Claude Code')
 
     // claude's presets first…
     fireEvent.pointerDown(document.querySelector('[data-slot="model-pill"]') as HTMLElement)
@@ -351,8 +351,8 @@ describe('picker data flows', () => {
     // …pick codex…
     fireEvent.pointerDown(runnerPill())
     options = await screen.findAllByRole('menuitemradio')
-    fireEvent.click(options.find((o) => o.textContent?.includes('codex')) as HTMLElement)
-    await waitFor(() => expect(runnerPill().textContent).toContain('codex'))
+    fireEvent.click(options.find((o) => o.textContent?.includes('Codex')) as HTMLElement)
+    await waitFor(() => expect(runnerPill().textContent).toContain('Codex'))
     // …the model reset to auto and the presets are codex's now.
     expect((document.querySelector('[data-slot="model-pill"]') as HTMLElement).textContent).toContain('auto')
     fireEvent.pointerDown(document.querySelector('[data-slot="model-pill"]') as HTMLElement)
@@ -373,8 +373,8 @@ describe('picker data flows', () => {
     fireEvent.pointerDown(runnerPill)
     const options = await screen.findAllByRole('menuitemradio')
     expect(options.map((option) => option.textContent)).toEqual([
-      expect.stringContaining('claude'),
-      expect.stringContaining('codex'),
+      expect.stringContaining('Claude Code'),
+      expect.stringContaining('Codex'),
     ])
     expect(options.some((option) => option.textContent?.includes('opencode'))).toBe(false)
   })
@@ -415,6 +415,18 @@ describe('picker data flows', () => {
 
   describe('the run-mode note (#793)', () => {
     const note = () => document.querySelector('[data-slot="run-mode-note"]')?.textContent
+
+    it('sits with the mode note under Start, with a hint while the prompt is empty', async () => {
+      serve()
+      renderNewTask()
+      await pillReady()
+      const feedback = document.querySelector('[data-slot="composer-feedback"]') as HTMLElement
+      expect(feedback.querySelector('[data-slot="new-task-mode-note"]')?.textContent).toContain('Start immediately with the selected configuration.')
+      expect(feedback.querySelector('[data-slot="run-mode-note"]')).not.toBeNull()
+      await waitFor(() => expect(feedback.querySelector('[data-slot="new-task-start-hint"]')?.textContent).toBe('Describe a task above to start.'))
+      fireEvent.change(textarea(), { target: { value: 'Fix the bug' } })
+      await waitFor(() => expect(feedback.querySelector('[data-slot="new-task-start-hint"]')).toBeNull())
+    })
 
     it('promises isolation only while the run will actually get a worktree', async () => {
       serve()
@@ -1077,8 +1089,8 @@ describe('the composer runner pill carries the account', () => {
     fireEvent.pointerDown(runnerPill()!)
     const options = await screen.findAllByRole('menuitemradio')
     expect(options.map((o) => o.textContent?.replace(/\s+/g, ' '))).toEqual([
-      'claude · Default/home/u/.claude'.replace(/\s+/g, ' '),
-      'claude · Klaudiusz~/.claude-klaudiusz'.replace(/\s+/g, ' '),
+      'Claude Code · Default/home/u/.claude'.replace(/\s+/g, ' '),
+      'Claude Code · Klaudiusz~/.claude-klaudiusz'.replace(/\s+/g, ' '),
     ])
     // Each row names its folder: the labels are Squawk's invention, the folder is the account.
     expect(options[1]?.textContent).toContain('~/.claude-klaudiusz')
@@ -1091,7 +1103,7 @@ describe('the composer runner pill carries the account', () => {
     renderNewTask()
     await pillReady()
     // The repo's choice IS the initial selection — no "repo default" abstraction to decode.
-    await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Klaudiusz'))
+    await waitFor(() => expect(runnerPill()?.textContent).toContain('Claude Code · Klaudiusz'))
 
     fireEvent.change(textarea(), { target: { value: 'do the thing' } })
     await startTask()
@@ -1107,10 +1119,10 @@ describe('the composer runner pill carries the account', () => {
     })
     renderNewTask()
     await pillReady()
-    await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Klaudiusz'))
+    await waitFor(() => expect(runnerPill()?.textContent).toContain('Claude Code · Klaudiusz'))
 
     await pickFrom(runnerPill()!, 'Default')
-    await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Default'))
+    await waitFor(() => expect(runnerPill()?.textContent).toContain('Claude Code · Default'))
     fireEvent.change(textarea(), { target: { value: 'do the thing' } })
     await startTask()
 
@@ -1125,7 +1137,7 @@ describe('the composer runner pill carries the account', () => {
 
     await pickFrom(runnerPill()!, 'Klaudiusz')
     // The pill says which login the task will really use, not just which agent.
-    await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Klaudiusz'))
+    await waitFor(() => expect(runnerPill()?.textContent).toContain('Claude Code · Klaudiusz'))
     fireEvent.change(textarea(), { target: { value: 'do the thing' } })
     await startTask()
 
@@ -1151,9 +1163,9 @@ describe('the composer runner pill carries the account', () => {
     await waitFor(() => expect(runnerPill()).not.toBeNull())
 
     await pickFrom(runnerPill()!, 'Klaudiusz')
-    await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Klaudiusz'))
+    await waitFor(() => expect(runnerPill()?.textContent).toContain('Claude Code · Klaudiusz'))
     await pickFrom(runnerPill()!, 'Default')
-    await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Default'))
+    await waitFor(() => expect(runnerPill()?.textContent).toContain('Claude Code · Default'))
 
     fireEvent.change(textarea(), { target: { value: 'do the thing' } })
     await startTask()
@@ -1173,10 +1185,10 @@ describe('the composer runner pill carries the account', () => {
     await pickFrom(runnerPill()!, 'Klaudiusz')
     await waitFor(() => expect(runnerPill()?.textContent).toContain('Klaudiusz'))
 
-    await pickFrom(runnerPill()!, 'codex')
+    await pickFrom(runnerPill()!, 'Codex')
 
     // Codex has no second login, so the account group goes away and the pill is a runner again…
-    await waitFor(() => expect(runnerPill()?.querySelector('[data-slot="picker-label"]')?.textContent?.trim()).toBe('Runner · codex'))
+    await waitFor(() => expect(runnerPill()?.querySelector('[data-slot="picker-label"]')?.textContent?.trim()).toBe('Runner · Codex'))
     fireEvent.change(textarea(), { target: { value: 'do the thing' } })
     await startTask()
     // …and nothing account-shaped reaches the wire.

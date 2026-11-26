@@ -89,7 +89,7 @@ function RailIcon({ visual }: { visual: RailVisual }) {
           role="status"
           aria-label="Step running"
           // stroke-pending, not text-*: amber is a dot & spinner color only (guardian rule).
-          className={cn(base, 'animate-spin stroke-pending motion-reduce:animate-none')}
+          className={cn(base, 'animate-spin stroke-pending motion-reduce:animate-none [html.light_&]:stroke-pending-strong')}
         />
       )
     case 'failed':

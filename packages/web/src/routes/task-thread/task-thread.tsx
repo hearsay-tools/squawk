@@ -57,7 +57,7 @@ import { useActiveProviderAvailability } from './active-provider'
 import { ThreadLoading } from './thread-loading'
 import { threadRenderMode } from './thread-scroll'
 import { JumpToLatestPill, useThreadScroll, type ThreadScrollControls } from './thread-scroller'
-import { AskOriginMarker, PENDING_ASK_SECTION_ID, pinnedAnswerControl, pinnedAskFocus } from './pending-ask-navigation'
+import { AskOriginMarker, PENDING_ASK_SECTION_ID, pinnedAnswerControl, pinnedAskFocus, usePinnedAskInView } from './pending-ask-navigation'
 import { useRevealAskOrigin } from './use-reveal-ask-origin'
 import { useSessionViewport } from './session-viewport'
 import {
@@ -628,6 +628,9 @@ function ThreadFooterDock({
   stopAction, finishAction, needsAnswer, sendMessage, reply,
   providerBlocked, providerReason,
 }: ThreadFooterDockProps) {
+  // The pinned ask card already is the latest thing to act on: while it shows, a floating
+  // jump pill would only cover its options.
+  const askInView = usePinnedAskInView(needsAnswer && pendingQuestions > 0, scroll.scrollElRef)
   /* The footer follows the transcript; desktop keeps it visible while reading history. */
   return (
     <div
@@ -635,7 +638,7 @@ function ThreadFooterDock({
       className="relative z-10 bg-background pt-1 pb-2 md:pt-1.5 md:pb-4"
     >
       {/* Desktop places Jump above the sticky footer; phones keep it in the viewport. */}
-      {scroll.pillVisible ? (
+      {scroll.pillVisible && !askInView ? (
         <div data-slot="thread-jump" data-pending-ask={needsAnswer || undefined} className="pointer-events-none z-30 flex justify-center">
           <JumpToLatestPill
             pendingQuestions={pendingQuestions}

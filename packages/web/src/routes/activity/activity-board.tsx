@@ -7,7 +7,7 @@ import { ActivityLines } from './activity-lines'
 import { nameOf, peerWaits, runIndex, type PeerWait } from './activity-model'
 import { EMPTY_MOTION, waitGhosts, type MotionState } from './activity-motion'
 import { ActivityRail } from './activity-rail'
-import { COLUMN_GAP, DENSE_AFTER, columnCount, placeCards, samePlacement, type Columns } from './layout'
+import { COLUMN_GAP, COMPACT_COLUMN_GAP, DENSE_AFTER, columnCount, placeCards, samePlacement, type Columns } from './layout'
 import type { NowContext } from './now-box'
 import { useFlip } from './use-flip'
 import { useWaitHighlight } from './use-wait-highlight'
@@ -115,7 +115,7 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
           data-columns={count}
           data-dense={dense ? 'true' : undefined}
           className="relative grid items-start"
-          style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, columnGap: narrow ? 0 : COLUMN_GAP }}
+          style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, columnGap: narrow ? 0 : drawnRequests.length + drawnWaits.length > 0 ? COLUMN_GAP : COMPACT_COLUMN_GAP }}
         >
           {columns.map((column, i) => (
             <div key={i} data-slot="activity-column" className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-[30px] max-md:gap-4">

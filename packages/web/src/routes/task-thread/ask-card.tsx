@@ -217,10 +217,11 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
       data-delivery={delivery.mode}
       className="rounded-lg border border-accent-strong/25 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card px-3 py-2"
     >
-      <div className="mb-2.5 flex items-center gap-2">
+      {/* Tight rhythm: a two-question card with its Send row fits above the dock at 1440×900. */}
+      <div className="mb-1.5 flex items-center gap-2">
         <span className="text-xs font-medium text-link-foreground">The agent is asking</span>
       </div>
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2.5">
         {questions.map((question, index) => (
           <AskQuestionBlock
             key={question.id ?? index}
@@ -341,10 +342,10 @@ function AskQuestionBlock({
           <span className="ml-auto text-[11px] text-soft-foreground">select all that apply</span>
         ) : null}
       </div>
-      <p className="mb-2.5 break-words text-sm font-semibold text-foreground">{question.question}</p>
+      <p className="mb-1.5 break-words text-sm font-semibold text-foreground">{question.question}</p>
       {options ? (
         <>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             {options.map((option) => {
               const isSelected = selected.includes(option.label)
               return (
@@ -355,7 +356,7 @@ function AskQuestionBlock({
                   aria-pressed={isSelected}
                   onClick={() => pick(option.label)}
                   className={cn(
-                    'flex min-h-11 w-full flex-col gap-0.5 rounded-md border px-3 py-2 text-left transition-colors',
+                    'flex min-h-11 w-full flex-col justify-center gap-0.5 rounded-md border px-3 py-1.5 text-left transition-colors',
                     'hover:border-accent-strong/50 hover:bg-accent-strong/[0.06] [html:not(.light)_&]:hover:bg-card disabled:pointer-events-none disabled:opacity-50',
                     isSelected ? 'border-accent-strong/60 bg-accent-strong/[0.06] [html:not(.light)_&]:bg-card' : 'border-border bg-card',
                   )}
@@ -385,7 +386,7 @@ function AskQuestionBlock({
               )
             })}
           </div>
-          {question.allowFreeText !== false ? <div className="mt-2">
+          {question.allowFreeText !== false ? <div className="mt-1.5">
             <Button
               type="button"
               variant="outline"

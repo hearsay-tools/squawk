@@ -106,7 +106,8 @@ export function Heartbeat({ rate, className }: { rate: readonly number[]; classN
       viewBox="0 0 62 16"
       className={cn('block h-4 w-[62px] shrink-0', className)}
     >
-      <path d="M0 15.5h62" className="stroke-border" />
+      {/* No baseline while idle: an empty trace would read as a stray rule across the card. */}
+      {calls > 0 ? <path d="M0 15.5h62" className="stroke-border" /> : null}
       {rate.map((n, i) => {
         if (n <= 0) return null
         const h = Math.max(1.5, (n / peak) * 14)

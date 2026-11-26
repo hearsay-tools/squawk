@@ -16,6 +16,7 @@ import {
 import { Link as RouterLink } from 'react-router'
 import { agentCardPath } from '@/lib/agents-settings-path'
 import { runnerEntries, useRunners } from '@/api/runners'
+import { canonicalRunnerName } from '@/routes/settings/agent-descriptors'
 
 /**
  * The composer's single-choice pill, factored out of new-task.tsx (#401) so the follow-up
@@ -477,10 +478,11 @@ export function RunnerPill({
   const options = available.flatMap((runner) => {
     const logins = accounts.filter((entry) => entry.provider === runner.id)
     // One login is not a choice, so it does not become a row of its own — the agent is the row.
-    if (logins.length < 2) return [{ value: choiceValue(runner.id, null), label: runner.id, desc: runner.pickerDescription }]
+    const name = canonicalRunnerName(runner.id, runner.displayName)
+    if (logins.length < 2) return [{ value: choiceValue(runner.id, null), label: name, desc: runner.pickerDescription }]
     return logins.map((login) => ({
       value: choiceValue(runner.id, login.id),
-      label: `${runner.id} · ${login.label}`,
+      label: `${name} · ${login.label}`,
       // The folder when available (omitted on a non-admin remote cockpit).
       ...(login.configDir ? { desc: login.configDir } : {}),
     }))
@@ -504,7 +506,7 @@ export function RunnerPill({
       fieldLabel={fieldLabel}
       slot="runner-pill"
       ariaLabel="Runner"
-      label={options.find((option) => option.value === value_)?.label ?? value}
+      label={options.find((option) => option.value === value_)?.label ?? canonicalRunnerName(value)}
       value={value_}
       disabled={disabled && !linksOnly}
       choicesDisabled={linksOnly}
@@ -524,8 +526,9 @@ export function RunnerPill({
 export function UnavailableRunnerLinks({ uninstalled, signedOut }: { uninstalled: readonly Runner[]; signedOut: readonly Runner[] }) {
   const registered = useRunners().data
   const entries = runnerEntries(registered).flatMap((entry) => {
-    if (uninstalled.includes(entry.id)) return [{ id: entry.id, state: 'Not installed', action: 'Install in Settings' }]
-    if (signedOut.includes(entry.id)) return [{ id: entry.id, state: 'Not signed in', action: 'Sign in in Settings' }]
+    const name = canonicalRunnerName(entry.id, entry.displayName)
+    if (uninstalled.includes(entry.id)) return [{ id: entry.id, name, state: 'Not installed', action: 'Install in Settings' }]
+    if (signedOut.includes(entry.id)) return [{ id: entry.id, name, state: 'Not signed in', action: 'Sign in in Settings' }]
     return []
   })
   if (entries.length === 0) return null
@@ -536,7 +539,7 @@ export function UnavailableRunnerLinks({ uninstalled, signedOut }: { uninstalled
         <DropdownMenuItem key={entry.id} asChild className="gap-2.5 ps-8">
           <RouterLink to={agentCardPath(entry.id)} data-slot="runner-install-link" data-runner={entry.id}>
             <span className="flex min-w-0 flex-col">
-              <span className="text-[13px] font-medium text-muted-foreground">{entry.id}</span>
+              <span className="text-[13px] font-medium text-muted-foreground">{entry.name}</span>
               <span className="text-[11px] text-muted-foreground">
                 {entry.state} · <span className="font-medium text-accent-text">{entry.action}</span>
               </span>

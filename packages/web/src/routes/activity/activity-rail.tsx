@@ -1,4 +1,4 @@
-import { ArrowRightIcon } from 'lucide-react'
+import { ArrowRightIcon, ChevronDownIcon, InfoIcon } from 'lucide-react'
 import type { ActivityRequest } from '@open-mercato/cezar-api-client/contract/activity'
 
 import { StatusDot } from '@/components/status-dot'
@@ -75,7 +75,11 @@ function Legend() {
   const row = 'flex items-center gap-2'
   return (
     <details data-slot="activity-legend" className="text-[11.5px] text-muted-foreground md:col-span-2">
-      <summary className="inline-flex cursor-pointer items-center rounded-md font-medium hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11">Legend</summary>
+      <summary className="group inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 font-medium text-foreground shadow-xs hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11 [&::-webkit-details-marker]:hidden">
+        <InfoIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
+        Legend
+        <ChevronDownIcon aria-hidden="true" className="size-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
       <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5">
       <div className={row}><StatusDot tone="running" aria-hidden="true" />Filled: working now</div>
       <div className={row}><StatusDot tone="info" shape="ring" aria-hidden="true" />Ring: waiting for something outside</div>

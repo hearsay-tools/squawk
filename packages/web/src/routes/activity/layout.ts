@@ -7,6 +7,8 @@
 /** The minimum card width and the gap between columns, so lines and labels have room. */
 export const CARD_MIN_WIDTH = 300
 export const COLUMN_GAP = 96
+/** The gap while no line runs between cards: nothing needs the room, so the cards sit closer. */
+export const COMPACT_COLUMN_GAP = 40
 /** With more cards than this, cards drop their detail line and fold workers into dots. */
 export const DENSE_AFTER = 12
 
