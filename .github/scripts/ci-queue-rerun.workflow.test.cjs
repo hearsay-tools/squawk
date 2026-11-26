@@ -112,9 +112,9 @@ test('the browser rerun records into a new parts directory, and only its parts u
   const browser = ci().jobs['cockpit-browser'];
   const first = step(browser, 'e2e');
   const rerun = step(browser, 'e2e-rerun');
-  assert.equal(expression(first.env.PARTS_DIR, context('merge_group', 'success')), 'squeal-parts-browser');
-  assert.equal(expression(first.env.PARTS_DIR, context('push', 'success')), '');
+  assert.equal(first.env.PARTS_DIR, 'squeal-parts-browser');
   assert.equal(rerun.env.PARTS_DIR, 'squeal-parts-browser-rerun');
+  assert.deepEqual({ ...rerun.env, PARTS_DIR: first.env.PARTS_DIR }, first.env, 'the same environment apart from the parts directory');
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-queue-rerun-browser-'));
   try {
     const bin = path.join(temp, 'bin');

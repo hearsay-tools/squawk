@@ -1650,24 +1650,29 @@ jobs:
           cache: ${{ hashFiles('pnpm-lock.yaml') != '' && 'pnpm' || 'npm' }}
           cache-dependency-path: ${{ hashFiles('pnpm-lock.yaml') != '' && 'pnpm-lock.yaml' || 'package-lock.json' }}
 
+      - name: Run cockpit browser E2E (unrecorded)
+        id: e2e_plain
+        if: github.event_name != 'merge_group'
+        run: |
+          set -o pipefail
+          npm run test:e2e -- --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee e2e.log
+          node .github/scripts/require-e2e-passed.cjs < e2e.log
+
       - name: Set up Squeal
         if: github.event_name == 'merge_group'
         uses: hearsay-tools/squeal/ci@846c3a8069d2941eb5e63f590fd11047442202eb # v0.1.641
 
       - name: Run cockpit browser E2E
         id: e2e
+        if: github.event_name == 'merge_group'
         # In a merge group a failed first run does not fail the job: the rerun below decides.
         continue-on-error: ${{ github.event_name == 'merge_group' }}
         env:
-          PARTS_DIR: ${{ github.event_name == 'merge_group' && 'squeal-parts-browser' || '' }}
+          PARTS_DIR: squeal-parts-browser
         run: &browser-shard |
           set -o pipefail
-          if [ -n "$PARTS_DIR" ]; then
-            sh .ai/scripts/test-env-up.sh
-            squeal ci record --out "$RUNNER_TEMP/$PARTS_DIR" -- npm run test:e2e -- --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee e2e.log
-          else
-            npm run test:e2e -- --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee e2e.log
-          fi
+          sh .ai/scripts/test-env-up.sh
+          squeal ci record --out "$RUNNER_TEMP/$PARTS_DIR" -- npm run test:e2e -- --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee e2e.log
           node .github/scripts/require-e2e-passed.cjs < e2e.log
 
       # The rerun clears each spec's old failure bundles, so the first run's ship first.

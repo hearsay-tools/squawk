@@ -125,6 +125,7 @@ test('the merge-group step runs the test command under squeal ci record and retu
 
 test('only merge groups run cockpit browser shards under squeal ci record after test-env-up.sh; other events run unchanged', () => {
   const browser = ci().jobs['cockpit-browser'];
+  const plain = step(browser, 'e2e_plain');
   const e2e = step(browser, 'e2e');
   const setup = step(browser, 'Set up Squeal');
   const upload = step(browser, 'Upload Squeal parts');
@@ -132,10 +133,12 @@ test('only merge groups run cockpit browser shards under squeal ci record after 
   for (const event of EVENTS) {
     const ctx = context(event);
     const recording = event === 'merge_group';
+    assert.equal(expression(plain.if, ctx), !recording, `${event} e2e_plain`);
     assert.equal(expression(setup.if, ctx), recording, `${event} Set up Squeal`);
+    assert.equal(expression(e2e.if, ctx), recording, `${event} e2e`);
     assert.equal(expression(upload.if, ctx), recording, `${event} Upload Squeal parts`);
-    assert.equal(expression(e2e.env.PARTS_DIR, ctx), recording ? 'squeal-parts-browser' : '', `${event} PARTS_DIR`);
   }
+  assert.equal(e2e.env.PARTS_DIR, 'squeal-parts-browser');
   assert.equal(upload['continue-on-error'], true);
   assert.equal(upload.with.name, 'squeal-parts-browser-shard-${{ matrix.shard }}');
   assert.equal(upload.with.path, "${{ runner.temp }}/${{ steps['e2e-rerun'].outcome == 'skipped' && 'squeal-parts-browser' || 'squeal-parts-browser-rerun' }}/");
@@ -153,17 +156,17 @@ test('only merge groups run cockpit browser shards under squeal ci record after 
     fs.writeFileSync(path.join(temp, '.ai', 'scripts', 'test-env-up.sh'), 'echo "test-env-up"\n');
     fs.mkdirSync(path.join(temp, '.github', 'scripts'), { recursive: true });
     fs.writeFileSync(path.join(temp, '.github', 'scripts', 'require-e2e-passed.cjs'), 'const s = require("fs").readFileSync(0, "utf8"); console.log("require:" + s.includes("TEST_E2E_STATUS=passed"));\n');
-    const run = (event, extraEnv = {}) => spawnSync('bash', ['-e', '-c', e2e.run.replaceAll('${{ matrix.shard }}', '3')], {
+    const run = (body, extraEnv = {}) => spawnSync('bash', ['-e', '-c', body.replaceAll('${{ matrix.shard }}', '3')], {
       cwd: temp, encoding: 'utf8',
-      env: { PATH: `${bin}:/usr/bin:/bin:${path.dirname(process.execPath)}`, RUNNER_TEMP: '/runner/temp', PARTS_DIR: expression(e2e.env.PARTS_DIR, context(event)), ...extraEnv },
+      env: { PATH: `${bin}:/usr/bin:/bin:${path.dirname(process.execPath)}`, RUNNER_TEMP: '/runner/temp', PARTS_DIR: e2e.env.PARTS_DIR, ...extraEnv },
     });
-    const plain = run('push');
-    assert.equal(plain.status, 0, plain.stderr);
-    assert.equal(plain.stdout, 'npm run test:e2e -- --allow-skip --shard=3/8\nTEST_E2E_STATUS=passed\nrequire:true\n');
-    const recorded = run('merge_group');
+    const unrecorded = run(plain.run);
+    assert.equal(unrecorded.status, 0, unrecorded.stderr);
+    assert.equal(unrecorded.stdout, 'npm run test:e2e -- --allow-skip --shard=3/8\nTEST_E2E_STATUS=passed\nrequire:true\n');
+    const recorded = run(e2e.run);
     assert.equal(recorded.status, 0, recorded.stderr);
     assert.equal(recorded.stdout, 'test-env-up\nsqueal ci record --out /runner/temp/squeal-parts-browser -- npm run test:e2e -- --allow-skip --shard=3/8\nnpm run test:e2e -- --allow-skip --shard=3/8\nTEST_E2E_STATUS=passed\nrequire:true\n');
-    const failed = run('merge_group', { NPM_EXIT: '4' });
+    const failed = run(e2e.run, { NPM_EXIT: '4' });
     assert.equal(failed.status, 4, 'pipefail preserves the recorded browser command exit code');
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
