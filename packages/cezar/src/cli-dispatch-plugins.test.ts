@@ -107,14 +107,15 @@ describe('plugin commands at dispatch', () => {
     expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([bundledRunnersDir(), home.plugins]);
   });
 
-  it('keeps help cold: no Home, no plugin, no runner, and a footer that points to hsq plugins', async () => {
+  it('loads plugin commands for help without preparing Home', async () => {
     writePlugin('greeter', greeter);
     const { deps, registries } = await dispatch(['--help']);
-    expect(deps.resolveCliHome).not.toHaveBeenCalled();
-    expect(registries).toEqual({ cli: true, runners: false });
+    expect(deps.resolveCliHome).toHaveBeenCalledOnce();
+    expect(deps.prepareOperatorHome).not.toHaveBeenCalled();
+    expect(registries).toEqual({ cli: true, runners: true });
     const help = deps.console.log.mock.calls[0]![0] as string;
     expect(help).toContain('run `hsq plugins` to list them');
-    expect(help).not.toContain('greet');
-    expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([]);
+    expect(help).toContain('hsq greet <name>');
+    expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([bundledRunnersDir(), home.plugins]);
   });
 });

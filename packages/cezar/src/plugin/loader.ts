@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { PluginHealthEntry, PluginsHealth } from '@open-mercato/cezar-contract';
 import { runPluginSetup, type PluginContributions, type SquawkPlugin } from './api.ts';
+import { bundledFeatureFolders, bundledFeaturesDir } from './bundled-features.ts';
 import { bundledRunnerFolders, bundledRunnersDir } from './bundled-runners.ts';
 import { installPluginResolveHook } from './resolve-hook.ts';
 
@@ -196,6 +197,23 @@ export async function loadBundledRunners(
       loaded.push(Object.freeze({ name: id, source: 'bundled' as const, path, contributions: await loadEntry(path, entry) }));
     } catch (error) {
       throw new Error(`Bundled runner "${id}" failed to load: ${errorText(error)}`, { cause: error });
+    }
+  }
+  return addToReport(dir, loaded, []);
+}
+
+/** Load shipped features after runners. A broken shipped feature stops boot. */
+export async function loadBundledFeatures(dir: string = bundledFeaturesDir()): Promise<PluginLoadReport> {
+  const folders = bundledFeatureFolders(dir);
+  // Do not advertise absent or unused feature folders in `hsq plugins`.
+  if (folders.length === 0) return report;
+  installPluginResolveHook();
+  const loaded: LoadedPlugin[] = [];
+  for (const { id, path, entry } of folders) {
+    try {
+      loaded.push(Object.freeze({ name: id, source: 'bundled' as const, path, contributions: await loadEntry(path, entry) }));
+    } catch (error) {
+      throw new Error(`Bundled feature "${id}" failed to load: ${errorText(error)}`, { cause: error });
     }
   }
   return addToReport(dir, loaded, []);

@@ -141,6 +141,7 @@ it('installs the resolve hook, loads the bundled runners, then host plugins, the
     return {
       ...loader,
       loadBundledRunners: async (...args: Parameters<typeof loader.loadBundledRunners>) => { order.push('runners'); return loader.loadBundledRunners(...args); },
+      loadBundledFeatures: async (...args: Parameters<typeof loader.loadBundledFeatures>) => { order.push('features'); return loader.loadBundledFeatures(...args); },
       loadPluginFolder: async (...args: Parameters<typeof loader.loadPluginFolder>) => { order.push('plugins'); return loader.loadPluginFolder(...args); },
     };
   });
@@ -155,7 +156,7 @@ it('installs the resolve hook, loads the bundled runners, then host plugins, the
       expect(cli.cliCommandsSealed()).toBe(false);
     } });
     // The loader asks for the hook again before the first plugin of each folder; the real install is idempotent.
-    expect(order).toEqual(['hook', 'runners', 'hook', 'plugins', 'hook', 'beforeSeal']);
+    expect(order).toEqual(['hook', 'runners', 'hook', 'features', 'plugins', 'hook', 'beforeSeal']);
     expect(cli.cliCommand('extra')?.name).toBe('extra');
     expect(lifecycle.registeredRunLifecycleListeners()).toHaveLength(1);
     const report = (await import('./plugin/loader.ts')).pluginLoadReport();
@@ -267,4 +268,48 @@ it('boots with no bundled runner when bundledRunnersDir is empty and reuses that
     rmSync(emptyBundled, { recursive: true, force: true });
     rmSync(hostDir, { recursive: true, force: true });
   }
+});
+
+it('loads the feature override before host plugins and reuses it after a failed hook', async () => {
+  vi.resetModules();
+  const features = pluginsDir();
+  const host = mkdtempSync(join(tmpdir(), 'hsq-feature-host-'));
+  mkdirSync(join(host, 'host'));
+  writeFileSync(join(host, 'host', 'index.mjs'), `export default api => {
+    api.registerCliCommand({ name: 'host-extra', usage: [], parseMode: 'subcommand', homeMode: 'none', runtimeMode: 'none', load: async () => async () => 0 });
+  };`);
+  try {
+    const boot = await import('./boot.ts');
+    await expect(boot.bootRuntime({ bundledFeaturesDir: features, pluginsDir: host, beforeSeal: async () => {
+      const cli = await import('./core/cli-registry.ts');
+      const report = (await import('./plugin/loader.ts')).pluginLoadReport();
+      expect(report.loaded.slice(-2).map(plugin => plugin.contributions.cliCommands)).toEqual([['extra'], ['host-extra']]);
+      expect(cli.cliCommandsSealed()).toBe(false);
+      throw new Error('retry feature boot');
+    } })).rejects.toThrow('retry feature boot');
+    await boot.bootRuntime({ bundledFeaturesDir: features, pluginsDir: host });
+    const report = (await import('./plugin/loader.ts')).pluginLoadReport();
+    expect(report.folders).toEqual([bundledRunnersDir(), features, host]);
+    expect(report.loaded.slice(-2).map(({ name, source }) => [name, source])).toEqual([['extra', 'bundled'], ['host', 'host']]);
+  } finally {
+    rmSync(features, { recursive: true, force: true });
+    rmSync(host, { recursive: true, force: true });
+  }
+});
+
+it('retains a bundled feature failure on retry and never loads host plugins or seals', async () => {
+  vi.resetModules();
+  const failure = new Error('Bundled feature "broken" failed to load: broken');
+  const load = vi.fn(async () => { throw failure; });
+  const host = vi.fn();
+  vi.doMock('./plugin/loader.ts', async original => ({
+    ...await original<typeof import('./plugin/loader.ts')>(), loadBundledFeatures: load, loadPluginFolder: host,
+  }));
+  const boot = await import('./boot.ts');
+  await expect(boot.bootRuntime({ bundledFeaturesDir: '/features', pluginsDir: '/host' })).rejects.toBe(failure);
+  await expect(boot.bootRuntime()).rejects.toBe(failure);
+  expect(load).toHaveBeenCalledExactlyOnceWith('/features');
+  expect(host).not.toHaveBeenCalled();
+  expect((await import('./core/cli-registry.ts')).cliCommandsSealed()).toBe(false);
+  expect((await import('./core/runner-registry.ts')).runnersSealed()).toBe(false);
 });

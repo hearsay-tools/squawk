@@ -67,7 +67,7 @@ Options:
 Zero config: uses your logged-in \`claude\` CLI (and \`gh\` for GitHub bits).
 Skills live in .ai/skills/, .ai/squawk/skills/ and your team skills repos
 workflows in .ai/squawk/workflows/. A project also reads .ai/cezar/, the old folder name.
-Plugins in <config>/plugins/ can add commands: run \`cez plugins\` to list them.`;
+Bundled features and plugins in <config>/plugins/ can add commands: run \`cez plugins\` to list them.`;
 }
 
 const ROOT_OPTIONS = {
@@ -91,7 +91,7 @@ const ROOT_OPTIONS = {
 
 /**
  * Whether this command line needs the full boot (spec 2026-11-24-plugin-loader-and-runner-kit § 1).
- * Help, version and a built-in whose `runtimeMode` is false stay cold. A built-in runtime command
+ * Version and a built-in whose `runtimeMode` is false stay cold. A built-in runtime command
  * and an unknown command name boot fully, so plugins register their commands before the seal.
  */
 export function cliNeedsRuntime(argv: readonly string[]): boolean {
@@ -106,7 +106,8 @@ export function cliNeedsRuntime(argv: readonly string[]): boolean {
     // Dispatch reports the parse error; that needs no runtime.
     return false;
   }
-  if (parsed.values.help || parsed.values.version) return false;
+  if (parsed.values.version) return false;
+  if (parsed.values.help) return true;
   const command = parsed.positionals[0] ?? 'serve';
   const definition = builtInCliCommand(command);
   return definition ? commandNeedsRuntime(definition, parsed.positionals.slice(1)) : true;
@@ -116,7 +117,7 @@ export function cliNeedsRuntime(argv: readonly string[]): boolean {
 async function bootCli(deps: CliDeps, argv: readonly string[]): Promise<void> {
   // An embedding caller (or a test) may seal its own table first.
   if (cliCommandsSealed()) return;
-  if (cliNeedsRuntime(argv)) await bootRuntime({ pluginsDir: hostPluginsDir(deps.resolveCliHome, line => deps.console.error(line)) });
+  if (cliNeedsRuntime(argv)) await bootRuntime({ pluginsDir: hostPluginsDir(deps.resolveCliHome, argv[0] === '--help' || argv[0] === '-h' ? () => {} : line => deps.console.error(line)) });
   else bootColdCli();
 }
 

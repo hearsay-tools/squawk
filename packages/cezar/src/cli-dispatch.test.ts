@@ -228,7 +228,7 @@ describe('CLI metadata', () => {
 
 describe('boot choice', () => {
   it.each([
-    [['--help'], false], [['-h'], false], [['--version'], false], [['-v'], false], [['run', '--help'], false],
+    [['--help'], true], [['-h'], true], [['--version'], false], [['-v'], false], [['run', '--help'], true],
     [['job', 'start', 'x'], false], [['artifact', 'publish', 'f'], false], [['message', 'inbox'], false],
     [['webhook'], false], [['automation', 'list'], false], [['backup', '--help'], false], [['remote-settings', '--help'], false],
     [['worker', 'list'], false], [['worker', 'inspect', 'id'], false], [['worker', 'collect'], false], [['worker', 'wait'], false],
@@ -244,6 +244,6 @@ describe('boot choice', () => {
     const f = fixture(['--help']);
     f.processStub.argv[1] = '/bin/hsq';
     await f.run();
-    expect(f.deps.console.log.mock.calls[0]![0]).toContain('Plugins in <config>/plugins/ can add commands: run `hsq plugins` to list them.');
+    expect(f.deps.console.log.mock.calls[0]![0]).toContain('Bundled features and plugins in <config>/plugins/ can add commands: run `hsq plugins` to list them.');
   });
 });

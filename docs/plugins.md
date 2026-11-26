@@ -93,8 +93,9 @@ A runner plugin folder is self-contained and needs no `npm install` or `node_mod
 
 ## Load order and failures
 
-- The runners that ship with Squawk load first, then the plugins in `<config>/plugins/`, in
-  ASCII order of folder name.
+- The bundled runners load first, then bundled features in ASCII folder-name order, then
+  host plugins in `<config>/plugins/` in ASCII folder-name order. Missing bundled features are
+  valid; a present bundled feature that fails to import or register stops boot.
 - Squawk applies a plugin's registrations only when its setup finishes with no error and no
   registration conflicts with an earlier one. Otherwise it applies none of them and skips the
   plugin. The cockpit still starts.
@@ -110,5 +111,6 @@ A runner plugin folder is self-contained and needs no `npm install` or `node_mod
 - `GET /api/v1/health` sends `plugins: { loaded, failed }`. A skipped plugin's `error` there is a
   short fixed text for the kind of failure; run `hsq plugins` on the host for the full error. A
   hosted cockpit sends no plugin paths.
-- `hsq --help` lists the built-in commands only, and loads no plugin. A plugin's command runs as
-  `hsq <name>` like a built-in.
+- `hsq --help` loads runtime and lists core, bundled feature and host plugin commands.
+  It skips host discovery quietly if home cannot be resolved, without preparing home.
+  A plugin's command runs as `hsq <name>` like a built-in.
