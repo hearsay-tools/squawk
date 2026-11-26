@@ -26,6 +26,7 @@ export class AcpTransport {
   constructor(private readonly streams: { input: Writable; output: Readable }, private readonly handlers: {
     notification: (method: string, params: unknown) => void;
     request: (method: string, params: unknown, id: RpcId) => unknown | Promise<unknown>;
+    answered?: (method: string, id: RpcId) => void;
     activity?: () => void;
     notice?: (message: string) => void;
   }) {
@@ -100,15 +101,20 @@ export class AcpTransport {
   }
 
   private async answer(method: string, params: unknown, id: RpcId): Promise<void> {
+    let result: unknown;
     try {
-      const result = await this.handlers.request(method, params, id);
-      this.write({ jsonrpc: '2.0', id, result });
+      result = await this.handlers.request(method, params, id);
     } catch (error) {
       if (this.failure) return;
       const rpc = error instanceof AcpRpcError ? error : new AcpRpcError(-32603, asError(error).message);
       try { this.write({ jsonrpc: '2.0', id, error: { code: rpc.code, message: rpc.message } }); }
       catch (writeError) { this.close(asError(writeError)); }
+      return;
     }
+    if (this.failure) return;
+    try { this.write({ jsonrpc: '2.0', id, result }); }
+    catch (writeError) { this.close(asError(writeError)); return; }
+    this.handlers.answered?.(method, id);
   }
 }
 

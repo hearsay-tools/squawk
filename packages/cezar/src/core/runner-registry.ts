@@ -98,6 +98,16 @@ export function knownRunnerIds(): readonly string[] {
   return runners.isSealed() ? runners.keys() : [];
 }
 
+/**
+ * The quota pool a named model draws on with this runner (`RunnerModelData.quotaPool`), or
+ * undefined when the runner cannot name one, the model is unnamed, or the runner is not registered.
+ * Never throws: usage-limit holds read it for every saved run.
+ */
+export function runnerQuotaPool(id: string, model: string | undefined): string | undefined {
+  if (!model || !runners.isSealed() || !runners.has(id)) return undefined;
+  return runners.get(id)?.models.quotaPool?.(model);
+}
+
 /** The registered definition of a runner. */
 export function runnerDefinition(id: string): RunnerDefinition {
   const definition = runners.get(id);

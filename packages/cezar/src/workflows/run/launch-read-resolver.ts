@@ -825,9 +825,9 @@ function resumedJob(run: RunRecord, job: PendingJob): PendingJob { return { ...j
 function storedWorkflow(run: RunRecord): WorkflowDef | undefined { return run.workflowDef; }
 function interruptedIndex(run: RunRecord, stepId: string | undefined): number { return run.workflowDef?.steps.findIndex(step => step.id === stepId) ?? -1; }
 function interruptedDefinition(run: RunRecord, index: number): WorkflowStepDef | undefined { return index >= 0 ? run.workflowDef?.steps[index] : undefined; }
-function heldAccount(run: RunRecord, runner: string, readHolds: () => Parameters<typeof accountHeldFor>[1]): boolean {
+function heldAccount(run: RunRecord, runner: string, readHolds: () => Parameters<typeof accountHeldFor>[1], launch: HoldLaunch): boolean {
   const selected = { ...run, runner };
-  return accountHeldFor(selected, readHolds(), runner);
+  return heldFor(selected, readHolds(), runner, launch);
 }
 function resumedStep(run: RunRecord, waitingIndex: () => number): WorkflowStepDef | undefined {
   return run.workflowDef?.steps[waitingIndex()];
@@ -844,7 +844,11 @@ function sourceInput(source: SourceInput): StartRunInput { return source instanc
 function recordedRunner(run: RunRecord): string | undefined { return savedRunnerId(run.runner); }
 function defaultRunner(config: LaunchConfig): string { return savedRunnerId(configValue(config).defaultRunner) ?? DEFAULT_RUNNER_ID; }
 function runnerless(store: RunLookup, id: string): boolean { return store.getRun(id)?.runner === undefined; }
-function heldFor(...args: Parameters<typeof accountHeldFor>): boolean { return accountHeldFor(...args); }
+/** Where a hold check reads the models lock (`agentModelsLocked`): the run's project and home. */
+type HoldLaunch = { repoRoot: string; home: Home };
+function heldFor(run: Parameters<typeof accountHeldFor>[0], holds: Parameters<typeof accountHeldFor>[1], fallbackRunner: string, launch: HoldLaunch): boolean {
+  return accountHeldFor(run, holds, fallbackRunner, () => agentModelsLocked(launch.repoRoot, process.env, launch.home));
+}
 function accountFor(...args: Parameters<typeof executionAccount>): ReturnType<typeof executionAccount> { return executionAccount(...args); }
 
 /** The native list reads the account and working folder selected for this process. */
