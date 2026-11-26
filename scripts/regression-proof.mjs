@@ -9,7 +9,8 @@ import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// A condition makes Squeal run each side fresh: a stored result never belongs to a break commit.
+// A condition makes Squeal run each side fresh: a stored result never belongs to a break commit,
+// and the store path answers not comparable for it (hearsay-tools/squeal#266).
 export const FRESH_RUN = 'SQUAWK_REGRESSION_PROOF=1';
 
 export const RECIPES_DIR = fileURLToPath(new URL('./regression-proofs/', import.meta.url));
@@ -170,6 +171,14 @@ export function buildBreak(cwd, source, head = git(cwd, ['rev-parse', 'HEAD^{com
   return git(cwd, ['commit-tree', tree, '-p', head, '-m', `regression-proof break: ${source.label}`]);
 }
 
+// Squeal appends this to a proven file's reason when the FRESH_RUN condition made no difference,
+// which is always true for that condition.
+const CONTROL_REASON = 'red without the conditions too: the conditions are not shown to matter';
+
+function withoutControlReason(reason) {
+  return reason?.split('; ').filter(part => part !== CONTROL_REASON).join('; ');
+}
+
 function plural(count, word) { return `${count} ${word}${count === 1 ? '' : 's'}`; }
 
 /** Human summary of a squeal-proof/1 JSON report. */
@@ -187,8 +196,8 @@ export function summarize(report, label) {
       if (first) lines.push(`        ${first}`);
     }
     if (failures.length > 5) lines.push(`      … and ${failures.length - 5} more`);
-    // Squeal gives a proven file the reason that the fresh-run condition did not matter.
-    if (file.reason && file.verdict !== 'proven') lines.push(`    reason: ${file.reason}`);
+    const reason = withoutControlReason(file.reason);
+    if (reason) lines.push(`    reason: ${reason}`);
   }
   const proven = report.files.filter(file => file.verdict === 'proven').length;
   lines.push(`proven ${proven}/${report.files.length}`);

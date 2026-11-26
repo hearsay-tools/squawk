@@ -223,7 +223,7 @@ test('the CLI exits 2 without squeal, on a break that does not apply, and on bad
   ]) assert.throws(() => parseArgs(args), message);
 });
 
-test('summarize names files without a red side and failures past five, and gives a reason only when not proven', () => {
+test('summarize names files without a red side and failures past five, and drops only Squeal\'s control reason', () => {
   const report = proofReport('a'.repeat(40), 'b'.repeat(40), [['x.test.ts', 'proven', ['1', '2', '3', '4', '5', '6', '7']]]);
   report.files[0].reason = 'red without the conditions too: the conditions are not shown to matter';
   report.files.push({ path: 'y.test.ts', verdict: 'not comparable', reason: 'imports z.ts, absent at base', red: null, green: null });
@@ -235,6 +235,10 @@ test('summarize names files without a red side and failures past five, and gives
   assert.match(text, /… and 2 more/);
   assert.match(text, /red: not read; green: not read\n {4}reason: imports z\.ts, absent at base/);
   assert.doesNotMatch(text, /conditions are not shown to matter/);
+  report.files[0].reason = 'labelled on an error the test body threw; red without the conditions too: the conditions are not shown to matter';
+  const thrown = summarize(report, 'demo');
+  assert.match(thrown, /reason: labelled on an error the test body threw\n/);
+  assert.doesNotMatch(thrown, /conditions are not shown to matter/);
   assert.match(text, /proven 1\/3$/);
 });
 

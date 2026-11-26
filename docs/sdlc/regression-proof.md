@@ -73,7 +73,8 @@ other than a named test, with `--source`. A break in a file the tests read at ru
 spawn is therefore proven the same way as a break in an imported file. It also passes
 `--env SQUAWK_REGRESSION_PROOF=1`. Under a condition, Squeal runs each side fresh and
 stores no result, because a stored result never belongs to a break commit. Squeal also
-runs the red side once without the condition, as a control. Its exit code is Squeal's: 0 when
+runs the red side once without the condition, as a control. A file can take three runs,
+so give `--timeout` room for them. Its exit code is Squeal's: 0 when
 every file is proven. `--revert` reverts one non-merge commit on top of `HEAD` and stops
 when the revert conflicts. `--patch` applies a patch that introduces the break.
 
