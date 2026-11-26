@@ -21,7 +21,7 @@ async function reporter(options = {}) {
 }
 
 function moduleResult(duration, state = 'passed', file = 'hooks.test.ts') {
-  return { moduleId: `/repo/${file}`, state: () => state, diagnostic: () => ({ duration }) };
+  return { project: { name: 'server' }, moduleId: `/repo/${file}`, state: () => state, diagnostic: () => ({ duration }) };
 }
 
 function end(instance, ...modules) {
@@ -163,7 +163,76 @@ test('the manifest supplies the weights when none are given', async () => {
 test('a collected module without completion fails instead of passing with zero duration', async () => {
   const instance = await reporter();
   instance.onTestModuleCollected(moduleResult(0, 'pending'));
-  assertFailure(instance, /hooks\.test\.ts: no completed result \(unmeasured ms\); hard limit 60000 ms/);
+  assertFailure(instance, /^Vitest test files that did not finish:\nhooks\.test\.ts: did not finish; the run ended before the file reported a result$/);
+});
+
+test('a planned file that never reports a result is named, annotated and listed for the rerun', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'cap-unfinished-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const { default: Reporter } = await import(reporterUrl);
+  const instance = new Reporter({ durations: {}, changedFilesList: undefined });
+  instance.onInit({ config: { root: dir } });
+  const spec = file => ({ project: { name: 'server' }, moduleId: join(dir, file) });
+  instance.onTestRunStart([spec('done.test.ts'), spec('dies.test.ts')]);
+  end(instance, { ...moduleResult(10, 'passed'), moduleId: join(dir, 'done.test.ts') });
+  const result = assertFailure(instance, /^Vitest test files that did not finish:\ndies\.test\.ts: did not finish; the run ended before the file reported a result$/);
+  assert.deepEqual(result.annotations, [
+    '::error file=dies.test.ts,title=Vitest test files that did not finish::dies.test.ts: did not finish; the run ended before the file reported a result',
+  ]);
+  assert.equal(readFileSync(join(dir, 'node_modules/.vite/vitest/file-duration-cap.txt'), 'utf8'), `${join(dir, 'dies.test.ts')}\n`);
+});
+
+test('a Vitest worker that exits on its own is reported with its exit code and signal', async () => {
+  const { channel } = require('node:diagnostics_channel');
+  const { EventEmitter } = require('node:events');
+  const { watchWorkerExits } = await import(reporterUrl);
+  const exits = [];
+  watchWorkerExits(exit => exits.push(exit));
+  const child = (pid, script, killed = false) => Object.assign(new EventEmitter(), { pid, killed, spawnargs: ['node', script] });
+  const children = [
+    child(1, '/n/vitest/dist/workers/forks.js'),
+    child(2, '/n/vitest/dist/workers/forks.js', true),
+    child(3, '/n/other/child.js'),
+  ];
+  for (const item of children) channel('child_process').publish({ process: item });
+  for (const item of children) item.emit('exit', null, 'SIGKILL');
+  assert.deepEqual(exits, [{ pid: 1, code: null, signal: 'SIGKILL' }]);
+
+  const instance = await reporter();
+  instance.exits.push(exits[0], { pid: 4, code: 134, signal: null });
+  const result = finish(instance);
+  assert.equal(result.exitCode, 0, 'a worker exit alone leaves the verdict to Vitest');
+  assert.equal(result.output, 'Vitest test files that did not finish:\n'
+    + 'Vitest worker 1 exited unexpectedly: exit code null, signal SIGKILL\nVitest worker 4 exited unexpectedly: exit code 134, signal none');
+});
+
+test('a real Vitest run names the file whose worker died and the signal that ended it', () => {
+  const root = resolve(__dirname, '../..');
+  mkdirSync(join(root, '.ai/qa'), { recursive: true });
+  const probe = mkdtempSync(join(root, '.ai/qa/vitest-unfinished-'));
+  try {
+    writeFileSync(join(probe, 'passes.test.ts'), `import { test, expect } from 'vitest'
+test('passes', () => expect(1).toBe(1))
+`);
+    // The worker dies while it imports the file, before Vitest collects any test of it.
+    writeFileSync(join(probe, 'dies.test.ts'), `import { test } from 'vitest'
+process.kill(process.pid, 'SIGKILL')
+test('never runs', () => {})
+`);
+    writeFileSync(join(probe, 'vitest.config.mjs'), `import { defineConfig } from 'vitest/config'
+import Reporter from ${JSON.stringify(reporterUrl)}
+export default defineConfig({ test: { include: ['*.test.ts'], reporters: ['default', new Reporter()] } })
+`);
+    const result = spawnSync(join(root, 'node_modules/.bin/vitest'), ['run', '--config', join(probe, 'vitest.config.mjs')], { cwd: probe, encoding: 'utf8' });
+    const output = result.stdout + result.stderr;
+    assert.equal(result.status, 1, output);
+    assert.match(output, /Vitest test files that did not finish:\ndies\.test\.ts: did not finish; the run ended before the file reported a result\nVitest worker \d+ exited unexpectedly: exit code null, signal SIGKILL\n/);
+    assert.equal((output.match(/exited unexpectedly: exit code/g) ?? []).length, 1, 'workers Vitest stopped itself are not reported');
+    // The merge-group rerun reset reads this list to name the file in the flake report.
+    assert.equal(readFileSync(join(probe, 'node_modules/.vite/vitest/file-duration-cap.txt'), 'utf8'), `${join(probe, 'dies.test.ts')}\n`);
+  } finally {
+    rmSync(probe, { recursive: true, force: true });
+  }
 });
 
 test('an end event without a completed state or valid measurement fails', async () => {
