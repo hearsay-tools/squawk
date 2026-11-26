@@ -105,23 +105,20 @@ Run on integrated `main` after each wave:
   jobs/job.ts` from `lint/layer-import.baseline.json` (77 -> 76), and update
   `lint/test-unpinned-clock-date.baseline.json` path for moved `job.test.ts`.
 - Add `packages/cezar/src/lint/bundled-feature-import.ts` (`cez/bundled-feature-import`, zero
-  baseline entries) and `bundled-feature-import.test.ts`; wire into `lint/plugin.ts` and
-  `.oxlintrc.json`.
-- Update affected tests (`cli-dispatch.test.ts`, `index-runners.test.ts`, `cli-references.test.ts`,
-  `runs/store.test.ts`, `workflows/agent-tmpdir.test.ts`, `workflows/run/guard-decisions.test.ts`,
-  `workflows/run/scratch-removal-slots.test.ts`, `delegation/scratch-cleanup.test.ts`,
-  `workflows/launch-system-prompt.test.ts`, `workflows/system-prompt.test.ts`).
+  baseline entries) and tests; wire into `lint/plugin.ts` and `.oxlintrc.json`.
+- Gate `hsq job` text in `ci-wait/tool-catalog.ts` and `workflows/run/wait-input-descriptors.ts` on
+  `!cliCommandsSealed() || hasCliCommand('job')`, omitting `hsq job` wording when jobs is absent.
+- Update affected unit, scratch, prompt, and CLI tests.
 
 ### S4 — Acceptance, ADR 0072, roadmap, and epic close-out (hearsay-tools/squawk#4315)
 
-- Add automated absent-jobs acceptance test booting with empty `bundledFeaturesDir`:
-  - Verifies `hsq plugins` omits `jobs`, `hsq job` exits 1 as unknown command, a task runs to
-    completion, and its composed system prompt names no `## Long commands` or `job start`.
-- Run packaged `test/e2e/job-cli.test.ts` and a live acceptance run on a real runner CLI with
-  jobs loaded where the task starts a job with `hsq job start` and the job outlives the agent
-  session; record sanitized evidence in the spec.
-- Write `docs/adr/0072-add-a-launch-slot-and-load-bundled-feature-plugins.md`, add the ADR 0070
-  section 6 amendment note for `hsq --help`, and update `docs/plugins.md` and `docs/areas/cli.md`.
+- Add absent-jobs acceptance test booting with empty `bundledFeaturesDir`: verifies `hsq plugins`
+  omits `jobs`, `hsq job` fails as unknown command, a task completes, and neither its system prompt
+  nor `cezar_wait` tool metadata names `hsq job` or `Long commands`.
+- Run packaged `test/e2e/job-cli.test.ts` and a live task on a real runner CLI with jobs loaded
+  starting a job via `hsq job start` that outlives the agent session; record sanitized evidence.
+- Write `docs/adr/0072-add-a-launch-slot-and-load-bundled-feature-plugins.md`, record the ADR 0070
+  section 6 amendment (per Removed rule text table), and update `docs/plugins.md` and `docs/areas/cli.md`.
 - Update `.ai/specs/2026-11-18-plugin-core-roadmap.md` with Squeal rule-5 counts and step 5
-  first-epic completion, mark `.ai/specs/2026-11-26-launch-slot-and-bundled-jobs.md` `Status: done`,
+  completion, mark `.ai/specs/2026-11-26-launch-slot-and-bundled-jobs.md` `Status: done`,
   and delete this `-plan.md` file.

@@ -34,10 +34,10 @@ outside `src/features/jobs/` imports it. After this epic:
   importing inside it;
 - `hsq plugins` lists `jobs` as a `bundled` plugin with its command, removal slot, and launch
   part;
-- booting with the `jobs` folder absent completes a task whose launch prompt names no job
-  command; booting with `jobs` present completes a live task that starts a background job with
-  `hsq job start` that outlives the agent session;
-- default-install launch prompt bytes and environment remain unchanged.
+- booting with `jobs` absent completes a task whose launch prompt and `cezar_wait` tool metadata
+  name no job command; booting with `jobs` present completes a live task that starts a background
+  job with `hsq job start` that outlives the agent session;
+- default-install launch prompt bytes, `cezar_wait` tool metadata, and env remain unchanged.
 
 ## Out of scope
 
@@ -201,6 +201,12 @@ that exercise shipped launch prompts (`workflows/launch-system-prompt.test.ts`,
      `directoryDeletionRefusal(dir, kind)` let `sweepAgentTmpDirs` check un-keyed orphan/fallback
      directories through the registered deletion gates, eliminating the `dir => jobRunsIn([dir])`
      callback in `src/delegation/scratch-cleanup.ts`.
+3. **Absent-jobs `cezar_wait` metadata:** `src/ci-wait/tool-catalog.ts` (`waitToolDefinition`)
+   and `src/workflows/run/wait-input-descriptors.ts` check `cliCommandsSealed() &&
+   !hasCliCommand('job')`. When `job` is absent after a sealed boot, they omit `hsq job
+   start|status|stop` guidance and advertise generic `process` wait wording (`pid` and optional
+   `exit_file` in `$TMPDIR` or the worktree) with zero import of `features/jobs/`. Default boots
+   and unsealed contract tests keep the exact existing text.
 
 ## Evidence
 
@@ -234,7 +240,7 @@ The boot and launch cases below pin every new boundary condition at shipped defa
 | Case | Boot / launch path | Behavior at shipped defaults |
 | --- | --- | --- |
 | Default install (`features/jobs/` present) | `bootRuntime()` | Loads 6 bundled runners, loads `jobs` (`source: 'bundled'`), loads host plugins, seals all 9 registries; `hsq plugins` lists `jobs` with `commands: job`, `removal slots: 1`, `launch parts: jobs`; launch prompt and env match baseline bytes |
-| `features/` folder absent or empty (`jobs` absent) | `bootRuntime({ bundledFeaturesDir })` | Boot succeeds with zero feature load errors; `hsq plugins` omits `jobs`; `hsq job` exits 1 with `unknown command: job`; a task completes with no `## Long commands` / `job start` text in its system prompt |
+| `features/` folder absent or empty (`jobs` absent) | `bootRuntime({ bundledFeaturesDir })` | Boot succeeds with zero feature load errors; `hsq plugins` omits `jobs`; `hsq job` exits 1 with `unknown command: job`; a task completes with no `## Long commands` or `hsq job` text in its system prompt or `cezar_wait` tool metadata |
 | Present bundled feature folder throws on import or setup | `bootRuntime()` | Throws an error naming the bundled feature id and stops boot; registries remain unsealed |
 | Host plugin registers a launch part (no `order`) | `bootRuntime({ pluginsDir })` | Defaults to `order: 100`; runs after built-in launch parts (10-40) and before the core handoff contract; env entries fold into session env |
 | Launch-part `contribute()` throws or rejects | `resolveLaunchParts()` in `launchPreamble` | Catches error, logs one warning naming the part `id`, skips that part, and continues launching with all other parts intact |
@@ -242,6 +248,14 @@ The boot and launch cases below pin every new boundary condition at shipped defa
 | `hsq --help` with resolved home | `cli-dispatch.ts` | Runs `bootRuntime()` and prints core, bundled feature (`hsq job`), and host plugin commands |
 | `hsq --help` with unresolvable home | `cli-dispatch.ts` | Runs `bootRuntime()` without host plugins (quiet degradation, no home creation) and prints core and bundled feature commands |
 | `hsq --version` or cold built-in (`hsq message`, `hsq artifact --help`) | `cli-dispatch.ts` | Runs `bootColdCli()`; loads zero runner, feature, or host plugin modules |
+
+### Removed rule text
+
+| Paragraph | Disposition |
+| --- | --- |
+| `docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md` § 6 ("`--help`, `--version` and every built-in command whose `runtimeMode` is `'none'` ... call `bootColdCli()`") | Dropped because `--help`/`-h` now runs `bootRuntime()` so bundled feature and host plugin commands appear in help; `--version` and cold built-ins stay on `bootColdCli()` (owner decision, 2026-11-26) |
+| `docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md` § 6 ("`hsq --help` lists the built-in commands only. Its footer says that plugins in `<config>/plugins/` can add commands and points to `hsq plugins`.") | Dropped because `hsq --help` now lists all registered commands (core, bundled features, host plugins) while keeping a pointer to `hsq plugins` (owner decision, 2026-11-26) |
+| `docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md` Considered Options ("Load all plugins before `--help`. Rejected.") | Dropped because bundled features register CLI commands via `SquawkPluginApi`, broken host plugins are already skipped, and an unresolvable home degrades quietly (owner decision, 2026-11-26) |
 
 ## Plan
 
