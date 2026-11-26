@@ -153,7 +153,14 @@ export function parseSessionContextText(text: string): ParsedSessionContext {
     const detail = oneLine(firstError.message);
     return fatal(`invalid YAML: ${detail}`, `Invalid YAML: ${detail}`, lineAt(firstError.pos[0]) ?? 1);
   }
-  const value: unknown = doc.toJS();
+  let value: unknown;
+  try {
+    value = doc.toJS();
+  } catch (error) {
+    // An alias with no anchor parses cleanly and fails only here.
+    const detail = oneLine(error instanceof Error ? error.message : String(error));
+    return fatal(`invalid YAML: ${detail}`, `Invalid YAML: ${detail}`, 1);
+  }
   if (value === null || value === undefined) return { rules: [], reports: [], problems: [] };
   if (typeof value !== 'object' || Array.isArray(value)) {
     return fatal('expected a mapping with version and rules', 'The file must be a mapping with version and rules', 1);

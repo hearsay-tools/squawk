@@ -1,7 +1,7 @@
 import '../built-in-wait-kinds.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Hono } from 'hono';
@@ -109,6 +109,42 @@ describe('the session-context API', () => {
     expect(await get()).toMatchObject({ exists: true, content: '', version: null, writable: false, readOnlyReason: expect.stringContaining('not valid UTF-8') });
     expect((await put({ content: VALID, version: null })).status).toBe(409);
     expect(readFileSync(join(repoRoot, '.ai/cezar/context.yaml'))).toEqual(bytes);
+  });
+
+  it.skipIf(process.platform === 'win32')('never writes through a symbolic link to another file', async () => {
+    boot('legacy');
+    const config = join(repoRoot, '.ai/cezar/config.json');
+    writeFileSync(config, '{}\n');
+    symlinkSync('config.json', join(repoRoot, '.ai/cezar/context.yaml'));
+    expect(await get()).toMatchObject({ writable: false, readOnlyReason: expect.stringContaining('symbolic link') });
+    const res = await put({ content: 'version: 1\nworktreeSetup: touch /tmp/owned\n', version: sha('{}\n') });
+    expect(res.status).toBe(409);
+    expect(readFileSync(config, 'utf8')).toBe('{}\n');
+  });
+
+  it.skipIf(process.platform === 'win32')('never writes into a project data directory reached through a symbolic link', async () => {
+    const elsewhere = mkdtempSync(join(tmpdir(), 'cez-session-context-elsewhere-'));
+    try {
+      mkdirSync(join(elsewhere, 'cezar'));
+      symlinkSync(elsewhere, join(repoRoot, '.ai'));
+      boot('legacy');
+      const read = await get();
+      expect(read).toMatchObject({ path: '.ai/cezar/context.yaml', writable: false, readOnlyReason: expect.stringContaining('symbolic link') });
+      expect((await put({ content: VALID, version: null })).status).toBe(409);
+      expect(existsSync(join(elsewhere, 'cezar/context.yaml'))).toBe(false);
+    } finally {
+      rmSync(elsewhere, { recursive: true, force: true });
+    }
+  });
+
+  it('lets only one of two saves over the same version succeed', async () => {
+    boot('legacy');
+    writeFileSync(join(repoRoot, '.ai/cezar/context.yaml'), 'version: 1\n');
+    const [a, b] = await Promise.all([
+      put({ content: VALID, version: sha('version: 1\n') }),
+      put({ content: VALID.replace('brief', 'other'), version: sha('version: 1\n') }),
+    ]);
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
   });
 
   it('previews a draft for a role without writing it', async () => {

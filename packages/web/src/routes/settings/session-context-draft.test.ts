@@ -24,6 +24,12 @@ describe('session context draft edits', () => {
     expect((parse(addRule('version: 1').text) as { rules: unknown[] }).rules).toHaveLength(1)
   })
 
+  it('turns an empty flow list of rules into a block list it can append to', () => {
+    const { text } = addRule('version: 1\nrules: []  # none yet\n')
+    expect((parse(text) as { rules: { id: string }[] }).rules.map((r) => r.id)).toEqual(['new-rule'])
+    expect(text).toContain('# none yet')
+  })
+
   it('inserts a variable over the selection and puts the caret after it', () => {
     expect(insertToken('Hi X!', 3, 4, 'run.id')).toEqual({ text: 'Hi {{run.id}}!', select: [13, 13] })
   })

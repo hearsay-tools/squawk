@@ -28,7 +28,17 @@ export function SessionContextSection() {
   return (
     <div data-slot="session-context" className="flex flex-col gap-4 p-4 md:p-6">
       <HandoffCard />
-      {file.isError ? (
+      {file.data !== undefined ? (
+        // A failed reload keeps the last good file, so the editor and its draft stay mounted.
+        <>
+          {file.isError && (
+            <p data-slot="session-context-reload-error" role="alert" className="text-[13px] text-danger">
+              Could not read context.yaml again: {file.error.message}
+            </p>
+          )}
+          <SessionContextEditor key={file.data.path} file={file.data} refetch={() => file.refetch()} />
+        </>
+      ) : file.isError ? (
         <CenteredState
           icon={<FileStackIcon />}
           tone="danger"
@@ -37,10 +47,8 @@ export function SessionContextSection() {
           heading="h2"
           actions={<Button variant="outline" onClick={() => void file.refetch()}>Try again</Button>}
         />
-      ) : file.data === undefined ? (
-        <LoadingShape />
       ) : (
-        <SessionContextEditor key={file.data.path} file={file.data} refetch={() => file.refetch()} />
+        <LoadingShape />
       )}
     </div>
   )
@@ -131,11 +139,13 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
   }
   const save = (version: string | null) => {
     setFailure(null)
+    const sent = content
     put.mutate(
-      { content, version },
+      { content: sent, version },
       {
         onSuccess: () => {
-          setDraft(null)
+          // Text typed while the save was on its way stays as the draft.
+          setDraft((now) => (now === null || now === sent ? null : now))
           setShowDisk(false)
           toast(`Saved ${file.path}`)
         },

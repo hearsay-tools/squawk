@@ -2,7 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SESSION_CONTEXT_LIMIT_BYTES, parseSessionContextText, previewSessionContext } from './session-context.ts';
+import { z } from 'zod';
+import { SESSION_CONTEXT_LIMIT_BYTES, SESSION_CONTEXT_REPORT_STATUSES, parseSessionContextText, previewSessionContext } from './session-context.ts';
+
+const REPORT_STATUS = z.enum(SESSION_CONTEXT_REPORT_STATUSES).enum;
 
 const RULES = `version: 1
 rules:
@@ -34,6 +37,13 @@ describe('parseSessionContextText: problems for the editor', () => {
     expect(problems).toHaveLength(1);
     expect(problems[0]!.message).toMatch(/^Invalid YAML: /);
     expect(problems[0]!.line).toBeGreaterThanOrEqual(3);
+  });
+
+  it('reports YAML that parses but cannot be resolved, without throwing', () => {
+    const parsed = parseSessionContextText('version: 1\nrules: *missing\n');
+    expect(parsed.rules).toEqual([]);
+    expect(parsed.reports).toEqual([expect.objectContaining({ id: 'context.yaml', status: REPORT_STATUS.skipped, reason: expect.stringMatching(/^invalid YAML: /) })]);
+    expect(parsed.problems).toEqual([{ line: 1, rule: null, message: expect.stringMatching(/^Invalid YAML: /) }]);
   });
 
   it('refuses another version and a non-list rules key, on their lines', () => {

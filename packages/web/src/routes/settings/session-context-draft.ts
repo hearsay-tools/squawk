@@ -29,6 +29,8 @@ export function addRule(text: string): { text: string; select: [number, number] 
   let head = text
   if (head.trim() === '') head = 'version: 1\nrules:\n'
   else {
+    // An empty flow list (`rules: []`) cannot take a block item after it: make it a block key.
+    head = head.replace(/^rules:[ \t]*\[[ \t]*\]/m, 'rules:')
     if (!head.endsWith('\n')) head += '\n'
     if (!/^rules:/m.test(head)) head += 'rules:\n'
   }

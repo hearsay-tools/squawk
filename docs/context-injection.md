@@ -84,8 +84,9 @@ in a project that starts there or has moved, `.ai/cezar/` in a project that has 
   used against the 65,536-byte limit.
 - A save is refused when the file changed on disk after you opened it. You can show the disk
   version, or overwrite it. Your draft stays either way.
-- A file that is not valid UTF-8, too large, or not a regular file is read only, and so is a copy
-  in the fallback project directory.
+- A file that is not valid UTF-8, too large, or not a regular file is read only. So is a copy in
+  the fallback project directory, and a file reached through a symbolic link, so the editor cannot
+  write another file such as `config.json`. Two saves never pass the version check together.
 - Squawk does not commit the file. The rules apply from the next session launch.
 - A remote cockpit can save the file without `remote-settings enable`. The file runs no host
   command, and its file includes cannot leave the worktree

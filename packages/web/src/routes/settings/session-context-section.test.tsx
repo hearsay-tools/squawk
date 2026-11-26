@@ -21,6 +21,8 @@ interface FakeServer {
   getStatus?: number
   /** Resolves the first GET when set: lets a case look at the page before the file arrives. */
   hold?: Promise<void>
+  /** Resolves each PUT when set: lets a case type while a save is on its way. */
+  holdPut?: Promise<void>
   puts: { content: string; version: string | null }[]
   previews: { content: string; role: string }[]
 }
@@ -61,6 +63,7 @@ function serve(server: FakeServer) {
       }
       if (url.endsWith('/session-context') && method === 'PUT') {
         server.puts.push({ content: body.content as string, version: body.version ?? null })
+        await server.holdPut
         if (body.version !== server.file.version) return json({ error: 'context.yaml changed on disk since you opened it.' }, 409)
         server.file = fileOf({ content: body.content as string, version: `v${server.puts.length + 1}` })
         return json(server.file)
@@ -152,6 +155,43 @@ describe('SessionContextSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Overwrite it' }))
     await waitFor(() => expect(server.puts.at(-1)).toEqual({ content: mine, version: 'v-disk' }))
     expect(await screen.findByText('Saved .ai/squawk/context.yaml')).toBeTruthy()
+  })
+
+  it('keeps what the user typed while a save was on its way', async () => {
+    let release!: () => void
+    const server: FakeServer = { file: fileOf(), holdPut: new Promise<void>((resolve) => { release = resolve }), puts: [], previews: [] }
+    serve(server)
+    renderSection()
+    await screen.findByLabelText('context.yaml rules')
+    const first = VALID.replace('Hello', 'First')
+    type(first)
+    await waitFor(() => expect(saveButton().disabled).toBe(false))
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(server.puts).toHaveLength(1))
+    const later = VALID.replace('Hello', 'First and later')
+    type(later)
+    release()
+    expect(await screen.findByText('Saved .ai/squawk/context.yaml')).toBeTruthy()
+    expect(editor().value).toBe(later)
+    expect(screen.getByText('Unsaved')).toBeTruthy()
+  })
+
+  it('keeps the draft when the disk version cannot be read after a refused save', async () => {
+    const server: FakeServer = { file: fileOf(), puts: [], previews: [] }
+    serve(server)
+    renderSection()
+    await screen.findByLabelText('context.yaml rules')
+    server.file = fileOf({ version: 'v-disk' })
+    server.getStatus = 500
+    const mine = VALID.replace('Hello', 'Mine')
+    type(mine)
+    await waitFor(() => expect(saveButton().disabled).toBe(false))
+    fireEvent.click(saveButton())
+    expect(await screen.findByText('Not saved: the file changed on disk')).toBeTruthy()
+    // The refetch fails; the page says so, and the editor and its draft stay.
+    expect(await screen.findByText(/Could not read context.yaml again: disk on fire/, undefined, { timeout: 10_000 })).toBeTruthy() // bound: the query retries before it fails
+    expect(editor().value).toBe(mine)
+    expect(screen.queryByText('Session context did not load')).toBeNull()
   })
 
   it('says what failed when the file does not load', async () => {
