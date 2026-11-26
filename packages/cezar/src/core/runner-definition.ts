@@ -78,8 +78,8 @@ export interface RunnerMock {
   /**
    * The mock script's file name in `packages/cezar/scripts/`. Runner dry-run code and
    * `core/skill-probe.ts` resolve it through `nativeMockPath(mock)`
-   * (`@hearsay-tools/squawk/plugin/runtime`), which throws an error naming the script when this
-   * installation does not ship it.
+   * (`@hearsay-tools/squawk/plugin/runtime`), which resolves `script` against the running
+   * installation's `scripts/` folder and throws an error naming the script when absent.
    */
   readonly script: string;
   /** Permission-policy runners prove tool admission through recorded native responses. */

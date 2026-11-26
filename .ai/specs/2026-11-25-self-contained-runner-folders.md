@@ -1,13 +1,14 @@
 # Self-contained runner folders
-Status: active
+Status: done
 
 Epic hearsay-tools/squawk#4232. It runs between step 4 and step 5 of
 [the plugin core roadmap](2026-11-18-plugin-core-roadmap.md), and it completes the loader and
 runner kit of [ADR 0070](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md).
+[ADR 0071](../../docs/adr/0071-keep-runner-folders-self-contained.md) records the result.
 Baseline: `main` at `56e5a0920`. The owner settled the seven open points of the epic on
-2026-11-25 (task `77826c8b`). The work lands in the slices of
-[the plan](2026-11-25-self-contained-runner-folders-plan.md), one child issue each.
-Paths are under `packages/cezar/` unless noted.
+2026-11-25 (task `77826c8b`). The work landed in nine slices (see
+[Implementation record](#implementation-record) below; the working plan file was deleted on
+close-out). Paths are under `packages/cezar/` unless noted.
 
 ## Goal
 
@@ -212,3 +213,53 @@ No case table of [the template](TEMPLATE.md#case-tables) applies. The epic adds 
 hold, lock, cross-run record, tool-grant mapping, worktree write or detached process. The tool
 grants of each runner, and the extensions that carry them, stay as they are. Only the path that
 names each extension changes.
+
+## Implementation record
+
+Epic hearsay-tools/squawk#4232. Every slice merged as one squash commit on `main`. The result is
+[ADR 0071](../../docs/adr/0071-keep-runner-folders-self-contained.md) (with a completion pointer
+in [ADR 0070](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md)).
+
+| Slice | Issue | Pull request | Commit on `main` | Notes |
+| --- | --- | --- | --- | --- |
+| Wave 0 | hearsay-tools/squawk#4232 | hearsay-tools/squawk#4249 | `f52468131` | Spec, plan and child issues |
+| A2 | hearsay-tools/squawk#4254 | hearsay-tools/squawk#4265 | `353fc9016` | `z` re-export in kit, `HSQ_TOOL_CLIENT` in `CiToolController.provision()`, `nativeMockPath(mock)`, `copy-runner-assets.mjs` + `check:pack` |
+| A3 | hearsay-tools/squawk#4255 | hearsay-tools/squawk#4267 | `b3e5b58c9` | `cez/runner-folder-escape` lint rule and 6 per-runner baselines (40 initial sites) |
+| A1 | hearsay-tools/squawk#4256 | hearsay-tools/squawk#4270 | `fd5a607f1` | `bootRuntime({ bundledRunnersDir })`, `hsq-without-bundled.mjs`, and `test/e2e/runner-copy-out.test.ts` |
+| B1 | hearsay-tools/squawk#4257 | hearsay-tools/squawk#4277 | `f4c9ca786` | `claude` self-contained; `claude.baseline.json` emptied (`[]`); live run passed |
+| B2 | hearsay-tools/squawk#4258 | hearsay-tools/squawk#4278 | `750aefd1d` | `codex` self-contained; `codex.baseline.json` emptied (`[]`); live run passed |
+| B3 | hearsay-tools/squawk#4259 | hearsay-tools/squawk#4281 | `e78efe632` | `antigravity` self-contained; `antigravity.baseline.json` emptied (`[]`); live run passed |
+| B4 | hearsay-tools/squawk#4260 | hearsay-tools/squawk#4285 | `448af8434` | `pi` + `omp` self-contained (`.mjs` assets moved into runner folders, `HSQ_TOOL_CLIENT`, E2E build mirror updated in `.ai/scripts/build-e2e.sh` and `.ai/scripts/test-env-up.sh`); `pi.baseline.json` and `omp.baseline.json` emptied (`[]`); both live runs passed |
+| B5 | hearsay-tools/squawk#4261 | hearsay-tools/squawk#4286 | `085835eb6` | `opencode` self-contained (`opencode-task-scope.mjs` moved into runner folder); `opencode.baseline.json` emptied (`[]`); live run passed |
+| E | hearsay-tools/squawk#4262 | Merged with E | Merged with E | Removed expected-failure branch from `runner-copy-out.test.ts`; updated docs, ADR 0071, roadmap and spec record; deleted plan |
+
+### Measurements
+
+- **Squeal selection (roadmap rule 5, Slice A2):** `packages/cezar/src/plugin/index.ts` selected
+  **743 test files before → 743 test files after** (`selection.complete: true`, 0 growth) for the
+  `z` re-export.
+- **`runner-folder-escape` baselines:** 40 initial sites across the six runners drained to 0
+  entries (`[]`) in all six files under `src/lint/runner-folder-escape/`.
+- **Copy-out guard (`test/e2e/runner-copy-out.test.ts`):** all six installed `dist/runners/<id>/`
+  folders load as `host` plugins with 0 bundled runners, 0 failures, no `node_modules` ancestor,
+  and pass `HSQ_DRY_RUN=1` cleanly with no expected failure.
+
+### Live acceptance runs
+
+Each runner was copied unchanged from its built `dist/runners/<id>/` folder into a sandbox
+`<config>/plugins/<id>/` with no `node_modules` ancestor and run through `hsq-without-bundled.mjs`
+(0 bundled runners loaded; target runner loaded with `source: "host"`):
+
+- **`claude` (Slice B1, hearsay-tools/squawk#4277):** Claude Code CLI `2.1.331`; completed a live
+  task with exit 0 in 10.2 s (`status: "done"`).
+- **`codex` (Slice B2, hearsay-tools/squawk#4278):** `codex-cli 0.164.0`; completed a live task
+  with exit 0 in 8.9 s (`status: "done"`).
+- **`antigravity` (Slice B3, hearsay-tools/squawk#4281):** `antigravity` (`gemini-3.8-flash`);
+  completed a live task with exit 0 in 11.7 s (`status: "done"`, 41,516 tokens).
+- **`pi` (Slice B4, hearsay-tools/squawk#4285):** `pi 1.6.0`; invoked `cezar_done` via
+  `pi-ci-wait.mjs` and `HSQ_TOOL_CLIENT`; completed in 15.3 s (`status: "done"`, 26,212 tokens).
+- **`omp` (Slice B4, hearsay-tools/squawk#4285):** `omp 18.13.1` (`zai/glm-4.5-air`); invoked
+  `cezar_done` via `omp-ci-wait.mjs` and `HSQ_TOOL_CLIENT`; completed in 13.2 s (`status: "done"`,
+  44,876 tokens).
+- **`opencode` (Slice B5, hearsay-tools/squawk#4286):** `opencode v1.19.4`; completed a live task
+  with exit 0 in 23.2 s (`status: "done"`, `cezar_done` accepted).

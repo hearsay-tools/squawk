@@ -9,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { Home } from '../../src/home/home.ts';
-import { hasRunnerFolderEscapeBaselineEntries } from '../../src/lint/runner-folder-escape.ts';
 import { bundledRunnerIds } from '../../src/plugin/bundled-runners.ts';
 import { projectPaths } from '../../src/project-paths.ts';
 import { readPersistedRuns } from '../../src/runs/run-store.testkit.ts';
@@ -42,27 +41,6 @@ export function assertNoNodeModulesAncestor(dir: string): void {
     if (parent === current) return;
     current = parent;
   }
-}
-
-/** Enforce the A3 baseline contract: baselined runners must fail; unbaselined runners must pass. */
-export function assertCopyOutOutcome(
-  runnerId: string,
-  outcome: { ok: boolean; detail: string },
-  expectsFailure: boolean,
-): void {
-  if (expectsFailure) {
-    assert.equal(
-      outcome.ok,
-      false,
-      `Runner "${runnerId}" still has entries in its runner-folder-escape baseline, so its copy-out dry run was expected to fail, but it passed. Empty its baseline if it is now self-contained.`,
-    );
-    return;
-  }
-  assert.equal(
-    outcome.ok,
-    true,
-    `Runner "${runnerId}" has an empty runner-folder-escape baseline and must complete its copy-out dry run cleanly:\n${outcome.detail}`,
-  );
 }
 
 function cleanChildEnv(homeDir: string, extra: Record<string, string> = {}): NodeJS.ProcessEnv {
@@ -151,14 +129,7 @@ test('assertNoNodeModulesAncestor fails when a node_modules folder exists above 
   }
 });
 
-test('assertCopyOutOutcome fails when a baselined runner passes or an unbaselined runner fails', () => {
-  assert.doesNotThrow(() => assertCopyOutOutcome('claude', { ok: false, detail: 'missing mock' }, true));
-  assert.doesNotThrow(() => assertCopyOutOutcome('claude', { ok: true, detail: '' }, false));
-  assert.throws(() => assertCopyOutOutcome('claude', { ok: true, detail: '' }, true), /expected to fail/);
-  assert.throws(() => assertCopyOutOutcome('claude', { ok: false, detail: 'boom' }, false), /must complete[\s\S]*boom/);
-});
-
-test('copied dist/runners folders run without bundled runners and follow A3 baselines', { timeout: 240_000 }, async () => {
+test('every copied dist/runners folder loads and runs without bundled runners', { timeout: 240_000 }, async () => {
   // Keep every sandbox root under /tmp so no repository node_modules sits above the plugin folder.
   const root = await mkdtemp(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'cezar-runner-copy-out-'));
   assert.ok(!realpathSync(root).startsWith(realpathSync(repoRoot) + sep));
@@ -211,7 +182,12 @@ test('copied dist/runners folders run without bundled runners and follow A3 base
     assert.equal(copyPluginsRes.code, 0, copyPluginsRes.stderr);
     const copyPlugins = JSON.parse(copyPluginsRes.stdout) as PluginsJson;
     assert.deepEqual(copyPlugins.loaded.filter(p => p.source === 'bundled'), []);
-    assert.deepEqual(copyPlugins.failed.filter(p => p.source === 'bundled'), []);
+    assert.deepEqual(copyPlugins.failed, []);
+    assert.deepEqual(copyPlugins.loaded.map(p => p.name).sort(), [...runnerIds].sort());
+    for (const entry of copyPlugins.loaded) {
+      assert.equal(entry.source, 'host');
+      assert.deepEqual(entry.contributions.runners, [entry.name]);
+    }
 
     const fixtureRepo = join(root, 'fixture-repo');
     await initFixtureRepo(fixtureRepo, runnerIds);
@@ -232,10 +208,10 @@ test('copied dist/runners folders run without bundled runners and follow A3 base
         && created !== undefined
         && stepBackend === id
         && (created.status === RUN_STATUS.done || created.status === RUN_STATUS.review);
-      assertCopyOutOutcome(
-        id,
-        { ok, detail: `exit=${result.code}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}` },
-        hasRunnerFolderEscapeBaselineEntries(id, repoRoot),
+      assert.equal(
+        ok,
+        true,
+        `Copied runner "${id}" must complete its copy-out dry run cleanly:\nexit=${result.code}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
       );
     }
   } finally {
