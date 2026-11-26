@@ -260,8 +260,8 @@ async function untilRun(fixture: RunWatch, cond: () => boolean, marked?: WireMar
   const start = Date.now();
   let wasActive = false;
   try {
+    // bound: `ms` is a hang guard only; the run settling or its session ending is the earlier signal.
     while (!cond()) {
-      // bound: `ms` is a hang guard only; the run settling or its session ending is the earlier signal.
       const status = fixture.store.getRun(fixture.runId)?.status ?? 'missing';
       const active = fixture.manager.isActive(fixture.runId);
       const ended = SETTLED_RUN.has(status) || status === 'missing'
