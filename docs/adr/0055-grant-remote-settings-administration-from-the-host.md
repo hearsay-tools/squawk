@@ -9,8 +9,12 @@ The server reads the file for its own port on each request.
 
 The capability is `settingsAdmin`: true on a local cockpit, or on a remote cockpit bound to loopback
 while the file grants the port that cockpit listens on. It gates the Agent config listing (with the user MCP
-servers), home-file reads, Agent config writes and the `worktreeSetup` write. Browser sign-in also uses `settingsAdmin`, because it writes host credentials; this includes existing named accounts without granting account listing or editing. `localHandoff` keeps
-gating host application launches, agent accounts, browsing, path disclosure and updates.
+servers), home-file reads, Agent config writes, the `worktreeSetup` write, browser sign-in, and agent
+account management (creating, renaming, repointing, removing, host-path display, and CLI sign-in commands
+for named accounts). Listing existing accounts (with host paths omitted), probing account status, choosing
+an account per task or per project, and per-account model/skill discovery work on every remote cockpit.
+`localHandoff` keeps gating host application launches, browsing outside the browse root, path disclosure
+on health/plugins, and home recovery.
 
 ## Consequences
 

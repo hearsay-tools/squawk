@@ -31,8 +31,12 @@ export const scopeRecordSchema = z.object({
 export type ScopeRecord = z.infer<typeof scopeRecordSchema>;
 
 /** What a spawn site needs: the argv that runs a command inside the scope, and a report of the
- * process it started. `command` may throw; the caller then starts nothing. */
+ * process it started. `command` may throw; the caller then starts nothing. `cgroupDir` and
+ * `jobName` let `spawnSessionLeader` nest a per-session container directly inside the worker's
+ * container without double-wrapping (hearsay-tools/squawk#1345). */
 export interface SpawnScope {
   command(file: string, args: readonly string[]): [string, string[]];
   started(pid: number): void;
+  cgroupDir?(): string | undefined;
+  jobName?(): string | undefined;
 }

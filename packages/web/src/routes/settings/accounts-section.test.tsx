@@ -52,7 +52,7 @@ let requests: Array<{ method: string; url: string; body?: unknown }> = []
 let statusReads: string[] = []
 
 function serve(
-  response: AgentProfilesResponse,
+  response: Omit<AgentProfilesResponse, 'projectSelections'> & Partial<Pick<AgentProfilesResponse, 'projectSelections'>>,
   options: {
     deleteStatus?: number
     deleteError?: string
@@ -63,7 +63,7 @@ function serve(
 ) {
   requests = []
   statusReads = []
-  let state = response
+  let state: AgentProfilesResponse = { projectSelections: {}, ...response }
   const json = (payload: unknown, status = 200) =>
     new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } })
   vi.stubGlobal(
@@ -122,13 +122,19 @@ function serve(
   )
 }
 
-function renderAccounts(runners = RUNNERS_RESPONSE, settingsAdmin = true, localHandoff = true, entry = '/settings/global/agents') {
+function renderAccounts(
+  runners = RUNNERS_RESPONSE,
+  settingsAdmin = true,
+  localHandoff = true,
+  entry = '/settings/global/agents',
+  remoteSettingsAdmin = !localHandoff && settingsAdmin,
+) {
   const client = createQueryClient()
   client.setDefaultOptions({ queries: { ...client.getDefaultOptions().queries, retry: false } })
   seedRunners(client, runners)
   client.setQueryData(queryKeys.health, {
     bootProject: 'boot',
-    capabilities: { settingsAdmin, localHandoff },
+    capabilities: { settingsAdmin, localHandoff, remoteSettingsAdmin },
     // The install/version rows come from the health probe — the one place a version can honestly
     // come from. Codex is present but UNAVAILABLE, which is "not installed"; an agent missing
     // from `checks` entirely is a different state ("Checking…") and must not be conflated.
@@ -519,31 +525,95 @@ describe('the global Agents section', () => {
     expect(document.querySelector('[data-action="accounts-add"]')).toBeNull()
   })
 
-  it('withholds every path in hosted mode', async () => {
-    serve({ editable: false, profileCapableProviders: ['claude', 'codex'],
-      selections: {}, profiles: [] })
+  it('lists configured accounts read-only without host paths in hosted mode', async () => {
+    const redacted = [
+      profile({ id: 'default', label: 'Default', configDir: undefined, path: undefined, isDefault: true }),
+      profile({ id: 'work', label: 'Work', configDir: undefined, path: undefined, status: { provider: 'claude', status: 'disconnected', profileId: 'work' } }),
+    ]
+    serve({ editable: false, profileCapableProviders: ['claude', 'codex'], selections: {}, profiles: redacted })
     renderAccounts(RUNNERS_RESPONSE, false, false)
 
     await waitFor(() =>
       expect(document.querySelector('[data-slot="accounts-hosted"]')?.textContent).toContain(
-        'hosted mode',
+        'remote-settings enable',
       ),
     )
-    expect(rows()).toHaveLength(0)
-    expect(document.querySelector('[data-action="accounts-add"]')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull()
-  })
-
-  it('offers hosted browser sign-in with the host grant while withholding account paths', async () => {
-    serve({ editable: false, profileCapableProviders: ['claude'], selections: {}, profiles: [] })
-    renderAccounts({ runners: [{ ...RUNNERS_RESPONSE.runners[1]!, id: 'antigravity', displayName: 'Antigravity', terminalLogin: false, browserLogin: true }] }, true, false)
-    const card = await cardFor('antigravity')
-    expect(within(card).getByText('Discovered account')).toBeTruthy()
-    expect(within(card).getByRole('heading', { name: 'Antigravity' })).toBeTruthy()
-    expect(within(card).getByRole('button', { name: 'Connect' })).toBeTruthy()
-    expect(rows()).toHaveLength(0)
+    expect(rows()).toHaveLength(2)
+    expect(rowFor('work')?.textContent).toContain('Work')
     expect(document.querySelector('[data-slot="account-path"]')).toBeNull()
     expect(document.querySelector('[data-action="accounts-add"]')).toBeNull()
+    expect(document.querySelector('[data-action="account-rename"]')).toBeNull()
+    expect(document.querySelector('[data-action="account-remove"]')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull()
+    expect(within(rowFor('work') as HTMLElement).getByRole('button', { name: 'Check again' })).toBeTruthy()
+  })
+
+  it('allows full account management and shows the remote-settings warning when granted in hosted mode', async () => {
+    const withWork = [...DEFAULTS, profile({ id: 'work', label: 'Work', status: { provider: 'claude', status: 'disconnected', profileId: 'work' } })]
+    serve({ editable: true, profileCapableProviders: ['claude', 'codex'], selections: {}, profiles: withWork })
+    renderAccounts(RUNNERS_RESPONSE, true, false)
+
+    await waitFor(() => expect(document.querySelector('[data-slot="remote-settings-notice"]')).not.toBeNull())
+    expect(document.querySelector('[data-slot="accounts-hosted"]')).toBeNull()
+    expect(document.querySelector('[data-action="accounts-add"]')).not.toBeNull()
+    expect(rowFor('work')?.querySelector('[data-slot="account-path"]')?.textContent).toBe('~/.claude-work')
+    expect(rowFor('work')?.querySelector('[data-action="account-rename"]')).not.toBeNull()
+    expect(rowFor('work')?.querySelector('[data-action="account-remove"]')).not.toBeNull()
+    expect(within(rowFor('work') as HTMLElement).getByRole('button', { name: 'Connect' })).toBeTruthy()
+  })
+
+  it('refreshes health and agent profiles when a mutation is refused after remote-settings is withdrawn', async () => {
+    const withWork = [...DEFAULTS, profile({ id: 'work', label: 'Work' })]
+    serve(
+      { editable: true, profileCapableProviders: ['claude', 'codex'], selections: {}, profiles: withWork },
+      { deleteStatus: 409, deleteError: 'agent accounts are read-only on this remote cockpit' },
+    )
+    renderAccounts(RUNNERS_RESPONSE, true, false)
+
+    await waitForRow('work')
+    const profileReadsBefore = requests.filter((r) => r.method === 'GET' && r.url === '/api/v1/workspace/agent-profiles').length
+    const healthReadsBefore = requests.filter((r) => r.method === 'GET' && r.url === '/api/v1/health').length
+
+    fireEvent.click(rowFor('work')!.querySelector('[data-action="account-remove"]')!)
+    await waitFor(() => expect(document.querySelector('[data-action="accounts-remove-confirm"]')).not.toBeNull())
+    fireEvent.click(document.querySelector('[data-action="accounts-remove-confirm"]')!)
+
+    await waitFor(() =>
+      expect(requests.filter((r) => r.method === 'GET' && r.url === '/api/v1/workspace/agent-profiles').length).toBeGreaterThan(profileReadsBefore),
+    )
+    await waitFor(() =>
+      expect(requests.filter((r) => r.method === 'GET' && r.url === '/api/v1/health').length).toBeGreaterThan(healthReadsBefore),
+    )
+  })
+
+  it('offers hosted browser sign-in with the host grant on discovered and named accounts', async () => {
+    const antigravityAccounts = [
+      profile({
+        id: 'default',
+        provider: 'antigravity',
+        label: 'Default',
+        configDir: '/home/u/.gemini',
+        path: '/home/u/.gemini',
+        isDefault: true,
+        status: { provider: 'antigravity', status: 'disconnected' },
+      }),
+      profile({
+        id: 'work',
+        provider: 'antigravity',
+        label: 'Work',
+        configDir: '~/.gemini-work',
+        path: '/home/u/.gemini-work',
+        status: { provider: 'antigravity', status: 'disconnected', profileId: 'work' },
+      }),
+    ]
+    serve({ editable: true, profileCapableProviders: ['antigravity'], selections: {}, profiles: antigravityAccounts })
+    renderAccounts({ runners: [{ ...RUNNERS_RESPONSE.runners[1]!, id: 'antigravity', displayName: 'Antigravity', terminalLogin: false, browserLogin: true }] }, true, false)
+    const card = await cardFor('antigravity')
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(within(card).getByRole('heading', { name: 'Antigravity' })).toBeTruthy()
+    expect(within(card).getAllByRole('button', { name: 'Connect' })).toHaveLength(2)
+    expect(document.querySelector('[data-slot="remote-settings-notice"]')).not.toBeNull()
+    expect(document.querySelector('[data-action="accounts-add"]')).not.toBeNull()
   })
 
   it('shows each agent install state and version in hosted mode too', async () => {
@@ -553,7 +623,6 @@ describe('the global Agents section', () => {
     const claude = await cardFor('claude')
     await waitFor(() => expect(claude.querySelector('[data-slot="agent-version"]')?.textContent).toBe('2.1.220'))
     expect((await cardFor('codex')).querySelector('[data-slot="agent-installed"]')?.textContent).toContain('Not installed')
-    // Account counts are part of the account listing, which hosted mode withholds.
     expect(document.querySelector('.settings-account-count')).toBeNull()
   })
 

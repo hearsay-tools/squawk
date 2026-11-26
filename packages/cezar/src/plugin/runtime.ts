@@ -14,7 +14,7 @@ export { codexToolGrantFields, ompRequestedTools, opencodeToolGrantFields } from
 export { buildChildEnv } from '../core/agent-env.ts';
 export { profileEnv } from '../core/agent-profiles.ts';
 export { shellQuote } from '../core/shell-env.ts';
-export { probeLeaderState, signalSession, spawnSessionLeader, waitForEofExit } from '../core/session-process.ts';
+export { markGracefulEnd, probeLeaderState, signalSession, spawnSessionLeader, waitForEofExit } from '../core/session-process.ts';
 export { SessionDescendants } from '../core/session-descendants.ts';
 export {
   AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS, afterExitDrain, boundOutputDrainAfterExit, exitDrainBudget,

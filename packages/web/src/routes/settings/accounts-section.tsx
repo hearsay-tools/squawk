@@ -53,6 +53,7 @@ import { catalogQueryStatus, modelsForRunner } from '@/routes/new-task-form'
 import { AddAccountDialog } from './add-account-dialog'
 import { BrowserSignInButton } from './browser-sign-in'
 import { ManagedCli } from './managed-cli'
+import { REMOTE_SETTINGS_ENABLE_COMMAND, RemoteSettingsNotice, useSettingsAdminRefresh } from './remote-settings-notice'
 
 import { SettingsAgentPicker } from './settings-agent-picker'
 
@@ -140,6 +141,7 @@ function AgentsPane({ data, runners }: { data: AgentProfilesResponse; runners: R
   const [confirming, setConfirming] = useState<AgentProfile | null>(null)
   const remove = useRemoveAgentProfile()
   useScrollToCard()
+  useSettingsAdminRefresh()
 
   return (
     <div
@@ -149,10 +151,11 @@ function AgentsPane({ data, runners }: { data: AgentProfilesResponse; runners: R
       <p className="text-[13px] text-muted-foreground">
         Install, update and sign in to each agent, and set what a project runs when it has not chosen.
       </p>
+      <RemoteSettingsNotice risk="Agent accounts run each CLI with the configured host folder" />
       {data.editable ? null : (
         <p data-slot="accounts-hosted" className="text-[13px] text-soft-foreground">
-          Agent accounts are managed from the machine that owns the checkout — this cockpit runs in
-          hosted mode.
+          Agent accounts are read-only on this remote cockpit. Run{' '}
+          <code>{REMOTE_SETTINGS_ENABLE_COMMAND}</code> on the host to add, edit, or sign in to accounts here.
         </p>
       )}
 
@@ -198,7 +201,7 @@ function AgentsPane({ data, runners }: { data: AgentProfilesResponse; runners: R
           <AlertDialogHeader>
             <AlertDialogTitle>Remove “{confirming?.label}”?</AlertDialogTitle>
             <AlertDialogDescription>
-              This only forgets the account. Nothing in {confirming?.configDir} is deleted — not
+              This only forgets the account. Nothing in {confirming?.configDir ?? 'this account’s folder'} is deleted — not
               your login, not your sessions. Projects using it fall back to the default account,
               and tasks that ran under it can no longer be resumed from here.
             </AlertDialogDescription>
@@ -265,7 +268,7 @@ function AgentCard({
   check: BackendCheck | undefined
   settingsAdmin: boolean
   runners: RunnersResponse
-  /** The account listing is editable: a local cockpit (ADR 0055). */
+  /** The account listing is editable: local cockpit or host-granted remote settings admin (ADR 0055). */
   editable: boolean
   accounts: AgentProfile[]
   canCarryAccounts: boolean
@@ -294,33 +297,32 @@ function AgentCard({
       {managed ? <ManagedCli runner={provider} /> : null}
       <div className="settings-account-installation settings-readout">
         {managed ? null : <InstallReadout entry={entry} check={check} />}
-        {editable ? (
+        {editable || accounts.length > 0 ? (
           <span className="settings-account-count">{accounts.length} {accounts.length === 1 ? 'account' : 'accounts'} ({discoveredCount} discovered, {accounts.length - discoveredCount} added)</span>
         ) : null}
       </div>
 
+      {accounts.length > 0 ? (
+        <ul>
+          {accounts.map((account) => (
+            <AccountRow key={account.id} account={account} runners={runners} editable={editable} onRemove={() => onRemove(account)} />
+          ))}
+        </ul>
+      ) : null}
       {editable ? (
-        <>
-          <ul>
-            {accounts.map((account) => (
-              <AccountRow key={account.id} account={account} runners={runners} onRemove={() => onRemove(account)} />
-            ))}
-          </ul>
-          {canCarryAccounts ? (
-            <div className="settings-account-add-row">
-              <Button type="button" variant="outline" size="sm" data-action="accounts-add" data-provider={provider} onClick={onAdd}>Add account</Button>
-            </div>
-          ) : (
-            <p data-slot="accounts-single-only" className="text-[11px] text-soft-foreground">
-              {entry.displayName} can only hold one account here: it keeps its credentials
-              outside its config folder, so a second folder would change settings without changing the
-              login — which would say “work account” while billing the other one.
-            </p>
-          )}
-        </>
-      ) : entry.browserLogin ? (
-        // Hosted: no account paths, but the host grant still allows browser sign-in to the
-        // discovered account (BrowserSignInButton renders nothing without it).
+        canCarryAccounts ? (
+          <div className="settings-account-add-row">
+            <Button type="button" variant="outline" size="sm" data-action="accounts-add" data-provider={provider} onClick={onAdd}>Add account</Button>
+          </div>
+        ) : (
+          <p data-slot="accounts-single-only" className="text-[11px] text-soft-foreground">
+            {entry.displayName} can only hold one account here: it keeps its credentials
+            outside its config folder, so a second folder would change settings without changing the
+            login — which would say “work account” while billing the other one.
+          </p>
+        )
+      ) : accounts.length === 0 && entry.browserLogin ? (
+        // Fallback for older servers that withhold account rows in hosted mode.
         <div data-slot="hosted-sign-in" className="flex flex-wrap items-center gap-3">
           <p className="text-[13px] text-muted-foreground">Discovered account</p>
           <BrowserSignInButton provider={provider} label={entry.displayName} />
@@ -433,15 +435,15 @@ function CatalogStatusOption({ runner, runners, catalog }: {
   return status ? <option disabled>{status}</option> : null
 }
 
-function AccountSignIn({ account, runners, status }: {
-  account: AgentProfile; runners: RunnersResponse; status: AgentProfile['status']
+function AccountSignIn({ account, runners, status, editable }: {
+  account: AgentProfile; runners: RunnersResponse; status: AgentProfile['status']; editable: boolean
 }) {
   const connect = useConnectAgentAccount()
   return <>
           {status && status.status !== 'connected' && runnerEntry(runners, account.provider)?.browserLogin ? (
             <BrowserSignInButton provider={account.provider} {...(account.isDefault ? {} : { profileId: account.id })} label={account.label} />
           ) : null}
-          {status && status.status !== 'connected' && runnerEntry(runners, account.provider)?.terminalLogin !== false ? (
+          {editable && status && status.status !== 'connected' && runnerEntry(runners, account.provider)?.terminalLogin !== false ? (
             <Button
               type="button"
               size="sm"
@@ -472,7 +474,30 @@ function AccountSignIn({ account, runners, status }: {
   </>
 }
 
-function AccountRow({ account, runners, onRemove }: { account: AgentProfile; runners: RunnersResponse; onRemove: () => void }) {
+function AccountFolderAdvisory({ account, runners, status, editable }: {
+  account: AgentProfile; runners: RunnersResponse; status: AgentProfile['status']; editable: boolean
+}) {
+  if (!status || status.requiresAccountHome === false) return null
+  if (!account.exists) {
+    return (
+      <span data-slot="account-missing">
+        {editable ? '— folder not created yet; Connect will make it' : '— not initialized on host yet'}
+      </span>
+    )
+  }
+  if (!account.looksValid && account.configDir) {
+    return (
+      <span data-slot="account-unrecognised">
+        — this folder does not look like {runnerDisplayName(runners, account.provider)} config yet
+      </span>
+    )
+  }
+  return null
+}
+
+function AccountRow({ account, runners, editable, onRemove }: {
+  account: AgentProfile; runners: RunnersResponse; editable: boolean; onRemove: () => void
+}) {
   const routeId = agentAccountRouteId(account)
   const recheck = useRecheckAgentAccount()
   // The listing carries a status whenever the server has one cached — which, after its boot warm,
@@ -499,25 +524,21 @@ function AccountRow({ account, runners, onRemove }: { account: AgentProfile; run
             ) : null}
           </div>
           <div className="settings-account-readout settings-readout">
-          <p
-            data-slot="account-path"
-            className="mt-0.5 truncate font-mono text-[11px] text-soft-foreground"
-            title={account.path}
-          >
-            {account.configDir}
-          </p>
+          {account.configDir ? (
+            <p
+              data-slot="account-path"
+              className="mt-0.5 truncate font-mono text-[11px] text-soft-foreground"
+              title={account.path}
+            >
+              {account.configDir}
+            </p>
+          ) : null}
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             {/* "Checking…" is a real, distinct state from any probe RESULT: the answer is not in
                 yet. Showing `unknown` here would claim a verification that never ran. */}
             <StatusDot tone={presentation?.tone ?? 'neutral'} pulse={presentation === undefined} />
             <span data-slot="account-status">{presentation?.label ?? 'Checking…'}</span>
-            {!status || status.requiresAccountHome === false ? null : !account.exists ? (
-              <span data-slot="account-missing">— folder not created yet; Connect will make it</span>
-            ) : !account.looksValid ? (
-              <span data-slot="account-unrecognised">
-                — this folder does not look like {runnerDisplayName(runners, account.provider)} config yet
-              </span>
-            ) : null}
+            <AccountFolderAdvisory account={account} runners={runners} status={status} editable={editable} />
           </div>
           {status?.hint ? <p className="text-xs text-muted-foreground">{status.hint}</p> : null}
           </div>
@@ -525,7 +546,7 @@ function AccountRow({ account, runners, onRemove }: { account: AgentProfile; run
 
         {/* Public account actions stay separate from the opt-in identity details below. */}
         <div className="settings-account-actions">
-          <AccountSignIn account={account} runners={runners} status={status} />
+          <AccountSignIn account={account} runners={runners} status={status} editable={editable} />
           <Button
             type="button"
             variant="outline"
@@ -541,7 +562,7 @@ function AccountRow({ account, runners, onRemove }: { account: AgentProfile; run
           >
             Check again
           </Button>
-          <AccountManagement account={account} onRemove={onRemove} />
+          {editable ? <AccountManagement account={account} onRemove={onRemove} /> : null}
         </div>
       </div>
     </li>

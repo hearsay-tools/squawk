@@ -44,13 +44,13 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 
 ## Steps
 
-| Step | What | State on 2026-11-25 |
+| Step | What | State on 2026-11-26 |
 | --- | --- | --- |
 | 0 | Draw the line: define the core, add the layer map and `cez/layer-import` | Done: hearsay-tools/squawk#3706, ADR 0065 |
 | 1 | Runners become definitions that register themselves | Done: epic hearsay-tools/squawk#3824, [spec](2026-11-18-runner-definitions.md), [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md) |
 | 2 | A typed run lifecycle, and a narrower run store | Done: epic hearsay-tools/squawk#4007, [spec](2026-11-21-run-lifecycle-and-store-ports.md), [ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md) |
 | 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Done: epic hearsay-tools/squawk#4152, [spec](2026-11-23-open-registries-and-tables.md), [ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md) |
-| 4 | Loader and package format | Done (first version, host folder only): epic hearsay-tools/squawk#4188, [spec](2026-11-24-plugin-loader-and-runner-kit.md), [ADR 0070](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md); project plugins, a trust gate and npm or git installation wait for a later epic |
+| 4 | Loader and package format | Done (first version, host folder only): epic hearsay-tools/squawk#4188, [spec](2026-11-24-plugin-loader-and-runner-kit.md), [ADR 0070](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md); self-contained runner folders done (epic hearsay-tools/squawk#4232, [spec](2026-11-25-self-contained-runner-folders.md), [ADR 0071](../../docs/adr/0071-keep-runner-folders-self-contained.md)); project plugins, a trust gate and npm or git installation wait for a later epic |
 | 5 | Move features out of the core, smallest first | Not filed; the first slice is a launch slot for environment variables and prompt text |
 | 6 | Cockpit slots | Not filed |
 
@@ -189,12 +189,17 @@ feature behind a port, so it lowers no count. Squeal selects slightly more test 
 because the new loader and plugin tests reach both; the spec's implementation record has the
 full counts.
 
-Before step 5, epic hearsay-tools/squawk#4232 makes every bundled runner load unchanged from a
-folder outside the product. The runners import core code only through the kit, but each still
-names script files in `packages/cezar/scripts/` by a relative path and imports `zod`, and the
-live `pi` run needed hand edits to its copy. The epic moves each runner's scripts into its own
-folder or behind the kit, and proves the result for all six runners with a test and a live run.
-The runners stay bundled. Its spec and slices: [self-contained runner folders](2026-11-25-self-contained-runner-folders.md).
+Between step 4 and step 5, epic hearsay-tools/squawk#4232 made every bundled runner load unchanged
+from a folder outside the product. Done on 2026-11-26
+([spec](2026-11-25-self-contained-runner-folders.md),
+[ADR 0071](../../docs/adr/0071-keep-runner-folders-self-contained.md)). All six bundled runners
+stay bundled, import `z` from `@hearsay-tools/squawk/plugin`, resolve native mocks via
+`nativeMockPath`, keep their product `.mjs` assets inside their own folders (copied by
+`copy-runner-assets.mjs` and checked by `check:pack`), and find Squawk's tool client through
+`HSQ_TOOL_CLIENT`. All six `runner-folder-escape` baselines are empty (`[]`),
+`test/e2e/runner-copy-out.test.ts` passes for all six runners with no expected failure and no
+`node_modules` ancestor, and all six runners (`claude`, `codex`, `antigravity`, `pi`, `omp` and
+`opencode`) completed live runs from `<config>/plugins/` on their real CLIs.
 
 ### Step 5: move features out
 

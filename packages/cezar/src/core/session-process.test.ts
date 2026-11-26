@@ -13,7 +13,8 @@ vi.mock('node:child_process', async original => ({ ...await original<typeof impo
 vi.mock('node:fs', async original => ({ ...await original<typeof import('node:fs')>() }));
 
 
-import { leaderState, probeLeaderState, psLeaderState, forwardToSessionGroups, procStatExited, sessionGroupOf, signalSession, spawnSessionLeader } from './session-process.ts';
+import { leaderState, markGracefulEnd, probeLeaderState, psLeaderState, forwardToSessionGroups, procStatExited, sessionGroupOf, signalSession, spawnSessionLeader } from './session-process.ts';
+import { isSessionContained, setSessionContainment } from './session-containment.ts';
 import { requirePid } from '../pid-file.testkit.ts';
 import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 
@@ -35,12 +36,13 @@ const TERM_RECEIPT = "process.on('SIGTERM',()=>{require('fs').writeFileSync('mem
 /** A leader that starts one member in its cwd, then stays or exits. The member publishes its pid
  * once its signal handlers are in place, and an exiting leader waits for that, so no signal the
  * leader's exit sets off can reach the member first. */
-function leaderScript(member: string, opts: { detached?: boolean; exit?: boolean } = {}): string {
+function leaderScript(member: string, opts: { detached?: boolean; exit?: boolean | number } = {}): string {
   const published = `${member}; const fs = require('fs'); fs.writeFileSync('member.pid.tmp', String(process.pid)); fs.renameSync('member.pid.tmp', 'member.pid');`;
+  const exitCode = typeof opts.exit === 'number' ? opts.exit : opts.exit ? 0 : undefined;
   // The exiting leader's hang guard: it exits 3 if the member never reports.
   return `const { spawn } = require('child_process');
 const m = spawn(process.execPath, ['-e', ${JSON.stringify(published)}], { stdio: 'ignore', detached: ${!!opts.detached} });
-${opts.exit ? "m.unref(); setTimeout(() => process.exit(3), 15000); setInterval(() => { if (require('fs').existsSync('member.pid')) process.exit(0); }, 10);" : "console.log('ready'); setTimeout(()=>{},20000);"}`;
+${exitCode !== undefined ? `m.unref(); setTimeout(() => process.exit(3), 15000); setInterval(() => { if (require('fs').existsSync('member.pid')) process.exit(${exitCode}); }, 10);` : "console.log('ready'); setTimeout(()=>{},20000);"}`;
 }
 
 // A crashed leader closes its sockets inside do_exit(), before it is a zombie: the runner can
@@ -195,6 +197,7 @@ describe.skipIf(process.platform === 'win32')('session process groups (hearsay-t
   const pids: number[] = [];
   const dirs: string[] = [];
   afterEach(() => {
+    setSessionContainment(undefined);
     for (const pid of pids.splice(0)) try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
     for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
     vi.restoreAllMocks();
@@ -239,13 +242,85 @@ describe.skipIf(process.platform === 'win32')('session process groups (hearsay-t
     await vi.waitFor(() => expect(alive(member)).toBe(false), { timeout: 10_000 });
   });
 
-  it('a setsid member is never signalled', async () => {
+  it('on a non-contained host, a setsid member is never signalled', async () => {
+    setSessionContainment({ backend: 'none' });
     const { leader, member } = await start(leaderScript(IGNORES_TERM, { detached: true }));
     vi.useFakeTimers();
     signalSession(leader, 'SIGTERM');
     await exited(leader);
     await vi.advanceTimersByTimeAsync(400);
     expect(alive(member)).toBe(true);
+  });
+
+  // hearsay-tools/squawk#1345: on a contained host (Linux delegated cgroup v2), abnormal exits
+  // (startup failure, outside SIGKILL, Stop) end detached MCP servers while clean exits keep them.
+  it.runIf(isSessionContained())('on a contained host, startup failure (exit 1) ends a detached setsid child that ignores SIGTERM', async () => {
+    const { leader, member, cwd } = await start(leaderScript(TERM_RECEIPT, { detached: true, exit: 1 }));
+    await exited(leader);
+    // bound: crash exit drain, SIGTERM grace, then cgroup.kill and reaping.
+    await vi.waitFor(() => expect(alive(member)).toBe(false), { timeout: 10_000 });
+    // bound: receipt was written synchronously by the SIGTERM handler before SIGKILL ended the child.
+    await vi.waitFor(() => expect(existsSync(join(cwd, 'member.term'))).toBe(true), { timeout: 2_000 });
+  });
+
+  it.runIf(isSessionContained())('on a contained host, outside SIGKILL ends a detached setsid child while leaving siblings alive', async () => {
+    const { leader, member } = await start(leaderScript(IGNORES_TERM, { detached: true }));
+    const sibling = childProcess.spawn(process.execPath, ['-e', DEFAULT_TERM], { stdio: 'ignore' });
+    pids.push(sibling.pid!);
+    leader.kill('SIGKILL');
+    await exited(leader);
+    // bound: exit drain, SIGTERM grace, then cgroup.kill and reaping.
+    await vi.waitFor(() => expect(alive(member)).toBe(false), { timeout: 10_000 });
+    expect(alive(sibling.pid!)).toBe(true);
+  });
+
+  it.runIf(isSessionContained())('on a contained host, Stop ends a detached setsid child even when the leader handles SIGTERM and exits 0, while gracefulEnd keeps it alive', async () => {
+    const stopped = await start(leaderScript(IGNORES_TERM, { detached: true }));
+    signalSession(stopped.leader, 'SIGTERM');
+    await exited(stopped.leader);
+    // bound: SIGTERM grace, then cgroup.kill and reaping.
+    await vi.waitFor(() => expect(alive(stopped.member)).toBe(false), { timeout: 10_000 });
+
+    // A leader whose SIGTERM handler exits 0 (as OpenCode's mock does): explicit Stop must still reap.
+    const exitZeroCwd = mkdtempSync(join(tmpdir(), 'cez-session-stop-exit0-'));
+    dirs.push(exitZeroCwd);
+    const exitZeroLeader = spawnSessionLeader(process.execPath, ['-e', `const { spawn } = require('child_process'); const fs = require('fs');
+process.on('SIGTERM', () => process.exit(0));
+const s = spawn(process.execPath, ['-e', ${JSON.stringify(IGNORES_TERM)}], { stdio: 'ignore', detached: true });
+fs.writeFileSync('member.pid.tmp', String(s.pid)); fs.renameSync('member.pid.tmp', 'member.pid');
+setTimeout(() => {}, 20000);`], { cwd: exitZeroCwd, env: process.env, timings: { killGraceMs: 100 } });
+    pids.push(exitZeroLeader.pid!);
+    // bound: wait for detached child PID publication.
+    const exitZeroMember = await vi.waitFor(() => requirePid(join(exitZeroCwd, 'member.pid')), { timeout: 10_000 });
+    pids.push(exitZeroMember);
+    signalSession(exitZeroLeader, 'SIGTERM');
+    await exited(exitZeroLeader);
+    expect(exitZeroLeader.exitCode).toBe(0);
+    // bound: SIGTERM grace, then cgroup.kill and reaping.
+    await vi.waitFor(() => expect(alive(exitZeroMember)).toBe(false), { timeout: 10_000 });
+
+    const cwd = mkdtempSync(join(tmpdir(), 'cez-session-graceful-'));
+    dirs.push(cwd);
+    const leader = spawnSessionLeader(process.execPath, ['-e', `const { spawn } = require('child_process'); const fs = require('fs');
+const g = spawn(process.execPath, ['-e', ${JSON.stringify(IGNORES_TERM)}], { stdio: 'ignore' });
+const s = spawn(process.execPath, ['-e', ${JSON.stringify(IGNORES_TERM)}], { stdio: 'ignore', detached: true });
+fs.writeFileSync('pids.tmp', g.pid + ' ' + s.pid); fs.renameSync('pids.tmp', 'pids');
+setTimeout(() => {}, 20000);`], { cwd, env: process.env, timings: { killGraceMs: 100 } });
+    pids.push(leader.pid!);
+    // bound: three node processes starting on a loaded host.
+    const [group, setsid] = await vi.waitFor(() => {
+      const found = readFileSync(join(cwd, 'pids'), 'utf8').split(' ').map(Number);
+      expect(found).toHaveLength(2);
+      return found as [number, number];
+    }, { timeout: 10_000 });
+    pids.push(group, setsid);
+    markGracefulEnd(leader);
+    signalSession(leader, 'SIGTERM');
+    await exited(leader);
+    // The group member's SIGKILL is the last signal the teardown sends; the detached child stays alive.
+    // bound: kill grace and reaping of the in-group child.
+    await vi.waitFor(() => expect(alive(group)).toBe(false), { timeout: 10_000 });
+    expect(alive(setsid)).toBe(true);
   });
 
   // hearsay-tools/cezarion#1286: a leader that exits on its own ended its session, so what it left
@@ -351,6 +426,12 @@ spawnSessionLeader(process.execPath, ['-e', ${JSON.stringify(leader)}], { cwd: $
       // bound: SIGKILL delivery and reaping by the subreaper, after the host sent it and exited.
       await vi.waitFor(() => expect(alive(member)).toBe(false), { timeout: 5000 });
       expect(existsSync(join(cwd, 'member.term'))).toBe(true);
+    }, 30_000);
+
+    it.runIf(isSessionContained())('stays up to reap a detached setsid child left by a startup failure (exit 1)', async () => {
+      const { member } = await host(leaderScript(DEFAULT_TERM, { detached: true, exit: 1 }));
+      // bound: host exited after crash drain + SIGTERM reap of the detached child.
+      await vi.waitFor(() => expect(alive(member)).toBe(false), { timeout: 5000 });
     }, 30_000);
   });
 

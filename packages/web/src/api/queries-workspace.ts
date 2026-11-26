@@ -353,6 +353,12 @@ function useAgentProfileMutation<TVariables>(
         invalidateRunnerModels(queryClient),
       ])
     },
+    onError: () => {
+      // A 409 can mean the host withdrew `remote-settings` while this page was open; re-read
+      // capabilities and the account listing so edit controls do not stay stale.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.health })
+      void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.agentProfiles, exact: true })
+    },
   })
 }
 
@@ -418,6 +424,10 @@ export function useConnectAgentAccount() {
         queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.providerStatus }),
         invalidateRunnerModels(queryClient, provider, 'none'),
       ])
+    },
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.health })
+      void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.agentProfiles, exact: true })
     },
   })
 }

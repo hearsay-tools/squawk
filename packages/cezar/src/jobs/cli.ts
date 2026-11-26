@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util';
 import { commandText } from '../home/command.ts';
-import { JobError, SUPERVISE, jobDirectory, jobStatus, startJob, stopJob, superviseJob, tellStarter } from './job.ts';
+import { JobError, SUPERVISE, jobDirectory, jobStatus, startJob, stopJob, superviseJob, tellAnswerFile, tellStarter } from './job.ts';
 
 const HELP = commandText(`Usage: cez job start <name> [--dir <dir>] -- <command> [args...]
        cez job status <name> [--dir <dir>]
@@ -39,7 +39,12 @@ const ACTIONS = new Set(['start', 'status', 'stop']);
 
 /** `cez job`: one JSON object on stdout for a result and on stderr for an error; help is text. */
 export async function runJobCommand(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
-  if (argv[0] === SUPERVISE) return superviseJob(argv[1]!, argv[2]!, argv.slice(4), tellStarter);
+  if (argv[0] === SUPERVISE) {
+    if (argv[3] === '--answer-file' && argv[4]) {
+      return superviseJob(argv[1]!, argv[2]!, argv.slice(6), answer => tellAnswerFile(argv[4]!, answer));
+    }
+    return superviseJob(argv[1]!, argv[2]!, argv.slice(4), tellStarter);
+  }
   const split = argv.indexOf('--');
   const own = split === -1 ? argv : argv.slice(0, split);
   const command = split === -1 ? [] : argv.slice(split + 1);

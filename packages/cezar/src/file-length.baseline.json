@@ -3,7 +3,7 @@
   "limit": 1000,
   "files": {
     "packages/cezar/src/runners/codex/codex-app-server-runner.ts": 1198,
-    "packages/cezar/src/runners/opencode/opencode-server-runner.ts": 1641,
+    "packages/cezar/src/runners/opencode/opencode-server-runner.ts": 1632,
     "packages/cezar/src/server-install/platforms/ubuntu-vps.ts": 1004,
     "packages/web/e2e/agent-browser.ts": 1139,
     "packages/web/src/routes/github/github.tsx": 1242,

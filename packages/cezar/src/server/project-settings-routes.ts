@@ -38,7 +38,6 @@ import { writeMergedConfig } from './config-merge.ts';
 import { subscribeRunFeed } from './run-event-feed.ts';
 import { readRunnerSkills } from './runner-skills.ts';
 import {
-  hostedProfileRefusal,
   streamSSENoBuffer,
   UI_STATE_BODY_LIMIT,
   type ProjectApiEnv,
@@ -53,16 +52,14 @@ import { currentRecord, type RunWrite } from './workspace-run-feed.ts';
 
 export interface SkillsRouteDeps {
   home: Home;
-  capabilities: ServerCapabilitiesFn;
   skillCatalog: RunnerSkillCatalog;
   resolveWorkspaceProfile: ResolveWorkspaceProfileFn;
 }
 
 export function createSkillsRoutes(deps: SkillsRouteDeps) {
-  const { home, capabilities, skillCatalog, resolveWorkspaceProfile } = deps;
+  const { home, skillCatalog, resolveWorkspaceProfile } = deps;
   return new Hono<ProjectApiEnv>()
     .get('/runner-skills', queryZodValidator(runnerSkillsQuerySchema, { runners: { ids: ['runner'] } }), async c => {
-      if (c.req.valid('query').account !== undefined && !capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
       const result = await readRunnerSkills(c.req.valid('query'), c.get('project').root, home, skillCatalog, resolveWorkspaceProfile);
       if ('error' in result) return c.json(result, 400);
       return c.json(result);

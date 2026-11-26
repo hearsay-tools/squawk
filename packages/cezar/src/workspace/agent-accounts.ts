@@ -381,6 +381,14 @@ export function selectionFor(
   return repoRoot === undefined ? undefined : selectionForRoot(store, repoRoot)?.[provider];
 }
 
+/** The per-provider account selections stored for `repoRoot`, matched literally then by realpath. */
+export function selectionEntryFor(
+  store: Pick<AgentAccountStore, 'selections'>,
+  repoRoot: string,
+): AgentAccountSelection | undefined {
+  return selectionForRoot(store, repoRoot);
+}
+
 /**
  * The selection stored for `repoRoot`, matched on the literal spelling first and the realpath'd
  * one second.

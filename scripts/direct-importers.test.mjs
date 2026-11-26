@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { directImporters } from './direct-importers.mjs';
+import { directImporters, literalCandidates, stringLiterals } from './direct-importers.mjs';
 
 function tree(t, files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'direct-importers-'));
@@ -65,4 +65,44 @@ test('a test that reads a directory whose last file was deleted is direct', t =>
     'src/root.test.ts': "const r = resolve(import.meta.dirname, '..');\n",
   });
   assert.deepEqual(directImporters(root, ['src/dir.test.ts', 'src/root.test.ts'], ['src/fixtures/last.json']), ['src/dir.test.ts']);
+});
+
+test('stringLiterals extracts quoted literals while ignoring comments and template expressions', () => {
+  const text = [
+    "import { browser } from './agent-browser' // the seam's 'helper'",
+    "/* './commented.ts' */",
+    "const data = resolve(import.meta.dirname, 'fixtures/run.ndjson')",
+    'const url = `http://x/${id}`',
+  ].join('\n');
+  assert.deepEqual(stringLiterals(text), ['./agent-browser', 'fixtures/run.ndjson']);
+});
+
+test('literalCandidates resolves relative paths and workspace aliases and rejects invalid or external paths', () => {
+  assert.ok(literalCandidates('packages/web/src/app.tsx', '@/lib/utils').includes('packages/web/src/lib/utils.ts'));
+  assert.deepEqual(literalCandidates('packages/cezar/src/app.ts', '@/lib/utils').includes('packages/web/src/lib/utils.ts'), false);
+  assert.ok(literalCandidates('packages/web/src/app.tsx', '@open-mercato/cezar-api-client').includes('packages/api-client/src/index.ts'));
+  assert.ok(literalCandidates('packages/web/src/app.tsx', '@open-mercato/cezar-api-client/contract/defined').includes('packages/api-client/src/contract/defined.ts'));
+  assert.ok(literalCandidates('packages/web/src/app.tsx', '@open-mercato/cezar-contract/schema.js').includes('packages/contract/src/schema.ts'));
+  assert.deepEqual(literalCandidates('src/a.test.ts', '/etc/passwd'), []);
+  assert.deepEqual(literalCandidates('src/a.test.ts', '../../outside'), []);
+  assert.deepEqual(literalCandidates('src/a.test.ts', 'node_modules/pkg/index.js'), []);
+  assert.deepEqual(literalCandidates('src/a.test.ts', 'node:fs'), []);
+  assert.deepEqual(literalCandidates('src/a.test.ts', 'a few words'), []);
+});
+
+test('a test importing via workspace aliases is direct when the target file changes', t => {
+  const root = tree(t, {
+    'packages/web/src/lib/utils.ts': 'export const u = 1;\n',
+    'packages/api-client/src/index.ts': 'export const client = 1;\n',
+    'packages/web/src/app.test.tsx': "import { u } from '@/lib/utils';\n",
+    'packages/web/src/api.test.tsx': "import { client } from '@open-mercato/cezar-api-client';\n",
+  });
+  assert.deepEqual(
+    directImporters(root, ['packages/web/src/app.test.tsx', 'packages/web/src/api.test.tsx'], ['packages/web/src/lib/utils.ts']),
+    ['packages/web/src/app.test.tsx'],
+  );
+  assert.deepEqual(
+    directImporters(root, ['packages/web/src/app.test.tsx', 'packages/web/src/api.test.tsx'], ['packages/api-client/src/index.ts']),
+    ['packages/web/src/api.test.tsx'],
+  );
 });

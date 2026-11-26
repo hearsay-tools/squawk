@@ -93,16 +93,15 @@ describe('runner-native skills API', () => {
     expect(calls.at(-1)).toEqual({ runner: 'claude', cwd: root, accountHome: undefined });
   });
 
-  it('refuses explicit accounts in hosted mode before probing and keeps project-default listing', async () => {
-    await addAccount();
+  it('allows explicit configured and default accounts in hosted mode and refuses unknown accounts', async () => {
+    const path = await addAccount();
     vi.stubEnv('CEZ_REMOTE', '1');
-    for (const account of ['work', 'missing', 'default']) {
-      const response = await request(`runner=claude&account=${account}`);
-      expect(response.status).toBe(409);
-    }
+    expect((await request('runner=claude&account=missing')).status).toBe(400);
     expect(calls).toEqual([]);
-    await list('runner=claude');
-    expect(calls).toHaveLength(1);
+    await list('runner=claude&account=work');
+    expect(calls).toEqual([{ runner: 'claude', cwd: root, accountHome: path }]);
+    await list('runner=claude&account=default');
+    expect(calls.at(-1)).toEqual({ runner: 'claude', cwd: root, accountHome: undefined });
   });
 
   it('serves the cached list and refresh=1 probes that runner/account again', async () => {

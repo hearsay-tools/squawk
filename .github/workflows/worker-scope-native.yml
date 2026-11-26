@@ -10,7 +10,12 @@ on:
     paths:
       - 'packages/cezar/src/worker-scope/**'
       - 'packages/cezar/scripts/windows-worker-job.*'
+      - 'packages/cezar/src/core/os-cgroup.ts'
+      - 'packages/cezar/src/core/os-win-job.ts'
+      - 'packages/cezar/src/core/session-containment*'
       - 'packages/cezar/src/core/session-process.ts'
+      - 'packages/cezar/src/core/session-process.test.ts'
+      - 'packages/cezar/src/jobs/**'
       - 'packages/cezar/src/workflows/grouped-command.ts'
       - 'packages/cezar/src/workflows/run/worker-orphans.ts'
       - 'packages/cezar/src/delegation/worker-cleanup.ts'
@@ -54,6 +59,9 @@ jobs:
           # The native cases skip without delegation; here they must have run.
           grep -q '✓ .*cgroup: stop ends a detached descendant after its leader exited' "$RUNNER_TEMP/scope.log"
           grep -q '✓ .*cgroup: kill ends the scope now' "$RUNNER_TEMP/scope.log"
+          NO_COLOR=1 FORCE_COLOR=0 npx vitest run --reporter=verbose src/core/session-process.test.ts src/jobs/job.test.ts src/core/runner-shutdown-process-groups-parity.test.ts 2>&1 | tee "$RUNNER_TEMP/session.log"
+          grep -q '✓ .*on a contained host, startup failure (exit 1) ends a detached setsid child that ignores SIGTERM' "$RUNNER_TEMP/session.log"
+          grep -q '✓ .*a job started inside a worker session survives session SIGKILL while detached leftovers die' "$RUNNER_TEMP/session.log"
           npx vitest run src/delegation/service-destroy src/workflows/worker-destroy src/delegation/scratch-cleanup
 
   windows-job:
@@ -90,6 +98,9 @@ jobs:
           grep -q '✓ .*the worker ends with its controller, and an unrelated process survives' "$RUNNER_TEMP/job.log"
           grep -q '✓ .*a cmd.exe /s /c command keeps its own quotes inside the job' "$RUNNER_TEMP/job.log"
           grep -q '✓ .*runs in an agent environment with its own TEMP and a PowerShell 7 module path' "$RUNNER_TEMP/job.log"
+          npx vitest run --reporter=verbose src/core/session-containment.test.ts 2>&1 | tee "$RUNNER_TEMP/session-win.log"
+          grep -q '✓ .*windows-native: abnormal exit ends a detached descendant while clean exit 0 keeps it alive' "$RUNNER_TEMP/session-win.log"
+          grep -q '✓ .*windows-native: nested worker+session job lets breakaway survive session crash and die on worker stop' "$RUNNER_TEMP/session-win.log"
 
   macos-groups:
     name: macOS process-group worker scope

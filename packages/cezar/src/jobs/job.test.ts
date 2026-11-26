@@ -11,7 +11,13 @@ import { probeProcessWait } from '../process-wait/supervisor.ts';
 import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 import { runJobCommand } from './cli.ts';
 import { jobInstructions, ownCommand } from './command.ts';
-import { claimJob, jobPaths, jobRunsIn, jobStatus, startJob, stopJob, superviseJob } from './job.ts';
+import { randomUUID } from 'node:crypto';
+import type { RunRecord } from '@open-mercato/cezar-contract';
+import { isSessionContained } from '../core/session-containment.ts';
+import { spawnSessionLeader } from '../core/session-process.ts';
+import { WorkerScopes, type ScopeStore } from '../worker-scope/worker-scopes.ts';
+import type { ScopeRecord } from '../worker-scope/scope.ts';
+import { claimJob, escapeSessionCgroup, jobPaths, jobRunsIn, jobStatus, startJob, stopJob, superviseJob } from './job.ts';
 
 const run = promisify(execFile);
 const dirs: string[] = [];
@@ -306,3 +312,97 @@ it.runIf(process.platform === 'darwin')('on macOS, stop reports a group its supe
   expect(await stopJob(dir, 'left', { graceMs: 300 })).toEqual({ name: 'left', pid: job.pid, stopped: false });
   expect(kill.mock.calls.filter(([, signal]) => signal !== 0 && signal !== undefined)).toEqual([]);
 }, 30_000);
+
+it('escapeSessionCgroup moves out of squawk-session-* cgroups and stops at the worker or base cgroup', () => {
+  const base = '/sys/fs/cgroup/app.slice/squawk.service';
+  let current: string | undefined = `${base}/squawk-worker-w1/squawk-session-a/squawk-session-b`;
+  const writes: Array<[string, string]> = [];
+  escapeSessionCgroup(
+    () => current,
+    (path, pid) => {
+      writes.push([path, pid]);
+      current = path.slice(0, -'/cgroup.procs'.length);
+    },
+  );
+  expect(writes).toEqual([
+    [`${base}/squawk-worker-w1/squawk-session-a/cgroup.procs`, '0'],
+    [`${base}/squawk-worker-w1/cgroup.procs`, '0'],
+  ]);
+  expect(current).toBe(`${base}/squawk-worker-w1`);
+
+  // Outside a session cgroup: no-op
+  const noopWrites: Array<[string, string]> = [];
+  escapeSessionCgroup(() => `${base}/squawk-worker-w1`, (p, v) => noopWrites.push([p, v]));
+  expect(noopWrites).toEqual([]);
+});
+
+it.runIf(process.platform === 'linux' && isSessionContained())('a job started inside a worker session survives session SIGKILL while detached leftovers die, and ends on worker destroy (hearsay-tools/squawk#1345)', async () => {
+  const dir = scratch();
+  const workerId = randomUUID();
+  let scopeRecord: ScopeRecord | undefined;
+  const store: ScopeStore = {
+    readWorkerScope: () => scopeRecord ?? 'absent',
+    writeWorkerScope: (_id, next) => { scopeRecord = next; },
+    getRun: id => ({ id, delegation: { role: 'worker' } }) as unknown as RunRecord,
+    readWorkerExecution: () => undefined,
+    readWorkerProcesses: () => 'absent',
+  };
+  const scopes = new WorkerScopes(store);
+  const scope = scopes.spawnScope(workerId);
+
+  const [jobBin, ...jobPrefix] = ownCommand();
+  const mcpPidFile = join(dir, 'mcp.pid');
+  const jobJsonFile = join(dir, 'job.json');
+  const leaderScript = `
+    const { spawn, execFileSync } = require('child_process');
+    const fs = require('fs');
+    const mcp = spawn(process.execPath, ['-e', ${JSON.stringify(`${ignoreTermSource()} setInterval(() => {}, 20000);`)}], { detached: true, stdio: 'ignore' });
+    mcp.unref();
+    fs.writeFileSync(${JSON.stringify(mcpPidFile)} + '.tmp', String(mcp.pid));
+    fs.renameSync(${JSON.stringify(mcpPidFile)} + '.tmp', ${JSON.stringify(mcpPidFile)});
+    const out = execFileSync(${JSON.stringify(jobBin)}, ${JSON.stringify([...jobPrefix, 'job', 'start', 'survivor', '--dir', dir, '--', process.execPath, '-e', 'setInterval(() => {}, 20000)'])} , { encoding: 'utf8' });
+    fs.writeFileSync(${JSON.stringify(jobJsonFile)} + '.tmp', out);
+    fs.renameSync(${JSON.stringify(jobJsonFile)} + '.tmp', ${JSON.stringify(jobJsonFile)});
+    setInterval(() => {}, 20000);
+  `;
+  const leader = spawnSessionLeader(process.execPath, ['-e', leaderScript], {
+    cwd: dir, env: process.env, timings: { killGraceMs: 100 }, scope,
+  });
+  pids.push(leader.pid!);
+  try {
+    // bound: wait for the session to spawn both the detached MCP stub and the hsq job.
+    await vi.waitFor(() => {
+      expect(existsSync(mcpPidFile)).toBe(true);
+      expect(existsSync(jobJsonFile)).toBe(true);
+    }, { timeout: 20_000, interval: 25 });
+    const mcpPid = Number(readFileSync(mcpPidFile, 'utf8'));
+    const job = JSON.parse(readFileSync(jobJsonFile, 'utf8')) as { pid: number; exitFile: string };
+    pids.push(mcpPid, job.pid);
+
+    // Crash the session leader with SIGKILL.
+    leader.kill('SIGKILL');
+    await new Promise<void>(resolve => { if (leader.exitCode !== null || leader.signalCode !== null) resolve(); else leader.once('exit', () => resolve()); });
+
+    // Detached MCP stub inside the crashed session must die.
+    // bound: exit drain, SIGTERM grace, cgroup.kill and reaping.
+    await vi.waitFor(() => {
+      try { process.kill(mcpPid, 0); throw new Error('still alive'); } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+      }
+    }, { timeout: 10_000, interval: 25 });
+
+    // The hsq job escaped the session cgroup into the worker cgroup, so it survives the session crash.
+    expect(jobStatus(dir, 'survivor')).toMatchObject({ state: 'running', pid: job.pid });
+
+    // Destroying the worker still ends the escaped job because it remained in the worker's cgroup.
+    expect(await scopes.stop(workerId, 10_000)).toEqual({ stopped: true });
+    // bound: hang guard; worker cgroup.kill already completed
+    await vi.waitFor(() => {
+      try { process.kill(job.pid, 0); throw new Error('still alive'); } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+      }
+    }, { timeout: 10_000, interval: 25 });
+  } finally {
+    await scopes.stop(workerId, 5_000);
+  }
+}, 40_000);

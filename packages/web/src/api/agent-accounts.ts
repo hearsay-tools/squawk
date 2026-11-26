@@ -1,7 +1,8 @@
 import { useQueries } from '@tanstack/react-query'
-import type { ProviderStatus, Runner } from '@open-mercato/cezar-api-client'
+import type { AgentProfilesResponse, ProviderStatus, Runner } from '@open-mercato/cezar-api-client'
 
 import { getAgentAccountStatus } from '@/api/client'
+import { useProjectScope } from '@/api/project-scope-context'
 import { useAgentProfiles, useProviderStatus, useRepo, workspaceQueryKeys } from '@/api/queries'
 import { useRunners } from '@/api/runners'
 import type { RunnerAccountChoice } from '@/components/picker-pill'
@@ -57,6 +58,18 @@ export function useNamedAccountStatuses(
   return statuses
 }
 
+/** Resolve one project's account selections, preferring project-id keys (available in hosted mode
+ *  without leaking host paths) and falling back to repo-root keys. */
+export function selectionForProject(
+  data: Pick<AgentProfilesResponse, 'selections'> & { projectSelections?: AgentProfilesResponse['projectSelections'] } | undefined,
+  projectId: string | null | undefined,
+  repoRoot: string | undefined,
+): Partial<Record<Runner, string>> | undefined {
+  const byId = data?.projectSelections?.[projectId ?? 'default']
+  if (byId !== undefined) return byId as Partial<Record<Runner, string>>
+  return (repoRoot ? data?.selections?.[repoRoot] : undefined) as Partial<Record<Runner, string>> | undefined
+}
+
 /** Every login for every runner, each with its sign-in state: the listing's cached answer, else
  *  the per-account status route's. Workspace-wide: it reads no project. */
 export function useAccountSignIns(): RunnerAccountChoice[] {
@@ -69,7 +82,7 @@ export function useAccountSignIns(): RunnerAccountChoice[] {
       provider: profile.provider as Runner,
       id: profile.id,
       label: profile.label,
-      configDir: profile.configDir,
+      ...(profile.configDir === undefined ? {} : { configDir: profile.configDir }),
       isDefault: profile.isDefault,
       ...(status === undefined ? {} : { status }),
     }
@@ -78,17 +91,13 @@ export function useAccountSignIns(): RunnerAccountChoice[] {
 
 export function useAgentAccounts(): AgentAccountChoices {
   const profiles = useAgentProfiles()
+  const scope = useProjectScope()
   const repo = useRepo()
   const accounts = useAccountSignIns()
-  // Selections are keyed by the project's realpath'd ROOT — the key the store itself uses — and
-  // `useRepo` is project-scoped, so it already answers for the ACTIVE project; going through the
-  // projects list would mean re-deriving a mapping the API has already done.
   const repoRoot = repo.data?.info?.root
   return {
     accounts,
-    repoAccount: (repoRoot ? profiles.data?.selections?.[repoRoot] : undefined) as
-      | Partial<Record<Runner, string>>
-      | undefined,
+    repoAccount: selectionForProject(profiles.data, scope.projectId, repoRoot),
   }
 }
 

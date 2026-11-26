@@ -14,6 +14,7 @@ import {
   useRunnerModelCatalogs,
   useSelectAgentProfile,
 } from '@/api/queries'
+import { selectionForProject } from '@/api/agent-accounts'
 import { useProjectScope } from '@/api/project-scope-context'
 import type { RunnerEntry } from '@open-mercato/cezar-api-client/contract/runners'
 import { runnerEntries, runnerIds, useRunners } from '@/api/runners'
@@ -368,7 +369,7 @@ function DefaultAgentField({
   // already answers for the ACTIVE project.
   const projectId = scope.projectId ?? 'default'
   const repoRoot = repo.data?.info?.root
-  const selection = repoRoot ? profiles.data?.selections[repoRoot] : undefined
+  const selection = selectionForProject(profiles.data, scope.projectId, repoRoot)
   const registered = useRunners().data
   const rows = agentPickerRows(profiles.data?.profiles ?? [], registered)
   const hasAccounts = hasAgentAccounts(rows, registered)
