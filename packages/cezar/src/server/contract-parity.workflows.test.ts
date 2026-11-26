@@ -7,6 +7,7 @@ import type {
   agentConfigFileContentSchema,
   agentConfigListingSchema,
 } from '@open-mercato/cezar-contract';
+import type { sessionContextFileSchema, sessionContextPreviewRequestSchema, sessionContextPreviewSchema, setSessionContextSchema } from '@open-mercato/cezar-contract/session-context';
 import type {
   deleteWorkflowResponseSchema,
   parsedWorkflowSchema,
@@ -21,7 +22,7 @@ import { workflowStepSchema } from '../workflows/types.ts';
 
 /**
  * Same guard as `contract-parity.test.ts`, for the workflows / skills /
- * agent-config families. See that file for why every assertion is MUTUAL: one-way
+ * agent-config and session-context families. See that file for why every assertion is MUTUAL: one-way
  * assignability passes on genuine drift, in both directions, and did so historically.
  *
  * Compile-time; `npm run typecheck` enforces it. The `it()` keeps the file visible as a test.
@@ -53,6 +54,14 @@ describe('src/contract workflows/skills/agent-config schemas match the routes ex
   type AgentConfigFile200 = InferResponseType<(typeof client.api.v1)['agent-config'][':id']['$get'], 200>;
   type AgentConfigPut200 = InferResponseType<(typeof client.api.v1)['agent-config'][':id']['$put'], 200>;
 
+  // ---- session context -------------------------------------------------------------------
+  type SessionContext = (typeof client.api.v1)['session-context'];
+  type SessionContext200 = InferResponseType<SessionContext['$get'], 200>;
+  type SessionContextPut = InferRequestType<SessionContext['$put']>['json'];
+  type SessionContextPut200 = InferResponseType<SessionContext['$put'], 200>;
+  type SessionContextPreview = InferRequestType<SessionContext['preview']['$post']>['json'];
+  type SessionContextPreview200 = InferResponseType<SessionContext['preview']['$post'], 200>;
+
   type _Checks = [
     Assert<ExactWire<z.infer<typeof workflowsResponseSchema>, Workflows200>>,
     Assert<Exact<z.infer<typeof saveWorkflowResponseSchema>, SaveWorkflow201>>,
@@ -64,6 +73,11 @@ describe('src/contract workflows/skills/agent-config schemas match the routes ex
     Assert<Exact<z.infer<typeof agentConfigListingSchema>, AgentConfig200>>,
     Assert<Exact<z.infer<typeof agentConfigFileContentSchema>, AgentConfigFile200>>,
     Assert<Exact<z.infer<typeof agentConfigFileContentSchema>, AgentConfigPut200>>,
+    Assert<Exact<z.infer<typeof sessionContextFileSchema>, SessionContext200>>,
+    Assert<Exact<z.input<typeof setSessionContextSchema>, SessionContextPut>>,
+    Assert<Exact<z.infer<typeof sessionContextFileSchema>, SessionContextPut200>>,
+    Assert<Exact<z.input<typeof sessionContextPreviewRequestSchema>, SessionContextPreview>>,
+    Assert<Exact<z.infer<typeof sessionContextPreviewSchema>, SessionContextPreview200>>,
   ];
 
   it('is enforced by tsc, not at runtime', () => {
