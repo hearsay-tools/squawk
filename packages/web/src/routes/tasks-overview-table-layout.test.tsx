@@ -1012,10 +1012,30 @@ it('hides owned worker rows without changing ordinary titles', () => {
 })
 
 describe('design frame 4 task summary', () => {
-  it('starts with five summary columns and reveals live resource facts without navigation', () => {
+  it('shows the Pull request column only while an open group has a reference, and names the columns once', () => {
+    const headers = (table: Element) => [...table.querySelectorAll('[role=columnheader]')].map((cell) => cell.textContent)
+    const { unmount } = renderOverview({ runs: [run({ id: 'plain', title: 'No reference' })] }, false)
+    expect(headers(document.querySelector('[data-slot="tasks-summary"]')!)).toEqual(['Task', 'Workflow', 'Changes', 'Started'])
+    unmount()
+    renderOverview({ runs: [run({ id: 'with-issue', title: 'Has an issue', issueNumber: 554, status: RUN_STATUS.running }), run({ id: 'finished', title: 'Finished', status: RUN_STATUS.done })] }, false)
+    const tables = [...document.querySelectorAll('[data-slot="tasks-summary"]')]
+    expect(tables.length).toBeGreaterThan(1)
+    // Every group keeps the same columns; only the first shows their names.
+    for (const table of tables) expect(headers(table)).toEqual(['Task', 'Workflow', 'Changes', 'Pull request', 'Started'])
+    expect(tables.map((table) => table.querySelector('[data-slot="task-summary-head"]')!.classList.contains('sr-only'))).toEqual([false, ...tables.slice(1).map(() => true)])
+  })
+
+  it('keeps the status and the origin on one meta line under the title', () => {
+    renderOverview({ runs: [run({ id: 'meta', title: 'Compact row' })] }, false)
+    const line = document.querySelector('[data-slot="task-summary-row"] [data-slot="task-meta-line"]') as HTMLElement
+    expect(line.querySelector('[data-slot="pill"]')).not.toBeNull()
+    expect(line.querySelector('[data-slot="task-origin"]')?.textContent).toBe('Direct task')
+  })
+
+  it('starts with the summary columns and reveals live resource facts without navigation', () => {
     renderOverview({ runs: [run({ id: 'summary', title: 'Review layout', inputTokens: 123, outputTokens: 45, costUsd: 0.2, peakRssBytes: 1024 ** 3 })] }, false)
     const summary = document.querySelector('[data-slot="tasks-summary"]') as HTMLElement
-    expect([...summary.querySelectorAll('[role=columnheader]')].map((cell) => cell.textContent)).toEqual(['Task', 'Workflow', 'Changes', 'Pull request', 'Started'])
+    expect([...summary.querySelectorAll('[role=columnheader]')].map((cell) => cell.textContent)).toEqual(['Task', 'Workflow', 'Changes', 'Started'])
     expect(document.querySelector('[data-slot="tasks-table"]')).toBeNull()
     const toggle = within(summary).getByRole('button', { name: 'Show resources for Review layout' })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
@@ -1159,9 +1179,9 @@ it('counts expanded preview rows and gives each row a correct table index', () =
   const rows = [...table.querySelectorAll('[role="row"]')]
   expect(table.getAttribute('aria-rowcount')).toBe('4')
   expect(rows.map(row => row.getAttribute('aria-rowindex'))).toEqual(['1', '2', '3', '4'])
-  expect(rows[1]!.querySelectorAll('[role="cell"]')).toHaveLength(5)
+  expect(rows[1]!.querySelectorAll('[role="cell"]')).toHaveLength(4)
   expect(rows[2]!.querySelectorAll('[role="cell"]')).toHaveLength(1)
-  expect(rows[2]!.querySelector('[role="cell"]')!.getAttribute('aria-colspan')).toBe('5')
+  expect(rows[2]!.querySelector('[role="cell"]')!.getAttribute('aria-colspan')).toBe('4')
   fireEvent.click(within(firstRow as HTMLElement).getByRole('button', { name: /^Hide resources/ }))
   expect(table.getAttribute('aria-rowcount')).toBe('3')
   expect([...table.querySelectorAll('[role="row"]')].map(row => row.getAttribute('aria-rowindex'))).toEqual(['1', '2', '3'])

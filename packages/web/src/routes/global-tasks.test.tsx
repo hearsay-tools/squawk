@@ -556,11 +556,11 @@ it('mounts summary actions only while the row is expanded', async () => {
       // Active is the default, so a normal link carries no key for it.
       expect(search()).toBe('')
 
-      fireEvent.click(screen.getByRole('button', { name: 'Archived' }))
+      fireEvent.click(screen.getByRole('button', { name: /^Archived(·|$)/ }))
       await waitFor(() => expect(search()).toBe('?archived=1'))
       await waitFor(() => expect(rowIds()).toEqual(['i1']))
 
-      fireEvent.click(screen.getByRole('button', { name: 'Active' }))
+      fireEvent.click(screen.getByRole('button', { name: /^Active(·|$)/ }))
       await waitFor(() => expect(search()).toBe(''))
       await waitFor(() => expect(rowIds()).toEqual(['w1', 'a1']))
     })
@@ -577,7 +577,7 @@ it('mounts summary actions only while the row is expanded', async () => {
       fireEvent.click(storefront)
       await waitFor(() => expect(search()).toBe('?tag=storefront&archived=1'))
 
-      fireEvent.click(screen.getByRole('button', { name: 'Active' }))
+      fireEvent.click(screen.getByRole('button', { name: /^Active(·|$)/ }))
       await waitFor(() => expect(search()).toBe('?tag=storefront'))
     })
 
@@ -596,7 +596,7 @@ it('mounts summary actions only while the row is expanded', async () => {
 
       await screen.findByText('Bump the runner')
       expect(rowIds()).toEqual(['i1'])
-      expect(screen.getByRole('button', { name: 'Archived' }).getAttribute('aria-pressed')).toBe(
+      expect(screen.getByRole('button', { name: /^Archived(·|$)/ }).getAttribute('aria-pressed')).toBe(
         'true',
       )
       expect(screen.getByTestId('shared-view').textContent).toBe('active')
@@ -1068,7 +1068,7 @@ it('mounts summary actions only while the row is expanded', async () => {
     renderPage()
     await screen.findByText('Add checkout endpoint')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Archived' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Archived(·|$)/ }))
     await waitFor(() => expect(rowIds()).toEqual(['i1']))
 
     fireEvent.click(screen.getByRole('button', { name: 'Show resources for Bump the runner' }))
@@ -1262,7 +1262,7 @@ describe('global tasks — status groups and origin (hearsay-tools/cezarion#1616
     await waitFor(() => expect(search()).toBe('?origin=automations'))
     expect(rowIds()).toEqual(['nightly-run'])
     // Origin survives the archive switch.
-    fireEvent.click(screen.getByRole('button', { name: 'Archived' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Archived(·|$)/ }))
     await waitFor(() => expect(search()).toBe('?archived=1&origin=automations'))
   })
 

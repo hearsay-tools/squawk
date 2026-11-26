@@ -1,4 +1,4 @@
-/* Revised project resource table (25), workspace cards (26), mobile FAB. */
+/* Revised project resource table (25), workspace cards (26). */
 [data-route="tasks"], [data-route="global-tasks"] { min-width: 0; }
 [data-slot="tasks-table"] [role="table"] { min-width: 1040px; }
 [data-slot="tasks-table"] .task-resource-grid > [role="row"] { background: var(--muted); }
@@ -28,11 +28,16 @@
   [data-presentation="summary"] [data-slot="global-summary-head"] { display: block; position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 }
 @media (min-width: 768px) {
-  [data-presentation="summary"] [data-slot="global-tasks-table"] { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 20px; }
+  [data-presentation="summary"] [data-slot="global-tasks-table"] { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding-block: 4px; padding-inline: 16px; }
   [data-presentation="summary"] [data-slot="global-summary-head"],
   [data-presentation="summary"] [data-slot="global-task-row"] { display: grid; grid-template-columns: minmax(0, 1fr) 120px 90px 100px 70px; column-gap: 16px; }
-  [data-presentation="summary"] [data-slot="global-summary-head"] { padding-block-end: 16px; color: var(--muted-foreground); font-weight: 500; text-transform: uppercase; }
-  [data-presentation="summary"] [data-slot="global-task-row"] { position: relative; align-items: center; margin: 0; padding-block: 20px; padding-inline: 0; border: 0; border-block-start: 1px solid var(--border); border-radius: 0; }
+  [data-presentation="summary"] [data-slot="global-summary-head"] { padding-block: 8px; color: var(--muted-foreground); font-weight: 500; text-transform: uppercase; }
+  [data-presentation="summary"] [data-slot="global-task-row"] { position: relative; align-items: center; margin: 0; padding-block: 10px; padding-inline: 0; border: 0; border-block-start: 1px solid var(--border); border-radius: 0; }
+  /* An earlier group shows the column names, so the first row needs no rule above it. */
+  [data-presentation="summary"] [data-head="false"] [data-first="true"] > [data-slot="global-task-row"] { border-block-start: 0; }
+  /* No row on the page has a pull request or an issue: the title takes that column's width. */
+  [data-presentation="summary"] [data-reference-column="false"] :is([data-slot="global-summary-head"], [data-slot="global-task-row"]) { grid-template-columns: minmax(0, 1fr) 120px 90px 70px; }
+  [data-presentation="summary"] [data-reference-column="false"] [data-slot="global-task-age"] { grid-column: 4; }
   [data-presentation="summary"] [data-slot="global-task-row"] [data-slot="global-task-title"] { grid-column: 1; grid-row: 1; }
   [data-presentation="summary"] [data-slot="global-task-title"] > span > a { font-size: 13px; }
   [data-presentation="summary"] [data-slot="global-task-workflow"] { grid-column: 2; grid-row: 1; }
@@ -41,8 +46,6 @@
   [data-presentation="summary"] [data-slot="global-task-age"] { grid-column: 5; grid-row: 1; text-align: start; }
   [data-presentation="summary"] [data-slot="global-task-actions"] { margin: 0; }
   [data-presentation="summary"] [data-slot="global-task-actions"] > span { gap: 8px; }
-  [data-slot="tasks-summary"] [data-slot="task-summary-row"] > [role="cell"]:first-child > div { margin-block-start: 8px; }
-  [data-slot="tasks-summary"] [aria-controls^="task-resources-"] { min-height: 26px; }
 }
 
 [data-filter-details="false"] [data-slot="group-controls"],
@@ -53,8 +56,6 @@
 [data-slot="global-task-diff"] { display: none; }
 @media (min-width: 768px) {
   [data-presentation="summary"] [data-slot="global-task-diff"] { display: block; }
-  [data-presentation="summary"] [data-slot="global-task-row"] { min-height: 102px; }
-  [data-presentation="summary"] [data-slot="global-task-title"] button { min-height: 26px; }
   [data-slot="tasks-table"] [role="table"] { min-width: 1240px; }
   [data-slot="tasks-table"] col[data-column-id="workflow"][data-expanded="true"] { width: 120px !important; }
   [data-slot="tasks-table"] col[data-column-id="memory"][data-expanded="true"] { width: 120px !important; }
@@ -91,6 +92,9 @@
 
 [data-slot="tasks-summary"] [data-slot="diff-stat"], [data-slot="mobile-task-meta"] [data-slot="diff-stat"], [data-slot="global-task-diff"] [data-slot="diff-stat"] { font-family: inherit; font-weight: 400; white-space: nowrap; }
 [data-slot="tasks-toolbar"] [data-slot="archive-finished"] { min-height: 44px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); }
+@media (min-width: 768px) {
+  [data-slot="tasks-toolbar"] [data-slot="archive-finished"] { min-height: 36px; }
+}
 
 @media (max-width: 767px) {
   [data-presentation="summary"] [data-slot="global-tasks-table"] { border: 1px solid var(--border); border-radius: 12px; padding: 20px; background: var(--card); }
@@ -132,7 +136,9 @@
   [data-route="tasks"] [data-slot="tasks-toolbar"] > div:has(input) { grid-column: 1 / -1; }
   [data-route="tasks"] [data-slot="archive-finished"] { grid-column: 1; }
 }
-[data-slot="table-title-editor"] button:first-of-type { background: var(--accent-strong); color: var(--accent-strong-foreground); }
+
+/* A status dot inside a muted pill reads dim on the dark theme; lift it there only. */
+:root:not(.light) :is([data-slot="tasks-summary"], [data-slot="task-card"], [data-route="global-tasks"]) [data-slot="pill"] [data-slot="status-dot"] { filter: brightness(1.2) saturate(1.15); }
 
 /* Summary references use the design's plain status label. The shared chip still
    owns navigation, live status, its accessible name and the conflict-action panel. */
@@ -144,8 +150,9 @@
 :is([data-slot="tasks-summary"], [data-slot="task-card"], [data-route="global-tasks"][data-presentation="summary"]) [data-slot="pr-chip"]:is([data-status="merged"], [data-conflicting="true"])[data-conflicting="true"]::after { content: ' · Conflicts'; white-space: pre; }
 
 /* Virtualizer wrappers are implementation details; flags describe logical run positions. */
-.task-list-flat-item { content-visibility: auto; contain-intrinsic-block-size: auto 102px; }
+.task-list-flat-item { content-visibility: auto; contain-intrinsic-block-size: auto 63px; }
 .task-summary-grid { display: grid; grid-template-columns: minmax(0, 1fr) 136px 106px 116px 70px; align-items: center; }
+[data-reference-column="false"] > [role="table"] .task-summary-grid { grid-template-columns: minmax(0, 1fr) 136px 106px 70px; }
 [data-slot="task-summary-row"] { border-block-end: 1px solid var(--border); }
 [data-last="true"] [data-slot="task-summary-row"] { border-block-end: 0; }
 .task-resource-grid { min-inline-size: 1240px; }

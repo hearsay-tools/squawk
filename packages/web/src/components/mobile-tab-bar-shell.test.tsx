@@ -47,14 +47,13 @@ function renderShell(entry: string, props: Partial<AppShellProps> = {}) {
 }
 
 const tabBar = () => document.querySelector('[data-slot="mobile-tab-bar"]')
-const fab = () => document.querySelector('[data-slot="mobile-new-task"]')
+const floating = () => document.querySelector('[data-slot="mobile-new-task"]')
 
 describe('AppShell mobile tab bar (#621)', () => {
-  it('renders the tab bar and New task button in the composer row on list routes', () => {
+  it('renders the tab bar in the composer row on list routes', () => {
     renderShell('/p/cezarion/')
     const row = document.querySelector('[data-slot="composer"]')!
     expect(row.contains(tabBar())).toBe(true)
-    expect(row.contains(fab())).toBe(true)
   })
 
   it('badges Tasks with the CURRENT project, not the elsewhere total', () => {
@@ -69,11 +68,10 @@ describe('AppShell mobile tab bar (#621)', () => {
   })
 
   it.each(['/p/cezarion/tasks/abc', '/p/cezarion/tasks/abc/changes', '/tasks/abc/files'])(
-    'hides the tab bar and New task button on pushed route %s',
+    'hides the tab bar on pushed route %s',
     (entry) => {
       renderShell(entry)
       expect(tabBar()).toBeNull()
-      expect(fab()).toBeNull()
     },
   )
 
@@ -95,35 +93,23 @@ describe('AppShell mobile tab bar (#621)', () => {
     expect(tabBar()).not.toBeNull()
   })
 
-  it('hides the tab bar and the button while the on-screen keyboard is open', () => {
+  it('hides the tab bar while the on-screen keyboard is open', () => {
     insets.bottom = 300
     renderShell('/p/cezarion/')
     expect(tabBar()).toBeNull()
-    expect(fab()).toBeNull()
     // The row itself stays: it is what lifts the composer by --kb.
     expect(document.querySelector('[data-slot="composer"]')).not.toBeNull()
   })
 
-  it('keeps the tab bar but drops the New task button on /new', () => {
-    renderShell('/p/cezarion/new')
-    expect(tabBar()).not.toBeNull()
-    expect(fab()).toBeNull()
-  })
-
-  it.each(['/p/cezarion/', '/tasks'])('shows the gold New task button and clears room for it on the task list %s', (entry) => {
-    renderShell(entry)
-    expect(fab()?.getAttribute('data-variant')).toBe('primary')
-    expect(document.querySelector('[data-slot="main"]')?.className).toContain('max-md:pb-24')
-  })
-
-  it.each(['/p/cezarion/activity', '/p/cezarion/git', '/p/cezarion/settings', '/activity', '/tools'])(
-    'keeps the tab bar but drops the New task button and its room on %s',
+  // New task is in each task list's own header: nothing floats over the rows at any scroll position.
+  it.each(['/p/cezarion/', '/tasks', '/p/cezarion/new', '/p/cezarion/activity', '/p/cezarion/git', '/p/cezarion/settings', '/activity', '/tools'])(
+    'keeps the tab bar and floats no New task button over %s',
     (entry) => {
       renderShell(entry)
       expect(tabBar()).not.toBeNull()
-      expect(fab()).toBeNull()
+      expect(floating()).toBeNull()
+      expect(document.querySelector('[data-slot="composer"] a[href$="/new"]')).toBeNull()
       expect(document.querySelector('[data-slot="main"]')?.className).not.toContain('max-md:pb-24')
     },
   )
-
 })

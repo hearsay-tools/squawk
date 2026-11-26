@@ -151,9 +151,6 @@ export function AppShell({
   // the layout one, so a real keyboard is the bottom inset that is both large and seen at scale ~1.
   const keyboardOpen = useKeyboardOpen()
   const { activeTo, current, currentProjectId, pushed, showTabBar, gitRepositoryView } = shellRoute(pathname, search, keyboardOpen)
-  // The floating New task button belongs to the two task lists: a project's and the workspace's.
-  const flatPathname = stripProjectPrefix(pathname)
-  const showNewTask = showTabBar && (flatPathname === '/tasks' || (flatPathname === '/' && currentProjectId !== null))
   const [menuOpen, setMenuOpen] = React.useState(false)
   // On the pushed task screen the routed `RunHeader` fills the top bar's slot through
   // `MobileRunBarSlotContext`.
@@ -260,16 +257,14 @@ export function AppShell({
           <main
             ref={mainRef}
             data-slot="main"
-            // The New task button floats over the bottom of main, so leave its height (48px + 16px
-            // gap) plus air clear while it is shown, or the last row sits under it at full scroll.
-            className={cn('row-start-3 min-h-0 overflow-y-auto overscroll-contain', showNewTask && 'max-md:pb-24')}
+            className="row-start-3 min-h-0 overflow-y-auto overscroll-contain"
           >
             <MobileRunBarSlotContext.Provider value={pushed ? runBarSlot : null}>
               {children}
             </MobileRunBarSlotContext.Provider>
           </main>
 
-          <ShellComposerRow showTabBar={showTabBar} items={items} activeTo={activeTo} mobileProjects={mobileProjects} currentProjectId={currentProjectId} repo={repo} showNewTask={showNewTask} />
+          <ShellComposerRow showTabBar={showTabBar} items={items} activeTo={activeTo} mobileProjects={mobileProjects} currentProjectId={currentProjectId} repo={repo} />
         </div>
       </div>
     </Sheet>
@@ -303,22 +298,21 @@ function DesktopBreadcrumb({ breadcrumb, repo, label }: {
  * inside main; shrinking that viewport keeps it reachable without an overlay. On a list screen
  * below `md` it also carries the tab bar.
  */
-function ShellComposerRow({ showTabBar, items, activeTo, mobileProjects, currentProjectId, repo, showNewTask }: {
+function ShellComposerRow({ showTabBar, items, activeTo, mobileProjects, currentProjectId, repo }: {
   showTabBar: boolean
   items: NavItem[]
   activeTo: string | null
   mobileProjects?: MobileProjectNav | null | undefined
   currentProjectId: string | null
   repo: RepoChip | null
-  showNewTask: boolean
 }) {
   const signal = currentProjectId !== null ? mobileProjects?.signals?.get(currentProjectId) : undefined
   return (
     <div
       data-slot="composer"
       // On a list screen below `md` the row IS the tab bar's surface, so the inset padding
-      // sits under the bar on the bar's own fill, and it is the anchor the New task button
-      // floats from. `md:` sheds all of it: the desktop row stays the empty gutter it was.
+      // sits under the bar on the bar's own fill. `md:` sheds all of it: the desktop row stays
+      // the empty gutter it was.
       className={cn(
         'row-start-4 pb-[max(env(safe-area-inset-bottom),var(--kb,0px))]',
         showTabBar && 'relative max-md:border-t max-md:border-border max-md:bg-sidebar',
@@ -331,7 +325,6 @@ function ShellComposerRow({ showTabBar, items, activeTo, mobileProjects, current
             activeTo={activeTo}
             signal={signal}
             projectName={mobileProjects?.projects.find((project) => project.id === currentProjectId)?.name ?? repo?.name ?? null}
-            showNewTask={showNewTask}
           />
         </div>
       ) : null}

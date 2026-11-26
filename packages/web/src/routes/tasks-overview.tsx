@@ -17,7 +17,7 @@ import { queryKeys, useArchivedRuns, useAutomationNames, useHealth, usePinRun, u
 import type { ArchivedRunsResponse, RunSummary } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { DiffStatLabel } from '@/components/diff-stat'
-import { Dash, TaskPageHeader } from './task-list-parts'
+import { Dash, TaskPageHeader, ViewTab, fullTime } from './task-list-parts'
 import { DirectionalUsage, directionalUsageLabel } from '@/components/directional-usage'
 import { TitleEditInput } from '@/components/editable-title'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -105,7 +105,7 @@ export type ArchivedPages = {
  * all come from the pure modules (`lib/task-groups.ts`, `lib/tasks-table.ts`,
  * `lib/attention.ts`). What lives here is markup, the router, and the local search text.
  *
- * Below `md` the table becomes a stacked card list (the New task FAB is the shell's, #621) — same rows, same order,
+ * Below `md` the table becomes a stacked card list — same rows, same order,
  * same data, only the framing changes (mockup `tasks-home.html`, mobile section).
  */
 const noAutomationName = () => undefined
@@ -211,18 +211,18 @@ export function TasksOverview({
   // drop the task at the top of the active list by a click that looked like it did nothing.
   const pinToggle = view === 'archived' ? undefined : onTogglePin
   return (
-    <TaskTitleEditorProvider runs={archivedPages ? [...all, ...archivedPages.runs] : all} onRename={onRename}><TaskListFocusBoundary layout={`${desktop}:${detailedTable}`} revision={groups} visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, expandedColumns])} data-route="tasks" data-presentation={detailedTable ? 'resources' : 'summary'} className="flex min-h-full flex-col gap-4 px-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pb-9">
+    <TaskTitleEditorProvider runs={archivedPages ? [...all, ...archivedPages.runs] : all} onRename={onRename}><TaskListFocusBoundary layout={`${desktop}:${detailedTable}`} revision={groups} visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, expandedColumns])} data-route="tasks" data-presentation={detailedTable ? 'resources' : 'summary'} className="flex min-h-full flex-col gap-3 px-4 pb-6 md:px-9 md:pb-9">
       {/* One set of search/view controls across breakpoints keeps query and selection intact.
-          Mobile places search above the list filters; the shell already supplies its title. */}
-      <header ref={headerRef} className="flex shrink-0 flex-col gap-4">
+          Mobile places search above the list filters. */}
+      <header ref={headerRef} className="flex shrink-0 flex-col gap-3">
         <TasksHeading projectName={projectName} detailedTable={detailedTable} />
         <div className="flex gap-6 border-b border-border">
-          <OverviewTab view="active" current={view} onSelect={onViewChange} count={derived.activeCount}>
+          <ViewTab view="active" current={view} onSelect={onViewChange} count={derived.activeCount}>
             Active
-          </OverviewTab>
-          <OverviewTab view="archived" current={view} onSelect={onViewChange} count={derived.archivedCount}>
+          </ViewTab>
+          <ViewTab view="archived" current={view} onSelect={onViewChange} count={derived.archivedCount}>
             Archived
-          </OverviewTab>
+          </ViewTab>
         </div>
         <div data-slot="tasks-toolbar" className="flex flex-wrap items-center gap-2.5">
         <BulkActions
@@ -245,7 +245,7 @@ export function TasksOverview({
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search tasks or automations…"
             aria-label="Search tasks"
-            className="h-11 w-full rounded-md border border-input bg-card pr-3 pl-8 text-[13px] text-foreground outline-none placeholder:text-soft-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="h-11 w-full rounded-md border border-input bg-card pr-3 pl-8 text-[13px] text-foreground outline-none placeholder:text-soft-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:h-9"
           />
         </div>
         <ColumnsPopover
@@ -331,7 +331,7 @@ function useUrlQuery(urlQuery: string, onQueryChange: TasksQueryWriter | undefin
 function TasksHeading({ projectName, detailedTable }: { projectName?: string | undefined; detailedTable: boolean }) {
   return (
     <TaskPageHeader title="Project tasks" subtitle={<>{projectName ? `${projectName} · ` : ''}{detailedTable ? 'Every resource column shown. Fold columns without losing the saved view.' : 'Review runs, pull requests and resource usage.'}</>}
-      action={<Button asChild variant="primary" data-slot="new-task-inline" className="min-h-11 inline-flex max-md:hidden"><Link to="/new"><PlusIcon aria-hidden="true" />New task</Link></Button>} />
+      action={<Button asChild variant="primary" data-slot="new-task-inline" className="min-h-11"><Link to="/new"><PlusIcon aria-hidden="true" />New task</Link></Button>} />
   )
 }
 /** Use the caller's URL origin when present; otherwise keep page state, starting at All. An
@@ -516,7 +516,7 @@ function ColumnsPopover({ columns, expandedColumns, columnsPending, onToggleColu
   onToggleDetailed: () => void
 }) {
   return (
-  <Popover><PopoverTrigger asChild><Button data-slot="task-columns-trigger" variant="outline" className="hidden min-h-11 md:inline-flex">Columns</Button></PopoverTrigger><PopoverContent align="end" className="w-72">
+  <Popover><PopoverTrigger asChild><Button data-slot="task-columns-trigger" variant="outline" className="hidden h-9 md:inline-flex">Columns</Button></PopoverTrigger><PopoverContent align="end" className="w-72">
     <h2 className="mb-2 text-base font-medium">Visible columns</h2><p className="mb-4 text-xs text-muted-foreground">Status and Task · Always visible</p>
     <div className="grid grid-cols-2 gap-3">{columns.filter((column) => column.canFold).map((column) => <label key={column.id} className="flex items-center gap-2 text-xs"><input data-column-toggle={column.id} type="checkbox" checked={isColumnExpanded(column.id, expandedColumns)} disabled={columnsPending} onChange={() => onToggleColumn(column.id)} />{column.id === 'diff' ? 'Diff' : column.id === 'reference' ? 'Reference' : column.id === 'memory' ? 'Memory' : column.label}</label>)}</div>
     <p className="mt-4 text-xs text-muted-foreground">Saved automatically. Tokens and cost appear only when supported.</p>
@@ -540,13 +540,16 @@ function ProjectTaskResults({ view, query, origin, onShowAll, caption, captionOn
   groups: TaskStatusGroup<RunSummary>[]
   folds: ReturnType<typeof useTaskListFoldsFromUrl>
   /** Everything each group's rows take besides the group itself. */
-  grouped: Omit<React.ComponentProps<typeof GroupedTasks>, 'group'>
+  grouped: Omit<React.ComponentProps<typeof GroupedTasks>, 'group' | 'showHeader' | 'showReference'>
 }) {
   if (groups.length === 0) return <TasksEmptyState view={view} query={query} origin={origin} onShowAll={onShowAll} />
+  // One column header for the page, on the first open group; the columns are the same in all.
+  const open = groups.filter((group) => !folds.isCollapsed(group.label))
+  const showReference = open.some((group) => group.rows.flatMap(rowTasks).some((run) => taskReference(run) !== undefined))
   return (
     <>
-      <p data-slot="tasks-result-count" className={cn('mb-3 text-[12px] text-muted-foreground tabular-nums', !captionOnPhones && 'max-md:hidden')}>{caption}</p>
-      <div className="flex flex-col gap-[22px]">
+      <p data-slot="tasks-result-count" className={cn('mb-2 text-[12px] text-muted-foreground tabular-nums', !captionOnPhones && 'max-md:hidden')}>{caption}</p>
+      <div className="flex flex-col gap-4">
         {groups.map((group) => {
           const members = groupMembers(group)
           return (
@@ -560,12 +563,12 @@ function ProjectTaskResults({ view, query, origin, onShowAll, caption, captionOn
               collapsed={folds.isCollapsed(group.label)}
               onToggle={() => folds.toggle(group.label)}
             >
-              <GroupedTasks group={group} {...grouped} />
+              <GroupedTasks group={group} showHeader={group === open[0]} showReference={showReference} {...grouped} />
             </StatusGroupSection>
           )
         })}
       </div>
-      <p className="mt-[22px] text-[11px] text-muted-foreground">Resource details—including tokens, cost, CPU and peak memory—are available when a task row is expanded.</p>
+      <p className="mt-4 text-[11px] text-muted-foreground">Resource details—including tokens, cost, CPU and peak memory—are available when a task row is expanded.</p>
     </>
   )
 }
@@ -637,7 +640,7 @@ function TasksEmptyState({ view, query, origin = 'all', onShowAll }: { view: Lis
           subtitle="Describe a task to get started."
           actions={
             <Button asChild>
-              <Link to="/new" data-new-task-action>
+              <Link to="/new">
                 <PlusIcon aria-hidden="true" />
                 New task
               </Link>
@@ -650,8 +653,12 @@ function TasksEmptyState({ view, query, origin = 'all', onShowAll }: { view: Lis
 }
 /** Frame 4: five scan columns, with resources disclosed per task. The optional detailed table
  * above still owns workspace column preferences, so switching presentation never rewrites them. */
-function SummaryTasksTable({ rows, onRename, onTogglePin, now, showTokens, showCost, automationName, expandedRuns, toggleExpandedRun }: TaskExpansion & {
+function SummaryTasksTable({ rows, showHeader, showReference, onRename, onTogglePin, now, showTokens, showCost, automationName, expandedRuns, toggleExpandedRun }: TaskExpansion & {
   rows: readonly GroupedTask[]
+  /** False keeps the column names for assistive technology only: an earlier group shows them. */
+  showHeader: boolean
+  /** False when no open group has a pull request or an issue to show. */
+  showReference: boolean
   onRename: (id: string, title: string) => void
   onTogglePin?: ((run: RunSummary, pinned: boolean) => void) | undefined
   now: number
@@ -660,15 +667,18 @@ function SummaryTasksTable({ rows, onRename, onTogglePin, now, showTokens, showC
   automationName: (automationId: string) => string | undefined
 }) {
   const aria = taskListRowIndexes(rows.map(({ run }) => run.id), expandedRuns)
-  return <div data-slot="tasks-summary"><div className="rounded-lg border border-border bg-card p-5" role="table" aria-rowcount={aria.rowCount}>
-    <div role="row" aria-rowindex={1} className="task-summary-grid">{['Task', 'Workflow', 'Changes', 'Pull request', 'Started'].map((label) => <div role="columnheader" key={label} className="h-8 border-b border-border text-start text-[12px] font-medium uppercase text-muted-foreground">{label}</div>)}</div>
-    <TaskListItems itemSize={103} items={rows} itemKey={({ run }) => run.id}>{({ run, queuePosition }, index) =>
-      <SummaryTaskRow run={run} queuePosition={queuePosition} rowIndex={aria.indexes[index]!} onRename={onRename} onTogglePin={onTogglePin} now={now} showTokens={showTokens} showCost={showCost} automationName={automationName} open={expandedRuns.has(run.id)} toggleExpandedRun={toggleExpandedRun} />
+  const labels = ['Task', 'Workflow', 'Changes', ...(showReference ? ['Pull request'] : []), 'Started']
+  return <div data-slot="tasks-summary" data-reference-column={showReference}><div className="rounded-lg border border-border bg-card px-4" role="table" aria-rowcount={aria.rowCount}>
+    <div role="row" aria-rowindex={1} data-slot="task-summary-head" className={cn('task-summary-grid', !showHeader && 'sr-only')}>{labels.map((label) => <div role="columnheader" key={label} className="flex h-8 items-center border-b border-border text-[11px] font-medium tracking-[0.04em] uppercase text-muted-foreground">{label}</div>)}</div>
+    <TaskListItems itemSize={SUMMARY_ROW_SIZE} items={rows} itemKey={({ run }) => run.id}>{({ run, queuePosition }, index) =>
+      <SummaryTaskRow showReference={showReference} run={run} queuePosition={queuePosition} rowIndex={aria.indexes[index]!} onRename={onRename} onTogglePin={onTogglePin} now={now} showTokens={showTokens} showCost={showCost} automationName={automationName} open={expandedRuns.has(run.id)} toggleExpandedRun={toggleExpandedRun} />
     }</TaskListItems>
   </div></div>
 }
-const SummaryTaskRow = React.memo(function SummaryTaskRow({ run, queuePosition, rowIndex, onRename, onTogglePin, now, showTokens, showCost, automationName, open, toggleExpandedRun }: {
-  run: RunSummary; queuePosition: number | null; rowIndex: number; onRename: (id: string, title: string) => void
+/** A summary row: 10px padding, the 18px title line, a 2px gap, the 22px meta line and the rule. */
+const SUMMARY_ROW_SIZE = 63
+const SummaryTaskRow = React.memo(function SummaryTaskRow({ run, queuePosition, rowIndex, showReference, onRename, onTogglePin, now, showTokens, showCost, automationName, open, toggleExpandedRun }: {
+  showReference: boolean; run: RunSummary; queuePosition: number | null; rowIndex: number; onRename: (id: string, title: string) => void
   onTogglePin?: ((run: RunSummary, pinned: boolean) => void) | undefined; now: number; showTokens: boolean; showCost: boolean
   automationName: (automationId: string) => string | undefined; open: boolean; toggleExpandedRun: (id: string) => void
 }) {
@@ -678,20 +688,22 @@ const SummaryTaskRow = React.memo(function SummaryTaskRow({ run, queuePosition, 
         const detailId = `task-resources-${run.id}`
         return <div role="rowgroup">
           <div role="row" aria-rowindex={rowIndex} data-status={run.status} data-slot="task-summary-row" data-run-id={run.id} className="task-summary-grid group/row">
-            <div role="cell" className="min-w-0 py-4 pr-4">
+            <div role="cell" className="min-w-0 py-2.5 pr-4">
               <TitleCell run={run} to={`/tasks/${run.id}`} onRename={onRename} onTogglePin={onTogglePin} />
-              <div className="mt-1"><RunOriginLine run={run} automationName={automationName} /></div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <button type="button" data-task-control="resources" aria-label={`${open ? 'Hide' : 'Show'} resources for ${runTitle(run)}`} aria-expanded={open} aria-controls={detailId} aria-describedby={`summary-status-${run.id}`} onClick={() => toggleExpandedRun(run.id)} className="inline-flex min-h-[26px] items-center gap-1 rounded-md p-0 text-[11px] text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"><Pill id={`summary-status-${run.id}`} dot={attention.tone} shape={attention.shape} pulse={attention.pulse}>{attention.label}{scheduled ? ` ${scheduled.label}` : ''}</Pill></button>
-                {run.status === 'queued' && queuePosition !== null ? <span className="text-xs text-muted-foreground">#{queuePosition} in queue</span> : null}
+              {/* One meta line: status, then where the task came from. */}
+              <div data-slot="task-meta-line" className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                <button type="button" data-task-control="resources" aria-label={`${open ? 'Hide' : 'Show'} resources for ${runTitle(run)}`} aria-expanded={open} aria-controls={detailId} aria-describedby={`summary-status-${run.id}`} onClick={() => toggleExpandedRun(run.id)} className="inline-flex min-h-[22px] shrink-0 items-center rounded-full p-0 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"><Pill id={`summary-status-${run.id}`} dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="py-0.5">{attention.label}{scheduled ? ` ${scheduled.label}` : ''}</Pill></button>
+                <span aria-hidden="true">·</span>
+                <RunOriginLine run={run} automationName={automationName} />
+                {run.status === 'queued' && queuePosition !== null ? <><span aria-hidden="true">·</span><span className="shrink-0">#{queuePosition} in queue</span></> : null}
               </div>
             </div>
             <div role="cell" className="truncate pr-3 text-xs text-muted-foreground" title={workflowLabel(run)}>{workflowLabel(run)}</div>
             <div role="cell" className="pr-2 text-xs">{run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}</div>
-            <div role="cell" className="pr-2">{reference ? <TaskReferenceChip run={run} reference={reference} compact /> : <Dash />}</div>
-            <div role="cell" className="text-xs text-muted-foreground">{shortAge(run.startedAt ?? run.createdAt, now)}</div>
+            {showReference ? <div role="cell" className="pr-2">{reference ? <TaskReferenceChip run={run} reference={reference} compact /> : <Dash />}</div> : null}
+            <div role="cell" className="text-xs text-muted-foreground tabular-nums" title={fullTime(run.startedAt ?? run.createdAt)}>{shortAge(run.startedAt ?? run.createdAt, now)}</div>
           </div>
-          {open ? <div role="row" aria-rowindex={rowIndex + 1} data-run-id={run.id}><div role="cell" aria-colspan={5} className="border-b border-border pb-5"><div id={detailId} className="flex flex-col gap-3">
+          {open ? <div role="row" aria-rowindex={rowIndex + 1} data-run-id={run.id}><div role="cell" aria-colspan={showReference ? 5 : 4} className="border-b border-border pb-4"><div id={detailId} className="flex flex-col gap-3">
             <TaskPreview runId={run.id} status={attention.label} error={run.error} open={<Button asChild variant="outline" className="min-h-11"><Link data-task-control="open" to={`/tasks/${run.id}`}>Open task<span className="sr-only">: {runTitle(run)}</span></Link></Button>} />
             <div className="rounded-md bg-muted/50 p-4"><TaskResourceDetails run={run} showTokens={showTokens} showCost={showCost} /></div>
           </div></div></div> : null}
@@ -708,6 +720,8 @@ type TaskExpansion = {
  * table with the saved column choices, and the phone cards.
  */
 function GroupedTasks({
+  showHeader,
+  showReference,
   desktop,
   expandedRuns,
   toggleExpandedRun,
@@ -724,6 +738,8 @@ function GroupedTasks({
   showCost,
   automationName,
 }: {
+  showHeader: boolean
+  showReference: boolean
   desktop: boolean
   group: TaskStatusGroup<RunSummary>
   detailedTable: boolean
@@ -743,7 +759,7 @@ function GroupedTasks({
   )
   return (
     <>
-      {desktop && !detailedTable ? <SummaryTasksTable expandedRuns={expandedRuns} toggleExpandedRun={toggleExpandedRun} rows={rows} onRename={onRename} onTogglePin={onTogglePin} now={now} showTokens={showTokens} showCost={showCost} automationName={automationName} /> : null}
+      {desktop && !detailedTable ? <SummaryTasksTable showHeader={showHeader} showReference={showReference} expandedRuns={expandedRuns} toggleExpandedRun={toggleExpandedRun} rows={rows} onRename={onRename} onTogglePin={onTogglePin} now={now} showTokens={showTokens} showCost={showCost} automationName={automationName} /> : null}
       {/* The detailed table retains every saved column preference. */}
       {desktop && detailedTable ? <div
         data-slot="tasks-table"
@@ -779,40 +795,6 @@ function TaskResourceDetails({ run, showTokens, showCost }: { run: RunSummary; s
     <div><dt className="text-muted-foreground">Memory</dt><dd className="mt-1" title={usage.mem.title}>{usage.mem.text || '—'}</dd></div>
     {run.branch ? <div className="col-span-2"><dt className="text-muted-foreground">Branch</dt><dd className="mt-1 break-all">{run.branch}</dd></div> : null}
   </dl>
-}
-function OverviewTab({
-  view,
-  current,
-  onSelect,
-  count,
-  children,
-}: {
-  view: ListView
-  current: ListView
-  onSelect: (view: ListView) => void
-  /** A number, or `200+` while the list holds a full window and the total is unknown. */
-  count: number | string
-  children: React.ReactNode
-}) {
-  const isActive = view === current
-  return (
-    <button
-      type="button"
-      data-slot="overview-tab"
-      data-view={view}
-      // Same rationale as the sidebar's tabs: these filter one list in place, they do not switch
-      // panels — `aria-pressed` is what that actually is.
-      aria-pressed={isActive}
-      onClick={() => onSelect(view)}
-      className={cn(
-        'flex min-h-11 items-center justify-center gap-1.5 border-b-2 border-transparent text-[13px] font-medium text-muted-foreground',
-        isActive && 'border-accent-strong font-semibold text-accent-text'
-      )}
-    >
-      {children}
-      {count !== 0 ? <span className="tabular-nums"> · {count}</span> : null}
-    </button>
-  )
 }
 function Th({
   children,
@@ -1128,7 +1110,7 @@ function TaskTableCell({
       )
     case 'started':
       return (
-        <div role="cell" data-column-id={column.id} className={cn(TD_BASE, 'text-right text-xs text-supporting-foreground tabular-nums')}>
+        <div role="cell" data-column-id={column.id} className={cn(TD_BASE, 'text-right text-xs text-supporting-foreground tabular-nums')} title={fullTime(run.startedAt ?? run.createdAt)}>
           {shortAge(run.startedAt ?? run.createdAt, now)}
         </div>
       )
@@ -1193,7 +1175,7 @@ function TitleCell({
         to={to}
         title={title}
         className={cn(
-          'line-clamp-2 min-w-0 flex-1 whitespace-normal rounded-sm text-[13px] leading-[18px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground',
+          'min-w-0 flex-1 truncate rounded-sm text-[13px] leading-[18px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground',
           unread ? 'font-semibold text-foreground' : readDone ? 'font-normal text-foreground' : 'font-medium'
         )}
       >
@@ -1375,7 +1357,7 @@ const TaskCard = React.memo(function TaskCard({
       <div data-slot="mobile-task-meta" className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 text-xs text-muted-foreground">
         <span>{workflowLabel(run)}</span>
         {queuePosition !== null ? <span data-slot="queue-note">#{queuePosition} in queue</span> : run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}
-        <span>{shortAge(run.startedAt ?? run.createdAt, now)}</span>
+        <span title={fullTime(run.startedAt ?? run.createdAt)}>{shortAge(run.startedAt ?? run.createdAt, now)}</span>
       </div>
       {reference ? <div className="mt-3"><TaskReferenceChip run={run} reference={reference} /></div> : null}
       {resourcesOpen ? <>

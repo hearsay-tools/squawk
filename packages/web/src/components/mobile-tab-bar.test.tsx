@@ -82,12 +82,10 @@ describe('MobileTabBar', () => {
     expect(bar().querySelector('[data-slot^="rail-pill"]')).toBeNull()
   })
 
-  it('floats a New task button that goes to /new, and can be turned off', () => {
-    const { unmount } = renderBar('/p/cezarion/')
-    expect(screen.getByRole('link', { name: 'New task' }).getAttribute('href')).toBe('/p/cezarion/new')
-    unmount()
-    renderBar('/new', { forge: true }, { showNewTask: false })
+  it('holds the view tabs only: no New task button floats over the page', () => {
+    renderBar('/p/cezarion/')
     expect(screen.queryByRole('link', { name: 'New task' })).toBeNull()
+    expect(document.querySelector('[data-slot="mobile-new-task"]')).toBeNull()
   })
 })
 

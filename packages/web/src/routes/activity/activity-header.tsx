@@ -6,7 +6,7 @@ import { StatusDot } from '@/components/status-dot'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 
-import { timeZoneName } from './activity-format'
+import { agoOf, fullTimeOf, since } from './activity-format'
 import type { ActivitySummary } from './activity-model'
 import type { MotionState } from './activity-motion'
 
@@ -16,19 +16,18 @@ import type { MotionState } from './activity-motion'
  * changed bumps.
  */
 
-const CLOCK = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
-
-const SEGMENT = 'inline-flex items-center px-3 py-[5px] text-[12px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring max-md:min-h-11'
+const SEGMENT = 'inline-flex min-w-0 items-center rounded-md border px-3 py-1 text-[12px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring max-md:min-h-11'
 
 /** "This project / All projects". The project link names the project; the global one is outside
- *  every project, so it is a plain router link. */
-export function ScopeSwitch({ scope, projectId }: { scope: 'project' | 'all'; projectId: string | null }) {
-  const segment = (active: boolean) => cn(SEGMENT, active ? 'bg-card-2 text-foreground' : 'text-muted-foreground hover:text-foreground')
+ *  every project, so it is a plain router link. On the global view no project is "this" one, so
+ *  the project segment reads as that project's name. */
+export function ScopeSwitch({ scope, projectId, projectName }: { scope: 'project' | 'all'; projectId: string | null; projectName?: string | undefined }) {
+  const segment = (active: boolean) => cn(SEGMENT, active ? 'border-border bg-card text-foreground shadow-xs' : 'border-transparent text-muted-foreground hover:text-foreground')
   return (
-    <nav aria-label="Activity scope" data-slot="activity-scope" className="ml-auto inline-flex overflow-hidden rounded-lg border border-border">
+    <nav aria-label="Activity scope" data-slot="activity-scope" className="ml-auto inline-flex max-w-full rounded-lg border border-border bg-muted/60 p-1">
       {projectId === null ? null : (
         <RouterLink to={`/p/${encodeURIComponent(projectId)}/activity`} aria-current={scope === 'project' ? 'page' : undefined} className={segment(scope === 'project')}>
-          This project
+          <span className="max-w-40 truncate">{scope === 'project' ? 'This project' : projectName ?? projectId}</span>
         </RouterLink>
       )}
       <RouterLink to="/activity" state={{ activityProjectId: projectId }} aria-current={scope === 'all' ? 'page' : undefined} className={segment(scope === 'all')}>
@@ -38,28 +37,29 @@ export function ScopeSwitch({ scope, projectId }: { scope: 'project' | 'all'; pr
   )
 }
 
-/** The live indicator: "Live" and the clock, ticking once a second in the user's time zone. When
+/** The live indicator: "Live" and the snapshot's age; the full server time is its tooltip. When
  *  the last read or frame failed, it says the view is not updating; the last snapshot stays. */
-function LiveClock({ now, stale }: { now: number; stale: boolean }) {
+function LiveClock({ now, updatedAt, stale }: { now: number; updatedAt: string | undefined; stale: boolean }) {
+  const known = updatedAt !== undefined && !Number.isNaN(Date.parse(updatedAt))
   return (
-    <span data-slot="activity-clock" data-stale={stale ? 'true' : undefined} className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground tabular-nums">
+    <span data-slot="activity-clock" data-stale={stale ? 'true' : undefined} title={fullTimeOf(now)} className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground tabular-nums">
       <span data-tone="success" className={cn('inline-flex size-[12px] items-center justify-center', !stale && 'activity-pulse')}>
         <StatusDot tone={stale ? 'neutral' : 'success'} aria-hidden="true" />
       </span>
       <b className={cn('font-semibold', stale ? 'text-muted-foreground' : 'text-success')}>{stale ? 'Not updating' : 'Live'}</b>
-      {CLOCK.format(now)} {timeZoneName()}
+      {known ? <span>· updated {agoOf(since(updatedAt, now))}</span> : null}
     </span>
   )
 }
 
-export function ActivityHeader({ name, now, stale = false, children }: { name: string; now?: number | undefined; stale?: boolean; children: ReactNode }) {
+export function ActivityHeader({ name, now, updatedAt, stale = false, children }: { name: string; now?: number | undefined; /** When the server built the snapshot on screen. */ updatedAt?: string | undefined; stale?: boolean; children: ReactNode }) {
   return (
     <header data-slot="page-header" className="flex flex-wrap items-start justify-between gap-4 pt-7 pb-1">
       <div className="min-w-0">
         <h1 className="truncate text-[26px] md:text-[28px] font-semibold tracking-tight leading-[1.2] text-foreground">
           Activity <span className="text-muted-foreground">· {name}</span>
         </h1>
-        {now === undefined ? null : <p className="mt-1"><LiveClock now={now} stale={stale} /></p>}
+        {now === undefined ? null : <p className="mt-1"><LiveClock now={now} updatedAt={updatedAt} stale={stale} /></p>}
       </div>
       {children}
     </header>

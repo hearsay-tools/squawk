@@ -34,7 +34,7 @@ function renderRoute(client = createQueryClient()) {
 
 const CLOCK = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
 /** The header clock's time, "HH:MM:SS". */
-const clockText = () => /\d{2}:\d{2}:\d{2}/.exec(document.querySelector('[data-slot="activity-clock"]')?.textContent ?? '')?.[0]
+const clockText = () => /\d{2}:\d{2}:\d{2}/.exec(document.querySelector('[data-slot="activity-clock"]')?.getAttribute('title') ?? '')?.[0]
 
 const chip = (label: string) => document.querySelector(`[data-chip="${label}"]`)?.textContent
 
@@ -52,6 +52,12 @@ describe('ProjectActivityRoute', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Activity · cezarion' })).toBeTruthy()
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/v1/workspace/activity?project=default')
+    // A relative age on screen; the full server time, with its zone, is the tooltip.
+    const clock = document.querySelector('[data-slot="activity-clock"]')!
+    expect(clock.textContent).toBe('Live· updated just now')
+    expect(clock.getAttribute('title')).toContain(Intl.DateTimeFormat().resolvedOptions().timeZone)
+    // The legend is a closed disclosure below the graph, not a permanent column beside it.
+    expect((document.querySelector('[data-slot="activity-legend"]') as HTMLDetailsElement).open).toBe(false)
     expect(chip('needs you')).toBe('1 needs you')
     expect(chip('working')).toBe('1 working')
     expect(chip('waiting')).toBe('1 waiting')

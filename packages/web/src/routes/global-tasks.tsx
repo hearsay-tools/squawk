@@ -5,7 +5,7 @@ import { TaskListItems, TaskListFocusBoundary } from '@/components/task-list-ite
 import { runAddress } from '@/api/run-address'
 import { useRunCacheWriter } from '@/api/use-run-cache-writer'
 import './task-lists.css'
-import { Dash, TaskPageHeader } from './task-list-parts'
+import { Dash, TaskPageHeader, ViewTab, fullTime } from './task-list-parts'
 import { useMutation } from '@tanstack/react-query'
 import { ArchiveRestoreIcon, EyeIcon, EyeOffIcon } from 'lucide-react'
 import { ArchiveIcon, PlusIcon, SearchIcon, SlidersHorizontalIcon, XIcon } from '@/components/design-icons'
@@ -254,6 +254,11 @@ export function GlobalTasksRoute() {
   })
   const groups = React.useMemo(() => groupGlobalTasks(visible, groupBy), [visible, groupBy])
   const origin = filters.origin ?? 'all'
+  // The same count the project list's tabs show: every task of the origin, whatever the filters.
+  const tabCounts = React.useMemo(() => {
+    const runs = tasks.map((task) => task.run)
+    return { active: originCounts(runs, 'active')[origin], archived: originCounts(runs, 'archived')[origin] }
+  }, [tasks, origin])
   const setOrigin = (next: TaskOrigin) => setFilters((current) => withOrigin(current, next))
   /**
    * Every tracker reference on screen, asked about ONCE.
@@ -300,21 +305,21 @@ export function GlobalTasksRoute() {
         onChange={(event) => setQueryDraft(event.target.value)}
         placeholder="Search every project…"
         aria-label="Search tasks across projects"
-        className="h-11 w-full rounded-md border border-input bg-card pr-3 pl-8 text-[13px] text-foreground outline-none placeholder:text-soft-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="h-11 w-full rounded-md border border-input bg-card pr-3 pl-8 text-[13px] text-foreground outline-none placeholder:text-soft-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:h-9"
       />
     </div>
   )
 
   return (
-    <TaskListFocusBoundary layout={groupBy} revision={groups} visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, filterDetailsOpen])} data-route="global-tasks" data-presentation={groupBy === 'none' ? 'summary' : 'cards'} data-filter-details={filterDetailsOpen} className="flex min-h-full flex-col gap-4 px-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pb-9">
-      <header className="flex shrink-0 flex-col gap-4">
+    <TaskListFocusBoundary layout={groupBy} revision={groups} visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, filterDetailsOpen])} data-route="global-tasks" data-presentation={groupBy === 'none' ? 'summary' : 'cards'} data-filter-details={filterDetailsOpen} className="flex min-h-full flex-col gap-3 px-4 pb-6 md:px-9 md:pb-9">
+      <header className="flex shrink-0 flex-col gap-3">
         <TaskPageHeader title="All tasks" subtitle={groupBy === 'none' ? 'Every project. One place to review what your agents have shipped.' : 'Filter across projects and act on each run without opening the session.'}
-          action={<Button asChild variant="primary" data-slot="new-task-inline" className="min-h-11 max-md:hidden"><Link to={scopeTo(projects.data?.bootProject ?? 'default', '/new')}><PlusIcon aria-hidden="true" />New task</Link></Button>} />
+          action={<Button asChild variant="primary" data-slot="new-task-inline" className="min-h-11"><Link to={scopeTo(projects.data?.bootProject ?? 'default', '/new')}><PlusIcon aria-hidden="true" />New task</Link></Button>} />
         <div className="flex items-center gap-6 border-b border-border">
-          <ViewTab view="active" current={view} onSelect={setView}>
+          <ViewTab view="active" current={view} onSelect={setView} count={tabCounts.active}>
             Active
           </ViewTab>
-          <ViewTab view="archived" current={view} onSelect={setView}>
+          <ViewTab view="archived" current={view} onSelect={setView} count={tabCounts.archived}>
             Archived
           </ViewTab>
         <span data-slot="global-tasks-count" className="ml-auto text-[13px] text-soft-foreground tabular-nums">
@@ -323,12 +328,12 @@ export function GlobalTasksRoute() {
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="min-w-0 basis-full md:flex-1 md:basis-auto">{search}</div>
-          <Button variant="outline" aria-expanded={filterDetailsOpen} onClick={() => setFilterDetailsOpen((open) => !open)}><SlidersHorizontalIcon aria-hidden="true" />Filters</Button>
+          <Button variant="outline" className="max-md:min-h-11" aria-expanded={filterDetailsOpen} onClick={() => setFilterDetailsOpen((open) => !open)}><SlidersHorizontalIcon aria-hidden="true" />Filters</Button>
         </div>
         <TaskOriginRow origin={origin} counts={originTotals} automations={automations} onChange={setOrigin} labels={statusGroups.map((group) => group.label)} onSetAll={folds.setAll} />
       </header>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
         <FilterBar
           filters={filters}
           onToggle={toggle}
@@ -403,7 +408,7 @@ function GlobalTaskResults({ view, filtered, visibleCount, referenceRequests, li
 }
 
 /** The rows any grouped list passes through, unchanged, to every `TaskList`. */
-type TaskListRowProps = Omit<React.ComponentProps<typeof TaskList>, 'tasks' | 'showProject'>
+type TaskListRowProps = Omit<React.ComponentProps<typeof TaskList>, 'tasks' | 'showProject' | 'showHead' | 'showReferences'>
 
 /**
  * The list body: the sidebar's status groups when no alternative grouping is picked
@@ -417,6 +422,9 @@ function GroupedTaskLists({ groupBy, view, statusGroups, groups, folds, row }: {
   folds: ReturnType<typeof useTaskListFolds>
   row: TaskListRowProps
 }) {
+  // One column header for the page, on the first open group; the columns are the same in all.
+  const open = statusGroups.filter((group) => !folds.isCollapsed(group.label))
+  const showReferences = open.some((group) => group.rows.flatMap(rowTasks).some((task) => taskReferences(task.run, task.project?.repoUrl).length > 0))
   return (
     <>
       {groupBy === 'none' ? statusGroups.map((group) => {
@@ -432,7 +440,7 @@ function GroupedTaskLists({ groupBy, view, statusGroups, groups, folds, row }: {
             collapsed={folds.isCollapsed(group.label)}
             onToggle={() => folds.toggle(group.label)}
           >
-            <TaskList summary tasks={group.rows.flatMap(rowTasks)} showProject {...row} />
+            <TaskList summary showHead={group === open[0]} showReferences={showReferences} tasks={group.rows.flatMap(rowTasks)} showProject {...row} />
           </StatusGroupSection>
         )
       }) : groups.map((group) => (
@@ -528,37 +536,6 @@ function useStatusGroups({ tasks, filters, view, groupBy, index, automationsOn }
   const revealed = new Set<BucketLabel>(filters.query.trim() !== '' ? statusGroups.map((group) => group.label) : [])
   const folds = useTaskListFolds('global', view, revealed)
   return { nameOf, visible, originTotals, statusGroups, folds }
-}
-
-function ViewTab({
-  view,
-  current,
-  onSelect,
-  children,
-}: {
-  view: ListView
-  current: ListView
-  onSelect: (view: ListView) => void
-  children: React.ReactNode
-}) {
-  const isActive = view === current
-  return (
-    <button
-      type="button"
-      data-slot="overview-tab"
-      data-view={view}
-      // Same rationale as the per-project table's tabs: these filter one list in place, they do
-      // not switch panels — `aria-pressed` is what that actually is.
-      aria-pressed={isActive}
-      onClick={() => onSelect(view)}
-      className={cn(
-        'flex min-h-11 items-center justify-center border-b-2 border-transparent text-[13px] font-medium text-muted-foreground',
-        isActive && 'border-accent-strong font-semibold text-accent-text',
-      )}
-    >
-      {children}
-    </button>
-  )
 }
 
 /**
@@ -729,6 +706,8 @@ function FilterBar({
 /** Each group owns a list of task cards, with the same scoped actions on desktop and mobile. */
 function TaskList({
   summary = false,
+  showHead = true,
+  showReferences = true,
   expandedRuns, toggleExpandedRun,
   tasks, now, showProject,
   onArchive, onSetRead,
@@ -737,6 +716,10 @@ function TaskList({
   expandedRuns: ReadonlySet<string>
   toggleExpandedRun: (id: string) => void
   summary?: boolean
+  /** False keeps the column names for assistive technology only: an earlier group shows them. */
+  showHead?: boolean
+  /** False when no open summary group has a pull request or an issue to show. */
+  showReferences?: boolean
   tasks: readonly GlobalTask[]
   now: number
   showProject: boolean
@@ -750,16 +733,17 @@ function TaskList({
   const desktop = useIsDesktop()
   return (
     <div
-      role={summary ? "table" : undefined} aria-rowcount={summary ? aria.rowCount : undefined} data-slot="global-tasks-table"
+      role={summary ? "table" : undefined} aria-rowcount={summary ? aria.rowCount : undefined} data-slot="global-tasks-table" data-head={showHead} data-reference-column={showReferences}
       className="overflow-x-auto rounded-lg border border-border bg-card p-5"
     >
-      <div data-slot="global-summary-head" className="text-[12px]" role="row" aria-rowindex={1}>{['Task', 'Workflow', 'Changes', 'Pull request', 'Started'].map((label) => <span role="columnheader" key={label}>{label}</span>)}</div>
+      <div data-slot="global-summary-head" className={cn('text-[11px] tracking-[0.04em]', !showHead && 'sr-only')} role="row" aria-rowindex={1}>{['Task', 'Workflow', 'Changes', ...(showReferences ? ['Pull request'] : []), 'Started'].map((label) => <span role="columnheader" key={label}>{label}</span>)}</div>
       <TooltipProvider>
-            <TaskListItems {...(summary ? { itemSize: desktop ? 115 : 218 } : {})} /* measured 114.5 / 217.5 px cards */ items={tasks} itemKey={(task) => `${task.run.projectId}/${task.run.id}`}>{(task, index) => (
+            <TaskListItems {...(summary ? { itemSize: desktop ? 63 : 150 } : {})} /* the desktop row; an estimate for the stacked card */ items={tasks} itemKey={(task) => `${task.run.projectId}/${task.run.id}`}>{(task, index) => (
               <TaskRow
                 key={`${task.run.projectId}/${task.run.id}`}
                 task={task}
                 summary={summary}
+                showReferences={showReferences}
                 rowIndex={aria.indexes[index]!}
                 resourcesOpen={expandedRuns.has(`${task.run.projectId}/${task.run.id}`)}
                 toggleExpandedRun={toggleExpandedRun}
@@ -787,6 +771,7 @@ function TaskList({
 export const TaskRow = React.memo(function TaskRow({
   rowIndex, resourcesOpen, toggleExpandedRun,
   summary,
+  showReferences = true,
   task,
   now,
   showProject,
@@ -800,6 +785,7 @@ export const TaskRow = React.memo(function TaskRow({
   resourcesOpen: boolean
   toggleExpandedRun: (id: string) => void
   summary: boolean
+  showReferences?: boolean
   task: GlobalTask
   now: number
   showProject: boolean
@@ -814,8 +800,6 @@ export const TaskRow = React.memo(function TaskRow({
   const { run } = task
   const attention = deriveAttention(run)
   const to = scopeTo(run.projectId, `/tasks/${run.id}`)
-  // Resolve references against this run's own project repository.
-  const references = taskReferences(run, task.project?.repoUrl)
   // Global usage comes from the index; run streams are project-scoped.
   const usage = usageCells(run, run.usage)
 
@@ -824,21 +808,8 @@ export const TaskRow = React.memo(function TaskRow({
       {/* The one column with no fixed width, so every pixel the others give up lands here — and
           dropping Branch gave up 140 of them. A cross-project list is read by TITLE. */}
       <div data-slot="global-task-cells" className="contents" role={rowRole} aria-rowindex={summary ? rowIndex : undefined}><GlobalTaskTitle summary={summary} task={task} showProject={showProject} automationName={automationName} resourcesOpen={resourcesOpen} toggleExpandedRun={toggleExpandedRun} />
-      <div role={cellRole} data-slot="global-task-workflow" className="text-[13px] text-muted-foreground">
-        {run.workflow}
-      </div>
-      <div role={cellRole} data-slot="global-task-diff" className="text-xs text-muted-foreground">{run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}</div>
-      <div role={cellRole} data-slot="global-task-references">
-        {references.length > 0 ? (
-          <ReferenceChips references={references} run={run} repoBase={task.project?.repoUrl} />
-        ) : (
-          <Dash />
-        )}
-      </div>
-      <div role={cellRole} data-slot="global-task-age" className="text-right text-xs text-soft-foreground tabular-nums">
-        {shortAge(run.startedAt ?? run.createdAt, now)}
-      </div>
-      </div>{!summary || resourcesOpen ? <div className="contents" role={rowRole} aria-rowindex={summary ? rowIndex + 1 : undefined}><div data-slot="global-task-detail-cell" role={cellRole} aria-colspan={summary ? 5 : undefined} className={summary ? 'col-span-full flex flex-col gap-3' : 'contents'}>
+      <TaskRowCells task={task} cellRole={cellRole} showReferences={showReferences} now={now} />
+      </div>{!summary || resourcesOpen ? <div className="contents" role={rowRole} aria-rowindex={summary ? rowIndex + 1 : undefined}><div data-slot="global-task-detail-cell" role={cellRole} aria-colspan={summary ? (showReferences ? 5 : 4) : undefined} className={summary ? 'col-span-full flex flex-col gap-3' : 'contents'}>
       <div data-slot="global-task-actions">
         <span className="inline-flex items-center gap-0.5">
           <ReadToggle task={task} busy={busy} onSetRead={onSetRead} />
@@ -862,6 +833,31 @@ export const TaskRow = React.memo(function TaskRow({
   return a.run === b.run && a.project === b.project && a.projectName === b.projectName && a.tags.length === b.tags.length && a.tags.every((tag, index) => tag === b.tags[index])
     && (Object.keys(before) as (keyof typeof before)[]).every((key) => before[key] === after[key])
 })
+
+/** The cells after the title: workflow, changes, references (unless the page hides them) and age. */
+function TaskRowCells({ task, cellRole, showReferences, now }: { task: GlobalTask; cellRole: 'cell' | undefined; showReferences: boolean; now: number }) {
+  const { run } = task
+  // Resolve references against this run's own project repository.
+  const references = taskReferences(run, task.project?.repoUrl)
+  return (
+    <>
+      <div role={cellRole} data-slot="global-task-workflow" className="text-[13px] text-muted-foreground">
+        {run.workflow}
+      </div>
+      <div role={cellRole} data-slot="global-task-diff" className="text-xs text-muted-foreground">{run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}</div>
+      {showReferences ? <div role={cellRole} data-slot="global-task-references">
+        {references.length > 0 ? (
+          <ReferenceChips references={references} run={run} repoBase={task.project?.repoUrl} />
+        ) : (
+          <Dash />
+        )}
+      </div> : null}
+      <div role={cellRole} data-slot="global-task-age" title={fullTime(run.startedAt ?? run.createdAt)} className="text-right text-xs text-soft-foreground tabular-nums">
+        {shortAge(run.startedAt ?? run.createdAt, now)}
+      </div>
+    </>
+  )
+}
 
 function GlobalTaskTitle({ summary, task, showProject, automationName, resourcesOpen, toggleExpandedRun }: Pick<React.ComponentProps<typeof TaskRow>, 'summary' | 'task' | 'showProject' | 'automationName' | 'resourcesOpen' | 'toggleExpandedRun'>) {
   const { run } = task
@@ -898,7 +894,10 @@ function GlobalTaskTitle({ summary, task, showProject, automationName, resources
             />
           ) : null}
         </span>
-        <div className="mt-1">
+        {/* One meta line: status, then the project and where the task came from, then tags. */}
+        <div data-slot="task-meta-line" className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+          <button type="button" data-task-control="resources" aria-expanded={resourcesOpen} aria-label={`${resourcesOpen ? 'Hide' : 'Show'} resources for ${runTitle(run)}`} onClick={() => toggleExpandedRun(`${run.projectId}/${run.id}`)} aria-describedby={`global-status-${run.projectId}-${run.id}`} title="Resources and actions" className="inline-flex min-h-[22px] shrink-0 items-center rounded-full p-0 hover:bg-muted"><Pill id={`global-status-${run.projectId}-${run.id}`} dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="py-0.5">{attention.label}</Pill></button>
+          <span aria-hidden="true">·</span>
           <TaskOriginLine
             automationId={run.automationId}
             automationName={automationName}
@@ -908,21 +907,7 @@ function GlobalTaskTitle({ summary, task, showProject, automationName, resources
               </Link>
             ) : undefined}
           />
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <button type="button" data-task-control="resources" aria-expanded={resourcesOpen} aria-label={`${resourcesOpen ? 'Hide' : 'Show'} resources for ${runTitle(run)}`} onClick={() => toggleExpandedRun(`${run.projectId}/${run.id}`)} aria-describedby={`global-status-${run.projectId}-${run.id}`} title="Resources and actions" className="min-h-[26px] rounded-md p-0 text-[11px] text-muted-foreground hover:bg-muted"><Pill id={`global-status-${run.projectId}-${run.id}`} dot={attention.tone} shape={attention.shape} pulse={attention.pulse}>{attention.label}</Pill></button>
-      <span>
-        {task.tags.length > 0 ? (
-          <span className="flex flex-wrap items-center gap-1">
-            {task.tags.map((tag) => (
-              <TagChip key={tag} tag={tag} />
-            ))}
-          </span>
-        ) : (
-          null
-        )}
-      </span>
-
+          {task.tags.map((tag) => <TagChip key={tag} tag={tag} />)}
         </div>
       </div>
 )

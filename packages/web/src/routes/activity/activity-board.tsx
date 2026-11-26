@@ -14,8 +14,9 @@ import { useWaitHighlight } from './use-wait-highlight'
 
 /**
  * The project graph and its rail (spec 2026-11-05-live-activity-view, "Project view"): task cards
- * in stable columns (D9), the lines between them, and the right rail, with their motion. The
- * column count follows the graph's width; one column is the narrow layout.
+ * in stable columns (D9) across the full width, the lines between them, and the details below
+ * (open requests, the feed and the legend), with their motion. The column count follows the
+ * graph's width and the number of cards; one column is the narrow layout.
  */
 
 /** The graph's width, measured now and again on every resize. */
@@ -79,7 +80,7 @@ export interface BoardProps {
 
 export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTION, feed, still = false, paused = false }: BoardProps) {
   const hostRef = React.useRef<HTMLDivElement>(null)
-  const count = columnCount(useWidth(hostRef))
+  const width = useWidth(hostRef)
   const index = React.useMemo(() => runIndex(project), [project])
   const waits = React.useMemo(() => peerWaits(project.tasks), [project.tasks])
   const ghosts = React.useMemo(() => ghostsOf(project, motion, waits), [project, motion, waits])
@@ -88,10 +89,14 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
   const highlight = useWaitHighlight(waits)
   const tasks = new Map([...ghosts.cards, ...project.tasks].map((task) => [task.runId, task]))
   const ghostIds = new Set(ghosts.cards.map((task) => task.runId))
+  // Never more columns than cards: a column without a card is an empty strip beside narrow cards.
+  const fit = columnCount(width)
+  const count = Math.min(fit, Math.max(1, tasks.size))
   // A card with workers is taller; the weight keeps the columns near the same height.
   const weight = (id: string) => 1 + 0.35 * (tasks.get(id)?.workers.length ?? 0)
   const columns = useStablePlacement([...tasks.keys()], count, weight)
-  const narrow = count === 1
+  // Narrow is about the width, not the count: one card on a wide graph still draws its lines.
+  const narrow = fit === 1
   const dense = project.tasks.length > DENSE_AFTER
   const ctx: NowContext = { now, titleOf: (runId) => nameOf(index, runId) }
   const placement = columns.map((column) => column.join(',')).join('|')
@@ -99,8 +104,8 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
   useFlip(hostRef, 'data-flip', placement, !still && !paused)
 
   return (
-    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
-      <div className="min-w-0 pl-5">
+    <div className="flex min-w-0 flex-col gap-6">
+      <div className="min-w-0">
         {project.tasks.length === 0 ? (
           <p data-slot="activity-empty" className="py-6 text-[13px] text-muted-foreground">No active work in this project.</p>
         ) : null}

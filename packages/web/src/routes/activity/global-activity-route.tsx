@@ -31,24 +31,31 @@ function useRailIds(): string[] | undefined {
   return React.useMemo(() => (registry ? orderProjects(registry, order).map((project) => project.id) : undefined), [registry, order])
 }
 
-export function GlobalActivityRoute() {
-  const activity = useActivityLive(WORKSPACE)
-  const projects = useProjects()
+/** The project the scope switch leads back to: the one this history entry came from, else the
+ *  boot project. Its name labels the segment. */
+function useReturnProject(): { id: string | null; name: string | undefined } {
+  const projects = useProjects().data
   const health = useHealth()
   const returnProjectId: unknown = useLocation().state?.activityProjectId
+  const boot = projects?.bootProject ?? health.data?.bootProject ?? null
+  // Keep the origin per history entry: another tab or a later visit cannot replace it.
+  const id = typeof returnProjectId === 'string' && projects?.projects.some((project) => project.id === returnProjectId && project.status !== 'missing') ? returnProjectId : boot
+  return { id, name: projects?.projects.find((project) => project.id === id)?.name }
+}
+
+export function GlobalActivityRoute() {
+  const activity = useActivityLive(WORKSPACE)
+  const back = useReturnProject()
   const railIds = useRailIds()
   const now = useServerNow(activity.data?.generatedAt, activity.dataUpdatedAt)
-  const boot = projects.data?.bootProject ?? health.data?.bootProject ?? null
-  // Keep the origin per history entry: another tab or a later visit cannot replace it.
-  const projectId = typeof returnProjectId === 'string' && projects.data?.projects.some((project) => project.id === returnProjectId && project.status !== 'missing') ? returnProjectId : boot
   const snapshot = activity.data?.projects
   const groups = React.useMemo(() => groupProjects(inRailOrder(snapshot ?? [], railIds)), [snapshot, railIds])
   const { motion, paused, reduced } = useActivityMotion(activity.data, 'workspace')
 
   return (
     <div data-route="activity-global" data-activity-paused={paused ? 'true' : undefined} className="flex min-h-full w-full flex-col gap-4 px-4 pb-6 md:px-9">
-      <ActivityHeader name="All projects" now={activity.data ? now : undefined} stale={activity.isError}>
-        <ScopeSwitch scope="all" projectId={projectId} />
+      <ActivityHeader name="All projects" now={activity.data ? now : undefined} updatedAt={activity.data?.generatedAt} stale={activity.isError}>
+        <ScopeSwitch scope="all" projectId={back.id} projectName={back.name} />
       </ActivityHeader>
       {snapshot ? <SummaryChips summary={summarize(snapshot)} tasksTo="/tasks" bumps={motion.bumps} /> : null}
       {/* The header and the scope switch stay while the snapshot loads: the user can switch away. */}

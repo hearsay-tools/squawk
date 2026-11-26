@@ -70,7 +70,7 @@ describe('ActivityBoard', () => {
   it('draws a peer line with its label when the graph has several columns', () => {
     setGraphWidth(1200)
     renderBoard(project({ tasks: [A, B], requests: [PEER] }))
-    expect(document.querySelector('[data-slot="activity-graph"]')?.getAttribute('data-columns')).toBe('3')
+    expect(document.querySelector('[data-slot="activity-graph"]')?.getAttribute('data-columns')).toBe('2')
     expect(document.querySelector(`path[data-request="${PEER.requestId}"]`)?.getAttribute('data-kind')).toBe('peer')
     const label = document.querySelector(`[data-slot="activity-line-label"][data-request="${PEER.requestId}"]`)
     expect(label?.textContent).toMatch(/^Request4:10/)

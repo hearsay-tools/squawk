@@ -35,7 +35,25 @@ export function clockOf(iso: string): string {
   return Number.isNaN(at) ? iso : CLOCK.format(at)
 }
 
-/** The user's time zone name, for the header clock. */
+const DAY = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
+const SECONDS = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+
+/** The full date, time and time zone of an instant, for the `title` of a relative age. */
+export function fullTimeOf(at: number | string): string {
+  const ms = typeof at === 'number' ? at : Date.parse(at)
+  return Number.isNaN(ms) ? String(at) : `${DAY.format(ms)}, ${SECONDS.format(ms)} ${timeZoneName()}`
+}
+
+/** A relative age for prose: `just now` under a minute, then `3m ago`, `2h ago`, `5d ago`. */
+export function agoOf(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000))
+  if (seconds < 60) return 'just now'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`
+  return `${Math.floor(seconds / 86_400)}d ago`
+}
+
+/** The user's time zone name, for the full time of a tooltip. */
 export function timeZoneName(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone
 }
