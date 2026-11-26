@@ -127,6 +127,14 @@ describe('quota pool holds', () => {
     expect(accountHeldFor(run, held('gemini-4-neon'), 'antigravity')).toBe(true);
   });
 
+  // A step with an empty `command` is an agent step (`stepKind`), so its model counts.
+  it('an agent step with an empty command counts toward the queued pool', () => {
+    const run = { ...queued('gemini-4-neon'), workflowDef: { name: 'chain', source: 'file' as const, steps: [{ id: 'task', prompt: 'Do the task', model: 'claude-opus-5-5', command: '' }] } };
+    expect(accountHeldFor(run, held('claude-opus-5-5'), 'antigravity')).toBe(true);
+    const mixed = { ...run, workflowDef: { ...run.workflowDef, steps: [{ id: 'a', model: 'gemini-4-neon' }, ...run.workflowDef.steps] } };
+    expect(accountHeldFor(mixed, held('claude-opus-5-5'), 'antigravity')).toBe(true);
+  });
+
   // A worker's bound workflow carries each step's resolved model; a step without one runs the
   // runner's default, not the run-level model (`boundSpawnWorkflow`).
   it('a worker step bound to the default model makes the worker\'s pool unknown', () => {

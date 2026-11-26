@@ -3,7 +3,7 @@ import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold'
 import type { RunRecord } from '../runs/store.ts';
 import type { AccountHolds } from '../workspace/semaphore.ts';
 import type { StartRunInput } from './run/types.ts';
-import type { WorkflowDef } from './types.ts';
+import { stepKind, type WorkflowDef } from './types.ts';
 import { resolveRunnerId, runnerQuotaPool } from '../core/runner-registry.ts';
 
 type HoldRun = Pick<RunRecord, 'runner' | 'agentProfile' | 'model' | 'workflowDef' | 'delegation'>;
@@ -66,7 +66,7 @@ function queuedQuotaPool(run: HoldRun, fallbackRunner: string): string | undefin
 }
 
 function turnModels(run: HoldRun): (string | undefined)[] {
-  const agentSteps = run.workflowDef?.steps.filter(step => step.command === undefined && step.kind !== 'plugin') ?? [];
+  const agentSteps = run.workflowDef?.steps.filter(step => stepKind(step) === 'agent') ?? [];
   if (!agentSteps.length) return [run.model];
   return run.delegation?.role === 'worker' ? agentSteps.map(step => step.model) : agentSteps.map(step => step.model ?? run.model);
 }
