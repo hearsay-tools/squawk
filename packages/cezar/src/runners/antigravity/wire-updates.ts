@@ -1,5 +1,6 @@
 import { z } from '@hearsay-tools/squawk/plugin';
 import type { AcpHooks } from './acp/protocol.ts';
+import { AntigravitySubagentTracker, parseChildToolCallId } from './subagent-tracker.ts';
 import { antigravityTool } from './tool-normalization.ts';
 
 const textSchema = z.object({ text: z.string() });
@@ -26,6 +27,27 @@ export function antigravityWorkEnds(update: Record<string, unknown>, previous: s
 }
 
 /** The ACP hooks that map Antigravity frames, shared by the live session and the fixture mapper. */
-export const ANTIGRAVITY_WIRE_HOOKS = {
-  normalizeTool: antigravityTool, updateError: antigravityUpdateError, agentWorkEnds: antigravityWorkEnds,
-} as const satisfies AcpHooks;
+export function antigravityWireHooks(subagents: AntigravitySubagentTracker): AcpHooks {
+  return {
+    normalizeTool(update, previous) {
+      const normalized = antigravityTool(update, previous);
+      const id = typeof update.toolCallId === 'string' ? update.toolCallId : '';
+      const child = parseChildToolCallId(id);
+      if (child) {
+        const parentItemId = previous?.parentItemId ?? subagents.parentForChild(child.childId);
+        if (parentItemId) normalized.parentItemId = parentItemId;
+      }
+      return normalized;
+    },
+    holdToolCompletion: (update, item) => subagents.shouldHold(update, item),
+    afterToolUpdate: (update, item) => {
+      subagents.observeStart(update, item);
+      return subagents.afterToolUpdate(update, item);
+    },
+    settleOnTurnEnd: reason => subagents.settleOnTurnEnd(reason),
+    updateError: antigravityUpdateError,
+    agentWorkEnds: antigravityWorkEnds,
+  };
+}
+
+export const ANTIGRAVITY_WIRE_HOOKS = antigravityWireHooks(new AntigravitySubagentTracker());

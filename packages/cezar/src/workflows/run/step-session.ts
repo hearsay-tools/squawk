@@ -128,7 +128,7 @@ export class StepSession {
     state.liveSession.selectStep(step.id);
     transitionTurnBoundary(state, { kind: 'session-open', phase: 'reset-step', session: state.liveSession.session });
     this.host.beginUsageInvocation(runId, state, step.id);
-    const launch = await sessionEvents.launchPreamble(this.launchPreambleHost, runId, state, stepProfile.env);
+    const launch = await sessionEvents.launchPreamble(this.launchPreambleHost, runId, state, stepProfile.env, stepBackend);
     const { delegation, launchParts, ciTools } = launch;
     // Revalidate after provisioning, then let execute settle cancellation or
     // requeue a Finish-held step through its existing no-session paths.

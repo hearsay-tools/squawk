@@ -80,7 +80,7 @@ export function createSessionEventHandler(context: RunModuleContext, host: Sessi
 }
 
 export interface LaunchPreambleHost {
-  provisionSession(runId: string, state: ActiveRun): LaunchDelegation;
+  provisionSession(runId: string, state: ActiveRun, runner?: string): LaunchDelegation;
   launchParts(runId: string, env: Readonly<Record<string, string>>): Promise<ResolvedLaunchParts>;
   provisionCiSession(runId: string, state: ActiveRun): Promise<LaunchCiTools>;
   launchStale(runId: string, state: ActiveRun, delegation: LaunchDelegation, ciTools: LaunchCiTools): boolean;
@@ -89,9 +89,9 @@ export interface LaunchPreambleHost {
 /** A launch's provisioning. `toolsError` (hearsay-tools/cezarion#2397): the lifecycle tools could
  *  not start, so this launch spawns nothing; its delegation is already revoked and the caller
  *  settles the run with the message. */
-export async function launchPreamble(host: LaunchPreambleHost, runId: string, state: ActiveRun, profileEnv: Readonly<Record<string, string>>):
+export async function launchPreamble(host: LaunchPreambleHost, runId: string, state: ActiveRun, profileEnv: Readonly<Record<string, string>>, runner?: string):
   Promise<{ delegation: LaunchDelegation; launchParts: ResolvedLaunchParts; ciTools: LaunchCiTools; stale: boolean; toolsError?: string }> {
-  const delegation = host.provisionSession(runId, state);
+  const delegation = host.provisionSession(runId, state, runner);
   // Read before the cancellation checks below, which also cover this await (hearsay-tools/cezarion#1576).
   const launchParts = await host.launchParts(runId, profileEnv);
   let ciTools: LaunchCiTools;

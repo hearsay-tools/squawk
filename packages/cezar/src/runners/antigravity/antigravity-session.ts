@@ -11,8 +11,9 @@ import { antigravityReadFile } from './client-files.ts';
 import { antigravityUsage } from './usage.ts';
 import { antigravityLaunchArgs } from './launch-args.ts';
 import { logAntigravityFailure, redactAntigravityDiagnostics } from './native-diagnostics.ts';
-import { ANTIGRAVITY_WIRE_HOOKS } from './wire-updates.ts';
-import { writeAntigravitySubagentGuard } from './subagent-guard.ts';
+import { antigravityWireHooks } from './wire-updates.ts';
+import { AntigravitySubagentTracker, parseChildToolCallId } from './subagent-tracker.ts';
+import { AntigravityChildTranscripts } from './subagent-transcript.ts';
 import { AntigravityToolOutputs, antigravityTranscriptPath } from './tool-transcript.ts';
 import { ANTIGRAVITY_MISSING, launchAntigravity, missingAntigravity, type AntigravityLaunch } from './executable.ts';
 import { antigravityQuestion, antigravityAnswer } from './ask-question.ts';
@@ -64,19 +65,27 @@ export class AntigravitySession implements AgentSession {
   private kill: NodeJS.Timeout | undefined;
   private deadline: NodeJS.Timeout | undefined;
   private readonly limit: number;
+  private readonly subagents = new AntigravitySubagentTracker();
+  private readonly childTranscripts = new AntigravityChildTranscripts(event => this.options.onUiEvent?.(event));
   /** Reads read, MCP and subagent results plus injected hook messages from the CLI transcript; the wire carries none. */
   private readonly toolOutputs = new AntigravityToolOutputs(
     item => this.options.onUiEvent?.({ type: 'item.updated', item, late: true }),
     Date.now,
     hook => this.options.onUiEvent?.({ type: 'item.completed', item: hook }),
+    undefined,
+    {
+      onSpawn: (parentItemId, childId) => {
+        this.subagents.bindChild(parentItemId, childId);
+        this.childTranscripts.openChild(childId, parentItemId, antigravityTranscriptPath(this.runtime.geminiDir, childId));
+      },
+      onMessage: (childId, body) => { void this.settleSubagentMessage(childId, body); },
+    },
   );
-  /** The native subagent guard could not be written; boot says so. */
-  private guardMissing = false;
   constructor(bin: string | undefined, private readonly spec: AgentRunSpec, private readonly onEvent: ((event: AgentEvent) => void) | undefined,
     private readonly options: SessionOptions, timeoutMs?: number) {
     this.runtime = antigravityEnv(spec);
     this.launch = launchAntigravity(bin) ?? missingAntigravity(this.runtime.temp);
-    this.child = spawnSessionLeader(this.launch.executable, antigravityLaunchArgs(this.runtime.geminiDir, this.guardArgs()), { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
+    this.child = spawnSessionLeader(this.launch.executable, antigravityLaunchArgs(this.runtime.geminiDir), { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
     try { if (this.child.pid) this.launch.bindProcess(this.child.pid); }
     catch (error) { this.failure = error instanceof Error ? error : new Error(String(error)); }
     this.descendants = new SessionDescendants(this.child);
@@ -96,10 +105,19 @@ export class AntigravitySession implements AgentSession {
   get pid(): number | undefined { return this.child.pid; }
   get open(): boolean { return this.accepting; }
   get closingQuietly(): boolean { return this.quiet && !this.requestedClose; }
-  /** `--add-dir` for the hook folder that denies native subagent tools (hearsay-tools/squawk#4098). */
-  private guardArgs(): string[] {
-    try { return ['--add-dir', writeAntigravitySubagentGuard(this.runtime.temp)]; }
-    catch { this.guardMissing = true; return []; }
+  private async settleSubagentMessage(childId: string, body: string): Promise<void> {
+    await this.childTranscripts.flushChild(childId);
+    const settled = this.subagents.settleChild(childId, body);
+    if (settled) this.acp.completeHeldTool(settled.id, settled.status, settled.output);
+  }
+  private observeWireUpdate(update: Record<string, unknown>): boolean {
+    this.toolOutputs.observe(update);
+    const id = typeof update.toolCallId === 'string' ? update.toolCallId : '';
+    const child = parseChildToolCallId(id);
+    if (child && typeof update.name === 'string') {
+      this.childTranscripts.recordWireTool(child.childId, id, update.name, update.args ?? update.rawInput);
+    }
+    return true;
   }
   private emit(event: AgentEvent): void {
     if (event.type === 'turn-end' && this.failedTurn) return;
@@ -116,7 +134,7 @@ export class AntigravitySession implements AgentSession {
       onActivity: () => this.options.onActivity?.(),
       uiEvent: event => this.uiEvent(event),
       hooks: {
-        ...ANTIGRAVITY_WIRE_HOOKS,
+        ...antigravityWireHooks(this.subagents),
         selectAuthMethod: hello => this.runtime.env.GEMINI_API_KEY && hello.authMethods.some(method => method.id === 'gemini-api-key') ? 'gemini-api-key' : undefined,
         normalizeUsage: antigravityUsage,
         normalizeOptions: value => { this.configOptions = value; },
@@ -125,7 +143,7 @@ export class AntigravitySession implements AgentSession {
         // The CLI saves the session/new system prompt with the session and appends a resent one,
         // so a resume prepends it to the opening turn instead (systemPromptOnResume 'in-thread').
         sessionParams: method => method === 'new' ? { _meta: { antigravity: { systemPrompt: { append: (this.lostSession ? spec.resumeFallbackSystemPrompt : undefined) ?? spec.systemPrompt ?? '' } } } } : {},
-        filterUpdate: update => { this.toolOutputs.observe(update); return true; },
+        filterUpdate: update => this.observeWireUpdate(update),
       },
     });
   }
@@ -143,9 +161,10 @@ export class AntigravitySession implements AgentSession {
     this.options.onUiEvent?.({ type: 'session.error', message, fatal: false });
   }
   private uiEvent(event: UiEvent): void {
-    if (event.type === 'turn.started') { clearTimeout(this.quietTimer); this.clearAutoEnd(); void this.toolOutputs.poll(); }
+    if (event.type === 'turn.started') { clearTimeout(this.quietTimer); this.clearAutoEnd(); void this.toolOutputs.poll(); void this.childTranscripts.poll(); }
     if (event.type === 'turn.completed') {
       void this.toolOutputs.poll();
+      void this.childTranscripts.poll();
       // The response that ends a turn carries every prompt sent into it: none is held after it.
       this.humanHolds.clear();
       if (event.stopReason === 'error' && !this.quiet && this.failedTurnEnded(event)) return;
@@ -199,7 +218,6 @@ export class AntigravitySession implements AgentSession {
       else this.emit({ type: 'note', message: `Antigravity model ${this.spec.model ?? '(default)'} ${option ? `does not offer effort ${this.spec.effort}` : 'has no effort setting'}; ignoring requested effort ${this.spec.effort}.` });
     }
     if (!this.open) return;
-    if (this.guardMissing) this.emit({ type: 'note', message: 'Squawk could not write its Antigravity hook folder; native subagent tools stay on for this session.' });
     // The CLI runs read_file with no permission request, so the policy cannot withhold reads.
     const grant = this.spec.toolGrant;
     if (grant.kind !== 'unset' && !grant.tools.includes('Read')) this.emit({ type: 'note', message: 'Antigravity reads files without asking for permission; this step\'s tool grant does not include Read, but it cannot stop native file reads.' });
@@ -355,7 +373,8 @@ export class AntigravitySession implements AgentSession {
   private async settle(boot: Promise<void>): Promise<AgentRunResult> {
     const code = await this.exited;
     await this.toolOutputs.flush();
-    this.accepting = false; this.acp.close(); this.toolOutputs.close(); this.clearAutoEnd(); clearTimeout(this.quietTimer); clearTimeout(this.term); clearTimeout(this.kill); clearTimeout(this.deadline);
+    await this.childTranscripts.flushAll();
+    this.accepting = false; this.acp.close(); this.toolOutputs.close(); this.childTranscripts.close(); this.clearAutoEnd(); clearTimeout(this.quietTimer); clearTimeout(this.term); clearTimeout(this.kill); clearTimeout(this.deadline);
     this.descendants.terminate(this.spec.timings?.eofKillGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofKillGraceMs);
     try { this.launch.release(); } catch { /* Pruning drops a lease whose owner process has exited. */ }
     await boot;

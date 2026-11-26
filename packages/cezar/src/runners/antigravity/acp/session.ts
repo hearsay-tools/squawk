@@ -236,6 +236,10 @@ export class AcpSession {
 
   close(): void { this.closed = true; this.turnCancelled = true; this.cancelPermissions(); this.events.flush(); this.transport.close(); }
 
+  completeHeldTool(id: string, status: 'completed' | 'failed' | 'declined', output?: string): void {
+    this.events.completeHeldTool(id, status, output);
+  }
+
   private requireSession(): string {
     if (!this.sessionId) throw new Error('ACP session is not open');
     return this.sessionId;

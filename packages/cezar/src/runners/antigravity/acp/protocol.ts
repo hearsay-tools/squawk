@@ -1,4 +1,4 @@
-import { z, type TokenUsage, type UiAskRequestedEvent, type UiToolItem } from '@hearsay-tools/squawk/plugin';
+import { z, type StopReason, type TokenUsage, type UiAskRequestedEvent, type UiToolItem } from '@hearsay-tools/squawk/plugin';
 
 export const recordSchema = z.record(z.string(), z.unknown());
 export const initializeSchema = z.object({
@@ -21,6 +21,7 @@ export interface AcpAsk {
   answer(value: unknown): unknown;
 }
 export interface AcpAskRefusal { refused: string }
+export interface AcpSettledTool { id: string; status: 'completed' | 'failed' | 'declined'; output?: string | undefined }
 export interface AcpHooks {
   /** Some ACP agents report execution failures as text followed by end_turn. A matching update
    *  makes the turn that carries it end as `error` when it opens a message of its own and no other
@@ -40,6 +41,12 @@ export interface AcpHooks {
   /** Return additional session/new, resume or load fields, including _meta. */
   sessionParams?(method: 'new' | 'resume' | 'load', params: Record<string, unknown>): Record<string, unknown>;
   normalizeTool?(update: Record<string, unknown>, previous: UiToolItem | undefined): Partial<Omit<UiToolItem, 'id' | 'kind'>>;
+  /** Keep a tool item running past its immediate wire completion (e.g. an async subagent launcher). */
+  holdToolCompletion?(update: Record<string, unknown>, item: UiToolItem): boolean;
+  /** Optional held tools settled as a side-effect of another tool update (e.g. killing a subagent). */
+  afterToolUpdate?(update: Record<string, unknown>, item: UiToolItem): readonly AcpSettledTool[];
+  /** Held tools that settle when the current turn ends. */
+  settleOnTurnEnd?(reason: StopReason): readonly AcpSettledTool[];
   normalizeOptions?(options: unknown): void;
   permissionPolicy?(request: AcpPermissionRequest): AcpPermissionOutcome | undefined;
   permissionAsk?(request: AcpPermissionRequest): AcpAsk | AcpAskRefusal | undefined;

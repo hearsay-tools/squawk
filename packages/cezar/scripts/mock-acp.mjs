@@ -17,7 +17,7 @@ import { knownSession, saveSession } from './mock-acp-sessions.mjs';
 import { SKILL_TOKEN } from './mock-skill-trigger.mjs';
 
 // The Antigravity CLI's identity: a bare version and a help text that lists its acp command.
-if (process.argv.includes('--version')) { console.log('1.5.14'); process.exit(0); }
+if (process.argv.includes('--version')) { console.log('1.5.18'); process.exit(0); }
 if (process.argv.includes('--help')) { console.log('Usage of antigravity:\n  acp  Start the Agent Client Protocol (ACP) stdio server'); process.exit(0); }
 const flag = name => { const index = process.argv.indexOf(name); return index < 0 ? undefined : process.argv[index + 1]; };
 if (process.argv.includes('--login')) {
@@ -40,8 +40,7 @@ let sessionParams = {};
 const steers = [];
 let mcpTurns = 0;
 let pendingAsk;
-// The subagent guard folder sits in each launch's own temp folder: record it by name, so launches compare.
-const recordedArgs = process.argv.slice(2).map(arg => /[\\/]squawk-antigravity-guard$/.test(arg) ? '<session temp>/squawk-antigravity-guard' : arg);
+const recordedArgs = process.argv.slice(2);
 if (process.env.CEZ_MOCK_ARGS_FILE) appendFileSync(process.env.CEZ_MOCK_ARGS_FILE, `${JSON.stringify(recordedArgs)}\n`);
 let serverId = 0;
 const pending = new Map();
@@ -86,6 +85,7 @@ async function prompt(frame) {
   if (text === 'mock:account-homes') { accountHomes(frame); return; }
   if (text === 'mock:transcript-read') { transcriptRead(frame); return; }
   if (text === 'mock:transcript-hooks') { transcriptHooks(frame); return; }
+  if (text === 'mock:subagent-nested') { await subagentNested(frame); return; }
   if (delivery?.rejects(text)) { write({ id: frame.id, error: { code: -32000, message: 'owned turn rejected' } }); return; }
   if (active) { steer(frame, text); return; }
   let cancel;
@@ -121,9 +121,46 @@ function steer(frame, text) {
 }
 function accountHomes(frame) {
   content('agent_message_chunk', JSON.stringify({ gemini: flag('--gemini-dir'), appData: flag('--app-data-dir'), geminiHome: process.env.GEMINI_HOME, home: process.env.HOME, config: process.env.XDG_CONFIG_HOME, ssh: process.env.SSH_CONNECTION,
-    guard: flag('--add-dir'), guardHooks: existsSync(join(flag('--add-dir') ?? '', '.agents', 'hooks.json')) }));
+    addDir: flag('--add-dir') }));
   update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
   reply(frame.id, { stopReason: 'end_turn' });
+}
+/** A CLI 1.5.18 turn-held subagent: spawn via invoke_subagent, child read_file in transcript,
+ *  child run_command forwarded over ACP with permission, then child reply and parent summary. */
+async function subagentNested(frame) {
+  const childId = '7bb3c467-2cb1-4fdc-a962-db063faac0e6';
+  const invokeArgs = { TypeName: 'self', Role: 'Shell Runner', Prompt: 'Read sample.txt and run echo sub-ok' };
+  const invoke = { toolCallId: 'call_sub_spawn', name: 'invoke_subagent', args: invokeArgs, kind: 'other', title: 'Run invoke_subagent', rawInput: invokeArgs };
+  update({ sessionUpdate: 'tool_call', ...invoke, status: 'in_progress' });
+  update({ sessionUpdate: 'tool_call_update', ...invoke, status: 'completed' });
+  appendTranscriptRows(frame.params.sessionId, [
+    { step_index: 1, type: 'PLANNER_RESPONSE', status: 'DONE', tool_calls: [{ name: 'invoke_subagent', args: invokeArgs }] },
+    { step_index: 2, type: 'GENERIC', status: 'DONE', content: `Created At: 2026-11-26T23:30:25+01:00\nCompleted At: 2026-11-26T23:30:28+01:00\nCreated the following subagent:\n{\n  "conversationId": "${childId}"\n}` },
+  ]);
+  const readArgs = { Path: '/work/project/sample.txt' };
+  const cmdArgs = { CommandLine: 'echo sub-ok', WaitMsBeforeAsync: 5000, toolSummary: 'Echo sub-ok command' };
+  const childCall = { toolCallId: `${childId}:call_child_cmd`, name: 'run_command', args: cmdArgs, kind: 'execute', title: 'echo sub-ok', rawInput: cmdArgs };
+  update({ sessionUpdate: 'tool_call', ...childCall, status: 'pending' });
+  const perm = await request('session/request_permission', { sessionId, toolCall: { sessionUpdate: 'tool_call', ...childCall, status: 'pending' }, options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }, { optionId: 'deny', name: 'Deny', kind: 'reject_once' }] });
+  const allowed = perm.outcome?.optionId === 'allow';
+  if (allowed) {
+    update({ sessionUpdate: 'tool_call_update', ...childCall, status: 'in_progress' });
+    update({ sessionUpdate: 'tool_call_update', ...childCall, status: 'completed', rawOutput: { output: 'sub-ok\n', exit_code: 0 }, content: [{ type: 'content', content: { type: 'text', text: 'sub-ok\n' } }] });
+  } else {
+    update({ sessionUpdate: 'tool_call_update', ...childCall, status: 'failed', rawOutput: { output: '' } });
+  }
+  appendTranscriptRows(childId, [
+    { step_index: 1, type: 'PLANNER_RESPONSE', status: 'DONE', thinking: 'Checking sample.txt and running echo.', tool_calls: [{ name: 'read_file', args: readArgs }, { name: 'run_command', args: cmdArgs }] },
+    { step_index: 2, type: 'GENERIC', status: 'DONE', content: 'Created At: 2026-11-26T23:30:33+01:00\nCompleted At: 2026-11-26T23:30:34+01:00\n1: hello from sample file' },
+    { step_index: 3, type: 'GENERIC', status: allowed ? 'DONE' : 'ERROR', content: allowed ? 'Command exited with code 0.\nsub-ok\n' : 'Permission denied' },
+    { step_index: 4, type: 'PLANNER_RESPONSE', status: 'DONE', content: allowed ? 'Reported results to the parent agent.' : 'Command was denied.' },
+  ]);
+  appendTranscriptRows(frame.params.sessionId, [
+    { step_index: 4, source: 'SYSTEM', type: 'SYSTEM_MESSAGE', status: 'DONE', content: `<SYSTEM_MESSAGE>\n[Message] timestamp=2026-11-26T22:30:38Z sender=${childId} priority=MESSAGE_PRIORITY_HIGH content=${allowed ? 'sub-ok' : 'denied'}\n</SYSTEM_MESSAGE>` },
+  ]);
+  content('agent_message_chunk', allowed ? 'Subagent reported: sub-ok' : 'Subagent command denied');
+  update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
+  reply(frame.id, { stopReason: 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } });
 }
 /** Appends rows to the session's Antigravity transcript file, matching the CLI 1.5.14 layout. */
 function appendTranscriptRows(targetSessionId, rows) {
@@ -379,7 +416,7 @@ async function handle(frame) {
   }
   if (!frame.method) { pending.get(frame.id)?.(frame.result); pending.delete(frame.id); return; }
   switch (frame.method) {
-    case 'initialize': reply(frame.id, { protocolVersion: 1, agentCapabilities: { loadSession: true, sessionCapabilities: { resume: {} }, mcpCapabilities: { http: true, sse: true } }, authMethods: [{ id: 'gemini-api-key', name: 'Gemini API key' }, { id: 'oauth-personal', name: 'Google' }], agentInfo: { name: 'Antigravity ACP Server', version: '1.5.14' } }); break;
+    case 'initialize': reply(frame.id, { protocolVersion: 1, agentCapabilities: { loadSession: true, sessionCapabilities: { resume: {} }, mcpCapabilities: { http: true, sse: true } }, authMethods: [{ id: 'gemini-api-key', name: 'Gemini API key' }, { id: 'oauth-personal', name: 'Google' }], agentInfo: { name: 'Antigravity ACP Server', version: '1.5.18' } }); break;
     case 'authenticate': authenticate(frame); break;
     case 'session/new':
       // Like the CLI, each session gets its own id; recordings show it as mock-acp-session.

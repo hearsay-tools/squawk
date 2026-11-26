@@ -9,7 +9,7 @@ export const ANTIGRAVITY_SPEC_SUPPORT: AgentRunSpecSupport = {
   images: { honored: true, via: 'session/prompt image content' },
   cwd: { honored: true, via: 'session/new cwd and the only active workspace; native command cwd is the task checkout' },
   toolGrant: { honored: true, via: 'default mode plus fail-closed session/request_permission policy; CLI 1.5.14 runs read_file with no request, so a grant cannot withhold native reads (a note says so when Read is not granted)' },
-  restrictCrossSessionMessaging: { honored: false, reason: 'The Antigravity CLI send_message tool reaches only the session\'s own subagents, and Squawk denies it with the other subagent tools; it has no tool that messages another session' },
+  restrictCrossSessionMessaging: { honored: false, reason: 'The Antigravity CLI send_message tool reaches only the session\'s own subagents; it has no tool that messages another session' },
   minimal: { honored: false, reason: 'The Antigravity CLI offers no minimal or no-context launch mode' },
   additionalDirectories: { honored: false, reason: 'The CLI --add-dir flag is not verified to keep the task checkout as command cwd; the registry server let extra roots displace it' },
   env: { honored: true, via: 'buildChildEnv over the runner allow-list' },

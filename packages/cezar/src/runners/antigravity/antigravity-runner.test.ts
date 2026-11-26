@@ -85,15 +85,60 @@ it('says when a grant without Read cannot stop native file reads', async () => {
   expect(granted.filter(event => event.type === 'note' && event.message.includes('native file reads'))).toEqual([]);
 });
 
-it('launches the CLI ACP server on the account folder with per-account file token storage', async () => {
+it('launches the CLI ACP server on the account folder with per-account file token storage and no subagent denial guard', async () => {
   const cwd = await workspace(); const account = join(cwd, 'account');
   const result = await new AntigravityRunner({ bin }).run({ cwd, toolGrant: { kind: 'unset' }, userPrompt: 'mock:account-homes', env: { GEMINI_HOME: account } });
   const launched = JSON.parse(result.text);
-  expect(launched).toMatchObject({ gemini: account, appData: 'antigravity-cli', ssh: '127.0.0.1 0 127.0.0.1 0', guardHooks: true });
+  expect(launched).toMatchObject({ gemini: account, appData: 'antigravity-cli', ssh: '127.0.0.1 0 127.0.0.1 0' });
   expect(launched).not.toHaveProperty('geminiHome');
-  // The native subagent guard is a session temp folder outside the checkout, removed at exit.
-  expect(launched.guard.startsWith(cwd)).toBe(false);
-  await expect(access(launched.guard)).rejects.toThrow();
+  expect(launched.addDir).toBeUndefined();
+});
+
+it('runs native subagents with forwarded permissions and nests ACP and transcript child items under the Task call', async () => {
+  const cwd = await workspace(); const ui: UiEvent[] = [];
+  const result = await new AntigravityRunner({ bin }).run(
+    { cwd, toolGrant: { kind: 'explicit', tools: ['Read', 'Bash'] }, userPrompt: 'mock:subagent-nested', env: { GEMINI_HOME: join(cwd, 'account') } },
+    undefined,
+  );
+  expect(result.text).toBe('Subagent reported: sub-ok');
+
+  const session = new AntigravityRunner({ bin }).startSession(
+    { cwd, toolGrant: { kind: 'explicit', tools: ['Read', 'Bash'] }, userPrompt: 'mock:subagent-nested', env: { GEMINI_HOME: join(cwd, 'account') } },
+    undefined,
+    { autoEndAfterFirstTurn: true, onUiEvent: event => { ui.push(event); } },
+  );
+  await session.result;
+
+  const startedTask = ui.find(event => event.type === 'item.started' && event.item.kind === 'tool' && event.item.id === 'call_sub_spawn');
+  const completedTask = ui.find(event => event.type === 'item.completed' && event.item.kind === 'tool' && event.item.id === 'call_sub_spawn');
+  // oxlint-disable-next-line cez/test-enum-literal -- UI tool status is independent of run status.
+  expect(startedTask).toMatchObject({ item: { name: 'Task', toolKind: 'task', title: 'Task: Shell Runner', status: 'running', input: expect.objectContaining({ subagent_type: 'self' }) } });
+  expect(completedTask).toMatchObject({ item: { name: 'Task', toolKind: 'task', title: 'Task: Shell Runner', status: 'completed' } });
+
+  const childItems = ui.flatMap(event => event.type === 'item.completed' && event.item.parentItemId === 'call_sub_spawn' ? [event.item] : []);
+  // ACP-forwarded run_command appears once (deduplicated against the child transcript) and nests under call_sub_spawn.
+  const childBash = childItems.filter(item => item.kind === 'tool' && item.name === 'Bash');
+  expect(childBash).toEqual([expect.objectContaining({ id: '7bb3c467-2cb1-4fdc-a962-db063faac0e6:call_child_cmd', status: 'completed', output: 'sub-ok\n', exitCode: 0 })]);
+  // Non-prompting child steps from transcript_full.jsonl also nest under call_sub_spawn.
+  expect(childItems).toContainEqual(expect.objectContaining({ kind: 'reasoning', text: 'Checking sample.txt and running echo.' }));
+  expect(childItems).toContainEqual(expect.objectContaining({ kind: 'tool', name: 'Read', output: '1: hello from sample file' }));
+  expect(childItems).toContainEqual(expect.objectContaining({ kind: 'message', text: 'Reported results to the parent agent.' }));
+});
+
+it('enforces the step tool grant on forwarded subagent permission requests', async () => {
+  const cwd = await workspace(); const ui: UiEvent[] = [];
+  const session = new AntigravityRunner({ bin }).startSession(
+    { cwd, toolGrant: { kind: 'explicit', tools: ['Read'] }, userPrompt: 'mock:subagent-nested', env: { GEMINI_HOME: join(cwd, 'account') } },
+    undefined,
+    { autoEndAfterFirstTurn: true, onUiEvent: event => { ui.push(event); } },
+  );
+  const result = await session.result;
+  expect(result.text).toBe('Subagent command denied');
+  expect(ui).toContainEqual(expect.objectContaining({
+    type: 'item.completed',
+    // oxlint-disable-next-line cez/test-enum-literal -- UI tool status is independent of run status.
+    item: expect.objectContaining({ id: '7bb3c467-2cb1-4fdc-a962-db063faac0e6:call_child_cmd', parentItemId: 'call_sub_spawn', status: 'failed' }),
+  }));
 });
 
 it('fills a read card from the CLI transcript row written after the wire completed the call', async () => {
