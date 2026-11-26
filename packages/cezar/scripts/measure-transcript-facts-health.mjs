@@ -41,6 +41,9 @@ try {
   const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await import(new URL('built-in-run-slots.js', runtime.url));
   registerBuiltInRunSlots();
   sealBuiltInRunSlots();
+  const { registerBuiltInLaunchParts, sealBuiltInLaunchParts } = await import(new URL('built-in-launch-parts.js', runtime.url));
+  registerBuiltInLaunchParts();
+  sealBuiltInLaunchParts();
   const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await import(new URL('workflows/step-kind-registry.js', runtime.url));
   registerBuiltInStepKinds();
   sealBuiltInStepKinds();

@@ -12,7 +12,7 @@ import type { SessionContext } from '../../session-context.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
 import type { RunExitId, ExitCall } from '../../runs/run-exits.ts';
 import { openWaitsFooter } from '../waits.ts';
-import { composeSystemPrompt, withResumeContext } from './prompts.ts';
+import { agentDirectories, composeSystemPrompt, withResumeContext } from './prompts.ts';
 import { isDisposedDelegatedRun } from './run-guards.ts';
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 import { clearIdleTimer, clearHeldHumanInputTimer, clearUnreadInputTimer } from './input-timers.ts';
@@ -234,6 +234,20 @@ export function launchSystemTail(context: RunModuleContext, host: SessionHelperH
     ...launch.launchParts.prompts,
     handoffInstructions({ handoffInjected: launch.handoffInjected, nativeSubagents: reportsNativeSubagents(launch.runner) }),
   );
+}
+
+/** The merged session env and its granted directories, shared by step launch and Continue. */
+export function launchSessionEnvironment(
+  runsDir: string,
+  launch: {
+    profileEnv: StepProfile['env'];
+    launchParts: ResolvedLaunchParts;
+    delegation: LaunchDelegation;
+    ciTools: LaunchCiTools;
+  },
+): { env: Record<string, string>; additionalDirectories: string[] } {
+  const env = { ...launch.profileEnv, ...launch.launchParts.env, ...launch.delegation?.env, ...launch.ciTools?.env };
+  return { env, additionalDirectories: agentDirectories(runsDir, env) };
 }
 
 /** Some adapters return assistant text only in their final result. Preserve that

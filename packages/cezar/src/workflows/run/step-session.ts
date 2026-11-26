@@ -16,7 +16,7 @@ import type { UiEventSink } from '../../runs/ui-event-sink.ts';
 import type { ActiveRun } from '../active-run.ts';
 import { pastedAttachmentsText, type PersistedAttachment } from '../pasted-content.ts';
 import { toolGrantLists, type WorkflowStepDef } from '../types.ts';
-import { agentDirectories, composeSystemPrompt } from './prompts.ts';
+import { composeSystemPrompt } from './prompts.ts';
 import { stepModel } from './launch-settings.ts';
 import { stepScope } from './steps.ts';
 import { isDisposedDelegatedRun } from './run-guards.ts';
@@ -233,8 +233,9 @@ export class StepSession {
           cwd: state.liveSession.cwd,
           toolGrant: launch.toolGrant,
           // The handoff file lives outside the worktree — grant access.
-          additionalDirectories: agentDirectories(join(runDataDir(this.context.dataDir, runId), 'runs'), profile.env),
-          env: { ...profile.env, ...launchParts.env, ...delegation?.env, ...ciTools?.env },
+          ...sessionEvents.launchSessionEnvironment(join(runDataDir(this.context.dataDir, runId), 'runs'), {
+            profileEnv: profile.env, launchParts, delegation, ciTools,
+          }),
           ...(ciTools ? { squawkTools: ciTools.descriptor } : {}),
           ...(delegation ? { restrictCrossSessionMessaging: delegation.restrictCrossSessionMessaging } : {}),
           model: launch.model.backendModel,

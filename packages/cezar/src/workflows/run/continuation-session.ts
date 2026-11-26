@@ -15,7 +15,7 @@ import { pastedAttachmentsText, type PastedContent, type PersistedAttachment } f
 import type { AutosaveReason } from '../../autosave-commit.ts';
 import { continuationOpening } from './opening.ts';
 import { createSessionEventHandler, launchPreamble, type SessionEventHandler } from './session-events.ts';
-import { agentDirectories, composeSystemPrompt, leadingSlashSkillName } from './prompts.ts';
+import { composeSystemPrompt, leadingSlashSkillName } from './prompts.ts';
 import { continuationRunner } from './launch-settings.ts';
 import { preserveRunAfterDisposal } from './run-guards.ts';
 import { stepScope } from './steps.ts';
@@ -529,8 +529,9 @@ export class ContinuationSession {
           ...(opening.openingImages.length ? { images: opening.openingImages } : {}),
           cwd: state.liveSession.cwd,
           toolGrant: settings.toolGrant,
-          additionalDirectories: agentDirectories(join(runDataDir(this.context.dataDir, runId), 'runs'), settings.profile.env),
-          env: { ...settings.profile.env, ...launchParts.env, ...delegation?.env, ...ciTools?.env },
+          ...sessionEvents.launchSessionEnvironment(join(runDataDir(this.context.dataDir, runId), 'runs'), {
+            profileEnv: settings.profile.env, launchParts, delegation, ciTools,
+          }),
           ...(ciTools ? { squawkTools: ciTools.descriptor } : {}),
           ...(delegation ? { restrictCrossSessionMessaging: delegation.restrictCrossSessionMessaging } : {}),
           model: settings.backendModel,

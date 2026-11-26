@@ -128,6 +128,9 @@ test('installed CLI completes owned-worker lifecycle with lost spawn reply and o
     const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await load('built-in-run-slots.js') as typeof import('../../src/built-in-run-slots.ts');
     registerBuiltInRunSlots();
     sealBuiltInRunSlots();
+    const { registerBuiltInLaunchParts, sealBuiltInLaunchParts } = await load('built-in-launch-parts.js') as typeof import('../../src/built-in-launch-parts.ts');
+    registerBuiltInLaunchParts();
+    sealBuiltInLaunchParts();
     const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await load('workflows/step-kind-registry.js') as typeof import('../../src/workflows/step-kind-registry.ts');
     registerBuiltInStepKinds();
     sealBuiltInStepKinds();
