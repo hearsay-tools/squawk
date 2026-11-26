@@ -1,24 +1,26 @@
 import '../built-in-wait-kinds.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { SessionContextFile, SessionContextPreview } from '@open-mercato/cezar-contract';
+import type { SessionContextPreview, SessionContextState } from '@open-mercato/cezar-contract';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
 
 const VALID = 'version: 1\nrules:\n  - id: brief\n    on: session_start\n    template: Read docs/vision.md.\n';
+const SHARED = 'version: 1\nrules:\n  - id: team\n    on: session_start\n    template: Team rules.\n';
 const sha = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
 
 /**
- * `GET/PUT /session-context` and `POST /session-context/preview` (hearsay-tools/squawk#4308): the
- * cockpit edits the same `context.yaml` a launch reads, never over a newer disk version, never with
- * problems, never in read-only fallback data, and on a remote cockpit without `settingsAdmin` too.
+ * `GET/PUT /session-context` and `POST /session-context/preview` (hearsay-tools/squawk#4308, hearsay-tools/squawk#4341):
+ * reads shared `context.yaml` (with Git tracked status) and local `context.local.yaml`, writes only
+ * gitignored `context.local.yaml`, and previews the combined launch output.
  */
 describe('the session-context API', () => {
   let repoRoot: string;
@@ -45,78 +47,99 @@ describe('the session-context API', () => {
     else process.env.CEZ_REMOTE = prevRemote;
   });
 
-  const get = async () => (await (await apiRequest(app, '/api/v1/session-context')).json()) as SessionContextFile;
+  const get = async () => (await (await apiRequest(app, '/api/v1/session-context')).json()) as SessionContextState;
   const put = (body: unknown) =>
     apiRequest(app, '/api/v1/session-context', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const preview = (body: unknown) =>
     apiRequest(app, '/api/v1/session-context/preview', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
-  it('reads a missing file as empty and creates it in the legacy project directory', async () => {
+  it('reads missing files as empty and creates context.local.yaml in the legacy project directory', async () => {
     boot('legacy');
-    expect(await get()).toEqual({ path: '.ai/cezar/context.yaml', exists: false, content: '', version: null, writable: true, readOnlyReason: null });
+    expect(await get()).toEqual({
+      local: { path: '.ai/cezar/context.local.yaml', exists: false, content: '', version: null, writable: true, readOnlyReason: null },
+      shared: { path: '.ai/cezar/context.yaml', exists: false, content: '', tracked: false, unreadableReason: null },
+    });
     const res = await put({ content: VALID, version: null });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ path: '.ai/cezar/context.yaml', exists: true, content: VALID, version: sha(VALID), writable: true, readOnlyReason: null });
-    expect(readFileSync(join(repoRoot, '.ai/cezar/context.yaml'), 'utf8')).toBe(VALID);
-  });
-
-  it('reads and writes .ai/squawk/context.yaml in a project that starts there', async () => {
-    boot('fresh');
-    writeFileSync(join(repoRoot, '.ai/squawk/context.yaml'), 'version: 1\n');
-    expect(await get()).toMatchObject({ path: '.ai/squawk/context.yaml', exists: true, content: 'version: 1\n', version: sha('version: 1\n') });
-    expect((await put({ content: VALID, version: sha('version: 1\n') })).status).toBe(200);
-    expect(readFileSync(join(repoRoot, '.ai/squawk/context.yaml'), 'utf8')).toBe(VALID);
+    expect(await res.json()).toEqual({
+      local: { path: '.ai/cezar/context.local.yaml', exists: true, content: VALID, version: sha(VALID), writable: true, readOnlyReason: null },
+      shared: { path: '.ai/cezar/context.yaml', exists: false, content: '', tracked: false, unreadableReason: null },
+    });
+    expect(readFileSync(join(repoRoot, '.ai/cezar/context.local.yaml'), 'utf8')).toBe(VALID);
     expect(existsSync(join(repoRoot, '.ai/cezar/context.yaml'))).toBe(false);
   });
 
-  it('refuses a save over a newer disk version and leaves the file as it is', async () => {
+  it('saves context.local.yaml without dirtying git status and reports tracked status on shared context.yaml', async () => {
+    const git = (...args: string[]) => execFileSync('git', ['-C', repoRoot, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    git('init');
+    boot('fresh');
+    writeFileSync(join(repoRoot, '.ai/squawk/context.yaml'), SHARED);
+    git('add', '.ai/squawk/context.yaml');
+    git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'add shared context');
+    // Also commit .gitignore created by RunStore/boot if untracked so we test clean status after PUT.
+    const before = await get();
+    expect(before.shared).toEqual({
+      path: '.ai/squawk/context.yaml', exists: true, content: SHARED, tracked: true, unreadableReason: null,
+    });
+    expect(before.local).toMatchObject({ path: '.ai/squawk/context.local.yaml', exists: false, writable: true });
+
+    expect((await put({ content: VALID, version: null })).status).toBe(200);
+    expect(readFileSync(join(repoRoot, '.ai/squawk/context.local.yaml'), 'utf8')).toBe(VALID);
+    expect(readFileSync(join(repoRoot, '.ai/squawk/context.yaml'), 'utf8')).toBe(SHARED);
+    expect(existsSync(join(repoRoot, '.ai/cezar/context.local.yaml'))).toBe(false);
+    // context.local.yaml is auto-ignored so git status never lists it.
+    expect(git('status', '--porcelain', '--', '.ai/squawk/context.local.yaml', '.ai/squawk/context.yaml')).toBe('');
+    expect(git('check-ignore', '.ai/squawk/context.local.yaml').trim()).toBe('.ai/squawk/context.local.yaml');
+  });
+
+  it('refuses a save over a newer disk version and leaves context.local.yaml as it is', async () => {
     boot('legacy');
-    writeFileSync(join(repoRoot, '.ai/cezar/context.yaml'), 'version: 1\n# edited elsewhere\n');
+    writeFileSync(join(repoRoot, '.ai/cezar/context.local.yaml'), 'version: 1\n# edited elsewhere\n');
     const res = await put({ content: VALID, version: sha('version: 1\n') });
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: string }).error).toContain('changed on disk');
-    expect(readFileSync(join(repoRoot, '.ai/cezar/context.yaml'), 'utf8')).toBe('version: 1\n# edited elsewhere\n');
+    expect(readFileSync(join(repoRoot, '.ai/cezar/context.local.yaml'), 'utf8')).toBe('version: 1\n# edited elsewhere\n');
     // Overwrite: the editor sends the version it now read.
     expect((await put({ content: VALID, version: sha('version: 1\n# edited elsewhere\n') })).status).toBe(200);
   });
 
   it('refuses text with problems and names the first one', async () => {
     boot('legacy');
-    writeFileSync(join(repoRoot, '.ai/cezar/context.yaml'), VALID);
+    writeFileSync(join(repoRoot, '.ai/cezar/context.local.yaml'), VALID);
     const res = await put({ content: VALID.replace('brief', 'handoff'), version: sha(VALID) });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe(
-      'context.yaml has problems; fix them to save (line 3: id "handoff" is reserved for the built-in handoff block)',
+      'context.local.yaml has problems; fix them to save (line 3: id "handoff" is reserved for the built-in handoff block)',
     );
-    expect(readFileSync(join(repoRoot, '.ai/cezar/context.yaml'), 'utf8')).toBe(VALID);
+    expect(readFileSync(join(repoRoot, '.ai/cezar/context.local.yaml'), 'utf8')).toBe(VALID);
   });
 
   it('keeps a fallback copy read only', async () => {
     boot('legacy');
     mkdirSync(join(repoRoot, '.ai/squawk'));
-    writeFileSync(join(repoRoot, '.ai/squawk/context.yaml'), VALID);
+    writeFileSync(join(repoRoot, '.ai/squawk/context.local.yaml'), VALID);
     const read = await get();
-    expect(read).toMatchObject({ path: '.ai/squawk/context.yaml', content: VALID, writable: false });
-    expect(read.readOnlyReason).toContain('read-only project data');
+    expect(read.local).toMatchObject({ path: '.ai/squawk/context.local.yaml', content: VALID, writable: false });
+    expect(read.local.readOnlyReason).toContain('read-only project data');
     expect((await put({ content: 'version: 1\n', version: sha(VALID) })).status).toBe(409);
-    expect(readFileSync(join(repoRoot, '.ai/squawk/context.yaml'), 'utf8')).toBe(VALID);
+    expect(readFileSync(join(repoRoot, '.ai/squawk/context.local.yaml'), 'utf8')).toBe(VALID);
   });
 
-  it('never offers to overwrite a file it cannot read as text', async () => {
+  it('never offers to overwrite a local file it cannot read as text', async () => {
     boot('legacy');
     const bytes = Buffer.from([0xff, 0xfe, 0x00]);
-    writeFileSync(join(repoRoot, '.ai/cezar/context.yaml'), bytes);
-    expect(await get()).toMatchObject({ exists: true, content: '', version: null, writable: false, readOnlyReason: expect.stringContaining('not valid UTF-8') });
+    writeFileSync(join(repoRoot, '.ai/cezar/context.local.yaml'), bytes);
+    expect((await get()).local).toMatchObject({ exists: true, content: '', version: null, writable: false, readOnlyReason: expect.stringContaining('not valid UTF-8') });
     expect((await put({ content: VALID, version: null })).status).toBe(409);
-    expect(readFileSync(join(repoRoot, '.ai/cezar/context.yaml'))).toEqual(bytes);
+    expect(readFileSync(join(repoRoot, '.ai/cezar/context.local.yaml'))).toEqual(bytes);
   });
 
   it.skipIf(process.platform === 'win32')('never writes through a symbolic link to another file', async () => {
     boot('legacy');
     const config = join(repoRoot, '.ai/cezar/config.json');
     writeFileSync(config, '{}\n');
-    symlinkSync('config.json', join(repoRoot, '.ai/cezar/context.yaml'));
-    expect(await get()).toMatchObject({ writable: false, readOnlyReason: expect.stringContaining('symbolic link') });
+    symlinkSync('config.json', join(repoRoot, '.ai/cezar/context.local.yaml'));
+    expect((await get()).local).toMatchObject({ writable: false, readOnlyReason: expect.stringContaining('symbolic link') });
     const res = await put({ content: 'version: 1\nworktreeSetup: touch /tmp/owned\n', version: sha('{}\n') });
     expect(res.status).toBe(409);
     expect(readFileSync(config, 'utf8')).toBe('{}\n');
@@ -129,9 +152,9 @@ describe('the session-context API', () => {
       symlinkSync(elsewhere, join(repoRoot, '.ai'));
       boot('legacy');
       const read = await get();
-      expect(read).toMatchObject({ path: '.ai/cezar/context.yaml', writable: false, readOnlyReason: expect.stringContaining('symbolic link') });
+      expect(read.local).toMatchObject({ path: '.ai/cezar/context.local.yaml', writable: false, readOnlyReason: expect.stringContaining('symbolic link') });
       expect((await put({ content: VALID, version: null })).status).toBe(409);
-      expect(existsSync(join(elsewhere, 'cezar/context.yaml'))).toBe(false);
+      expect(existsSync(join(elsewhere, 'cezar/context.local.yaml'))).toBe(false);
     } finally {
       rmSync(elsewhere, { recursive: true, force: true });
     }
@@ -139,7 +162,7 @@ describe('the session-context API', () => {
 
   it('lets only one of two saves over the same version succeed', async () => {
     boot('legacy');
-    writeFileSync(join(repoRoot, '.ai/cezar/context.yaml'), 'version: 1\n');
+    writeFileSync(join(repoRoot, '.ai/cezar/context.local.yaml'), 'version: 1\n');
     const [a, b] = await Promise.all([
       put({ content: VALID, version: sha('version: 1\n') }),
       put({ content: VALID.replace('brief', 'other'), version: sha('version: 1\n') }),
@@ -147,15 +170,20 @@ describe('the session-context API', () => {
     expect([a.status, b.status].sort()).toEqual([200, 409]);
   });
 
-  it('previews a draft for a role without writing it', async () => {
+  it('previews combined shared context.yaml and unsaved local draft without writing', async () => {
     boot('legacy');
+    writeFileSync(join(repoRoot, '.ai/cezar/context.yaml'), SHARED);
     const res = await preview({ content: VALID, role: 'worker' });
     expect(res.status).toBe(200);
     const body = (await res.json()) as SessionContextPreview;
     expect(body.problems).toEqual([]);
-    expect(body.blocks.map((b) => [b.id, b.status])).toEqual([['handoff', 'applied'], ['brief', 'applied']]);
+    expect(body.blocks.map((b) => [b.id, b.source, b.status])).toEqual([
+      ['handoff', 'built-in', 'applied'],
+      ['team', 'shared', 'applied'],
+      ['brief', 'local', 'applied'],
+    ]);
     expect(body.limitBytes).toBe(65_536);
-    expect(existsSync(join(repoRoot, '.ai/cezar/context.yaml'))).toBe(false);
+    expect(existsSync(join(repoRoot, '.ai/cezar/context.local.yaml'))).toBe(false);
     expect((await preview({ content: VALID, role: 'everyone' })).status).toBe(400);
   });
 
