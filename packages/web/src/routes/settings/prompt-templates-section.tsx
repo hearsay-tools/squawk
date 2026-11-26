@@ -31,6 +31,7 @@ import { isProjectSkill, searchSkillsForDisplay, skillKeywords, skillKey } from 
 import { cn } from '@/lib/utils'
 import { useUnsentDraft } from '@/lib/version-reload'
 import { sameJson, useSavedDraft } from '@/lib/saved-draft'
+import { SaveCue } from './save-cue'
 
 /**
  * Settings → Prompt templates (#413): "add the settings pane for editing these prompt templates
@@ -177,7 +178,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                   onChange={(event) => updateTemplate(template.id, { text: event.target.value })}
                   className="min-h-14 rounded-md border border-border bg-background text-[13px]"
                 />
-                <p className="mt-3 text-sm">Apply automatically with skills</p>
+                <p className="text-sm">Apply automatically with skills</p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                   <TemplateSkillsPicker
                     label={template.label}
@@ -280,6 +281,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
           >
             Reset to defaults
           </Button>
+          <SaveCue show={!dirty && !invalid && !save.isPending} />
           {invalid ? (
             <p data-slot="prompt-templates-invalid" className="text-[11px] text-danger">
               Every template needs both a label and text.
@@ -353,12 +355,12 @@ function TemplateSkillsPicker({
           aria-label={`Apply ${label || 'this template'} automatically with a skill`}
           title="Pick the skills this template applies itself to"
           className={cn(
-            'inline-flex h-[26px] min-w-[9rem] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
+            'inline-flex h-[26px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
             selected.length > 0 && 'border-foreground/60 font-semibold text-foreground',
           )}
         >
           <SparklesIcon aria-hidden="true" className="size-3 shrink-0 text-accent-icon" />
-          Apply with…
+          Add skill
           <ChevronDownIcon aria-hidden="true" className="size-2.5 shrink-0 text-soft-foreground" />
         </button>
       </PopoverTrigger>

@@ -17,6 +17,7 @@ import { parseWorktreeSetupInput } from './worktree-setup-input'
 import { SettingsField } from './settings-field'
 import { useActiveProjectRoot } from './project-location'
 import { RemoteSettingsNotice, useSettingsAdminRefresh } from './remote-settings-notice'
+import { SaveCue } from './save-cue'
 
 type WorktreeCommandsKey = 'worktreeSetup' | 'worktreeTeardown'
 
@@ -194,6 +195,7 @@ export function WorktreeCommandsField({ config, copy }: { config: ConfigResponse
           >
             {copy.save}
           </Button>
+          <SaveCue show={editable && unchanged && !save.isPending} />
         </div>
       </WorktreeCommandsStatus>
     </SettingsField>

@@ -240,7 +240,8 @@ function AgentsPane({ data, runners }: { data: AgentProfilesResponse; runners: R
   )
 }
 
-/** The host check as one line: Checking…, Installed · version, or Not installed with the hint. */
+/** The host check, inline in the card's summary: Checking…, Installed (version), or Not installed
+ *  with the install hint. */
 function InstallReadout({ entry, check }: { entry: RunnerEntry; check: BackendCheck | undefined }) {
   if (check === undefined) return <span data-slot="agent-installed">Checking…</span>
   if (!check.available) {
@@ -251,14 +252,62 @@ function InstallReadout({ entry, check }: { entry: RunnerEntry; check: BackendCh
     )
   }
   return (
-    <>
+    <span className="whitespace-nowrap">
       <span data-slot="agent-installed">Installed</span>
-      {check.version ? <><span aria-hidden="true"> · </span><span data-slot="agent-version">{check.version}</span></> : null}
-    </>
+      {check.version ? <> <span className="text-soft-foreground">(<span data-slot="agent-version">{check.version}</span>)</span></> : null}
+    </span>
   )
 }
 
-/** One agent: what the machine has, then the logins configured for it. */
+/** Inline summary items joined by a quiet middle dot. `null` items are skipped. */
+function SummaryLine({ items }: { items: ReactNode[] }) {
+  const shown = items.filter((item) => item !== null && item !== undefined && item !== false)
+  if (shown.length === 0) return null
+  return (
+    <p data-slot="agent-summary" className="settings-agent-summary">
+      {shown.map((item, index) => (
+        <span key={index} className="settings-agent-summary-item">
+          {index > 0 ? <span aria-hidden="true" className="settings-agent-summary-sep">·</span> : null}
+          {item}
+        </span>
+      ))}
+    </p>
+  )
+}
+
+/** The card's top row: name and inline summary on the left, compact actions on the right. */
+function AgentHead({ titleId, title, summary, actions, actionsSlot }: {
+  titleId: string
+  title: string
+  summary: ReactNode[]
+  actions: ReactNode
+  actionsSlot: 'account-actions' | 'accounts-actions'
+}) {
+  return (
+    <div data-slot="agent-head" className="settings-agent-head">
+      <div className="settings-agent-heading">
+        <h3 id={titleId} className="settings-account-provider-title">{title}</h3>
+        <SummaryLine items={summary} />
+      </div>
+      {actions ? <div data-slot={actionsSlot} className="settings-account-actions">{actions}</div> : null}
+    </div>
+  )
+}
+
+/** What the card shows about the agent itself, shared by every login of the same CLI. */
+interface AgentFacts {
+  titleId: string
+  title: string
+  /** The install readout and the account count; `null` entries are skipped. */
+  facts: ReactNode[]
+  /** Add account, when this agent can carry another login here. */
+  addButton: ReactNode
+}
+
+/** One agent, flattened into a single card: a top row with the name, an inline status summary and
+ *  the actions, then one quiet metadata line per account. The first account's status and actions
+ *  ride in the top row, because for most agents it is the only login and a second box around it
+ *  only cost height. */
 function AgentCard({
   entry,
   check,
@@ -283,6 +332,7 @@ function AgentCard({
   onRemove: (account: AgentProfile) => void
 }) {
   const provider = entry.id
+  const title = canonicalRunnerName(entry.id, entry.displayName)
   // The managed installer reports its own installed and latest versions; it renders only under
   // `settingsAdmin`, so without that grant the host check is the readout.
   const managed = entry.managedInstall === true && settingsAdmin
@@ -291,6 +341,23 @@ function AgentCard({
   const addButton = editable && canCarryAccounts
     ? <Button type="button" variant="outline" size="sm" data-action="accounts-add" data-provider={provider} onClick={onAdd}>Add account</Button>
     : null
+  const agent: AgentFacts = {
+    titleId,
+    title,
+    facts: [
+      managed ? null : <InstallReadout entry={entry} check={check} />,
+      editable || accounts.length > 0 ? (
+        <span
+          className="settings-account-count"
+          title={`${discoveredCount} discovered, ${accounts.length - discoveredCount} added`}
+        >
+          {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}
+        </span>
+      ) : null,
+    ],
+    addButton,
+  }
+  const [primary, ...others] = accounts
 
   return (
     <section
@@ -299,50 +366,42 @@ function AgentCard({
       aria-labelledby={titleId}
       data-slot="accounts-provider"
       data-provider={provider}
-      className="settings-agent-card flex flex-col gap-4 rounded-lg border border-border bg-card p-4"
+      className="settings-agent-card flex flex-col rounded-lg border border-border bg-card"
     >
-      {/* Facts about the BINARY, not about any one account: a version and an install are shared by
-          every login of the same CLI, so they belong here rather than repeated on each row. */}
-      <h3 id={titleId} className="settings-account-provider-title">{canonicalRunnerName(entry.id, entry.displayName)}</h3>
+      {primary === undefined ? (
+        <AgentHead titleId={titleId} title={title} summary={agent.facts} actions={addButton} actionsSlot="accounts-actions" />
+      ) : null}
       {managed ? <ManagedCli runner={provider} /> : null}
-      <div className="settings-account-installation settings-readout">
-        {managed ? null : <InstallReadout entry={entry} check={check} />}
-        {editable || accounts.length > 0 ? (
-          <span className="settings-account-count">{accounts.length} {accounts.length === 1 ? 'account' : 'accounts'} ({discoveredCount} discovered, {accounts.length - discoveredCount} added)</span>
-        ) : null}
-      </div>
-
-      {accounts.length > 0 ? (
-        <ul>
-          {accounts.map((account, index) => (
+      {primary !== undefined ? (
+        <ul className="settings-agent-accounts">
+          <AccountRow
+            account={primary}
+            runners={runners}
+            editable={editable}
+            onRemove={() => onRemove(primary)}
+            agent={agent}
+          />
+          {others.map((account) => (
             <AccountRow
               key={account.id}
               account={account}
               runners={runners}
               editable={editable}
               onRemove={() => onRemove(account)}
-              // Add account joins the last row's action row, so Check again and Add account sit
-              // side by side instead of stacking as two one-button rows.
-              trailing={index === accounts.length - 1 ? addButton : null}
             />
           ))}
         </ul>
       ) : null}
-      {editable ? (
-        canCarryAccounts ? (
-          accounts.length === 0 ? <div className="settings-account-add-row">{addButton}</div> : null
-        ) : (
-          <p data-slot="accounts-single-only" className="text-[12px] text-muted-foreground">
-            {canonicalRunnerName(entry.id, entry.displayName)} can only hold one account here: it keeps its credentials
-            outside its config folder, so a second folder would change settings without changing the
-            login — which would say “work account” while billing the other one.
-          </p>
-        )
-      ) : accounts.length === 0 && entry.browserLogin ? (
+      {editable && !canCarryAccounts ? (
+        <p data-slot="accounts-single-only" className="settings-agent-note">
+          One account only: {title} keeps its login outside its config folder, so a second folder
+          would change settings without changing who is billed.
+        </p>
+      ) : !editable && accounts.length === 0 && entry.browserLogin ? (
         // Fallback for older servers that withhold account rows in hosted mode.
-        <div data-slot="hosted-sign-in" className="flex flex-wrap items-center gap-3">
-          <p className="text-[13px] text-muted-foreground">Discovered account</p>
-          <BrowserSignInButton provider={provider} label={canonicalRunnerName(entry.id, entry.displayName)} />
+        <div data-slot="hosted-sign-in" className="settings-agent-note flex flex-wrap items-center gap-3">
+          <span>Discovered account</span>
+          <BrowserSignInButton provider={provider} label={title} />
         </div>
       ) : null}
     </section>
@@ -516,10 +575,11 @@ function AccountFolderAdvisory({ account, runners, status, editable }: {
   return null
 }
 
-function AccountRow({ account, runners, editable, onRemove, trailing }: {
+function AccountRow({ account, runners, editable, onRemove, agent }: {
   account: AgentProfile; runners: RunnersResponse; editable: boolean; onRemove: () => void
-  /** A card-level action (Add account) that shares this row's action line. */
-  trailing?: ReactNode
+  /** Set on the agent's first account: this row also renders the card's top row, so the account's
+   *  status and Check again sit beside the agent name instead of in a box of their own. */
+  agent?: AgentFacts
 }) {
   const routeId = agentAccountRouteId(account)
   const recheck = useRecheckAgentAccount()
@@ -530,65 +590,94 @@ function AccountRow({ account, runners, editable, onRemove, trailing }: {
   const status = account.status ?? probed.data?.status
   const presentation = status ? STATUS_PRESENTATION[status.status] : undefined
 
-  return (
-    <li
-      data-slot="account-row"
-      data-account={account.id}
-      className="flex flex-col gap-2 px-3.5 py-3"
-    >
-      <div className="settings-account-card">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] font-medium text-foreground">{account.label}</span>
-            {account.isDefault ? (
-              <Badge variant="ghost" className="shrink-0 text-[12px] text-muted-foreground">
-                discovered
-              </Badge>
-            ) : null}
-          </div>
-          {/* Status on its own line, the folder on the next: a long path never squeezes the status. */}
+  // "Checking…" is a real, distinct state from any probe RESULT: the answer is not in yet.
+  // Showing `unknown` here would claim a verification that never ran.
+  const statusReadout = (
+    <span className="inline-flex items-center gap-1.5">
+      <StatusDot tone={presentation?.tone ?? 'neutral'} pulse={presentation === undefined} />
+      <span data-slot="account-status" className="text-foreground">{presentation?.label ?? 'Checking…'}</span>
+    </span>
+  )
+  const actions = (
+    <>
+      <AccountSignIn account={account} runners={runners} status={status} editable={editable} />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        data-action="account-recheck"
+        disabled={recheck.isPending}
+        title="Re-probe this account's login now, instead of waiting for the cached answer"
+        onClick={() =>
+          recheck.mutate(routeId, {
+            onError: (error: Error) => toast(error.message, { tone: 'danger' }),
+          })
+        }
+      >
+        Check again
+      </Button>
+    </>
+  )
+  const name = (
+    <>
+      <span className="settings-account-label">{account.label}</span>
+      {account.isDefault ? (
+        <Badge variant="ghost" className="shrink-0 text-[11px] text-muted-foreground">
+          discovered
+        </Badge>
+      ) : null}
+    </>
+  )
+  const path = account.configDir ? (
+    <span data-slot="account-path" className="settings-account-path" title={account.path}>
+      {shortPath(account.configDir)}
+    </span>
+  ) : null
+  const hint = status?.hint ? <p className="settings-account-hint">{status.hint}</p> : null
+  const manage = editable && !account.isDefault ? <AccountManagement account={account} onRemove={onRemove} /> : null
+
+  if (agent) {
+    return (
+      <li data-slot="account-row" data-account={account.id} data-primary="" className="settings-account-primary">
+        <AgentHead
+          titleId={agent.titleId}
+          title={agent.title}
+          summary={[statusReadout, ...agent.facts]}
+          actions={<>{actions}{agent.addButton}</>}
+          actionsSlot="account-actions"
+        />
+        {/* The metadata line: which login this is and where it lives, then the advisory. */}
+        <div className="settings-account-meta">
           <div className="settings-account-readout">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              {/* "Checking…" is a real, distinct state from any probe RESULT: the answer is not in
-                  yet. Showing `unknown` here would claim a verification that never ran. */}
-              <StatusDot tone={presentation?.tone ?? 'neutral'} pulse={presentation === undefined} />
-              <span data-slot="account-status" className="text-foreground">{presentation?.label ?? 'Checking…'}</span>
+            <div className="settings-account-meta-line">
+              {name}
+              {path}
               <AccountFolderAdvisory account={account} runners={runners} status={status} editable={editable} />
             </div>
-            {account.configDir ? (
-              <p
-                data-slot="account-path"
-                className="font-mono text-[12px] text-muted-foreground"
-                title={account.path}
-              >
-                {shortPath(account.configDir)}
-              </p>
-            ) : null}
-            {status?.hint ? <p className="text-xs text-muted-foreground">{status.hint}</p> : null}
+            {hint}
           </div>
+          {manage ? <div className="settings-account-actions">{manage}</div> : null}
         </div>
+      </li>
+    )
+  }
 
-        {/* Public account actions stay separate from the opt-in identity details below. */}
-        <div data-slot="account-actions" className="settings-account-actions flex flex-row flex-wrap items-center gap-2">
-          <AccountSignIn account={account} runners={runners} status={status} editable={editable} />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-action="account-recheck"
-            disabled={recheck.isPending}
-            title="Re-probe this account's login now, instead of waiting for the cached answer"
-            onClick={() =>
-              recheck.mutate(routeId, {
-                onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-              })
-            }
-          >
-            Check again
-          </Button>
-          {editable ? <AccountManagement account={account} onRemove={onRemove} /> : null}
-          {trailing}
+  return (
+    <li data-slot="account-row" data-account={account.id} className="settings-account-line">
+      <div className="settings-account-readout">
+        {/* Status leads the line; the folder follows on its own, so a long path never squeezes it. */}
+        <div className="settings-account-meta-line">
+          {name}
+          <span aria-hidden="true" className="settings-agent-summary-sep">·</span>
+          {statusReadout}
+          <AccountFolderAdvisory account={account} runners={runners} status={status} editable={editable} />
         </div>
+        {path}
+        {hint}
+      </div>
+      <div data-slot="account-actions" className="settings-account-actions">
+        {actions}
+        {manage}
       </div>
     </li>
   )

@@ -13,6 +13,7 @@ import { SettingsField } from './settings-field'
 import { WORKTREE_COMMANDS_COPY, WorktreeCommandsField } from './worktree-commands-field'
 import { ChevronRightIcon } from '@/components/design-icons'
 import { Link } from '@/lib/project-router'
+import { SaveCue } from './save-cue'
 
 /**
  * Project settings → Worktrees: configuration only — the retention count (#483), the commands
@@ -125,6 +126,7 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
           >
             Save retention
           </Button>
+          <SaveCue show={retentionSaved && !retentionInvalid && !save.isPending} />
         </div>
         {retentionInvalid ? (
           <p data-slot="resources-retention-invalid" className="text-[11px] text-danger">

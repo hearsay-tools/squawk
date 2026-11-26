@@ -159,6 +159,8 @@ describe('Project settings → Worktrees: keep-last-N-worktrees (#483)', () => {
     await waitFor(() => expect(retentionInput()).not.toBeNull())
     expect(retentionInput()!.value).toBe('7')
     expect(saveButton()!.disabled).toBe(true)
+    // A quiet cue says why Save is greyed: nothing changed, not "not allowed".
+    expect(saveButton()!.parentElement?.querySelector('[data-slot="settings-save-cue"]')?.textContent).toBe('No unsaved changes')
   })
 
   it('saves the entered count through PUT /api/v1/config', async () => {
@@ -168,6 +170,7 @@ describe('Project settings → Worktrees: keep-last-N-worktrees (#483)', () => {
 
     fireEvent.change(retentionInput()!, { target: { value: '3' } })
     expect(saveButton()!.disabled).toBe(false)
+    expect(saveButton()!.parentElement?.querySelector('[data-slot="settings-save-cue"]')).toBeNull()
     fireEvent.click(saveButton()!)
 
     await waitFor(() => expect(puts()).toHaveLength(1))

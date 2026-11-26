@@ -59,18 +59,19 @@ function SettingsMainHeader({ scope, title, mobileTitle, description }: { scope:
   // The same name the sidebar header shows; an unregistered boot project falls back to its root.
   const projectName = useActiveProjectIdentity().name
   const where = scope === 'global' ? 'every project' : (projectName ?? 'this project')
+  // Title and subtitle keep the same 4px (`mt-1`) rhythm as Tasks, Automations and Skills.
   return (
-    <header data-slot="settings-main-header" className="settings-route-header flex shrink-0 flex-col gap-1 md:px-9 px-4 pt-7 pb-5">
+    <header data-slot="settings-main-header" className="settings-route-header flex shrink-0 flex-col md:px-9 px-4 pt-7 pb-5">
       <h1 className="font-semibold tracking-tight leading-[1.2] text-foreground">
         <span className="md:hidden">{mobileTitle}</span>
         <span className="max-md:hidden">{title} <span className="font-normal text-soft-foreground">· {where}</span></span>
       </h1>
       {/* Small screens: the section picker below names the section, so the title names the area
           and this line keeps the scope cue the desktop title carries after its "·". */}
-      <span data-slot="settings-mobile-scope" className="text-[13px] text-muted-foreground md:hidden">
+      <span data-slot="settings-mobile-scope" className="mt-1 text-[13px] text-muted-foreground md:hidden">
         {scope === 'global' ? 'Applies to every project' : where}
       </span>
-      {description ? <p className="max-md:hidden text-[13px] text-muted-foreground">{description}</p> : null}
+      {description ? <p className="mt-1 max-md:hidden text-[13px] text-muted-foreground">{description}</p> : null}
       {scope === 'global' ? (
         <span data-slot="settings-scope-chip" className="sr-only">
           Global settings

@@ -26,7 +26,7 @@
 .settings-panel [data-slot="projects-checkout-root"] { width: 100%; max-width: none; }
 .settings-panel button:not([role=switch]):not([data-slot=project-tag-suggestion]) { min-height: 40px; }
 .settings-panel [data-slot="resources-composer-defaults"] { grid-template-columns: 1fr; gap: 24px; }
-.settings-panel [data-slot="prompt-template-row"] { padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: color-mix(in oklch, var(--card-2) 40%, transparent); gap: 12px; margin-block-end: 12px; }
+.settings-panel [data-slot="prompt-template-row"] { padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: transparent; gap: 6px; margin-block-end: 0; }
 .settings-panel [data-slot="prompt-template-new"] { padding-block: 20px; padding-inline: 0; border: 0; border-radius: 0; gap: 12px; border-block-end: 1px solid var(--border); }
 .settings-panel [data-slot="agent-config-agents"] { padding: 4px; background: color-mix(in oklch, var(--muted) 60%, transparent); border: 1px solid var(--border); border-radius: 8px; gap: 4px; width: fit-content; max-width: 100%; }
 .settings-panel [data-slot="agent-config-agent"] { border: 1px solid transparent; }
@@ -54,7 +54,7 @@
 /* S01–S13: the Settings shell owns this rhythm, independent of the task reading width. */
 .settings-route { padding: 0; gap: 0; }
 /* Desktop: the header is the board's full-bleed "Main header" (16/28 padding, rule below); the body keeps the board's 28px. */
-.settings-route-header { gap: 4px; }
+.settings-route-header { gap: 0; }
 .settings-route-body { gap: 24px; padding-block: 8px 28px; padding-inline: 36px; max-width: 56rem; width: 100%; }
 /* Agent config is a split view (file list + editor), like Git and GitHub: it takes the full width. */
 .settings-route[data-route=settings-agent-config] .settings-route-body { max-width: none; }
@@ -120,10 +120,10 @@
 
 .settings-panel [data-slot=prompt-templates-section] > .settings-field > div:first-child > h2 { display: none; }
 .settings-panel [data-slot=prompt-templates-section] > .settings-field > div:first-child > p { margin-block-start: 0; }
-.settings-panel [data-slot=prompt-template-row] { padding-block-start: 12px; gap: 12px; }
+/* One box per template, no inner dividers: label, instructions and skills read as one flat form. */
 .settings-panel [data-slot=prompt-template-row] > label,
 .settings-panel [data-slot=prompt-template-row] > p,
-.settings-panel [data-slot=prompt-template-new] > label:not(:first-of-type) { margin-block-start: 8px; padding-block-start: 20px; border-block-start: 1px solid var(--border); }
+.settings-panel [data-slot=prompt-template-new] > label:not(:first-of-type) { margin-block-start: 6px; }
 .settings-panel [data-slot=prompt-template-row] textarea { min-height: 44px; }
 /* A selected skill is a bordered pill; hover turns it red because a click removes it. */
 .settings-panel [data-slot=prompt-template-skill-chip] { min-height: 28px; padding-block: 2px; padding-inline: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--muted); font-size: 12px; }
@@ -131,9 +131,6 @@
 .settings-panel [data-slot=prompt-template-skills-trigger] { border-radius: 6px; }
 .settings-panel [data-slot=accounts-defaults] { margin-block-start: 8px; }
 .settings-panel [data-slot=accounts-defaults] select { max-width: none; }
-.settings-panel [data-slot=accounts-provider] > dl { background: var(--background); }
-.settings-panel [data-slot=accounts-provider] > ul { border: 0; }
-.settings-panel [data-slot=account-row] { padding-block: 16px; padding-inline: 0; }
 .settings-panel [data-slot=account-details] { background: var(--background); }
 .settings-route [data-slot=project-general] { gap: 20px; }
 .settings-route [data-slot=project-general] > section { padding: 20px; border-radius: 10px; }
@@ -150,7 +147,6 @@
 @media (max-width: 767px) {
   .settings-panel [data-slot=accounts-defaults] label { flex-direction: column; align-items: stretch; }
   .settings-panel [data-slot=accounts-defaults] label > span { width: auto; }
-  .settings-panel [data-slot=accounts-provider] dl > div { flex-wrap: wrap; }
   .settings-route [data-slot=project-general] > section { padding: 16px; }
 }
 
@@ -208,19 +204,6 @@
 .settings-config-save-help { display: grid; gap: 8px; padding-block-start: 8px; font-size: 12px; color: var(--muted-foreground); }
 .settings-config-scopes { display: grid; gap: 12px; padding-block-start: 24px; border-block-start: 1px solid var(--border); }
 .settings-config-scopes h3 { font-size: 14px; }
-.settings-panel [data-slot=accounts-provider] { gap: 12px; }
-.settings-account-provider-title { font-size: 14px; }
-.settings-account-installation { line-height: 1.6; }
-.settings-account-count { display: block; margin-block-start: 4px; color: var(--muted-foreground); font-size: 11px; }
-/* Compact account rows: name, then status on its own line, then the folder, then one action row. */
-.settings-panel [data-slot=account-row] { padding-block: 12px 0; padding-inline: 0; border-block-start: 1px solid var(--border); margin-block-start: 12px; }
-.settings-account-card { display: flex; flex-direction: column; gap: 10px; }
-.settings-account-card > div:first-child > div:first-child > span:first-child { font-size: 14px; font-weight: 500; }
-.settings-account-readout { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-block-start: 4px; }
-.settings-account-readout [data-slot=account-path] { margin: 0; font-size: 12px; white-space: normal; overflow-wrap: anywhere; color: var(--muted-foreground); }
-.settings-account-readout > div { margin: 0; font-size: 13px; }
-.settings-account-actions { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
-.settings-account-add-row { margin-block-start: 12px; }
 .settings-panel [data-slot=accounts-defaults] { border: 0; padding: 0; background: transparent; margin-block-start: 12px; gap: 12px; }
 .settings-panel [data-slot=accounts-defaults] > div:first-child > h3 { font-size: 14px; }
 .settings-panel [data-slot=accounts-defaults] > div:first-child > p { margin-block-start: 8px; font-size: 12px; }
@@ -231,17 +214,12 @@
   .settings-config-agent-choice { margin-inline-start: 0; }
   .settings-config-file-row { gap: 8px; }
   .settings-config-file-row button { padding-inline: 12px; }
-  .settings-account-actions { align-items: center; flex-direction: row; }
   .settings-panel [data-slot=accounts-defaults] .settings-account-model { flex-direction: row; align-items: center; flex-wrap: wrap; }
   .settings-panel .settings-account-model select { flex: 1; min-width: 100px; }
 }
 .settings-panel [data-slot=agent-config-scope] { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .settings-config-scopes [data-slot=agent-config-nav] { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 20px; }
 .settings-config-scopes [data-slot=agent-config-file] { font-size: 12px; padding: 8px; }
-.settings-panel [data-slot=accounts-provider] > ul { border-radius: 0; }
-.settings-account-management { display: contents; }
-.settings-account-management > span { order: 2; flex-basis: 100%; font-size: 12px; }
-.settings-account-management [data-slot=account-rename-input] { min-width: 0; max-width: 100%; }
 .settings-panel [data-slot=accounts-defaults] .settings-model-agent-choice { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 12px; color: var(--muted-foreground); }
 .settings-panel .settings-model-agent-choice select { width: 16rem; max-width: 100%; }
 .settings-config-scopes [data-slot=agent-config-group] > ul > li { width: 100%; min-width: 0; }
@@ -257,7 +235,6 @@
 .settings-panel .settings-field > select[data-slot="resources-max-parallel"], .settings-panel .settings-field > select[data-slot="resources-max-monitoring"] { width: 9rem; }
 .settings-panel .settings-resource-controls input[data-slot="resources-memory-limit"], .settings-panel .settings-resource-controls input[data-slot="resources-monitoring-wake-interval"] { flex: none; width: 9rem; }
 .settings-panel [data-slot="resources-composer-defaults"] select { width: 16rem; max-width: 100%; }
-.settings-panel .settings-account-add-row, .settings-panel [data-slot=accounts-actions] { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 
 /* Unified page header (pass-3 contract): the same 28px title and gutter every route uses. */
 @media (max-width: 767px) { .settings-route-header { padding: 0; } }
@@ -267,11 +244,38 @@
   .settings-route-header { padding-inline: 36px; padding-block: 28px 20px; }
   .settings-route-header h1 { font-size: 28px; }
 }
-/* Compact agent cards: tight vertical rhythm so two or three fit above the fold. */
-.settings-panel .settings-agent-card { gap: 10px; padding: 12px 16px; }
-.settings-panel .settings-agent-card .settings-readout { padding: 8px 12px; }
-.settings-panel .settings-account-add-row { margin-block-start: 0; }
 
 /* Archive-on-merge reads as one more settings card: the same 14px regular title and hint rhythm. */
 .settings-panel [data-slot=archive-on-merge-field] > div:first-child > label { font-size: 14px; font-weight: 400; }
 .settings-panel [data-slot=archive-on-merge-field] > div:first-child > label + p { margin-block-start: 4px; line-height: 1.6; }
+
+/* Flat agent cards (pass 5): ONE bordered card per agent. Top row = name, inline status summary
+   and compact actions; then one quiet metadata line per account, split by a hairline. No inner
+   boxes, so three or four agents fit above the fold. */
+.settings-panel .settings-agent-card { gap: 0; padding: 0; scroll-margin-block-start: 16px; }
+.settings-agent-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 12px 16px; }
+.settings-agent-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; min-width: 0; flex: 1 1 18rem; }
+.settings-panel .settings-account-provider-title { font-size: 14px; font-weight: 600; color: var(--foreground); }
+.settings-agent-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0; min-width: 0; font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+.settings-agent-summary-item { display: inline-flex; align-items: center; min-width: 0; overflow-wrap: anywhere; }
+.settings-agent-summary-sep { padding-inline: 6px; color: var(--soft-foreground); }
+.settings-account-actions { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
+.settings-panel .settings-agent-card .settings-account-actions button:not([data-slot=account-rename-input]) { min-height: 32px; padding-inline: 12px; font-size: 12px; }
+.settings-agent-accounts { display: flex; flex-direction: column; }
+.settings-account-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-inline: 16px; padding-block: 8px 12px; border-block-start: 1px solid var(--border); }
+.settings-account-readout { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.settings-account-meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; font-size: 12px; color: var(--muted-foreground); }
+.settings-account-label { font-size: 13px; font-weight: 500; color: var(--foreground); }
+.settings-account-path { font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.settings-account-hint { font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+.settings-account-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-inline: 16px; padding-block: 10px 12px; border-block-start: 1px solid var(--border); }
+.settings-agent-note { margin-inline: 16px; padding-block: 8px 12px; border-block-start: 1px solid var(--border); font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+.settings-agent-card > section[aria-label="CLI installation"] { margin-inline: 16px; padding-block: 8px 12px; border-block-start: 1px solid var(--border); }
+.settings-account-management { display: contents; }
+.settings-account-management > span { flex-basis: 100%; font-size: 12px; color: var(--muted-foreground); }
+.settings-account-management [data-slot=account-rename-input] { min-width: 0; max-width: 100%; }
+@media (max-width: 767px) {
+  .settings-agent-head { padding: 12px; }
+  .settings-account-meta, .settings-account-line, .settings-agent-note, .settings-agent-card > section[aria-label="CLI installation"] { margin-inline: 12px; }
+  .settings-panel .settings-agent-card .settings-account-actions button:not([data-slot=account-rename-input]) { min-height: 44px; }
+}

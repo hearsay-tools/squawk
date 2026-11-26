@@ -14,6 +14,7 @@ import { toast } from '@/components/ui/toaster'
 import { useUnsentDraft } from '@/lib/version-reload'
 import { useSavedDraft } from '@/lib/saved-draft'
 import { SettingsField } from './settings-field'
+import { SaveCue } from './save-cue'
 
 /**
  * Global settings → Resources: how hard the MACHINE works. `maxParallel` caps concurrent tasks
@@ -231,7 +232,7 @@ function MaxParallelField({
         <Link
           to="/settings/global/projects"
           data-slot="resources-project-limits-link"
-          className="font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+          className="font-medium text-link-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
         >
           Configure per-project limits
         </Link>
@@ -332,6 +333,7 @@ function WakeField({
           </>
         ) : null}
         <Button type="button" variant="primary" size="sm" data-action="resources-save-monitoring-wake" disabled={wakeSaved || showInvalid || saveIsPending} onClick={saveWake}>Save</Button>
+        <SaveCue show={wakeSaved && !showInvalid && !saveIsPending} />
       </div>
       {showInvalid ? (
         <p data-slot="resources-monitoring-wake-invalid" className="text-[11px] text-danger">Enter a whole number from 1 to 60 minutes.</p>
@@ -389,6 +391,7 @@ function MemoryField({
         >
           Save
         </Button>
+        <SaveCue show={memorySaved && !memoryInvalid && !saveIsPending} />
       </div>
       {memoryInvalid ? (
         <p data-slot="resources-memory-invalid" className="text-[11px] text-danger">

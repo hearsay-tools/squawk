@@ -194,7 +194,8 @@ describe('the global Agents section', () => {
   it('does not invent a discovered login when the selected provider has no account rows', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'], selections: {}, profiles: [] })
     renderAccounts()
-    await waitFor(() => expect(document.querySelector('.settings-account-count')?.textContent).toBe('0 accounts (0 discovered, 0 added)'))
+    await waitFor(() => expect(document.querySelector('.settings-account-count')?.textContent).toBe('0 accounts'))
+    expect(document.querySelector('.settings-account-count')?.getAttribute('title')).toBe('0 discovered, 0 added')
     expect(rows()).toHaveLength(0)
   })
 
@@ -557,10 +558,18 @@ describe('the global Agents section', () => {
     expect(document.querySelector('[data-slot="accounts-hosted"]')).toBeNull()
     expect(document.querySelector('[data-action="accounts-add"]')).not.toBeNull()
     expect(rowFor('work')?.querySelector('[data-slot="account-path"]')?.textContent).toBe('~/.claude-work')
-    // Add account shares the last row's action line with Check again; status sits above the path.
+    // One flat card: the first account's Check again sits beside Add account in the top row, next
+    // to the agent name and its inline status; a further account keeps its own Check again.
+    const head = rowFor('default')?.querySelector('[data-slot="agent-head"]')
+    expect(head?.querySelector('h3')?.textContent).toBe('Claude Code')
+    expect(head?.querySelector('[data-slot="agent-summary"] [data-slot="account-status"]')).not.toBeNull()
+    const headActions = head?.querySelector('[data-slot="account-actions"]')
+    expect([...(headActions?.querySelectorAll('button') ?? [])].map((b) => b.getAttribute('data-action'))).toEqual(['account-recheck', 'accounts-add'])
     const actions = rowFor('work')?.querySelector('[data-slot="account-actions"]')
     expect(actions?.querySelector('[data-action="account-recheck"]')).not.toBeNull()
-    expect(actions?.querySelector('[data-action="accounts-add"]')).not.toBeNull()
+    expect(actions?.querySelector('[data-action="accounts-add"]')).toBeNull()
+    // No box inside the card: the install readout is inline text, not a bordered panel.
+    expect(document.querySelector('.settings-readout')).toBeNull()
     const readout = rowFor('work')?.querySelector('.settings-account-readout')
     expect(readout?.firstElementChild?.querySelector('[data-slot="account-status"]')).not.toBeNull()
     expect(rowFor('work')?.querySelector('[data-action="account-rename"]')).not.toBeNull()

@@ -277,7 +277,9 @@ describe('Global settings → Projects', () => {
     renderProjects()
     await waitFor(() => expect(rootInput()).not.toBeNull())
     expect(saveRoot()!.disabled).toBe(true) // unchanged
+    expect(saveRoot()!.parentElement?.querySelector('[data-slot="settings-save-cue"]')?.textContent).toBe('No unsaved changes')
     fireEvent.change(rootInput()!, { target: { value: '~/code' } })
+    expect(saveRoot()!.parentElement?.querySelector('[data-slot="settings-save-cue"]')).toBeNull()
     fireEvent.click(saveRoot()!)
     await waitFor(() =>
       expect(requests.filter((r) => r.method === 'PUT' && r.url === '/api/v1/workspace/config')).toEqual([

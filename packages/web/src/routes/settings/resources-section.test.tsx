@@ -160,6 +160,8 @@ describe('Global settings → Resources', () => {
 
     const link = await screen.findByRole('link', { name: 'Configure per-project limits' })
     expect(link.getAttribute('href')).toBe('/settings/global/projects')
+    // The cockpit's teal link token, not bold neutral text.
+    expect(link.className).toContain('text-link-foreground')
   })
 
   it('saves the extra monitoring capacity and explains the two pools', async () => {
@@ -340,8 +342,10 @@ describe('Global settings → Resources', () => {
     await waitFor(() => expect(memoryInput()).not.toBeNull())
     expect(memoryInput()!.value).toBe('')
     expect(saveMemory()!.disabled).toBe(true)
+    expect(saveMemory()!.parentElement?.querySelector('[data-slot="settings-save-cue"]')?.textContent).toBe('No unsaved changes')
 
     fireEvent.change(memoryInput()!, { target: { value: '2048' } })
+    expect(saveMemory()!.parentElement?.querySelector('[data-slot="settings-save-cue"]')).toBeNull()
     fireEvent.click(saveMemory()!)
     await waitFor(() => expect(puts()).toHaveLength(1))
     expect(puts()[0]?.body).toEqual({ resources: { memoryLimitMb: 2048 } })

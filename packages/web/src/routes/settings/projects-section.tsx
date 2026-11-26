@@ -30,6 +30,7 @@ import { allProjectTags, suggestTags } from '@/lib/project-tags'
 import { cn } from '@/lib/utils'
 import { RemoveProjectDialog, useProjectRemoval } from './remove-project'
 import { SettingsField } from './settings-field'
+import { SaveCue } from './save-cue'
 
 /**
  * Global settings → Projects (multi-project spec, step 4.4; mockup
@@ -237,6 +238,7 @@ function WorkspaceRootField({
         >
           Save
         </Button>
+        <SaveCue show={unchanged && trimmed !== '' && !save.isPending} />
       </div>
       {serverError !== null ? (
         // The mockup's error line: the reason, then what did NOT happen — a failed probe
