@@ -117,6 +117,8 @@ export function useThreadScroll(
   } = {},
 ): ThreadScrollControls {
   const { surface = 'document', onLoadOlder, onJumpToLatest, rowKeys = [] } = options
+  const rowKeysRef = useRef(rowKeys)
+  rowKeysRef.current = rowKeys
   const viewKeyRef = useRef(viewKey)
   viewKeyRef.current = viewKey
   const scrollElRef = useRef<HTMLElement | null>(null)
@@ -161,7 +163,20 @@ export function useThreadScroll(
 
   const toBottom = useCallback(() => {
     const scroller = scrollElRef.current
-    if (scroller) setOffset(scroller.scrollHeight - scroller.clientHeight)
+    if (!scroller) return
+    // An answerable ask owns the arrival target, including replay and later layout growth.
+    // Keep its heading below the sticky header instead of aligning the card's bottom.
+    const askIndex = rowKeysRef.current.findIndex(key => key.startsWith('pending-ask:'))
+    const ask = scroller.querySelector<HTMLElement>('[data-slot="ask-card"][data-pinned="true"][data-resolved="false"]')
+    const header = scroller.querySelector<HTMLElement>('[data-slot="run-header"]')
+    const inset = header && getComputedStyle(header).position === 'sticky' ? header.getBoundingClientRect().height : 0
+    if (ask) {
+      setOffset(scroller.scrollTop + ask.getBoundingClientRect().top - scroller.getBoundingClientRect().top - inset - 12)
+    } else if (askIndex >= 0 && virtualizerRef.current) {
+      virtualizerRef.current.scrollToIndex(askIndex, { align: 'start', offset: -inset - 12 })
+    } else {
+      setOffset(scroller.scrollHeight - scroller.clientHeight)
+    }
   }, [setOffset])
 
   const applyArrival = useCallback(() => {
@@ -224,8 +239,6 @@ export function useThreadScroll(
   const wheelGestureTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const touchHistoryConsumedRef = useRef(false)
   const pointerHistoryConsumedRef = useRef(false)
-  const rowKeysRef = useRef(rowKeys)
-  rowKeysRef.current = rowKeys
 
   const measuredRows = useCallback((scroller: HTMLElement): ThreadRowPosition[] =>
     [...scroller.querySelectorAll<HTMLElement>('[data-slot="thread-row"][data-row-key]')].map((row) => {

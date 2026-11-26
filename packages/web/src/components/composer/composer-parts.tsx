@@ -168,6 +168,7 @@ export function ComposerFeedback({
 export function ComposerSubmitRow({
   mode,
   emptySubmitLabel,
+  emptySubmitVariant,
   optionsId,
   dictationButton,
   footerEnd,
@@ -178,6 +179,7 @@ export function ComposerSubmitRow({
 }: {
   mode: ComposerSubmitMode
   emptySubmitLabel: string | undefined
+  emptySubmitVariant?: 'primary' | 'outline' | undefined
   optionsId: string
   dictationButton: ReactNode
   footerEnd: ReactNode
@@ -203,6 +205,7 @@ export function ComposerSubmitRow({
           <Button
             type="button"
             size="icon-sm"
+            variant={mode.hasContent ? 'primary' : emptySubmitVariant ?? 'primary'}
             aria-label={mode.submitLabel}
             aria-busy={composerAriaBusy(mode.busy, mode.stopPending)}
             disabled={composerSendDisabled(mode)}

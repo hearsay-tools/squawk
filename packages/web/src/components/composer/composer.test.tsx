@@ -1119,6 +1119,15 @@ describe('unified execution actions (#201)', () => {
     expect(screen.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(false)
   })
 
+  it('keeps an empty review continuation outlined until a follow-up is entered', () => {
+    const { textarea } = renderComposer({ allowEmptySubmit: true, emptySubmitLabel: 'Continue', emptySubmitVariant: 'outline' })
+    expect(screen.getByRole('button', { name: 'Continue' }).getAttribute('data-variant')).toBe('outline')
+    type(textarea, 'Please update the tests')
+    expect(screen.getByRole('button', { name: 'Send' }).getAttribute('data-variant')).toBe('primary')
+    type(textarea, '   ')
+    expect(screen.getByRole('button', { name: 'Continue' }).getAttribute('data-variant')).toBe('outline')
+  })
+
   it('preserves attachments and text through failed Stop and locks competing submissions', async () => {
     let reject!: (error: Error) => void
     const onStop = vi.fn(() => new Promise<void>((_, no) => { reject = no }))

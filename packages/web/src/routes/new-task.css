@@ -30,7 +30,7 @@
 .new-task-editor [data-slot='composer-footer-start'] button { min-height: 44px; }
 @container new-task-layout (min-width: 60rem) {
   /* The sidebar may grow without adding space between the editor and its controls. */
-  .new-task-composer { grid-template-columns: minmax(0, 1fr) 330px; grid-template-rows: max-content max-content max-content minmax(0, 1fr); column-gap: 24px; }
+  .new-task-composer { grid-template-columns: minmax(0, 1fr) 330px; grid-template-rows: max-content max-content max-content max-content; column-gap: 24px; }
   .new-task-editor { grid-column: 1; grid-row: 1; }
   .new-task-composer [data-slot='composer-agent-options'] { grid-column: 1; grid-row: 2; }
   .new-task-composer [data-slot='composer-execution-panel'] { grid-column: 2; grid-row: 1 / 5; }
@@ -144,3 +144,5 @@
 @media (min-width: 768px) {
   [data-slot='new-task-layout'] { padding-inline: 36px; }
 }
+
+[data-route='new'] [data-slot='run-mode-note'] { margin-block-start: 12px; }

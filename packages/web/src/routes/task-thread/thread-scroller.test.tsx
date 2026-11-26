@@ -100,6 +100,41 @@ describe('useThreadScroll — outside a shell scroller (jsdom, tests, storybook-
     ])
   })
 
+  it('opens a pending ask at its heading below the sticky tabs and keeps it there on growth', () => {
+    let grow!: ResizeObserverCallback
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: ResizeObserverCallback) { grow = callback }
+      observe() {}
+      disconnect() {}
+    })
+    const main = document.createElement('main')
+    main.dataset.slot = 'main'
+    Object.defineProperties(main, { clientHeight: { value: 500 }, scrollHeight: { value: 2000 } })
+    const header = document.createElement('header')
+    header.dataset.slot = 'run-header'
+    header.style.position = 'sticky'
+    header.getBoundingClientRect = () => ({ height: 60 }) as DOMRect
+    const content = document.createElement('div')
+    const card = document.createElement('div')
+    Object.assign(card.dataset, { slot: 'ask-card', pinned: 'true', resolved: 'false' })
+    let cardTop = 1000
+    main.getBoundingClientRect = () => ({ top: 0 }) as DOMRect
+    card.getBoundingClientRect = () => ({ top: cardTop - main.scrollTop }) as DOMRect
+    content.append(card)
+    main.append(header, content)
+    document.body.append(main)
+    const hook = renderHook(() => useThreadScroll('pending-heading'))
+    act(() => hook.result.current.attachContent(content))
+    expect(main.scrollTop).toBe(928)
+    cardTop += 100
+    act(() => grow([], {} as ResizeObserver))
+    expect(main.scrollTop).toBe(1028)
+    fireEvent.wheel(main, { deltaY: -100 })
+    cardTop += 100
+    act(() => grow([], {} as ResizeObserver))
+    expect(main.scrollTop).toBe(1028)
+  })
+
   it('keeps jump-to-latest intent when refreshing history remounts the transcript', async () => {
     const scroller = document.createElement('main')
     scroller.dataset.slot = 'main'

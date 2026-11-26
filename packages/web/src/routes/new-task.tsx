@@ -164,7 +164,7 @@ export function NewTaskRoute() {
       className="relative isolate flex min-h-full flex-col overflow-x-clip pb-16"
     >
 
-      <div data-slot="new-task-layout" data-persisted-draft={persisted || undefined} ref={draftPanelRef} style={plan !== null ? { display: 'none' } : undefined} className="relative z-[1] mx-auto w-full max-w-none px-4 md:px-9 pt-12 max-md:pt-[22px]">
+      <div data-slot="new-task-layout" data-persisted-draft={persisted || undefined} ref={draftPanelRef} style={plan !== null ? { display: 'none' } : undefined} className="relative z-[1] mx-auto w-full max-w-none px-4 md:px-9 pt-7">
         <NewTaskHeader />
 
 

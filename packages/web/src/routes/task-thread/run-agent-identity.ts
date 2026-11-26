@@ -3,6 +3,7 @@ import type { AgentProfile } from '@open-mercato/cezar-api-client/contract/agent
 import type { ApiRun, Runner } from '@open-mercato/cezar-api-client'
 import { removedRunnerLabel } from '@open-mercato/cezar-api-client/contract/runner'
 
+import { useRunners, runnerDisplayName } from '@/api/runners'
 import { hasAccountChoice, useAgentAccounts } from '@/api/agent-accounts'
 import type { RunnerAccountChoice } from '@/components/picker-pill'
 import { useAgentProfiles, useConfig } from '@/api/queries'
@@ -55,6 +56,7 @@ export function useAgentIdentity(run: ApiRun): AgentIdentity {
   // codex/opencode, and "which agent produced this?" is the one question #416 exists to answer.
   // 'claude' stays the last resort only while the active project's config is in flight.
   // `/api/health` describes the boot project and can name the wrong runner on scoped routes.
+  const registered = useRunners()
   const config = useConfig()
   const profiles = useAgentProfiles()
   const { accounts } = useAgentAccounts()
@@ -110,7 +112,7 @@ export function useAgentIdentity(run: ApiRun): AgentIdentity {
   const identity = run.modelIdentity && run.modelIdentity !== model ? run.modelIdentity : undefined
   return {
     // A task saved on a runner Squawk no longer ships names it, marked removed (hearsay-tools/squawk#3715).
-    runner: run.removedRunner !== undefined ? removedRunnerLabel(run.removedRunner) : runner,
+    runner: run.removedRunner !== undefined ? removedRunnerLabel(run.removedRunner) : runnerDisplayName(registered.data, runner),
     ...(account ? { account } : {}),
     model,
     effort,

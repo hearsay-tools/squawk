@@ -67,9 +67,8 @@ import { ownsDirectory } from '@open-mercato/cezar-api-client/contract/delegatio
 /**
  * The run header (spec §"Task thread" → Header): editable title + status pill, the meta line,
  * the Session | Changes | Files tabs with the action bar — the header region above the thread.
- * Session activity controls live in the activity dock above the composer. The header scrolls away
- * on phones so the transcript owns the small viewport. On desktop Session it docks (`md:sticky md:top-0`) so Archive and sibling
- * actions stay on screen while the transcript scrolls. Git tabs stay in document flow — their own
+ * Session activity controls live in the activity dock above the composer. The Session header docks on every viewport so the facet tabs stay visible above pending
+ * questions. Desktop actions stay on screen while the transcript scrolls. Git tabs stay in document flow — their own
  * sticky chrome (`top-4` / `--diff-sticky-top`) already parks under the viewport top. Opaque
  * `bg-background` so thread text does not show through; `z-20` parks it below any shell top bar
  * and above the transcript.
@@ -373,7 +372,7 @@ export function RunHeader({
         // the header has no top padding of its own there.
         'relative z-20 bg-background px-4 md:px-9 md:pt-7',
         phoneBar ? 'pt-0' : 'pt-[18px]',
-        tab === 'session' && 'md:sticky md:top-0',
+        tab === 'session' && 'sticky [inset-block-start:0]',
       )}
     >
       <AutoArchiveNote run={run} />
@@ -544,7 +543,7 @@ function MobileRunTitle({ run }: { run: ApiRun }) {
       }}
     >
       <div data-slot="mobile-run-title" className="flex min-w-0 flex-1 flex-col gap-px">
-        <h1 className="truncate text-[15px] leading-tight font-semibold text-foreground" title={run.task}>{title}</h1>
+        <h1 className="line-clamp-2 break-words text-[15px] leading-tight font-semibold text-foreground" title={run.task}>{title}</h1>
       </div>
       <PopoverTrigger asChild>
         <button

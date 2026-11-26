@@ -19,6 +19,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ProjectScopeProvider } from '@/api/project-scope-context'
 import { createQueryClient } from '@/api/query-client'
+import { seedRunners } from '@/test/runners.testkit'
 import type { ApiRun, RunEvent, StepState, WorkerInspection } from '@open-mercato/cezar-api-client'
 
 import { RunActivityDock, resetActivityDisclosureForTests } from './run-activity-dock'
@@ -133,6 +134,7 @@ function renderDock(
     }),
   )
   const client = createQueryClient()
+  seedRunners(client)
   client.setDefaultOptions({ queries: { retry: false } })
   const tree = (current: ApiRun) => (
     <QueryClientProvider client={client}>
@@ -633,7 +635,7 @@ describe('Session activity — status, usage and workspace (#1333)', () => {
     fireEvent.click(sectionHead('usage'))
     const body = section('usage')!.textContent
     expect(body).toContain('Runner')
-    expect(body).toContain('codex')
+    expect(body).toContain('Codex')
     expect(body).toContain('gpt-6')
     expect(body).toContain('high')
   })
@@ -646,10 +648,10 @@ describe('Session activity — status, usage and workspace (#1333)', () => {
     expect(usage).toContain('gpt-6')
     expect(usage).toContain('high')
     fireEvent.click(summary())
-    expect(summary().textContent).toContain('codex')
+    expect(summary().textContent).toContain('Codex')
     expect(summary().textContent).toContain('gpt-6')
     expect(summary().textContent).toContain('high')
-    expect(summary().getAttribute('aria-label')).toContain('runner codex; model gpt-6; effort high')
+    expect(summary().getAttribute('aria-label')).toContain('runner Codex; model gpt-6; effort high')
   })
 
   it('reads the saved provider even when the model already includes it', () => {

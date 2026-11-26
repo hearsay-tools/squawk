@@ -117,6 +117,7 @@ export interface ComposerProps {
    * no business knowing what archiving is, the same seam `footerEnd` and `sessionControls` use.
    */
   secondaryAction?: ReactNode
+  emptySubmitVariant?: 'primary' | 'outline' | undefined
   emptySubmitLabel?: string | undefined
   compactFeedback?: boolean
   /** Idle guidance occupies the already-reserved submission status space. */
@@ -341,7 +342,7 @@ function useComposerText(value: string | undefined, onValueChange: ((text: strin
 export function Composer(props: ComposerProps) {
   const {
     onSubmit, retainDraftUntilSuccess, onStop, onFinish, finishing, secondaryAction, stopOnEmpty,
-    stopping, emptySubmitLabel, compactFeedback, idleFeedback, pendingLabel, failureHint,
+    stopping, emptySubmitLabel, emptySubmitVariant, compactFeedback, idleFeedback, pendingLabel, failureHint,
     clearOnSuccess, onPendingChange, value, onValueChange, autoFocus, mobileCollapsible,
     mobileDisclosureKey, footerStart, footerEnd, sessionControls, executionOptions, agentOptions,
     sendAriaLabel, disabled, disabledReason, allowEmptySubmit, placeholder, ariaLabel,
@@ -739,6 +740,7 @@ export function Composer(props: ComposerProps) {
     <ComposerSubmitRow
       mode={mode}
       emptySubmitLabel={emptySubmitLabel}
+      emptySubmitVariant={emptySubmitVariant}
       optionsId={optionsId}
       dictationButton={dictationButton}
       footerEnd={footerEnd}

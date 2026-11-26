@@ -8,11 +8,6 @@
   inset: min(0px, (100% - 44px) / 2);
 }
 
-.completion-switch:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 3px;
-}
-
 .completion-control:active {
   background: var(--muted);
 }
@@ -34,34 +29,9 @@
   display: block;
   margin-block-start: 3px;
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   line-height: 1.5;
-}
-
-[data-embedded] .completion-switch {
-  inline-size: 44px;
-  block-size: 44px;
-  margin-block-start: -7px;
-  background: transparent;
-}
-
-[data-embedded] .completion-switch::before {
-  content: '';
-  position: absolute;
-  inset-inline: 1px;
-  inset-block: 9px;
-  border-radius: inherit;
-  background: var(--input);
-}
-
-[data-embedded] .completion-switch[data-state='checked']::before {
-  background: var(--accent-strong);
-}
-
-[data-embedded] .completion-switch [data-slot='switch-thumb'] {
-  position: relative;
-  margin-inline-start: 1px;
 }
 
 [data-embedded] .completion-order-note {

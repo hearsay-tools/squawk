@@ -508,7 +508,7 @@ function ThreadTranscript({
   /* Row spacing lives on each thread row (pb-2.5, both render modes measure alike);
       this gap only separates the sections — rows, empty state, footer, review panel. */
   return (
-    <div data-slot="session-conversation" className="mx-auto flex w-full max-w-[var(--measure)] flex-1 flex-col gap-2.5 px-[18px] py-3 md:gap-3.5 md:px-16 md:py-5">
+    <div data-slot="session-conversation" className="mx-auto flex w-full max-w-[var(--measure)] flex-1 flex-col gap-2.5 px-[18px] py-3 md:gap-3.5 md:px-16 md:py-5 [padding-block-end:24px]">
       {history ? (
         <HistoryBoundary
           hasOlder={history.hasOlder}
@@ -771,6 +771,7 @@ function ThreadComposer({
       }
       // Continuing with nothing typed is the legacy one-click Continue.
       allowEmptySubmit={continuable && !needsAnswer}
+      emptySubmitVariant={run.status === 'review' ? 'outline' : 'primary'}
       emptySubmitLabel={continuable && !needsAnswer ? 'Continue' : undefined}
       placeholder={threadComposerPlaceholder(run, queued, continuable)}
       autocompleteSkills

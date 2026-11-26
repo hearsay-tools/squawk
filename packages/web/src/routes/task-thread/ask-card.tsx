@@ -118,7 +118,7 @@ function RoutedAsk({ ask, onShowOrigin }: { ask: ThreadAsk; onShowOrigin: (() =>
       data-resolved="false"
       data-pinned={ask.placement === 'pinned' ? 'true' : undefined}
       data-routed="parent"
-      className="rounded-lg border border-border bg-card px-4 pt-3.5 pb-3.5"
+      className="rounded-lg border border-border bg-card px-3 py-2"
     >
       <div className="mb-2.5 flex items-center gap-2">
         <span className="text-xs font-medium text-link-foreground">The agent is asking its parent</span>
@@ -215,12 +215,12 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
       data-resolved="false"
       data-pinned={ask.placement === 'pinned' ? 'true' : undefined}
       data-delivery={delivery.mode}
-      className="rounded-lg border border-accent-strong/25 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card px-4 pt-3.5 pb-3.5"
+      className="rounded-lg border border-accent-strong/25 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card px-3 py-2"
     >
       <div className="mb-2.5 flex items-center gap-2">
         <span className="text-xs font-medium text-link-foreground">The agent is asking</span>
       </div>
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         {questions.map((question, index) => (
           <AskQuestionBlock
             key={question.id ?? index}
@@ -283,7 +283,7 @@ function AskSubmit({ oneTap, hasOtherAnswer, resuming, disabled, questionCount, 
     </p>
   ) : null
   return (
-    <div className="mbs-3 flex items-center gap-2.5">
+    <div className="mbs-2 flex items-center gap-2.5">
       <Button size="sm" className="min-h-11" disabled={disabled} onClick={onSend}>
         {resuming ? 'Send answer & reopen' : 'Send answer'}
       </Button>
@@ -355,7 +355,7 @@ function AskQuestionBlock({
                   aria-pressed={isSelected}
                   onClick={() => pick(option.label)}
                   className={cn(
-                    'flex min-h-11 w-full flex-col gap-0.5 rounded-md border px-3.5 py-2.5 text-left transition-colors',
+                    'flex min-h-11 w-full flex-col gap-0.5 rounded-md border px-3 py-2 text-left transition-colors',
                     'hover:border-accent-strong/50 hover:bg-accent-strong/[0.06] [html:not(.light)_&]:hover:bg-card disabled:pointer-events-none disabled:opacity-50',
                     isSelected ? 'border-accent-strong/60 bg-accent-strong/[0.06] [html:not(.light)_&]:bg-card' : 'border-border bg-card',
                   )}

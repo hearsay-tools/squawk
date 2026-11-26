@@ -57,6 +57,7 @@ export function ActivitySummary({ items, lead = 0 }: { items: SummaryItem[]; lea
           <span key={item.id} data-summary-item={item.id} data-hidden={hidden} aria-hidden={hidden || undefined} inert={hidden || undefined}
             style={first && lead ? { marginInlineStart: lead } : undefined}
             className="inline-flex w-max shrink-0 items-center gap-1.5 data-[hidden=true]:invisible data-[hidden=true]:absolute">
+            {!first || lead > 0 ? <span aria-hidden="true" data-slot="activity-separator">·</span> : null}
             {item.content}
           </span>
         )
