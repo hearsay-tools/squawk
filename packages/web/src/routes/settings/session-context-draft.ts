@@ -17,7 +17,14 @@ const RULE_ID = /(?:^\s*-\s*|\{\s*)id:\s*([^\s,}]+)/gm
 
 /** A rule id the draft does not use yet: `new-rule`, then `new-rule-2`, … */
 function freeRuleId(text: string): string {
-  const used = new Set([...text.matchAll(RULE_ID)].map((match) => match[1]))
+  const used = new Set<unknown>([...text.matchAll(RULE_ID)].map((match) => match[1]))
+  // Quoted or otherwise written ids: read them from the parsed rules when the draft parses.
+  try {
+    const rules = (parseDocument(text).toJS() as { rules?: unknown } | null)?.rules
+    if (Array.isArray(rules)) for (const rule of rules) used.add((rule as { id?: unknown } | null)?.id)
+  } catch {
+    // A draft that does not parse keeps the ids the pattern found.
+  }
   if (!used.has('new-rule')) return 'new-rule'
   let n = 2
   while (used.has(`new-rule-${n}`)) n++

@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { queryKeys } from '@/api/queries'
 import { createQueryClient } from '@/api/query-client'
 import type { SessionContextFile, SessionContextPreview, SessionContextProblem } from '@open-mercato/cezar-api-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
@@ -75,9 +76,9 @@ function serve(server: FakeServer) {
   )
 }
 
-function renderSection() {
+function renderSection(client = createQueryClient()) {
   return render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={client}>
       <SessionContextSection />
       <Toaster />
     </QueryClientProvider>,
@@ -226,6 +227,25 @@ describe('SessionContextSection', () => {
     expect(await screen.findByText('Not checked')).toBeTruthy()
     expect(screen.queryByText('Valid')).toBeNull()
     expect(saveButton().disabled).toBe(true)
+  })
+
+  it('saves over the version the draft started from, even after a background reload', async () => {
+    const server: FakeServer = { file: fileOf(), puts: [], previews: [] }
+    serve(server)
+    const client = createQueryClient()
+    renderSection(client)
+    await screen.findByLabelText('context.yaml rules')
+    const mine = VALID.replace('Hello', 'Mine')
+    type(mine)
+    // Someone else saves; a background reload brings their version while the draft stays.
+    server.file = fileOf({ content: 'version: 1\n# theirs\n', version: 'v-theirs' })
+    await act(() => client.invalidateQueries({ queryKey: queryKeys.sessionContext }))
+    expect(editor().value).toBe(mine)
+    await waitFor(() => expect(saveButton().disabled).toBe(false))
+    fireEvent.click(saveButton())
+    expect(await screen.findByText('Not saved: the file changed on disk')).toBeTruthy()
+    expect(server.puts).toEqual([{ content: mine, version: 'v1' }])
+    expect(server.file.content).toBe('version: 1\n# theirs\n')
   })
 
   it('says what failed when the file does not load', async () => {

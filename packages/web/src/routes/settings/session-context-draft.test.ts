@@ -20,6 +20,11 @@ describe('session context draft edits', () => {
     expect(text.slice(...select)).toBe('new-rule-2')
   })
 
+  it('picks a free id when an existing id is quoted', () => {
+    const { text } = addRule('version: 1\nrules:\n  - id: "new-rule"\n    on: session_start\n    template: x\n')
+    expect((parse(text) as { rules: { id: string }[] }).rules.map((r) => r.id)).toEqual(['new-rule', 'new-rule-2'])
+  })
+
   it('adds the rules key when the draft has only a version', () => {
     expect((parse(addRule('version: 1').text) as { rules: unknown[] }).rules).toHaveLength(1)
   })

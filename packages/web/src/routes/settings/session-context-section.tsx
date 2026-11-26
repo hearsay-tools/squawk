@@ -94,7 +94,16 @@ type SaveFailure = { kind: 'conflict'; message: string } | { kind: 'error'; mess
 
 /** The draft, its server-rendered preview, and the save that never loses the draft. */
 function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise<unknown>) {
-  const [draft, setDraft] = useState<string | null>(null)
+  const [draft, setDraftText] = useState<string | null>(null)
+  // The version the draft started from. A background reload may bring a newer file; a normal save
+  // still names this one, so it gets a conflict instead of overwriting the other edit.
+  const [base, setBase] = useState<{ version: string | null } | null>(null)
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+  const setDraft = (text: string) => {
+    setBase((pinned) => pinned ?? { version: file.version })
+    setDraftText(text)
+  }
   const [role, setRole] = useState<SessionContextRole>('parent')
   const [pane, setPane] = useState<Pane>('edit')
   const [failure, setFailure] = useState<SaveFailure | null>(null)
@@ -136,18 +145,23 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
     setSelection(lineRange(content, line))
   }
   const discard = () => {
-    setDraft(null)
+    setDraftText(null)
+    setBase(null)
     setFailure(null)
   }
-  const save = (version: string | null) => {
+  /** `overwrite` saves over the version on disk now; a normal save names the draft's base. */
+  const save = (overwrite = false) => {
+    const version = overwrite || base === null ? file.version : base.version
     setFailure(null)
     const sent = content
     put.mutate(
       { content: sent, version },
       {
-        onSuccess: () => {
-          // Text typed while the save was on its way stays as the draft.
-          setDraft((now) => (now === null || now === sent ? null : now))
+        onSuccess: (saved) => {
+          // Text typed while the save was on its way stays as the draft, now based on the saved file.
+          const kept = draftRef.current !== null && draftRef.current !== sent
+          setDraftText(kept ? draftRef.current : null)
+          setBase(kept ? { version: saved.version } : null)
           setShowDisk(false)
           toast(`Saved ${file.path}`)
         },
@@ -183,7 +197,7 @@ function SessionContextEditor({ file, refetch }: { file: SessionContextFile; ref
     <div data-slot="session-context-editor" data-reports-dirty="" className="flex flex-col gap-4">
       {!writable && <ReadOnlyNotice reason={file.readOnlyReason} />}
       {state.failure && writable && (
-        <SaveFailureNotice failure={state.failure} showDisk={state.showDisk} onShowDisk={state.toggleDisk} onOverwrite={() => state.save(file.version)} />
+        <SaveFailureNotice failure={state.failure} showDisk={state.showDisk} onShowDisk={state.toggleDisk} onOverwrite={() => state.save(true)} />
       )}
       {state.showDisk && <DiskVersion content={file.content} />}
       {state.previewError && (
@@ -236,7 +250,7 @@ function SessionContextEditor({ file, refetch }: { file: SessionContextFile; ref
         saving={state.saving}
         canSave={writable && state.dirty && !state.saving && current && problems.length === 0}
         onDiscard={state.discard}
-        onSave={() => state.save(file.version)}
+        onSave={() => state.save()}
       />
     </div>
   )
