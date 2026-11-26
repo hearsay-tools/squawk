@@ -6,7 +6,7 @@ import type { StartRunInput } from './run/types.ts';
 import type { WorkflowDef } from './types.ts';
 import { resolveRunnerId, runnerQuotaPool } from '../core/runner-registry.ts';
 
-type HoldRun = Pick<RunRecord, 'runner' | 'agentProfile' | 'model' | 'workflowDef'>;
+type HoldRun = Pick<RunRecord, 'runner' | 'agentProfile' | 'model' | 'workflowDef' | 'delegation'>;
 
 /**
  * A deadline hold blocks all work in its pool. An in-flight resume holds fresh work only; other
@@ -54,9 +54,10 @@ export function runHoldKey(run: Pick<RunRecord, 'runner' | 'agentProfile' | 'mod
 
 /**
  * The pool every turn a queued run can take draws on (hearsay-tools/squawk#4343): each agent step
- * runs its authored model, else the run-level pin, which an accepted Continue also sets. Steps on
- * two pools, or a step on the runner's default model, read as unknown, which every pool hold on the
- * account blocks.
+ * runs its authored model, else the run-level pin, which an accepted Continue also sets. A worker's
+ * bound workflow holds each step's resolved model, and a step without one runs the runner's default
+ * (`boundSpawnWorkflow`; a resume override rewrites it). Steps on two pools, or a step on the
+ * runner's default model, read as unknown, which every pool hold on the account blocks.
  */
 function queuedQuotaPool(run: HoldRun, fallbackRunner: string): string | undefined {
   const runner = run.runner ?? fallbackRunner;
@@ -66,7 +67,8 @@ function queuedQuotaPool(run: HoldRun, fallbackRunner: string): string | undefin
 
 function turnModels(run: HoldRun): (string | undefined)[] {
   const agentSteps = run.workflowDef?.steps.filter(step => step.command === undefined && step.kind !== 'plugin') ?? [];
-  return agentSteps.length ? agentSteps.map(step => step.model ?? run.model) : [run.model];
+  if (!agentSteps.length) return [run.model];
+  return run.delegation?.role === 'worker' ? agentSteps.map(step => step.model) : agentSteps.map(step => step.model ?? run.model);
 }
 
 /** An account-wide hold blocks every pool. A pool hold blocks its pool, and a run whose pool is

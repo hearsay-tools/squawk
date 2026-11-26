@@ -127,6 +127,16 @@ describe('quota pool holds', () => {
     expect(accountHeldFor(run, held('gemini-4-neon'), 'antigravity')).toBe(true);
   });
 
+  // A worker's bound workflow carries each step's resolved model; a step without one runs the
+  // runner's default, not the run-level model (`boundSpawnWorkflow`).
+  it('a worker step bound to the default model makes the worker\'s pool unknown', () => {
+    const delegation = makeRunRecord({ delegation: { role: 'worker', permissions: [], parentRunId: 'parent', workspace: { kind: 'isolated', baselineSha: 'a'.repeat(40) } } as never }).delegation;
+    const worker = (...models: (string | undefined)[]) => ({ ...queued('gemini-4-neon'), delegation,
+      workflowDef: { name: 'chain', source: 'file' as const, steps: models.map((model, index) => ({ id: `s${index}`, ...(model === undefined ? {} : { model }) })) } });
+    expect(accountHeldFor(worker('gemini-4-neon', undefined), held('claude-opus-5-5'), 'antigravity')).toBe(true);
+    expect(accountHeldFor(worker('gemini-4-neon'), held('claude-opus-5-5'), 'antigravity')).toBe(false);
+  });
+
   it('an in-flight third-party resume holds fresh third-party work, not Gemini work or other resumes', () => {
     const holds = deriveAccountHolds([makeRunRecord({ status: RUN_STATUS.running, runner: 'antigravity', model: 'claude-opus-5-5', modelIdentity: identity('claude-opus-5-5'), autoResumeAttempts: 1 })], same, NOW);
     expect(accountHeldFor(queued('claude-sonnet-5-5'), holds, 'antigravity')).toBe(true);
