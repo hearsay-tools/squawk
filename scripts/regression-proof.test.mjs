@@ -181,6 +181,24 @@ test('the CLI names every file the break changes, except a named test, as --sour
   assert.ok(args.includes('SQUAWK_REGRESSION_PROOF=1'));
 });
 
+test('a break that deletes or renames a file names the old and the new path as --source', (t) => {
+  const { cwd, git, put } = fixture(t);
+  put('scripts/old-name.sh', 'echo old\n');
+  put('scripts/gone.sh', 'echo gone\n');
+  git('add', '.');
+  git('commit', '-m', 'scripts');
+  git('mv', 'scripts/old-name.sh', 'scripts/new-name.sh');
+  git('rm', '-q', 'scripts/gone.sh');
+  writeFileSync(join(cwd, 'break.patch'), execFileSync('git', ['diff', '--cached', '-M'], { cwd, encoding: 'utf8' }));
+  git('reset', '-q', '--hard');
+  const squeal = fakeSqueal(t, proofReport('__BASE__', git('rev-parse', 'HEAD'), [['src/guard.test.ts', 'proven', ['x']]]));
+  const result = run(cwd, ['--patch', join(cwd, 'break.patch'), '--test', 'src/guard.test.ts'], squeal.bin);
+  assert.equal(result.status, 0, result.stderr);
+  const args = squeal.args();
+  const sources = args.flatMap((arg, index) => (args[index - 1] === '--source' ? [arg] : []));
+  assert.deepEqual(sources, ['scripts/gone.sh', 'scripts/new-name.sh', 'scripts/old-name.sh']);
+});
+
 test('the break is built over the pinned head, and a proof over another HEAD is refused', (t) => {
   const { cwd, git, put } = fixture(t);
   const pinned = git('rev-parse', 'HEAD');

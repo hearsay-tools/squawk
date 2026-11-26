@@ -27,12 +27,11 @@ Red is the test at `HEAD` over the code at `--base`. Green is the test and the c
 `HEAD`. The verdict must be `proven`, with a red failure that shows the reported defect.
 `red for another reason` (an import or setup error) and `not comparable` are not proof.
 
-Squeal counts a file as product code when the test imports it. A file the test reads at
-runtime (through `readFileSync` or `git ls-files`) or spawns as a child process is not
-imported. When the test is unchanged since `--base`, Squeal compares nothing until every
-other file changed since `--base` is named. Name each such file with `--source <path>`.
-Otherwise the verdict is `not comparable`, with the reason
-`changed files not named: <paths>`.
+When the test is unchanged since `--base`, Squeal compares nothing until every other file
+changed since `--base` is named. Imported files, files the test reads at runtime (through
+`readFileSync` or `git ls-files`) and scripts it spawns count the same. Without the names,
+the verdict is `not comparable`, with the reason `changed files not named: <paths>`. Name
+every path that reason lists with `--source <path>`.
 
 A new test that imports an export the fix adds cannot run over the code from before the
 fix: the import fails, and the verdict is `red for another reason`. Prove such a test with
