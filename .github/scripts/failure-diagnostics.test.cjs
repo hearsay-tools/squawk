@@ -182,11 +182,11 @@ test('a Vitest test file that did not finish is one cause per file, apart from t
   const input = pid => ({run: {id: 1, name: 'CI', run_attempt: 1}, job: {id: 2, name: 'Vitest shard 4/8'}, step, log: [
     '2026-11-18T10:04:00.0000000Z Error: [vitest-pool]: Worker forks emitted error.',
     '2026-11-18T10:04:01.0000000Z Vitest test files that did not finish:',
-    '2026-11-18T10:04:01.0000000Z packages/cezar/src/runs/fallback-write-invariant.test.ts: did not finish; the run ended before the file reported a result',
+    '2026-11-18T10:04:01.0000000Z packages/c.test.ts: did not finish; the run ended before the file reported a result',
     `2026-11-18T10:04:01.0000000Z Vitest worker ${pid} exited unexpectedly: exit code null, signal SIGKILL`,
   ].join('\n')});
   const a = causesForStep(input(31025)), b = causesForStep(input(4242));
-  assert.deepEqual(a.map(cause => cause.title), ['Vitest test file did not finish: packages/cezar/src/runs/fallback-write-invariant.test.ts']);
+  assert.deepEqual(a.map(cause => cause.title), ['Vitest test file did not finish: packages/c.test.ts']);
   assert.deepEqual(a.map(cause => cause.signature), b.map(cause => cause.signature));
   assert.match(a[0].excerpt, /exited unexpectedly: exit code null, signal SIGKILL/);
 });
