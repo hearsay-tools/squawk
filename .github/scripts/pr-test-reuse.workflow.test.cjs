@@ -40,10 +40,18 @@ test('queue suites always execute, PR Vitest selects with eight shards, and PR b
     assert.equal(evaluate(browserJob.if, context(event)), event !== 'pull_request_target', `cockpit-browser ${event}`);
   }
   assert.equal(browserJob.steps.find(s => s.id === 'e2e-pr'), undefined, 'no PR browser selection step remains');
-  const e2e = browserJob.steps.find(s => s.id === 'e2e');
-  assert.equal(e2e.if, undefined);
-  assert.match(e2e.run, /npm run test:e2e -- --allow-skip --shard=\$\{\{ matrix.shard \}\}\/8/);
-  assert.match(e2e.run, /require-e2e-passed\.cjs < e2e\.log/);
+  const browserStep = name => browserJob.steps.find(s => s.id === name);
+  const e2ePlain = browserStep('e2e_plain');
+  const e2e = browserStep('e2e');
+  for (const event of ['merge_group', 'pull_request_target', 'push', 'workflow_dispatch']) {
+    const ctx = context(event);
+    assert.equal(evaluate(e2ePlain.if, ctx), event !== 'merge_group', `e2e_plain ${event}`);
+    assert.equal(evaluate(e2e.if, ctx), event === 'merge_group', `e2e ${event}`);
+  }
+  for (const step of [e2ePlain, e2e]) {
+    assert.match(step.run, /npm run test:e2e -- --allow-skip --shard=\$\{\{ matrix.shard \}\}\/8/);
+    assert.match(step.run, /require-e2e-passed\.cjs < e2e\.log/);
+  }
 });
 test('native PR Vitest keeps immutable input resolution and blocks on a failed resolver', () => {
   const { jobs } = ci();
