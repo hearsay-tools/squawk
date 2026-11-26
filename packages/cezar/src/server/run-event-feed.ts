@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { LIVE_BYTE_LIMIT, LIVE_EVENT_LIMIT } from '@open-mercato/cezar-contract/live-limits';
 import type { LiveRunBatch, LiveRunDemand, RunEvent } from '@open-mercato/cezar-contract';
 import { decodeLiveCursor } from '../runs/event-history.ts';
@@ -19,6 +20,8 @@ function parsePersistedRunEvent(line: string): RunEvent | undefined {
 interface RunEventBatchScan {
   offset: number;
   afterSeq: number;
+  lowSnapshotCount: number;
+  snapshotSeq: number;
   events: LiveRunBatch['events'];
   bytes: number;
   hasMore: boolean;
@@ -31,7 +34,7 @@ interface RunEventBatchScan {
 function acceptRunEvent(scan: RunEventBatchScan, event: RunEvent, length: number, byteLimit: number): boolean {
   if (event.seq <= scan.afterSeq) return true;
   if (length > byteLimit) throw new LiveFeedReset('event exceeds live batch limit — reload history');
-  if (scan.events.length >= LIVE_EVENT_LIMIT || scan.bytes + length > byteLimit) {
+  if (scan.events.length + scan.lowSnapshotCount >= LIVE_EVENT_LIMIT || scan.bytes + length > byteLimit) {
     scan.hasMore = true;
     return false;
   }
@@ -45,6 +48,7 @@ function acceptSnapshotsBefore(scan: RunEventBatchScan, seq: number, byteLimit: 
   while (scan.snapshotIndex < scan.snapshots.length && scan.snapshots[scan.snapshotIndex]!.seq < seq) {
     const snapshot = scan.snapshots[scan.snapshotIndex]!;
     if (!acceptRunEvent(scan, snapshot, Buffer.byteLength(JSON.stringify(snapshot)) + 1, byteLimit)) return false;
+    scan.snapshotSeq = Math.max(scan.snapshotSeq, snapshot.seq);
     scan.snapshotIndex++;
   }
   return true;
@@ -72,18 +76,43 @@ function consumePersistedLine(
   return 'continue';
 }
 
+/** Charge each low snapshot once; the cursor records progress independently of disk replay. */
+function collectLowSnapshots(scan: RunEventBatchScan, byteLimit: number): RunEvent[] {
+  const lowSeqSnapshots: RunEvent[] = [];
+  for (const event of scan.snapshots) {
+    if (event.seq > scan.afterSeq || event.seq <= scan.snapshotSeq) continue;
+    const bytes = Buffer.byteLength(JSON.stringify(event)) + 1;
+    if (bytes > byteLimit) throw new LiveFeedReset('snapshot exceeds live batch limit — reload history');
+    if (scan.bytes + bytes > byteLimit || lowSeqSnapshots.length >= LIVE_EVENT_LIMIT) {
+      scan.hasMore = true;
+      break;
+    }
+    lowSeqSnapshots.push(event);
+    scan.bytes += bytes;
+    scan.snapshotSeq = event.seq;
+  }
+  scan.lowSnapshotCount = lowSeqSnapshots.length;
+  scan.snapshots = scan.snapshots.filter(event => event.seq > scan.afterSeq);
+  return lowSeqSnapshots;
+}
+
+// Independent progress lets low-sequence snapshots span pages without moving afterSeq.
+const snapshotProgressSchema = z.object({ snapshotSeq: z.number().int().nonnegative().safe().default(0) });
+
 /** The returned cursor covers exactly the accepted prefix, including complete ignored lines.
  * Capture sorted live snapshots and their sequence boundary together BEFORE disk IO.
  * Later writes wait for the next capture: otherwise a newer persisted event could
  * acknowledge live content emitted during the scan but absent from the snapshots.
  * Keep the byte offset at the first unaccepted persisted record. */
-export async function readRunEventBatch(dataDir: string, demand: LiveRunDemand, signal: AbortSignal, byteLimit = LIVE_BYTE_LIMIT, snapshot?: ReturnType<ProjectContext['store']['liveReadSnapshot']>): Promise<LiveRunBatch> {
+async function scanRunEventBatch(dataDir: string, demand: LiveRunDemand, signal: AbortSignal, byteLimit = LIVE_BYTE_LIMIT, snapshot?: ReturnType<ProjectContext['store']['liveReadSnapshot']>): Promise<{ batch: LiveRunBatch; sizeLimited: boolean }> {
   signal.throwIfAborted();
   const start = demand.cursor ? decodeLiveCursor(demand.cursor) : { offset: 0, boundarySeq: 0 };
   const scan: RunEventBatchScan = {
     offset: start.offset,
     afterSeq: Math.max(demand.afterSeq, start.boundarySeq),
     events: [],
+    lowSnapshotCount: 0,
+    snapshotSeq: demand.cursor ? snapshotProgressSchema.parse(JSON.parse(Buffer.from(demand.cursor, 'base64url').toString())).snapshotSeq : 0,
     bytes: 0,
     hasMore: false,
     laterWrites: false,
@@ -91,8 +120,10 @@ export async function readRunEventBatch(dataDir: string, demand: LiveRunDemand, 
     snapshotIndex: 0,
     ...(snapshot ? { snapshot } : {}),
   };
+  const lowSeqSnapshots = collectLowSnapshots(scan, byteLimit);
   let pending: Buffer = Buffer.alloc(0);
   outer: for await (const chunk of streamHistoryAfter(dataDir, demand.runId, scan.offset, signal)) {
+    if (scan.hasMore) break;
     pending = pending.length ? Buffer.concat([pending, chunk]) : chunk;
     let boundary: number;
     while ((boundary = pending.indexOf(10)) !== -1) {
@@ -106,10 +137,15 @@ export async function readRunEventBatch(dataDir: string, demand: LiveRunDemand, 
   signal.throwIfAborted();
   if (!scan.hasMore) acceptSnapshotsBefore(scan, Infinity, byteLimit);
   // No newline means a writer is still appending: do not acknowledge that partial record.
-  return {
+  return { sizeLimited: scan.hasMore, batch: {
+    ...(lowSeqSnapshots.length ? { snapshots: lowSeqSnapshots } : {}),
     type: 'batch', projectId: demand.projectId, runId: demand.runId, events: scan.events, afterSeq: scan.afterSeq, hasMore: scan.hasMore || scan.laterWrites,
-    cursor: Buffer.from(JSON.stringify({ v: 1, kind: 'live', offset: scan.offset, boundarySeq: scan.afterSeq })).toString('base64url'),
-  };
+    cursor: Buffer.from(JSON.stringify({ v: 1, kind: 'live', offset: scan.offset, boundarySeq: scan.afterSeq, snapshotSeq: scan.snapshotSeq })).toString('base64url'),
+  } };
+}
+
+export async function readRunEventBatch(...args: Parameters<typeof scanRunEventBatch>): Promise<LiveRunBatch> {
+  return (await scanRunEventBatch(...args)).batch;
 }
 
 /** Freeze the finite scan even for a cold store with no in-memory sequence yet.
@@ -128,11 +164,22 @@ export async function readFiniteRunFeed(
   finally { unsubscribe(); }
 }
 
+/** Snapshot delivery restores open items without acknowledging any event sequence. */
+async function replaySnapshots(
+  snapshot: ReturnType<ProjectContext['store']['liveReadSnapshot']>,
+  write: ((event: RunEvent) => Promise<void>) | undefined, stopped: Promise<void>, signal: AbortSignal,
+): Promise<void> {
+  for (const event of snapshot.events) {
+    await Promise.race([write?.(event), stopped]);
+    signal.throwIfAborted();
+  }
+}
+
 /** Attach before reading; serialize replay and live writes; bound slow-client memory. */
 export async function subscribeRunFeed(
   context: Pick<ProjectContext, 'store' | 'dataDir'>,
   demand: LiveRunDemand,
-  handlers: { event(event: RunEvent): Promise<void>; reset(reason: string, status?: 409 | 413): void },
+  handlers: { snapshot?(event: RunEvent): Promise<void>; event(event: RunEvent): Promise<void>; reset(reason: string, status?: 409 | 413): void },
   signal: AbortSignal,
   byteLimit = LIVE_BYTE_LIMIT,
 ): Promise<void> {
@@ -152,7 +199,9 @@ export async function subscribeRunFeed(
   let wake: (() => void) | undefined;
   const reset = (reason: string, status: 409 | 413 = 409) => { if (!controller.signal.aborted) { stop(); handlers.reset(reason, status); } };
   const onEvent = ({ runId, event }: { runId: string; event: RunEvent }) => {
-    if (runId !== demand.runId || event.seq <= maxSeq || controller.signal.aborted) return;
+    if (runId !== demand.runId || controller.signal.aborted) return;
+    diskSnapshot.throughSeq = Math.min(diskSnapshot.throughSeq, event.seq - 1);
+    if (event.seq <= maxSeq) return;
     const bytes = Buffer.byteLength(JSON.stringify(event));
     pendingBytes += bytes;
     if (pendingBytes > byteLimit) { reset('live buffer exceeded — reload history'); return; }
@@ -164,6 +213,8 @@ export async function subscribeRunFeed(
     'run.event': onEvent,
     'run.deleted': ({ runId }) => { if (runId === demand.runId) reset('run removed'); },
   });
+  const liveSnapshot = context.store.liveReadSnapshot(demand.runId);
+  const diskSnapshot = { throughSeq: liveSnapshot.throughSeq, events: [] };
   const detached = () => {
     unsubscribe();
     pending = [];
@@ -171,9 +222,10 @@ export async function subscribeRunFeed(
   };
   controller.signal.addEventListener('abort', detached, { once: true });
   try {
+    if (demand.cursor) maxSeq = Math.max(maxSeq, decodeLiveCursor(demand.cursor).boundarySeq);
     let cursor = demand.cursor;
     do {
-      const batch = await readRunEventBatch(context.store.claims.sourceDataDir(demand.runId), { ...demand, ...(cursor ? { cursor } : {}), afterSeq: maxSeq }, controller.signal, byteLimit);
+      const { batch, sizeLimited } = await scanRunEventBatch(context.store.claims.sourceDataDir(demand.runId), { ...demand, ...(cursor ? { cursor } : {}), afterSeq: maxSeq }, controller.signal, byteLimit, diskSnapshot);
       for (const event of batch.events) {
         controller.signal.throwIfAborted();
         if (event.seq <= maxSeq) continue;
@@ -182,8 +234,9 @@ export async function subscribeRunFeed(
       }
       maxSeq = Math.max(maxSeq, batch.afterSeq);
       cursor = batch.cursor;
-      if (!batch.hasMore) break;
+      if (!sizeLimited) break;
     } while (!controller.signal.aborted);
+    await replaySnapshots(liveSnapshot, handlers.snapshot, stopped, controller.signal);
     while (!controller.signal.aborted) {
       // RunStore assigns one monotonic clock per run; ignore duplicate/reordered replays.
       const next = pending[head];

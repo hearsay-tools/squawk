@@ -279,11 +279,15 @@ export function createLiveCoordinator() {
         id, demand, handlers, bootAlias: input.kind === 'run' && input.projectId === 'default', recovering: false, released: false,
         frame(frame) {
           if (entry.released || entry.recovering || !active || restoration) return
-          if ('type' in frame && frame.type === 'event' && entry.demand.kind === 'run') {
-            if (frame.projectId !== entry.demand.projectId || frame.runId !== entry.demand.runId || frame.event.seq <= entry.demand.afterSeq) return
+          if ('type' in frame && (frame.type === 'event' || frame.type === 'snapshot') && entry.demand.kind === 'run') {
+            if (frame.projectId !== entry.demand.projectId || frame.runId !== entry.demand.runId) return
+            if (frame.type === 'event' && frame.event.seq <= entry.demand.afterSeq) return
             handlers.frame?.(frame)
-            entry.demand.afterSeq = frame.event.seq
-            post({ type: 'ack', id, seq: frame.event.seq })
+            if (frame.type === 'snapshot') post({ type: 'ack-snapshot', id })
+            else {
+              entry.demand.afterSeq = frame.event.seq
+              post({ type: 'ack', id, seq: frame.event.seq })
+            }
           } else if ('type' in frame && (frame.type === 'reset' || frame.type === 'error')) {
             void recover(entry, frame.error)
           } else handlers.frame?.(frame)

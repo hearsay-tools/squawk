@@ -118,6 +118,7 @@ export function createLiveRoutes({ resolveProject, serverGeneration, resolveBoot
               }
               const { projectId, runId } = demand;
               feeds.push(subscribeRunFeed(resolved.project, demand, {
+                snapshot: event => send({ type: 'snapshot', projectId, runId, name: 'ui-event', event }),
                 event: event => send({ type: 'event', projectId, runId, name: isV2WireEventType(event.type) ? 'ui-event' : 'run-event', event }),
                 reset: (error, status = 409) => { void send({ type: 'reset', projectId, runId, status, error }); },
               }, controller.signal));

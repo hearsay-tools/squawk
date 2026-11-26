@@ -188,3 +188,68 @@ describe('ordered replay/live handoff', () => {
   });
 
 });
+
+describe('active item replay', () => {
+  function activeItem() {
+    store.eventLog.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'typing', text: '' } });
+    store.eventLog.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'before' });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'persisted after delta' });
+  }
+  it('returns snapshots behind the finite cursor without advancing it', async () => {
+    activeItem();
+    const batch = await readFiniteRunFeed({ store, dataDir }, { ...demand(), afterSeq: 3 }, signal());
+    expect(batch).toMatchObject({ events: [], afterSeq: 3, snapshots: [{ seq: 2, type: 'item.updated', item: { text: 'before' } }] });
+  });
+  it.each([0, 3])('replays active content at afterSeq %i and drains writes beyond the fence', async afterSeq => {
+    activeItem();
+    const controller = new AbortController();
+    const seen: number[] = [];
+    const snapshots: RunEvent[] = [];
+    const order: string[] = [];
+    let complete!: () => void;
+    const received = new Promise<void>(resolve => { complete = resolve; });
+    const capture = store.liveReadSnapshot.bind(store);
+    const context = { dataDir, store: Object.create(store) as RunStore };
+    context.store.liveReadSnapshot = id => {
+      const snapshot = capture(id);
+      // Append after capture but before the scanner resumes filesystem IO.
+      queueMicrotask(() => {
+        store.eventLog.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: ' after' });
+        store.eventLog.appendEvent(runId, { type: 'item.completed', item: { kind: 'message', id: 'typing', text: 'before after' } });
+      });
+      return snapshot;
+    };
+    const task = subscribeRunFeed(context, { ...demand(), afterSeq }, {
+      snapshot: async event => { snapshots.push(event); order.push(`snapshot:${event.seq}`); },
+      event: async event => { seen.push(event.seq); order.push(`event:${event.seq}`); if (event.seq === 5) complete(); },
+      reset: reason => { throw new Error(reason); },
+    }, controller.signal);
+    try {
+      await received;
+      expect(seen).toEqual(afterSeq === 0 ? [1, 3, 4, 5] : [4, 5]);
+      expect(snapshots.map(event => event.seq)).toEqual([2]);
+      expect(order).toEqual(afterSeq === 0 ? ['event:1', 'event:3', 'snapshot:2', 'event:4', 'event:5'] : ['snapshot:2', 'event:4', 'event:5']);
+    } finally { controller.abort(); await task; }
+  });
+});
+
+it.each([0, 5])('paginates unfiltered large finite snapshots at afterSeq %i', async initialAfterSeq => {
+  for (const id of ['a', 'b']) {
+    store.eventLog.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id, text: '' } });
+    store.eventLog.emitEphemeral(runId, { type: 'item.delta', itemId: id, field: 'text', delta: id.repeat(600 * 1024) });
+  }
+  store.eventLog.appendEvent(runId, { type: 'note', text: 'after both items' });
+  let afterSeq = initialAfterSeq;
+  let cursor: string | undefined;
+  const seen: RunEvent[] = [];
+  for (let page = 0; page < 4; page++) {
+    const batch = await readFiniteRunFeed({ store, dataDir }, { ...demand(), afterSeq, cursor }, signal());
+    seen.push(...(batch.snapshots ?? []), ...batch.events);
+    cursor = batch.cursor;
+    afterSeq = batch.afterSeq;
+    if (!batch.hasMore) break;
+    expect(page).toBeLessThan(3);
+  }
+  expect(seen.filter(event => event.type === 'item.updated').map(event => event.seq)).toEqual([2, 4]);
+  expect(afterSeq).toBe(5);
+});
