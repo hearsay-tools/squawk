@@ -1,7 +1,7 @@
 import { SkillOptionLabel } from '@/components/skill-option-label'
 import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckIcon, ChevronDownIcon, NotebookPenIcon, PlusIcon, SparklesIcon, XIcon } from '@/components/design-icons'
+import { CheckIcon, ChevronDownIcon, NotebookPenIcon, PlusIcon, SparklesIcon, Trash2Icon, XIcon } from '@/components/design-icons'
 
 import { useRef, useState, type ReactNode } from 'react'
 
@@ -31,7 +31,7 @@ import { isProjectSkill, searchSkillsForDisplay, skillKeywords, skillKey } from 
 import { cn } from '@/lib/utils'
 import { useUnsentDraft } from '@/lib/version-reload'
 import { sameJson, useSavedDraft } from '@/lib/saved-draft'
-import { SaveCue } from './save-cue'
+import { SaveRow } from './save-cue'
 
 /**
  * Settings → Prompt templates (#413): "add the settings pane for editing these prompt templates
@@ -207,12 +207,13 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                   <Button
                     type="button"
                     className="self-start"
-                    variant="outline"
+                    variant="danger-ghost"
                     size="sm"
                     data-action="prompt-template-remove"
                     title="Remove this template"
                     onClick={() => removeTemplate(template.id)}
                   >
+                    <Trash2Icon aria-hidden="true" className="size-3" />
                     Delete template
                   </Button>
               </div>
@@ -261,16 +262,18 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            data-action="prompt-templates-save"
-            disabled={!dirty || invalid || save.isPending}
-            onClick={() => save.mutate(templates)}
-          >
-            Save
-          </Button>
+          <SaveRow show={!dirty && !invalid && !save.isPending}>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              data-action="prompt-templates-save"
+              disabled={!dirty || invalid || save.isPending}
+              onClick={() => save.mutate(templates)}
+            >
+              Save
+            </Button>
+          </SaveRow>
           <Button
             type="button"
             variant="ghost"
@@ -281,7 +284,6 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
           >
             Reset to defaults
           </Button>
-          <SaveCue show={!dirty && !invalid && !save.isPending} />
           {invalid ? (
             <p data-slot="prompt-templates-invalid" className="text-[11px] text-danger">
               Every template needs both a label and text.
@@ -356,7 +358,7 @@ function TemplateSkillsPicker({
           title="Pick the skills this template applies itself to"
           className={cn(
             'inline-flex h-[26px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
-            selected.length > 0 && 'border-foreground/60 font-semibold text-foreground',
+            selected.length > 0 && 'text-foreground',
           )}
         >
           <SparklesIcon aria-hidden="true" className="size-3 shrink-0 text-accent-icon" />

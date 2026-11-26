@@ -453,7 +453,8 @@ describe('the global Agents section', () => {
       expect(rowFor('new')?.querySelector('[data-action="account-connect"]')).toBeNull()
       await act(async () => answer(new Response(JSON.stringify({ status: { provider: 'claude', status: 'disconnected' } }), { headers: { 'content-type': 'application/json' } })))
       await waitFor(() => expect(rowFor('new')?.querySelector('[data-action="account-connect"]')).not.toBeNull())
-      expect(rowFor('new')?.querySelector('[data-slot="account-missing"]')?.textContent).toContain('Connect will make it')
+      expect(rowFor('new')?.querySelector('[data-slot="account-missing"]')?.textContent).toBe('Not initialized')
+      expect(rowFor('new')?.querySelector('[data-slot="account-folder-guidance"]')?.textContent).toContain('Connect will make it')
     })
 
     it('renders immediately with Checking…, then fills each dot in', async () => {
@@ -559,10 +560,9 @@ describe('the global Agents section', () => {
     expect(document.querySelector('[data-action="accounts-add"]')).not.toBeNull()
     expect(rowFor('work')?.querySelector('[data-slot="account-path"]')?.textContent).toBe('~/.claude-work')
     // One flat card: the first account's Check again sits beside Add account in the top row, next
-    // to the agent name and its inline status; a further account keeps its own Check again.
+    // to the agent name and its CLI summary; a further account keeps its own Check again.
     const head = rowFor('default')?.querySelector('[data-slot="agent-head"]')
     expect(head?.querySelector('h3')?.textContent).toBe('Claude Code')
-    expect(head?.querySelector('[data-slot="agent-summary"] [data-slot="account-status"]')).not.toBeNull()
     const headActions = head?.querySelector('[data-slot="account-actions"]')
     expect([...(headActions?.querySelectorAll('button') ?? [])].map((b) => b.getAttribute('data-action'))).toEqual(['account-recheck', 'accounts-add'])
     const actions = rowFor('work')?.querySelector('[data-slot="account-actions"]')
@@ -575,6 +575,22 @@ describe('the global Agents section', () => {
     expect(rowFor('work')?.querySelector('[data-action="account-rename"]')).not.toBeNull()
     expect(rowFor('work')?.querySelector('[data-action="account-remove"]')).not.toBeNull()
     expect(within(rowFor('work') as HTMLElement).getByRole('button', { name: 'Connect' })).toBeTruthy()
+  })
+
+  it('keeps the CLI in the top row and the login and folder state on the account line', async () => {
+    serve({ editable: true, profileCapableProviders: ['claude', 'codex'], selections: {},
+      profiles: [profile({ id: 'default', isDefault: true, exists: false, looksValid: false })] })
+    renderAccounts()
+
+    const row = await waitForRow('default')
+    const head = row.querySelector('[data-slot="agent-head"]')!
+    // "Connected" in the top row read as "the account is ready" right above a folder that was not.
+    await waitFor(() => expect(head.querySelector('[data-slot="agent-installed"]')?.textContent).toBe('CLI installed'))
+    expect(head.querySelector('[data-slot="account-status"]')).toBeNull()
+    const line = row.querySelector('.settings-account-meta-line')!
+    expect(line.querySelector('[data-slot="account-status"]')).not.toBeNull()
+    expect(line.querySelector('[data-slot="account-missing"]')!.textContent).toBe('Not initialized')
+    expect(row.querySelector('[data-slot="account-folder-guidance"]')).not.toBeNull()
   })
 
   it('refreshes health and agent profiles when a mutation is refused after remote-settings is withdrawn', async () => {
@@ -637,7 +653,7 @@ describe('the global Agents section', () => {
 
     const claude = await cardFor('claude')
     await waitFor(() => expect(claude.querySelector('[data-slot="agent-version"]')?.textContent).toBe('2.1.220'))
-    expect((await cardFor('codex')).querySelector('[data-slot="agent-installed"]')?.textContent).toContain('Not installed')
+    expect((await cardFor('codex')).querySelector('[data-slot="agent-installed"]')?.textContent).toContain('CLI not installed')
     expect(document.querySelector('.settings-account-count')).toBeNull()
   })
 
@@ -646,7 +662,7 @@ describe('the global Agents section', () => {
     renderAccounts({ runners: [{ ...RUNNERS_RESPONSE.runners[1]!, id: 'codex', managedInstall: true }] }, false, false)
 
     const card = await cardFor('codex')
-    await waitFor(() => expect(card.querySelector('[data-slot="agent-installed"]')?.textContent).toContain('Not installed'))
+    await waitFor(() => expect(card.querySelector('[data-slot="agent-installed"]')?.textContent).toContain('CLI not installed'))
     expect(within(card).queryByRole('region', { name: 'CLI installation' })).toBeNull()
     expect(within(card).queryByRole('button', { name: /Install CLI/ })).toBeNull()
   })
@@ -710,7 +726,7 @@ describe('the global Agents section', () => {
     await waitFor(() =>
       expect(document.querySelector('[data-slot="agent-version"]')?.textContent).toBe('2.1.220'),
     )
-    expect(document.querySelector('[data-slot="agent-installed"]')?.textContent).toBe('Installed')
+    expect(document.querySelector('[data-slot="agent-installed"]')?.textContent).toBe('CLI installed')
   })
 
   it('names the install command for an agent that is not on this machine', async () => {

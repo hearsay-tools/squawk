@@ -109,6 +109,10 @@
   .settings-panel [data-slot=appearance-section] [role=radiogroup] { display: grid; width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .settings-panel [data-slot=appearance-section] [role=radiogroup][data-slot=appearance-width] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .settings-panel [data-slot=appearance-section] [role=radio] { justify-content: center; padding-inline: 8px; white-space: nowrap; font-size: 12px; }
+  /* Density's labels differ in length ("Ultra-compact" is twice "Compact"): content-sized tracks share the
+     spare width, so the longest label keeps the same breathing room as the others instead of touching its edge. */
+  .settings-panel [data-slot=appearance-section] [role=radiogroup][data-slot=appearance-density] { grid-template-columns: repeat(3, auto); gap: 4px; }
+  .settings-panel [data-slot=appearance-section] [data-slot=appearance-density] [role=radio] { padding-inline: 10px; }
   .settings-panel .settings-resource-controls { align-items: stretch; }
   .settings-panel [data-slot=agents-system-prompt] { min-height: 192px; }
 }
@@ -232,7 +236,9 @@
 .settings-panel .settings-option-row { align-items: center; }
 .settings-panel .settings-option-row :is(select, output) { width: 16rem; min-width: 0; max-width: 100%; }
 .settings-panel .settings-field > select { width: 16rem; max-width: 100%; }
-.settings-panel .settings-field > select[data-slot="resources-max-parallel"], .settings-panel .settings-field > select[data-slot="resources-max-monitoring"] { width: 9rem; }
+/* A count select holds one or two digits: a natural 8rem measure, never the field's full width. The
+   select sits in SettingsSelect's wrapper, so the wrapper takes the width and the select fills it. */
+.settings-panel .settings-field > .settings-select:has(> select:is([data-slot="resources-max-parallel"], [data-slot="resources-max-monitoring"])) { width: 8rem; }
 .settings-panel .settings-resource-controls input[data-slot="resources-memory-limit"], .settings-panel .settings-resource-controls input[data-slot="resources-monitoring-wake-interval"] { flex: none; width: 9rem; }
 .settings-panel [data-slot="resources-composer-defaults"] select { width: 16rem; max-width: 100%; }
 
@@ -263,11 +269,14 @@
 .settings-panel .settings-agent-card .settings-account-actions button:not([data-slot=account-rename-input]) { min-height: 32px; padding-inline: 12px; font-size: 12px; }
 .settings-agent-accounts { display: flex; flex-direction: column; }
 .settings-account-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-inline: 16px; padding-block: 8px 12px; border-block-start: 1px solid var(--border); }
-.settings-account-readout { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.settings-account-readout { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
 .settings-account-meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; font-size: 12px; color: var(--muted-foreground); }
 .settings-account-label { font-size: 13px; font-weight: 500; color: var(--foreground); }
-.settings-account-path { font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.settings-account-path { font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--muted-foreground); overflow-wrap: anywhere; }
 .settings-account-hint { font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+/* Folder readiness beside the login state: a quiet outlined pill, never a status colour, because a
+   folder the CLI has not created yet is a normal first-run state, not a fault. */
+.settings-account-pill { display: inline-flex; align-items: center; min-height: 20px; padding-inline: 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--muted); font-size: 11px; font-weight: 500; line-height: 1; color: var(--foreground); white-space: nowrap; }
 .settings-account-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-inline: 16px; padding-block: 10px 12px; border-block-start: 1px solid var(--border); }
 .settings-agent-note { margin-inline: 16px; padding-block: 8px 12px; border-block-start: 1px solid var(--border); font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
 .settings-agent-card > section[aria-label="CLI installation"] { margin-inline: 16px; padding-block: 8px 12px; border-block-start: 1px solid var(--border); }

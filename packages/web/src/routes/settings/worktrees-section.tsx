@@ -13,7 +13,7 @@ import { SettingsField } from './settings-field'
 import { WORKTREE_COMMANDS_COPY, WorktreeCommandsField } from './worktree-commands-field'
 import { ChevronRightIcon } from '@/components/design-icons'
 import { Link } from '@/lib/project-router'
-import { SaveCue } from './save-cue'
+import { SaveRow } from './save-cue'
 
 /**
  * Project settings → Worktrees: configuration only — the retention count (#483), the commands
@@ -115,18 +115,18 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
             className="block w-32 rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
           />
           <span className="text-xs text-soft-foreground">worktrees</span>
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            className="self-start"
-            data-action="resources-save-retention"
-            disabled={retentionSaved || retentionInvalid || save.isPending}
-            onClick={saveRetention}
-          >
-            Save retention
-          </Button>
-          <SaveCue show={retentionSaved && !retentionInvalid && !save.isPending} />
+          <SaveRow show={retentionSaved && !retentionInvalid && !save.isPending}>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              data-action="resources-save-retention"
+              disabled={retentionSaved || retentionInvalid || save.isPending}
+              onClick={saveRetention}
+            >
+              Save retention
+            </Button>
+          </SaveRow>
         </div>
         {retentionInvalid ? (
           <p data-slot="resources-retention-invalid" className="text-[11px] text-danger">

@@ -14,7 +14,7 @@ import { toast } from '@/components/ui/toaster'
 import { useUnsentDraft } from '@/lib/version-reload'
 import { useSavedDraft } from '@/lib/saved-draft'
 import { SettingsField } from './settings-field'
-import { SaveCue } from './save-cue'
+import { SaveRow } from './save-cue'
 
 /**
  * Global settings → Resources: how hard the MACHINE works. `maxParallel` caps concurrent tasks
@@ -332,8 +332,9 @@ function WakeField({
             <span className="text-xs text-muted-foreground">minutes</span>
           </>
         ) : null}
-        <Button type="button" variant="primary" size="sm" data-action="resources-save-monitoring-wake" disabled={wakeSaved || showInvalid || saveIsPending} onClick={saveWake}>Save</Button>
-        <SaveCue show={wakeSaved && !showInvalid && !saveIsPending} />
+        <SaveRow show={wakeSaved && !showInvalid && !saveIsPending}>
+          <Button type="button" variant="primary" size="sm" data-action="resources-save-monitoring-wake" disabled={wakeSaved || showInvalid || saveIsPending} onClick={saveWake}>Save</Button>
+        </SaveRow>
       </div>
       {showInvalid ? (
         <p data-slot="resources-monitoring-wake-invalid" className="text-[11px] text-danger">Enter a whole number from 1 to 60 minutes.</p>
@@ -381,17 +382,18 @@ function MemoryField({
           className="block rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
         />
         <span className="text-xs text-muted-foreground">MiB</span>
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          data-action="resources-save-memory"
-          disabled={memorySaved || memoryInvalid || saveIsPending}
-          onClick={saveMemory}
-        >
-          Save
-        </Button>
-        <SaveCue show={memorySaved && !memoryInvalid && !saveIsPending} />
+        <SaveRow show={memorySaved && !memoryInvalid && !saveIsPending}>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            data-action="resources-save-memory"
+            disabled={memorySaved || memoryInvalid || saveIsPending}
+            onClick={saveMemory}
+          >
+            Save
+          </Button>
+        </SaveRow>
       </div>
       {memoryInvalid ? (
         <p data-slot="resources-memory-invalid" className="text-[11px] text-danger">

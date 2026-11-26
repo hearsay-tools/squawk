@@ -30,7 +30,7 @@ import { allProjectTags, suggestTags } from '@/lib/project-tags'
 import { cn } from '@/lib/utils'
 import { RemoveProjectDialog, useProjectRemoval } from './remove-project'
 import { SettingsField } from './settings-field'
-import { SaveCue } from './save-cue'
+import { SaveRow } from './save-cue'
 
 /**
  * Global settings → Projects (multi-project spec, step 4.4; mockup
@@ -226,19 +226,20 @@ function WorkspaceRootField({
           }}
           className="block w-full max-w-sm rounded-md border border-input bg-card px-3 py-1.5 font-mono text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-danger disabled:opacity-50"
         />
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          data-action={`projects-save-${slot}-root`}
-          disabled={unchanged || trimmed === '' || save.isPending}
-          onClick={() =>
-            save.mutate(trimmed, { onSuccess: () => toast(`${savedLabel} set to ${trimmed}`) })
-          }
-        >
-          Save
-        </Button>
-        <SaveCue show={unchanged && trimmed !== '' && !save.isPending} />
+        <SaveRow show={unchanged && trimmed !== '' && !save.isPending}>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            data-action={`projects-save-${slot}-root`}
+            disabled={unchanged || trimmed === '' || save.isPending}
+            onClick={() =>
+              save.mutate(trimmed, { onSuccess: () => toast(`${savedLabel} set to ${trimmed}`) })
+            }
+          >
+            Save
+          </Button>
+        </SaveRow>
       </div>
       {serverError !== null ? (
         // The mockup's error line: the reason, then what did NOT happen — a failed probe

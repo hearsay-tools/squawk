@@ -17,7 +17,7 @@ import { parseWorktreeSetupInput } from './worktree-setup-input'
 import { SettingsField } from './settings-field'
 import { useActiveProjectRoot } from './project-location'
 import { RemoteSettingsNotice, useSettingsAdminRefresh } from './remote-settings-notice'
-import { SaveCue } from './save-cue'
+import { SaveRow } from './save-cue'
 
 type WorktreeCommandsKey = 'worktreeSetup' | 'worktreeTeardown'
 
@@ -184,18 +184,19 @@ export function WorktreeCommandsField({ config, copy }: { config: ConfigResponse
             />
             <span>seconds</span>
           </label>
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            className="min-h-11 self-start md:min-h-0"
-            data-action={`${copy.slot}-save`}
-            disabled={!editable || unchanged || invalid !== null || save.isPending}
-            onClick={submit}
-          >
-            {copy.save}
-          </Button>
-          <SaveCue show={editable && unchanged && !save.isPending} />
+          <SaveRow show={editable && unchanged && !save.isPending}>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              className="min-h-11 md:min-h-0"
+              data-action={`${copy.slot}-save`}
+              disabled={!editable || unchanged || invalid !== null || save.isPending}
+              onClick={submit}
+            >
+              {copy.save}
+            </Button>
+          </SaveRow>
         </div>
       </WorktreeCommandsStatus>
     </SettingsField>

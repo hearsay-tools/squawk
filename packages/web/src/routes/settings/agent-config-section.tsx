@@ -160,9 +160,11 @@ function AgentConfigView({
           {selected ? (
             <FileEditor key={selected.id} file={selected} />
           ) : (
-            <div className="flex h-full min-h-40 items-center justify-center rounded-md border border-dashed border-border text-[13px] text-soft-foreground">
+            // A short note at the top of the editor column, not a full-height dashed box: before a
+            // file is chosen the column has nothing to show, and a tall empty frame read as a void.
+            <p data-slot="agent-config-editor-empty" className="rounded-md border border-border bg-muted/40 px-4 py-3 text-[13px] text-soft-foreground">
               Select a config file to view or edit it.
-            </div>
+            </p>
           )}
         </div>
       </div>

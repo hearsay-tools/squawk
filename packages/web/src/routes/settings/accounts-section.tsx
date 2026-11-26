@@ -240,20 +240,20 @@ function AgentsPane({ data, runners }: { data: AgentProfilesResponse; runners: R
   )
 }
 
-/** The host check, inline in the card's summary: Checking…, Installed (version), or Not installed
- *  with the install hint. */
+/** The host check, inline in the card's summary. It names the CLI, so the top row reads as the
+ *  machine's answer (is the binary there, which version) and never as an account's login state. */
 function InstallReadout({ entry, check }: { entry: RunnerEntry; check: BackendCheck | undefined }) {
-  if (check === undefined) return <span data-slot="agent-installed">Checking…</span>
+  if (check === undefined) return <span data-slot="agent-installed">Checking CLI…</span>
   if (!check.available) {
     return (
       <span data-slot="agent-installed">
-        Not installed{entry.installHint ? <> — <code className="break-all">{entry.installHint}</code></> : null}
+        CLI not installed{entry.installHint ? <> — <code className="break-all">{entry.installHint}</code></> : null}
       </span>
     )
   }
   return (
     <span className="whitespace-nowrap">
-      <span data-slot="agent-installed">Installed</span>
+      <span data-slot="agent-installed">CLI installed</span>
       {check.version ? <> <span className="text-soft-foreground">(<span data-slot="agent-version">{check.version}</span>)</span></> : null}
     </span>
   )
@@ -298,14 +298,16 @@ function AgentHead({ titleId, title, summary, actions, actionsSlot }: {
 interface AgentFacts {
   titleId: string
   title: string
-  /** The install readout and the account count; `null` entries are skipped. */
+  /** The CLI install readout and the account count; `null` entries are skipped. */
   facts: ReactNode[]
   /** Add account, when this agent can carry another login here. */
   addButton: ReactNode
 }
 
 /** One agent, flattened into a single card: a top row with the name, an inline status summary and
- *  the actions, then one quiet metadata line per account. The first account's status and actions
+ *  the actions, then one quiet metadata block per account. The top row describes the CLI (install
+ *  and version, account count); each account block carries its own login state and folder
+ *  readiness, so "signed in" never reads as "the folder is ready". The first account's actions
  *  ride in the top row, because for most agents it is the only login and a second box around it
  *  only cost height. */
 function AgentCard({
@@ -550,27 +552,28 @@ function AccountSignIn({ account, runners, status, editable }: {
   </>
 }
 
-function AccountFolderAdvisory({ account, runners, status, editable }: {
-  account: AgentProfile; runners: RunnersResponse; status: AgentProfile['status']; editable: boolean
-}) {
+/** The account folder's readiness, apart from its login: a pill on the status line and one
+ *  line of guidance under the path. `null` when the folder is ready or not needed. */
+function folderAdvisory(account: AgentProfile, runners: RunnersResponse, status: AgentProfile['status'], editable: boolean):
+  { slot: 'account-missing' | 'account-unrecognised'; pill: string; guidance: string } | null {
   if (!status || status.requiresAccountHome === false) return null
   if (!account.exists) {
-    return (
-      <span data-slot="account-missing">
-        {editable
-          ? status.status === 'connected'
-            ? '— folder not created yet; use Check again to refresh'
-            : '— folder not created yet; Connect will make it'
-          : '— not initialized on host yet'}
-      </span>
-    )
+    return {
+      slot: 'account-missing',
+      pill: 'Not initialized',
+      guidance: editable
+        ? status.status === 'connected'
+          ? 'Folder not created yet. Use Check again to refresh.'
+          : 'Folder not created yet. Connect will make it.'
+        : 'Folder not created on the host yet.',
+    }
   }
   if (!account.looksValid && account.configDir) {
-    return (
-      <span data-slot="account-unrecognised">
-        — this folder does not look like {canonicalRunnerName(account.provider, runnerDisplayName(runners, account.provider))} config yet
-      </span>
-    )
+    return {
+      slot: 'account-unrecognised',
+      pill: 'Unrecognized folder',
+      guidance: `This folder does not look like ${canonicalRunnerName(account.provider, runnerDisplayName(runners, account.provider))} config yet.`,
+    }
   }
   return null
 }
@@ -578,7 +581,7 @@ function AccountFolderAdvisory({ account, runners, status, editable }: {
 function AccountRow({ account, runners, editable, onRemove, agent }: {
   account: AgentProfile; runners: RunnersResponse; editable: boolean; onRemove: () => void
   /** Set on the agent's first account: this row also renders the card's top row, so the account's
-   *  status and Check again sit beside the agent name instead of in a box of their own. */
+   *  Check again sits beside the agent name instead of in a box of their own. */
   agent?: AgentFacts
 }) {
   const routeId = agentAccountRouteId(account)
@@ -633,8 +636,31 @@ function AccountRow({ account, runners, editable, onRemove, agent }: {
       {shortPath(account.configDir)}
     </span>
   ) : null
+  const advisory = folderAdvisory(account, runners, status, editable)
+  const pill = advisory ? (
+    <span data-slot={advisory.slot} className="settings-account-pill">{advisory.pill}</span>
+  ) : null
+  const guidance = advisory ? (
+    <p data-slot="account-folder-guidance" className="settings-account-hint">{advisory.guidance}</p>
+  ) : null
   const hint = status?.hint ? <p className="settings-account-hint">{status.hint}</p> : null
   const manage = editable && !account.isDefault ? <AccountManagement account={account} onRemove={onRemove} /> : null
+  // Every account line reads the same way: which login and its sign-in state, the folder's
+  // readiness as a pill, then the folder on its own line and what to do about it. The login state
+  // lives here, never in the card's top row, which describes the CLI alone.
+  const readout = (
+    <div className="settings-account-readout">
+      <div className="settings-account-meta-line">
+        {name}
+        <span aria-hidden="true" className="settings-agent-summary-sep">·</span>
+        {statusReadout}
+        {pill}
+      </div>
+      {path}
+      {guidance}
+      {hint}
+    </div>
+  )
 
   if (agent) {
     return (
@@ -642,20 +668,12 @@ function AccountRow({ account, runners, editable, onRemove, agent }: {
         <AgentHead
           titleId={agent.titleId}
           title={agent.title}
-          summary={[statusReadout, ...agent.facts]}
+          summary={agent.facts}
           actions={<>{actions}{agent.addButton}</>}
           actionsSlot="account-actions"
         />
-        {/* The metadata line: which login this is and where it lives, then the advisory. */}
         <div className="settings-account-meta">
-          <div className="settings-account-readout">
-            <div className="settings-account-meta-line">
-              {name}
-              {path}
-              <AccountFolderAdvisory account={account} runners={runners} status={status} editable={editable} />
-            </div>
-            {hint}
-          </div>
+          {readout}
           {manage ? <div className="settings-account-actions">{manage}</div> : null}
         </div>
       </li>
@@ -664,17 +682,7 @@ function AccountRow({ account, runners, editable, onRemove, agent }: {
 
   return (
     <li data-slot="account-row" data-account={account.id} className="settings-account-line">
-      <div className="settings-account-readout">
-        {/* Status leads the line; the folder follows on its own, so a long path never squeezes it. */}
-        <div className="settings-account-meta-line">
-          {name}
-          <span aria-hidden="true" className="settings-agent-summary-sep">·</span>
-          {statusReadout}
-          <AccountFolderAdvisory account={account} runners={runners} status={status} editable={editable} />
-        </div>
-        {path}
-        {hint}
-      </div>
+      {readout}
       <div data-slot="account-actions" className="settings-account-actions">
         {actions}
         {manage}
