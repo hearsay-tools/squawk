@@ -1,5 +1,7 @@
 /** Main-thread measurements only: worker CPU does not count as loop blocking. */
 import { readFileSync } from 'node:fs';
+import { once } from 'node:events';
+import { Worker } from 'node:worker_threads';
 
 export function readQueueWaitMs({ read = readFileSync, platform = process.platform } = {}) {
   // Linux schedstat field 2 is cumulative run-queue wait in nanoseconds.
@@ -104,6 +106,56 @@ export function callsWithin(calls, from, to) {
     total.maxElapsedMs = Math.max(total.maxElapsedMs, call.elapsedMs);
   }
   return phases;
+}
+
+// Polls the main thread's kernel state from another thread; records it whenever it is not running.
+const WATCH_SOURCE = `
+const { workerData, parentPort } = require('node:worker_threads');
+const { readFileSync } = require('node:fs');
+const flag = new Int32Array(workerData.flag);
+const base = '/proc/' + workerData.pid + '/task/' + workerData.pid + '/';
+const read = name => { try { return readFileSync(base + name, 'utf8').trim(); } catch { return null; } };
+const seen = [];
+parentPort.postMessage('ready');
+for (let mode; (mode = Atomics.load(flag, 0)) !== 2;) {
+  if (mode === 0) { Atomics.wait(flag, 0, 0); continue; }
+  const stat = read('stat');
+  const state = stat === null ? '?' : stat.charAt(stat.lastIndexOf(')') + 2);
+  if (state !== 'R') seen.push({ at: performance.timeOrigin + performance.now(), state, wchan: read('wchan'),
+    syscall: read('syscall')?.split(' ')[0] ?? null });
+  Atomics.wait(flag, 0, 1, 1);
+}
+parentPort.postMessage(seen);
+`;
+
+/** Diagnostics only (Linux): name what the main thread waits in, such as a futex, a sleep, a
+ * child process or a page fault, about once a millisecond while watching is on. */
+export async function startThreadWatch() {
+  if (process.platform !== 'linux') return null;
+  const flag = new Int32Array(new SharedArrayBuffer(4));
+  const worker = new Worker(WATCH_SOURCE, { eval: true, workerData: { flag: flag.buffer, pid: process.pid } });
+  await once(worker, 'message');
+  const set = mode => { Atomics.store(flag, 0, mode); Atomics.notify(flag, 0); };
+  return {
+    watch: on => set(on ? 1 : 0),
+    async stop() {
+      const reply = once(worker, 'message');
+      set(2);
+      const [seen] = await reply;
+      await worker.terminate();
+      return seen.map(entry => ({ ...entry, at: entry.at - performance.timeOrigin }));
+    },
+  };
+}
+
+/** Counts of watched waits by state, syscall number and kernel wait channel. */
+export function summarizeWaits(seen) {
+  const counts = {};
+  for (const entry of seen) {
+    const key = `${entry.state} syscall=${entry.syscall} ${entry.wchan}`;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
 }
 
 /** Instrument only the synchronous open call. Imports and hook setup are outside its budget.

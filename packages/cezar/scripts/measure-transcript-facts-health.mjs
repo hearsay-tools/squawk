@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { PerformanceObserver } from 'node:perf_hooks';
-import { timingSnapshot, timingDelta, blockingBudget, prepareOpenTiming, hookCalls, callsWithin } from './transcript-facts-timing.mjs';
+import { timingSnapshot, timingDelta, blockingBudget, prepareOpenTiming, hookCalls, callsWithin, startThreadWatch, summarizeWaits } from './transcript-facts-timing.mjs';
 import { seedColdHistories, verifyFacts } from './transcript-facts-fixture.mjs';
 
 const root = mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'cez-facts-health-'));
@@ -26,6 +26,7 @@ let bootStore;
 let server;
 let unhookCalls;
 let gcObserver;
+let threadWatch;
 const watchdog = setTimeout(() => { console.error('health measurement exceeded 30s'); process.exitCode = 1; server?.closeAllConnections(); server?.close(); store?.close(); bootStore?.close(); }, 30_000);
 try {
   const { RunStore } = await import(new URL('runs/store.js', runtime.url));
@@ -91,6 +92,7 @@ try {
   const gcPauses = [];
   gcObserver = new PerformanceObserver(list => { for (const entry of list.getEntries()) gcPauses.push(entry); });
   gcObserver.observe({ entryTypes: ['gc'] });
+  threadWatch = await startThreadWatch();
   const start = performance.now();
   let end;
   let warming;
@@ -103,6 +105,7 @@ try {
     const measurementStart = pauseStart ?? timingSnapshot();
     const plannedMs = pauseStart ? pauseMs : 0;
     const requestStart = performance.now();
+    if (!store) threadWatch?.watch(true);
     const pendingResponse = fetch(endpoint, { signal: AbortSignal.timeout(2_000) });
     // The first request includes synchronous project-open work too.
     if (!store) {
@@ -115,6 +118,7 @@ try {
     const requestEnd = performance.now();
     // Include EVERY request begun while cold warm-up was active, even one ending after it.
     const measurement = timingDelta(measurementStart, timingSnapshot());
+    threadWatch?.watch(false);
     samples.push({ fromMs: measurementStart.at - start, startMs: requestStart - start, endMs: requestEnd - start,
       latencyMs: requestEnd - requestStart, plannedMs, ...measurement, ...blockingBudget(measurement) });
     if (end !== undefined) break;
@@ -123,6 +127,8 @@ try {
   }
   await warming;
   unhookCalls();
+  const firstSampleWaits = (await threadWatch?.stop()) ?? [];
+  threadWatch = undefined;
   for (const entry of gcObserver.takeRecords()) gcPauses.push(entry);
   gcObserver.disconnect();
   for (const sample of samples) {
@@ -147,6 +153,7 @@ try {
     maxBlockingMs: Math.max(...samples.map(sample => sample.blockingMs)),
     maxMainThreadCpuMs: Math.max(...samples.map(sample => sample.mainThreadCpuMs)),
     maxLoopIdleMs: Math.max(...samples.map(sample => sample.loopIdleMs)),
+    firstSampleWaits: summarizeWaits(firstSampleWaits), firstSampleWaitTrace: firstSampleWaits.slice(0, 300),
     sampleCount: samples.length, maxLatencyMs: Math.max(...samples.map(sample => sample.latencyMs)), samples };
   console.log(JSON.stringify(result));
   // Exclude run-queue delay and loop idle time: a response that waits on the thread pool, a worker
@@ -156,6 +163,7 @@ try {
   clearTimeout(watchdog);
   unhookCalls?.();
   gcObserver?.disconnect();
+  await threadWatch?.stop();
   let cleanupTimer;
   try {
     if (server) await Promise.race([server.shutdownForRestart(), new Promise((_, reject) => {

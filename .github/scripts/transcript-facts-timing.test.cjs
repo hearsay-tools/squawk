@@ -149,3 +149,18 @@ test('records hooked calls, restores them even on throw, and totals them per pha
     { phase: 'a', at: 3, elapsedMs: 5, mainThreadCpuMs: 4 }, { phase: 'b', at: 9, elapsedMs: 1, mainThreadCpuMs: 1 }], 0, 9);
   assert.deepEqual(totals, { a: { count: 2, elapsedMs: 7, mainThreadCpuMs: 5, maxElapsedMs: 5 } });
 });
+
+test('names the main-thread wait a watcher thread sees', async () => {
+  const { startThreadWatch, summarizeWaits } = await timing;
+  assert.deepEqual(summarizeWaits([{ state: 'S', syscall: '202', wchan: 'futex_wait_queue' },
+    { state: 'S', syscall: '202', wchan: 'futex_wait_queue' }, { state: 'D', syscall: '74', wchan: 'jbd2' }]),
+  { 'S syscall=202 futex_wait_queue': 2, 'D syscall=74 jbd2': 1 });
+  const watch = await startThreadWatch();
+  if (process.platform !== 'linux') { assert.equal(watch, null); return; }
+  watch.watch(true);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 40);
+  watch.watch(false);
+  const seen = await watch.stop();
+  // Atomics.wait parks the main thread in futex(2), syscall 202 on x86-64 and 98 on arm64.
+  assert.ok(seen.some(entry => entry.state === 'S' && ['202', '98'].includes(entry.syscall)), JSON.stringify(seen.slice(0, 5)));
+});
