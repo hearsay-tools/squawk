@@ -220,3 +220,25 @@ describe('Claude native parent turns on the mock wire (hearsay-tools/cezarion#15
     expect(ui.indexOf(completed[0]!)).toBeGreaterThan(ui.findIndex(event => event.type === 'turn.completed'));
   }, 60_000);
 });
+
+describe('Claude streaming turn announcement', () => {
+  it.each(['native', 'queued'])('announces %s turns before partial item events and keeps v1 text completion-only', async mode => {
+    const f = pipeSession();
+    try {
+      // bound: wait for the opening stdin write before sending output.
+      await vi.waitFor(() => expect(f.written).toHaveLength(1), { timeout: 10_000 });
+      await f.frames(init);
+      if (mode === 'queued') expect(f.session.sendMessage([{ type: 'text', text: 'next' }])).toBe(true);
+      await f.frames(parentText('opening'), result('opening'));
+      const offset = f.ui.length;
+      const v1Before = f.v1.filter(e => e.type === 'text').length;
+      const partial = (event: unknown) => ({ type: 'stream_event', parent_tool_use_id: null, event });
+      await f.frames(partial({ type: 'message_start', message: { id: 'message-stream' } }), partial({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }), partial({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'hello' } }));
+      expect(f.ui.slice(offset, offset + 3).map(e => e.type)).toEqual(['turn.started', 'item.started', 'item.delta']);
+      expect(f.v1.filter(e => e.type === 'text')).toHaveLength(v1Before);
+      await f.frames({ ...parentText('hello'), message: { id: 'message-stream', role: 'assistant', content: [{ type: 'text', text: 'hello' }] } }, partial({ type: 'content_block_stop', index: 0 }), result('hello'));
+      expect(f.starts()).toEqual(['turn_1', 'turn_2']);
+      expect(f.v1.filter(e => e.type === 'text')).toHaveLength(v1Before + 1);
+    } finally { await f.finish(); }
+  });
+});

@@ -1,0 +1,162 @@
+[
+  {
+    "type": "session.started",
+    "sessionId": "session-partial",
+    "backend": "claude",
+    "model": "claude-haiku-5-5"
+  },
+  {
+    "type": "turn.started",
+    "turnId": "turn_1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "item_1",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": "**17 \u00d7 "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": "23 = 391**"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": "\n\nSplit "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": "23 into "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": "20 +"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": " 3 "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": "and multiply each"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": " part by 17:\n\n- "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": "17 \u00d7 20 = "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": "340\n- 17 \u00d7 "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": "3 = 51\n- "
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": "340 + 51 = **"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": "391**"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": "\n\nCheck: 17 \u00d7 25"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": " = 425, and 17"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": " \u00d7 2 = 34"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": ", so 425 \u2212 34"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": " = 391."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "item_1",
+      "role": "assistant",
+      "text": "**17 \u00d7 23 = 391**\n\nSplit 23 into 20 + 3 and multiply each part by 17:\n\n- 17 \u00d7 20 = 340\n- 17 \u00d7 3 = 51\n- 340 + 51 = **391**\n\nCheck: 17 \u00d7 25 = 425, and 17 \u00d7 2 = 34, so 425 \u2212 34 = 391."
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "turn_1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 2,
+      "output": 260,
+      "total": 12791,
+      "cacheRead": 11056,
+      "cacheWrite": 1473
+    },
+    "costUsd": 0.00053536
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 2,
+      "output": 260,
+      "total": 12791,
+      "cacheRead": 11056,
+      "cacheWrite": 1473
+    },
+    "costUsd": 0.00053536
+  }
+]

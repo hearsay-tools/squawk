@@ -80,6 +80,8 @@ function expectedEvents(fixture: string): unknown {
 
 const GOLDEN_FIXTURES = [
   'text-turn',
+  'partial-text',
+  'partial-thinking',
   'bash-and-screenshot',
   'thinking-edit-write-todo',
   'subagent-task',
@@ -927,5 +929,72 @@ describe('claude blank thinking blocks (#528)', () => {
     const events = reasoningItems(assistant('Checking the auth path.'));
     expect(events).toHaveLength(2); // started + completed
     expect(events.every((e) => 'item' in e && e.item.kind === 'reasoning' && e.item.text === 'Checking the auth path.')).toBe(true);
+  });
+});
+
+describe('Claude partial messages', () => {
+  const partial = (event: unknown, parent_tool_use_id: string | null = null) => ({ type: 'stream_event', event, parent_tool_use_id });
+  const start = { type: 'message_start', message: { id: 'stream-message' } };
+  const block = (type = 'text', index = 0) => ({ type: 'content_block_start', index, content_block: { type, text: '', thinking: '' } });
+  const delta = (text: string, type = 'text_delta', index = 0) => ({ type: 'content_block_delta', index, delta: { type, text, thinking: text } });
+  const assistant = (text: string) => ({ type: 'assistant', message: { id: 'stream-message', content: [{ type: 'text', text }] } });
+  const result = { type: 'result', subtype: 'success', result: 'hello' };
+  function fold(frames: unknown[]) {
+    let state = createClaudeUiState();
+    const events: UiEvent[] = [];
+    for (const frame of frames) { const mapped = mapClaudeMessage(frame, state); state = mapped.state; events.push(...mapped.events); }
+    return { state, events };
+  }
+
+  it('completes interrupted streams on result without a duplicate fallback message', () => {
+    const { state, events } = fold([partial(start), partial(block()), partial(delta('hello')), result]);
+    expect(events.map(e => e.type)).toEqual(['item.started', 'item.delta', 'item.completed', 'turn.completed']);
+    expect(events[2]).toEqual({ type: 'item.completed', item: { kind: 'message', id: 'item_1', role: 'assistant', text: 'hello' } });
+    expect(state.streamBlocks.size).toBe(0);
+  });
+
+  it.each([true, false])('reconciles assistant before block-stop: %s', before => {
+    const stop = partial({ type: 'content_block_stop', index: 0 });
+    const tail = before ? [assistant('hello'), stop] : [stop, assistant('hello')];
+    const { events } = fold([partial(start), partial(block()), partial(delta('hello')), ...tail, result]);
+    expect(events.filter(e => e.type === 'item.started')).toHaveLength(1);
+    expect(events.filter(e => e.type === 'item.completed')).toEqual([{ type: 'item.completed', item: { kind: 'message', id: 'item_1', role: 'assistant', text: 'hello' } }]);
+  });
+
+  it('keeps malformed frames and unknown deltas inert with the same state', () => {
+    const { state } = fold([partial(start), partial(block())]);
+    for (const event of [{}, null, [], { type: 'unknown' }, { type: 'content_block_delta', index: 0, delta: {} }, { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'x' } }, { type: 'content_block_start', index: '0', content_block: { type: 'text' } }]) {
+      expect(mapClaudeMessage(partial(event), state)).toEqual({ events: [], state });
+      expect(mapClaudeMessage(partial(event), state).state).toBe(state);
+    }
+  });
+
+  it('ignores child streams while preserving nested completed assistant items', () => {
+    const { events } = fold([partial(start), partial(block()), partial(delta('hello')), partial(start, 'tool-child'), partial(block(), 'tool-child'), partial(delta('child'), 'tool-child'), { ...assistant('child'), parent_tool_use_id: 'tool-child' }, assistant('hello'), result]);
+    expect(events.filter(e => e.type === 'item.delta')).toHaveLength(1);
+    expect(events.filter(e => e.type === 'item.completed').map(e => e.item)).toEqual([
+      { kind: 'message', id: 'item_2', role: 'assistant', text: 'child', parentItemId: 'tool-child' },
+      { kind: 'message', id: 'item_1', role: 'assistant', text: 'hello' },
+    ]);
+  });
+
+  it('starts thinking lazily, preserves whitespace and completes it once', () => {
+    const { events } = fold([partial(start), partial(block('thinking')), partial(delta(' ', 'thinking_delta')), partial(delta('reason', 'thinking_delta')), partial({ type: 'content_block_stop', index: 0 }), result]);
+    expect(events[0]).toEqual({ type: 'item.started', item: { kind: 'reasoning', id: 'item_1', text: ' ' } });
+    expect(events[1]).toEqual({ type: 'item.delta', itemId: 'item_1', field: 'text', delta: 'reason' });
+    expect(events[2]).toEqual({ type: 'item.completed', item: { kind: 'reasoning', id: 'item_1', text: ' reason' } });
+    const blank = fold([partial(start), partial(block('thinking')), partial(delta(' ', 'thinking_delta')), partial({ type: 'content_block_stop', index: 0 })]);
+    expect(blank.events).toEqual([]);
+  });
+
+  it('completes stale blocks before starting a new API message', () => {
+    const { events } = fold([partial(start), partial(block()), partial(delta('hello')), partial({ type: 'message_start', message: { id: 'next' } }), partial(block()), result]);
+    expect(events.filter(e => e.type === 'item.completed')).toHaveLength(2);
+  });
+
+  it('leaves streamed tool input to the complete assistant tool block', () => {
+    const { events } = fold([partial(start), partial({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'tool', name: 'Read', input: {} } }), partial({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{' } }), { type: 'assistant', message: { id: 'stream-message', content: [{ type: 'tool_use', id: 'tool', name: 'Read', input: { file_path: '/tmp/file' } }] } }]);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: 'item.started', item: { kind: 'tool', id: 'tool', input: { file_path: '/tmp/file' } } });
   });
 });
