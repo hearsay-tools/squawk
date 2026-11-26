@@ -148,6 +148,34 @@ describe('Antigravity permission-wait steer deferral (hearsay-tools/squawk#4181)
     } finally { session.interrupt(); await session.result.catch(() => undefined); }
   });
 
+  it('drains a deferred agent steer followed by a deferred human steer once the permission resolves', async () => {
+    const cwd = await workspace();
+    const events: AgentEvent[] = [];
+    const ui: UiEvent[] = [];
+    const session = new AntigravityRunner({ bin }).startSession(
+      { cwd, toolGrant: { kind: 'explicit', tools: ['Bash'] }, userPrompt: 'mock:permission-race-early gated', env: { HSQ_APPROVAL_GATE: '1' } },
+      event => events.push(event),
+      { autoEndAfterFirstTurn: true, onUiEvent: event => ui.push(event) },
+    );
+    try {
+      await waitFor(() => events.some(event => event.type === 'tool-call'));
+      const ack = session.sendAgentMessage([{ type: 'text', text: 'first deferred agent steer' }]);
+      expect(ack).not.toBe(false);
+      await waitFor(() => ui.some(event => event.type === 'permission.requested'));
+      const request = ui.find((event): event is Extract<UiEvent, { type: 'permission.requested' }> => event.type === 'permission.requested')!;
+      expect(session.sendMessage([{ type: 'text', text: 'second deferred human steer' }])).toBe(true);
+      expect(session.holdsHumanInput()).toBe(true);
+      expect(session.respondPermission?.(request.requestId, 'allow-once')).toBe(true);
+      await ack;
+      await session.result;
+      expect(session.holdsHumanInput()).toBe(false);
+      const text = events.filter(event => event.type === 'text').map(event => event.text).join('');
+      expect(text).toContain('first deferred agent steer');
+      expect(text).toContain('second deferred human steer');
+      expect(events.filter(event => event.type === 'error')).toEqual([]);
+    } finally { session.interrupt(); await session.result.catch(() => undefined); }
+  });
+
   it('still fails delivery on unrelated ACP RPC rejections for sendAgentMessage and sendMessage', async () => {
     await withRejectedInput('antigravity', async () => {
       const cwd = await workspace();

@@ -383,7 +383,7 @@ export class AntigravitySession implements AgentSession {
   private flushDeferredSteers(): boolean {
     if (!this.open || !this.ready || this.retryingDeferred || this.acp.hasPendingPermission || this.pendingAsk || !this.deferredSteers.length) return false;
     const next = this.deferredSteers[0]!;
-    if (next.sender === 'agent' && this.humanAcks > 0) return false;
+    if (next.sender === 'agent' && this.humanAcks > this.deferredHumanCount()) return false;
     this.deferredSteers.shift();
     this.retryingDeferred = true;
     if (next.sender === 'user') this.dispatchHuman(next, true);
