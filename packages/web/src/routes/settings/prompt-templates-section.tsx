@@ -175,7 +175,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                   value={template.text}
                   maxLength={2000}
                   onChange={(event) => updateTemplate(template.id, { text: event.target.value })}
-                  className="min-h-14 text-[13px]"
+                  className="min-h-14 rounded-md border border-border bg-background text-[13px]"
                 />
                 <p className="mt-3 text-sm">Apply automatically with skills</p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
@@ -243,7 +243,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
             value={newText}
             maxLength={2000}
             onChange={(event) => setNewText(event.target.value)}
-            className="min-h-14 text-[13px]"
+            className="min-h-14 rounded-md border border-border bg-background text-[13px]"
           />
           <Button
             type="button"
@@ -353,7 +353,7 @@ function TemplateSkillsPicker({
           aria-label={`Apply ${label || 'this template'} automatically with a skill`}
           title="Pick the skills this template applies itself to"
           className={cn(
-            'inline-flex h-[26px] items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
+            'inline-flex h-[26px] min-w-[7.5rem] items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
             selected.length > 0 && 'border-foreground/60 font-semibold text-foreground',
           )}
         >

@@ -1,3 +1,5 @@
+import { SettingsSelect } from './settings-select'
+import { canonicalRunnerName } from './agent-descriptors'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { IdCardIcon } from 'lucide-react'
 import { CpuIcon } from '@/components/design-icons'
@@ -121,6 +123,14 @@ export function GlobalAgentsSection() {
   return <AgentsPane data={profiles.data!} runners={runners.data!} />
 }
 
+/** A config folder for display: the home folder as `~`, and a long path cut to its last three
+ *  segments. The full path stays in the element's `title`. */
+function shortPath(path: string): string {
+  const home = path.replace(/^\/(?:home|Users)\/[^/]+/, '~')
+  const parts = home.split('/')
+  return parts.length > 4 ? `…/${parts.slice(-3).join('/')}` : home
+}
+
 /** Scroll to the card a link named (`#agent-<id>`) once the cards exist. The router does not
  *  scroll to a hash on client navigation, so a link from the runner picker would land at the
  *  top of the page without this. */
@@ -148,9 +158,6 @@ function AgentsPane({ data, runners }: { data: AgentProfilesResponse; runners: R
       data-slot="accounts-section"
       className="mx-auto flex w-full max-w-2xl flex-col gap-5 p-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-6 md:pb-6"
     >
-      <p className="text-[13px] text-muted-foreground">
-        Install, update and sign in to each agent, and set what a project runs when it has not chosen.
-      </p>
       <RemoteSettingsNotice risk="Agent accounts run each CLI with the configured host folder" />
       {data.editable ? null : (
         <p data-slot="accounts-hosted" className="text-[13px] text-soft-foreground">
@@ -293,7 +300,7 @@ function AgentCard({
     >
       {/* Facts about the BINARY, not about any one account: a version and an install are shared by
           every login of the same CLI, so they belong here rather than repeated on each row. */}
-      <h3 id={titleId} className="settings-account-provider-title">{entry.displayName}</h3>
+      <h3 id={titleId} className="settings-account-provider-title">{canonicalRunnerName(entry.id, entry.displayName)}</h3>
       {managed ? <ManagedCli runner={provider} /> : null}
       <div className="settings-account-installation settings-readout">
         {managed ? null : <InstallReadout entry={entry} check={check} />}
@@ -316,7 +323,7 @@ function AgentCard({
           </div>
         ) : (
           <p data-slot="accounts-single-only" className="text-[11px] text-soft-foreground">
-            {entry.displayName} can only hold one account here: it keeps its credentials
+            {canonicalRunnerName(entry.id, entry.displayName)} can only hold one account here: it keeps its credentials
             outside its config folder, so a second folder would change settings without changing the
             login — which would say “work account” while billing the other one.
           </p>
@@ -325,7 +332,7 @@ function AgentCard({
         // Fallback for older servers that withhold account rows in hosted mode.
         <div data-slot="hosted-sign-in" className="flex flex-wrap items-center gap-3">
           <p className="text-[13px] text-muted-foreground">Discovered account</p>
-          <BrowserSignInButton provider={provider} label={entry.displayName} />
+          <BrowserSignInButton provider={provider} label={canonicalRunnerName(entry.id, entry.displayName)} />
         </div>
       ) : null}
     </section>
@@ -384,15 +391,15 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
       <div className="settings-account-models flex flex-col gap-2">
         <label className="settings-model-agent-choice">
           <span>Default model for</span>
-          <select aria-label="Model agent" value={modelChoice} onChange={(event) => setModelRunner(event.target.value as Runner)}>
-            {runners.runners.map((entry) => <option key={entry.id} value={entry.id}>{entry.displayName}</option>)}
-          </select>
+          <SettingsSelect aria-label="Model agent" value={modelChoice} onChange={(event) => setModelRunner(event.target.value as Runner)}>
+            {runners.runners.map((entry) => <option key={entry.id} value={entry.id}>{canonicalRunnerName(entry.id, entry.displayName)}</option>)}
+          </SettingsSelect>
         </label>
         {runners.runners.filter((entry) => entry.id === modelChoice).map((entry) => (
           <label key={entry.id} className="settings-account-model flex flex-wrap items-center gap-3">
             <CpuIcon className="size-4 text-accent-icon shrink-0" />
-            <span className="w-28 shrink-0 text-xs text-muted-foreground">{entry.displayName}</span>
-            <select
+            <span className="w-28 shrink-0 text-xs text-muted-foreground">{canonicalRunnerName(entry.id, entry.displayName)}</span>
+            <SettingsSelect
               aria-label={`Default model for ${entry.pickerLabel}`}
               data-slot="accounts-default-model"
               data-runner={entry.id}
@@ -417,7 +424,7 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
                 </option>
               ))}
               <CatalogStatusOption runner={entry.id} runners={runners} catalog={catalogs[entry.id]} />
-            </select>
+            </SettingsSelect>
           </label>
         ))}
       </div>
@@ -492,7 +499,7 @@ function AccountFolderAdvisory({ account, runners, status, editable }: {
   if (!account.looksValid && account.configDir) {
     return (
       <span data-slot="account-unrecognised">
-        — this folder does not look like {runnerDisplayName(runners, account.provider)} config yet
+        — this folder does not look like {canonicalRunnerName(account.provider, runnerDisplayName(runners, account.provider))} config yet
       </span>
     )
   }
@@ -534,7 +541,7 @@ function AccountRow({ account, runners, editable, onRemove }: {
               className="mt-0.5 truncate font-mono text-[11px] text-soft-foreground"
               title={account.path}
             >
-              {account.configDir}
+              {shortPath(account.configDir)}
             </p>
           ) : null}
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">

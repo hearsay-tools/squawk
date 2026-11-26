@@ -60,8 +60,8 @@ function SettingsMainHeader({ scope, title, mobileTitle, description }: { scope:
   const projectName = useActiveProjectIdentity().name
   const where = scope === 'global' ? 'every project' : (projectName ?? 'this project')
   return (
-    <header data-slot="settings-main-header" className="settings-route-header flex shrink-0 flex-col gap-2">
-      <h1 className="text-[20px] font-semibold tracking-tight text-foreground max-md:text-[24px]">
+    <header data-slot="settings-main-header" className="settings-route-header flex shrink-0 flex-col gap-1 md:px-9 px-4 pt-7 pb-5">
+      <h1 className="font-semibold tracking-tight leading-[1.2] text-foreground">
         <span className="md:hidden">{mobileTitle}</span>
         <span className="max-md:hidden">{title} <span className="font-normal text-soft-foreground">· {where}</span></span>
       </h1>
@@ -118,7 +118,7 @@ export function SettingsSectionRoute({
         scope={scope}
         title={section.title}
         description={section.description}
-        mobileTitle={scope === 'global' ? 'Global settings' : 'Project settings'}
+        mobileTitle={section.title}
       />
       <div className="settings-route-body flex min-w-0 flex-1 flex-col md:flex-row">
         <SectionPills scope={scope} activeId={section.id} />
@@ -137,7 +137,7 @@ export function SettingsSectionRoute({
 export function SettingsIndexRoute() {
   return (
     <div data-route="settings" className="settings-route flex min-h-full w-full flex-col">
-      <SettingsMainHeader scope="project" title="General" mobileTitle="Project settings" />
+      <SettingsMainHeader scope="project" title="General" mobileTitle="General" />
       <div className="settings-route-body flex min-w-0 flex-1 flex-col md:flex-row">
         <SectionPills scope="project" activeId={null} />
         {/* No second h1 for small screens: the app shell's mobile top bar already titles the

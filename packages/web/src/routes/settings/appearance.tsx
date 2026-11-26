@@ -41,7 +41,7 @@ const ACCENT_OPTIONS: Array<{ value: Accent; label: string; swatch: string }> = 
 const DENSITY_OPTIONS: Array<{ value: Density; label: string }> = [
   { value: 'comfortable', label: 'Comfortable' },
   { value: 'compact', label: 'Compact' },
-  { value: 'ultra', label: 'Compact for real' },
+  { value: 'ultra', label: 'Ultra-compact' },
 ]
 
 const WIDTH_OPTIONS: Array<{ value: Width; label: string }> = [
@@ -68,7 +68,7 @@ function Segmented<V extends string>({
       role="radiogroup"
       aria-label={label}
       data-slot={slot}
-      className="inline-flex w-fit gap-0.5 rounded-md border border-border bg-card p-0.5 max-md:max-w-full max-md:flex-wrap"
+      className="inline-flex w-fit gap-0.5 rounded-lg border border-border bg-muted/60 p-1 max-md:max-w-full max-md:flex-wrap"
     >
       {options.map((option) => {
         const checked = option.value === value
@@ -81,9 +81,9 @@ function Segmented<V extends string>({
             data-value={option.value}
             onClick={() => onChange(option.value)}
             className={cn(
-              'flex min-h-11 items-center gap-2 rounded-sm px-3 py-1.5 text-[13px] font-medium transition-colors',
+              'flex min-h-11 items-center gap-2 rounded-md border border-transparent px-3 py-1.5 text-[13px] font-medium transition-colors',
               checked
-                ? 'bg-muted text-foreground'
+                ? 'border border-border bg-card text-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >

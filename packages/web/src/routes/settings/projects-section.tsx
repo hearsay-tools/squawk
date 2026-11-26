@@ -1,3 +1,4 @@
+import { SettingsSelect } from './settings-select'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { FoldersIcon, XIcon } from '@/components/design-icons'
 
@@ -663,7 +664,7 @@ export function MaxParallelSelect({
   // `''` is the inherit sentinel; a number is an explicit per-project ceiling.
   const value = project.maxParallel === undefined ? '' : String(project.maxParallel)
   return (
-    <select
+    <SettingsSelect
       aria-label={`Max parallel tasks for ${project.name}`}
       data-slot="project-max-parallel"
       value={value}
@@ -695,6 +696,6 @@ export function MaxParallelSelect({
           {n}
         </option>
       ))}
-    </select>
+    </SettingsSelect>
   )
 }

@@ -216,13 +216,13 @@ function AgentPane({
                       file.id === selectedId ? 'bg-accent-strong/15 text-foreground' : 'hover:bg-muted/60',
                     )}
                   >
-                    <span className="min-w-0 flex-1 truncate font-mono text-[12px]">{file.label}</span>
+                    <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground">{file.label}</span>
                     {file.seeded && (
                       <Badge variant="outline" className="shrink-0 text-[12px]">
-                        seeded
+                        Default template
                       </Badge>
                     )}
-                    {!file.exists && <span className="shrink-0 text-[11px] text-soft-foreground">absent</span>}
+                    {!file.exists && <span className="shrink-0 text-[11px] text-muted-foreground">Not created</span>}
                   </button>
                 </li>
               ))}

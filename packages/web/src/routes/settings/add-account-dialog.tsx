@@ -1,3 +1,5 @@
+import { SettingsSelect } from './settings-select'
+import { canonicalRunnerName } from './agent-descriptors'
 import { useState } from 'react'
 
 import { useCreateAgentProfile } from '@/api/queries'
@@ -109,7 +111,7 @@ export function AddAccountDialog({
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-[13px]">
             <span className="text-muted-foreground">Agent</span>
-            <select
+            <SettingsSelect
               aria-label="Agent"
               data-slot="add-account-provider"
               value={provider}
@@ -118,10 +120,10 @@ export function AddAccountDialog({
             >
               {providers.map((id) => (
                 <option key={id} value={id}>
-                  {id}
+                  {canonicalRunnerName(id)}
                 </option>
               ))}
-            </select>
+            </SettingsSelect>
           </label>
           <label className="flex min-w-0 flex-1 items-center gap-2 text-[13px]">
             <span className="shrink-0 text-muted-foreground">Name</span>

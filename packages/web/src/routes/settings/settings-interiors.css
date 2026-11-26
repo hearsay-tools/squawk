@@ -20,6 +20,7 @@
   background: var(--background); box-shadow: none; font-size: 13px;
 }
 .settings-panel .settings-field > :is(input, select, textarea:not([data-slot="code-editor-input"])),
+.settings-panel .settings-field > .settings-select, .settings-panel .settings-field > .settings-select > select,
 .settings-panel [data-slot="agents-default-runner"],
 .settings-panel [data-slot="projects-browse-root"],
 .settings-panel [data-slot="projects-checkout-root"] { width: 100%; max-width: none; }
@@ -27,9 +28,9 @@
 .settings-panel [data-slot="resources-composer-defaults"] { grid-template-columns: 1fr; gap: 24px; }
 .settings-panel [data-slot="prompt-template-row"] { padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: color-mix(in oklch, var(--card-2) 40%, transparent); gap: 12px; margin-block-end: 12px; }
 .settings-panel [data-slot="prompt-template-new"] { padding-block: 20px; padding-inline: 0; border: 0; border-radius: 0; gap: 12px; border-block-end: 1px solid var(--border); }
-.settings-panel [data-slot="agent-config-agents"] { padding: 0; background: transparent; gap: 8px; }
-.settings-panel [data-slot="agent-config-agent"] { border: 1px solid var(--border); }
-.settings-panel [data-slot="agent-config-agent"][aria-selected=true] { background: var(--accent-strong); color: var(--accent-strong-foreground); }
+.settings-panel [data-slot="agent-config-agents"] { padding: 4px; background: color-mix(in oklch, var(--muted) 60%, transparent); border: 1px solid var(--border); border-radius: 8px; gap: 4px; width: fit-content; max-width: 100%; }
+.settings-panel [data-slot="agent-config-agent"] { border: 1px solid transparent; }
+.settings-panel [data-slot="agent-config-agent"][aria-selected=true] { background: var(--card); border-color: var(--border); color: var(--foreground); box-shadow: var(--shadow-xs); }
 /* Keep the complete table semantics/data while arranging each record as the
    reference's vertical card, so long paths and tag editors fit at any width. */
 .settings-panel [data-slot="projects-section"] table { display: block; }
@@ -53,7 +54,7 @@
 /* S01–S13: the Settings shell owns this rhythm, independent of the task reading width. */
 .settings-route { padding: 0; gap: 0; }
 /* Desktop: the header is the board's full-bleed "Main header" (16/28 padding, rule below); the body keeps the board's 28px. */
-.settings-route-header { padding-block: 20px 16px; padding-inline: 36px; gap: 4px; }
+.settings-route-header { gap: 4px; }
 .settings-route-body { gap: 24px; padding-block: 8px 28px; padding-inline: 36px; max-width: 56rem; width: 100%; }
 .settings-section-picker { position: relative; width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
 .settings-section-picker summary { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding-block: 12px; padding-inline: 14px; list-style: none; cursor: pointer; font-size: 14px; }
@@ -71,9 +72,9 @@
 .settings-panel [data-slot=appearance-section] > section + section { border-block-start: 1px solid var(--border); padding-block-start: 24px; }
 .settings-panel [data-slot=appearance-section] h2 { font-size: 14px; font-weight: 400; }
 .settings-panel [data-slot=appearance-section] h2 + p { margin-block-start: 8px; }
-.settings-panel [data-slot=appearance-section] [role=radiogroup] { padding: 0; gap: 10px; border: 0; background: transparent; }
-.settings-panel [data-slot=appearance-section] [role=radio] { border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding-block: 12px; padding-inline: 16px; font-weight: 400; }
-.settings-panel [data-slot=appearance-section] [aria-checked=true] { background: color-mix(in oklch, var(--accent-strong) 12%, transparent); color: var(--accent-text); border-color: color-mix(in oklch, var(--accent-strong) 30%, var(--border)); }
+.settings-panel [data-slot=appearance-section] [role=radiogroup] { gap: 4px; }
+.settings-panel [data-slot=appearance-section] [role=radio] { border-radius: 6px; padding-block: 8px; padding-inline: 14px; font-weight: 400; }
+.settings-panel [data-slot=appearance-section] [aria-checked=true] { background: var(--card); color: var(--foreground); border-color: var(--border); }
 
 .settings-panel [data-slot=notifications-permission] { margin-block: 20px; margin-inline: 0; }
 .settings-panel [data-slot=notifications-permission][data-permission=denied] { color: var(--danger); }
@@ -96,7 +97,7 @@
 @media (max-width: 767px) {
   .settings-route { padding-block: 28px 32px; padding-inline: 16px; gap: 24px; }
   .settings-route-header { padding: 0; }
-  .settings-route-header h1 { line-height: 36px; letter-spacing: 0; }
+  .settings-route-header h1 { line-height: 1.2; letter-spacing: -0.01em; }
   .settings-route-header > p { display: none; }
   .settings-route-body { gap: 20px; padding: 0; max-width: none; }
   .settings-panel { padding: 16px; }
@@ -187,7 +188,6 @@
    Scoped here so framework behavior and other route families remain untouched. */
 .settings-route [data-slot=button] { font-weight: 400; border-radius: 8px; }
 .settings-panel [data-slot=button] { padding-inline: 16px; }
-.settings-route [data-slot=button][data-variant=primary] { background: var(--accent-strong); color: var(--accent-strong-foreground); }
 .settings-route [data-slot=switch-thumb] { background: white; }
 .settings-panel .settings-form-actions [data-variant=primary] { order: 1; }
 .settings-panel .settings-form-actions > span { order: 2; }
@@ -195,7 +195,7 @@
 .settings-config-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .settings-config-file-row { display: flex; flex-wrap: wrap; gap: 10px; }
 .settings-config-file-row button { border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding-block: 10px; padding-inline: 16px; font-size: 12px; font-weight: 400; }
-.settings-config-file-row button[aria-pressed=true] { background: var(--accent-strong); color: var(--accent-strong-foreground); }
+.settings-config-file-row button[aria-pressed=true] { background: var(--card); color: var(--foreground); border-color: var(--border); box-shadow: var(--shadow-xs); font-weight: 500; }
 .settings-config-agent-choice { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; font-size: 12px; color: var(--muted-foreground); }
 .settings-panel .settings-config-agent-choice select { min-height: 36px; padding-block: 6px; padding-inline: 10px; border: 1px solid var(--border); border-radius: 6px; }
 .settings-config-content-heading { border-block-start: 1px solid var(--border); padding-block-start: 20px; margin-block-start: 8px; }
@@ -258,3 +258,16 @@
 .settings-panel .settings-resource-controls input[data-slot="resources-memory-limit"], .settings-panel .settings-resource-controls input[data-slot="resources-monitoring-wake-interval"] { flex: none; width: 9rem; }
 .settings-panel [data-slot="resources-composer-defaults"] select { width: 16rem; max-width: 100%; }
 .settings-panel .settings-account-add-row, .settings-panel [data-slot=accounts-actions] { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* Unified page header (pass-3 contract): the same 28px title and gutter every route uses. */
+@media (max-width: 767px) { .settings-route-header { padding: 0; } }
+.settings-route-header h1 { font-size: 26px; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em; }
+.settings-route-header > p { margin-block-start: 4px; font-size: 13px; }
+@media (min-width: 768px) {
+  .settings-route-header { padding-inline: 36px; padding-block: 28px 20px; }
+  .settings-route-header h1 { font-size: 28px; }
+}
+/* Compact agent cards: tight vertical rhythm so two or three fit above the fold. */
+.settings-panel .settings-agent-card { gap: 10px; padding: 12px 16px; }
+.settings-panel .settings-agent-card .settings-readout { padding: 8px 12px; }
+.settings-panel .settings-account-add-row { margin-block-start: 0; }

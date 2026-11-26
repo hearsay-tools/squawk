@@ -1,3 +1,5 @@
+import { SettingsSelect } from './settings-select'
+import { canonicalRunnerName } from './agent-descriptors'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { BotIcon } from '@/components/design-icons'
 
@@ -143,7 +145,7 @@ function AgentsForm({
     return (
       <label key={runner.id} className="settings-option-row">
         <div>
-          <h3>{runner.pickerLabel}</h3>
+          <h3>{canonicalRunnerName(runner.id, runner.pickerLabel)}</h3>
         </div>
         {config.modelsLocked ? (
           <output
@@ -156,7 +158,7 @@ function AgentsForm({
             {configuredModelLabel}
           </output>
         ) : (
-          <select
+          <SettingsSelect
             aria-label={`Default model for ${runner.pickerLabel}`}
             data-slot="agents-model"
             data-runner={runner.id}
@@ -178,7 +180,7 @@ function AgentsForm({
               </option>
             ))}
             {catalogStatus ? <option disabled>{catalogStatus}</option> : null}
-          </select>
+          </SettingsSelect>
         )}
       </label>
     )
@@ -297,7 +299,7 @@ function AgentsForm({
           hint="New task worktrees branch from this and draft PRs target it. Also settable from the Git view."
         >
           {repo.data?.info ? (
-            <select
+            <SettingsSelect
               aria-label="Base branch"
               data-slot="agents-base-branch"
               value={config.baseBranch ?? ''}
@@ -311,7 +313,7 @@ function AgentsForm({
                   {name}
                 </option>
               ))}
-            </select>
+            </SettingsSelect>
           ) : (
             <p data-slot="agents-base-branch-unavailable" className="text-[13px] text-soft-foreground">
               {repo.isPending ? 'Loading branches…' : 'Not a git repository — tasks run in place, no branching.'}

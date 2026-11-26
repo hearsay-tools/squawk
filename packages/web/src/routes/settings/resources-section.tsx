@@ -1,3 +1,4 @@
+import { SettingsSelect } from './settings-select'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { GaugeIcon } from '@/components/design-icons'
 
@@ -171,7 +172,7 @@ function ResourcesForm({ config }: { config: WorkspaceConfigResponse }) {
           onCheckedChange={saveAutoResume}
         />
         <p className="text-[11px] text-soft-foreground">
-          Applies to Claude, Codex and OpenCode — whenever the provider says when the limit lifts.
+          Applies to Claude Code, Codex and OpenCode — whenever the provider says when the limit lifts. Saves automatically.
         </p>
       </SettingsField>
 
@@ -208,7 +209,7 @@ function MaxParallelField({
       title="Max parallel tasks"
       hint="Limit simultaneously running tasks."
     >
-      <select
+      <SettingsSelect
         aria-label="Max parallel tasks"
         data-slot="resources-max-parallel"
         value={maxParallel}
@@ -223,7 +224,8 @@ function MaxParallelField({
             </option>
           ),
         )}
-      </select>
+      </SettingsSelect>
+      <p data-slot="resources-autosave" className="text-[11px] text-soft-foreground">Saves automatically.</p>
       <p className="text-[11px] text-soft-foreground">
         Need a different limit for one project?{' '}
         <Link
@@ -256,7 +258,7 @@ function MaxMonitoringField({
       title="Extra monitoring sessions"
       hint="Additional capacity reserved for monitoring."
     >
-      <select
+      <SettingsSelect
         aria-label="Extra monitoring sessions"
         data-slot="resources-max-monitoring"
         value={maxMonitoringSessions ?? 2}
@@ -267,7 +269,8 @@ function MaxMonitoringField({
         {Array.from({ length: MAX_MONITORING_MAX + 1 }, (_, n) => (
           <option key={n} value={n}>{n}</option>
         ))}
-      </select>
+      </SettingsSelect>
+      <p data-slot="resources-autosave" className="text-[11px] text-soft-foreground">Saves automatically.</p>
       <p className="text-[11px] text-soft-foreground">
         Capacity: {maxParallel} active + {maxMonitoringSessions ?? 2} monitoring. Set 0 to make monitoring share active slots.
       </p>
@@ -422,7 +425,7 @@ function ComposerDefaultsField({
       <div className="grid gap-4 sm:grid-cols-2" data-slot="resources-composer-defaults">
         <label className="grid gap-1.5 text-sm sm:grid-cols-1">
           <span className="font-medium">Autonomous by default</span>
-          <select
+          <SettingsSelect
             aria-label="Autonomous by default"
             value={triStateValue(composerDefaults.autonomous)}
             disabled={saveIsPending}
@@ -432,7 +435,7 @@ function ComposerDefaultsField({
             <option value="inherit">Inherit environment</option>
             <option value="on">On</option>
             <option value="off">Off</option>
-          </select>
+          </SettingsSelect>
           <span className="text-[11px] text-soft-foreground">
             Inherited: {composerDefaults.inheritedAutonomous === 'source-dependent'
               ? 'Source-dependent — skills on, workflows off'
@@ -441,7 +444,7 @@ function ComposerDefaultsField({
         </label>
         <label className="grid gap-1.5 text-sm sm:grid-cols-1">
           <span className="font-medium">Use a worktree by default</span>
-          <select
+          <SettingsSelect
             aria-label="Use a worktree by default"
             value={triStateValue(composerDefaults.worktree)}
             disabled={saveIsPending}
@@ -451,14 +454,14 @@ function ComposerDefaultsField({
             <option value="inherit">Inherit environment</option>
             <option value="on">On</option>
             <option value="off">Off</option>
-          </select>
+          </SettingsSelect>
           <span className="text-[11px] text-soft-foreground">
             Inherited: {composerDefaults.inheritedWorktree ? 'On' : 'Off'}
           </span>
         </label>
       </div>
       <p className="text-[11px] text-soft-foreground">
-        Interactive skills may recommend both off. Multi-step and parallel runs remain isolated.
+        Interactive skills may recommend both off. Multi-step and parallel runs remain isolated. Saves automatically.
       </p>
     </SettingsField>
   )
