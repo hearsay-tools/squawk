@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { waitForSettledSample } from './visual-ready'
+import { clickInView, waitForSettledSample } from './visual-ready'
 import { AgentBrowser, bootProjectId, readTestEnv } from './agent-browser'
 import {
   applyContrastQaVariant,
@@ -23,7 +23,10 @@ import {
 
 const artifactsDir = resolve(import.meta.dirname, '../../../.ai/qa/artifacts_e2e')
 const sessionId = `e2e-settings-session-context-${process.pid}`
-const FILE_ROUTE = '*/session-context'
+// The API path only, in both spellings: the boot project reads `/api/v1/session-context`, another
+// project `/api/v1/p/<id>/session-context`. A bare `*/session-context` would also match the page's own
+// address, `/p/<id>/settings/session-context`, and serve this JSON as the HTML document.
+const FILE_ROUTES = ['**/api/v1/session-context', '**/api/v1/p/*/session-context']
 const AA_NORMAL_TEXT = 4.5
 const DRAFT = 'version: 1\nrules:\n  - id: handoff\n    on: session_start\n    template: Mine\n  - id: brief\n    on: session_start\n    target: worker\n    template: You are {{run.id}}.\n'
 
@@ -35,13 +38,12 @@ beforeAll(async () => {
   baseUrl = readTestEnv().baseUrl
   project = await bootProjectId(baseUrl)
   browser = AgentBrowser.open(sessionId)
-  browser.routeJson(FILE_ROUTE, {
-    path: '.ai/squawk/context.yaml', exists: true, content: DRAFT, version: 'e2e', writable: true, readOnlyReason: null,
-  })
+  const file = { path: '.ai/squawk/context.yaml', exists: true, content: DRAFT, version: 'e2e', writable: true, readOnlyReason: null }
+  for (const route of FILE_ROUTES) browser.routeJson(route, file)
 }, 120_000)
 
 afterAll(() => {
-  browser?.unroute(FILE_ROUTE)
+  for (const route of FILE_ROUTES) browser?.unroute(route)
   browser?.close()
 })
 
@@ -86,13 +88,15 @@ describe('settings → session context', () => {
         if (phone) browser.screenshot(`${artifactsDir}/settings-session-context-edit-${variant.id}.png`, { viewport: true })
 
         // The preview: on a phone it is the second tab. Previewed as a worker, the worker rule applies.
-        if (phone) browser.click('[data-slot="session-context-pane"][data-pane="preview"]')
-        browser.click('[data-slot="session-context-role"]:nth-child(2)')
+        // The shell's New-task button floats over the bottom of a phone screen: click in view.
+        if (phone) clickInView(browser, '[data-slot="session-context-pane"][data-pane="preview"]')
+        clickInView(browser, '[data-slot="session-context-role"]:nth-child(2)')
         browser.waitForFunction(
           `[...document.querySelectorAll('[data-slot="session-context-block"]')].some((el) => el.textContent.includes('brief') && el.dataset.status === 'applied')`,
         )
+        // On desktop the settings stylesheet gives panel buttons a 40px bar; 44 is the touch rule.
         const role = rectOf('[data-slot="session-context-role"]')
-        expect(role.height).toBeGreaterThanOrEqual(44)
+        expect(role.height).toBeGreaterThanOrEqual(phone ? 44 : 40)
         const status = contrastOf('[data-slot="session-context-block"][data-status="applied"] code')
         expect(status.ratio, `block id ${JSON.stringify(status)}`).toBeGreaterThanOrEqual(AA_NORMAL_TEXT)
         if (phone) browser.screenshot(`${artifactsDir}/settings-session-context-preview-${variant.id}.png`, { viewport: true })
