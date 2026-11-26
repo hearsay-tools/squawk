@@ -482,6 +482,31 @@ describe('useRunHistory', () => {
     vi.unstubAllGlobals()
   })
 
+  it.each([
+    { label: 'carries an item whose start the refreshed page evicted', closed: false, expected: [300, 302] },
+    { label: 'drops an item the refreshed page completes', closed: true, expected: [301, 302] },
+  ])('$label', async ({ closed, expected }) => {
+    FakeEventSource.instances = []
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const at = (seq: number, type: string, rest: Record<string, unknown> = {}) =>
+      ({ seq, ts: page(seq).events[0]!.ts, type, ...rest }) as RunHistoryPage['events'][number]
+    const tool = (output: string) => ({ kind: 'tool', id: 't1', name: 'Bash', toolKind: 'execute', title: 'Run', status: TOOL_STATUS.running, output })
+    const done = at(301, 'item.completed', { item: { ...tool('x'.repeat(200)), status: TOOL_STATUS.completed } })
+    mockHistory.mockResolvedValueOnce({ ...page(100), events: [at(100, 'item.started', { item: tool('') })] })
+      .mockResolvedValue({ ...page(302), events: [...(closed ? [done] : []), at(302, 'note')] })
+    mockContext.mockResolvedValue(context())
+    const { wrapper } = harness()
+    const { result } = renderHook(() => useRunHistory('run-1'), { wrapper })
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      for (let seq = 101; seq <= 300; seq += 1) FakeEventSource.instances[0]!.emit('ui-event', JSON.stringify(at(seq, 'item.delta', { itemId: 't1', field: 'output', delta: 'x' })))
+    })
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))
+    expect(result.current.visibleEvents.map(({ seq }) => seq)).toEqual(expected)
+    if (!closed) expect(result.current.visibleEvents[0]).toMatchObject({ type: 'item.updated', item: { id: 't1', output: 'x'.repeat(200) } })
+    vi.unstubAllGlobals()
+  })
+
   it('refreshes the context with each compaction, so frames before the new page stay current', async () => {
     FakeEventSource.instances = []
     vi.stubGlobal('EventSource', FakeEventSource)

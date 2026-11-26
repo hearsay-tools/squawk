@@ -225,12 +225,16 @@ export function useRunHistory(runId: string | undefined): RunHistoryState {
   )
   // Compaction restarts the stream at the new page. The page lacks the ephemeral deltas of an
   // item still streaming, so keep one folded snapshot per such item until the stream sends its own.
-  const pagedRef = useRef(pagedEvents)
-  pagedRef.current = pagedEvents
-  const carryOpenItems = useCallback(
-    (live: RunEvent[]) => openItemSnapshots(orderedUnique(pagedRef.current, live), live),
-    [],
-  )
+  // The pages before the refresh stay readable: the new page can start after the item opened.
+  const paged = useRef({ runId, current: pagedEvents, previous: [] as RunEvent[] })
+  if (paged.current.current !== pagedEvents || paged.current.runId !== runId) {
+    const previous = paged.current.runId === runId ? paged.current.current : []
+    paged.current = { runId, current: pagedEvents, previous }
+  }
+  const carryOpenItems = useCallback((live: RunEvent[]) => {
+    const { current, previous } = paged.current
+    return openItemSnapshots(orderedUnique(previous, current, live), live)
+  }, [])
   const liveEvents = useRunEvents(!fallback && newestPage && !refreshPending ? runId : undefined, {
     cursor: newestPage?.liveCursor,
     afterSeq: newestPage?.asOfSeq,
