@@ -136,6 +136,26 @@ describe('document live demand', () => {
     expect(frame).toHaveBeenCalledTimes(1)
     expect(worker.port.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'ack', seq: 4 }))
   })
+  it('forwards a matching snapshot below the cursor, acknowledges its bytes and keeps afterSeq', () => {
+    const frame = vi.fn()
+    coordinator.configure(local)
+    coordinator.subscribe({ kind: 'run', projectId: 'default', runId: 'same', afterSeq: 9 }, { frame })
+    const worker = Worker.all[0]!
+    const sync = worker.port.postMessage.mock.calls.at(-1)![0] as any
+    const id = sync.entries[0].id
+    const snapshot = { type: 'snapshot', projectId: 'boot', runId: 'same', name: 'ui-event', event: { type: 'item.updated', seq: 5, ts: '' } }
+    worker.reply({ version: LIVE_PROTOCOL, type: 'frame', epoch: sync.epoch, id, frame: { ...snapshot, runId: 'other' } })
+    worker.reply({ version: LIVE_PROTOCOL, type: 'frame', epoch: sync.epoch, id, frame: { ...snapshot, projectId: 'other' } })
+    expect(frame).not.toHaveBeenCalled()
+    expect(worker.port.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'ack-snapshot' }))
+    worker.reply({ version: LIVE_PROTOCOL, type: 'frame', epoch: sync.epoch, id, frame: snapshot })
+    expect(frame).toHaveBeenCalledWith(snapshot)
+    expect(worker.port.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'ack-snapshot', id }))
+    // The cursor did not move: the next event above the old afterSeq still arrives.
+    worker.reply({ version: LIVE_PROTOCOL, type: 'frame', epoch: sync.epoch, id, frame: { ...snapshot, type: 'event', event: { type: 'note', seq: 10, ts: '' } } })
+    expect(frame).toHaveBeenCalledTimes(2)
+    expect(worker.port.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'ack', seq: 10 }))
+  })
 })
 
 describe('worker recovery boundaries', () => {

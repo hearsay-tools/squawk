@@ -3,10 +3,12 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { RunHistoryContext, RunHistoryPage } from '@open-mercato/cezar-api-client'
+import type { RunEvent, RunHistoryContext, RunHistoryPage } from '@open-mercato/cezar-api-client'
 import { TOOL_STATUSES } from '@open-mercato/cezar-api-client/protocol/ui-events'
 import { flushAnimationFrames, installAnimationFrameQueue } from '../test/animation-frames'
 import { getRunHistory, getRunHistoryContext } from './client'
+import { applyThreadEvent } from '../routes/task-thread/thread-fold-reducers'
+import { createFoldState } from '../routes/task-thread/thread-fold-state'
 import { orderedUnique, useRunHistory } from './run-history'
 
 vi.mock('./client', () => ({
@@ -21,9 +23,10 @@ vi.mock('./live-coordinator', () => ({ subscribeLive: (demand: { projectId: stri
   if (demand.cursor || demand.afterSeq > 0) params.set('afterSeq', String(demand.afterSeq))
   const prefix = demand.projectId === 'default' ? '/api/v1' : `/api/v1/p/${demand.projectId}`
   const source = new FakeEventSource(`${prefix}/runs/${demand.runId}/events${params.size ? `?${params}` : ''}`)
-  for (const name of ['run-event', 'ui-event']) source.addEventListener(name, event => {
+  for (const name of ['run-event', 'ui-event', 'snapshot']) source.addEventListener(name, event => {
     const data = JSON.parse((event as MessageEvent).data as string)
-    handlers.frame({ type: 'event', projectId: demand.projectId, runId: demand.runId, name, event: data })
+    const frame = name === 'snapshot' ? { type: 'snapshot', name: 'ui-event' } : { type: 'event', name }
+    handlers.frame({ ...frame, projectId: demand.projectId, runId: demand.runId, event: data })
   })
   return () => source.close()
 } }))
@@ -438,6 +441,45 @@ describe('useRunHistory', () => {
     await waitFor(() => expect(mockContext.mock.calls.filter(([id]) => id === 'run-b')).toHaveLength(2))
     await waitFor(() => expect(result.current.currentComplete).toBe(true))
     mockContext.mockReset()
+  })
+
+  it('keeps a streaming item through compaction and folds the stream snapshot without duplicate text', async () => {
+    FakeEventSource.instances = []
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const at = (seq: number, type: string, rest: Record<string, unknown> = {}) =>
+      JSON.stringify({ seq, ts: page(seq).events[0]!.ts, type, ...rest })
+    const message = (text: string) => ({ kind: 'message', id: 'm1', role: 'assistant', text })
+    const started = JSON.parse(at(100, 'item.started', { item: message('') })) as RunHistoryPage['events'][number]
+    const usage = JSON.parse(at(301, 'usage.updated', { tokensUsed: 5 })) as RunHistoryPage['events'][number]
+    mockHistory.mockResolvedValueOnce({ ...page(100), events: [started] })
+      .mockResolvedValue({ ...page(301), events: [started, usage] })
+    mockContext.mockResolvedValue(context())
+    const textOf = (events: RunEvent[]) => {
+      const fold = createFoldState()
+      for (const event of events) applyThreadEvent(fold, event)
+      return (fold.itemsById.get('m1')?.entry.entry as { text?: string } | undefined)?.text
+    }
+    const { wrapper } = harness()
+    const { result } = renderHook(() => useRunHistory('run-1'), { wrapper })
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+
+    act(() => {
+      for (let seq = 101; seq <= 300; seq += 1) FakeEventSource.instances[0]!.emit('ui-event', at(seq, 'item.delta', { itemId: 'm1', field: 'text', delta: 'a' }))
+    })
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))
+    // The new stream has sent nothing yet, and the streamed text is still there.
+    expect(result.current.visibleEvents.map(({ seq }) => seq)).toEqual([100, 300, 301])
+    expect(textOf(result.current.visibleEvents)).toBe('a'.repeat(200))
+
+    act(() => {
+      const source = FakeEventSource.instances[1]!
+      source.emit('snapshot', at(300, 'item.updated', { item: message('a'.repeat(200)) }))
+      source.emit('ui-event', at(302, 'item.delta', { itemId: 'm1', field: 'text', delta: 'b' }))
+    })
+    expect(textOf(result.current.visibleEvents)).toBe(`${'a'.repeat(200)}b`)
+    act(() => FakeEventSource.instances[1]!.emit('ui-event', at(303, 'item.completed', { item: message(`${'a'.repeat(200)}b`) })))
+    expect(textOf(result.current.visibleEvents)).toBe(`${'a'.repeat(200)}b`)
+    vi.unstubAllGlobals()
   })
 
   it('refreshes the context with each compaction, so frames before the new page stay current', async () => {

@@ -74,6 +74,10 @@ export function createLiveFallback(
         const demand = entry.demand as Extract<LiveDemand, { kind: 'run' }>
         if (result.runId !== demand.runId || result.projectId !== demand.projectId) continue
         if (result.type !== 'batch') { await entry.reset(result.error, signal); signal.throwIfAborted(); continue }
+        // Snapshots restore open items below the cursor; only persisted events move `afterSeq`.
+        for (const event of result.snapshots ?? []) {
+          entry.frame({ type: 'snapshot', projectId: demand.projectId, runId: demand.runId, name: 'ui-event', event })
+        }
         for (const event of result.events) if (event.seq > demand.afterSeq) {
           entry.frame({ type: 'event', projectId: demand.projectId, runId: demand.runId, name: event.type.includes('.') ? 'ui-event' : 'run-event', event })
           demand.afterSeq = event.seq

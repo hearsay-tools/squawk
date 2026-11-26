@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setApiScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { flushAnimationFrames, installAnimationFrameQueue } from '../test/animation-frames'
-import { parseRunEvent, useRunEvents } from './run-events'
+import { openItemSnapshots, parseRunEvent, useRunEvents } from './run-events'
 
+import type { RunEvent } from '@open-mercato/cezar-api-client'
 import type { LiveDemand } from './live-protocol'
 import type { LiveHandlers } from './live-coordinator'
 
@@ -27,6 +28,11 @@ class FakeFeed {
     this.handlers.frame?.({ type: 'event', name: name as 'run-event' | 'ui-event', event, projectId: this.demand.projectId, runId: this.demand.runId })
   }
   emit(name: string, data: string) { act(() => { this.deliver(name, data); flushAnimationFrames() }) }
+  snapshot(data: string) {
+    if (this.demand.kind !== 'run') return
+    const frame = { type: 'snapshot' as const, name: 'ui-event' as const, event: parseRunEvent(data)!, projectId: this.demand.projectId, runId: this.demand.runId }
+    act(() => { this.handlers.frame?.(frame); flushAnimationFrames() })
+  }
 }
 
 /** A wire line as the server stamps it: seq + ts + type + payload. */
@@ -146,6 +152,76 @@ describe('useRunEvents — seq dedup uses `>`', () => {
     source.emit('ui-event', line(4, 'stdout', { text: 'late' })) // below — replayed history
 
     expect(result.current).toHaveLength(1)
+  })
+})
+
+describe('useRunEvents — live snapshots', () => {
+  const started = (seq: number) => line(seq, 'item.started', { item: { kind: 'message', id: 'm1', role: 'assistant', text: '' } })
+  const delta = (seq: number, text: string) => line(seq, 'item.delta', { itemId: 'm1', field: 'text', delta: text })
+  const updated = (seq: number, text: string) => line(seq, 'item.updated', { item: { kind: 'message', id: 'm1', role: 'assistant', text } })
+
+  it('admits a snapshot below the high-water mark without moving it, in seq order', () => {
+    const { result } = renderHook(() => useRunEvents('run-1', { afterSeq: 10 }))
+    const source = FakeFeed.last
+    source.emit('ui-event', line(12, 'turn.started', { turnId: 't1' }))
+    source.snapshot(updated(8, 'Hel'))
+    source.emit('ui-event', delta(11, 'stale'))
+    source.emit('ui-event', delta(13, 'lo'))
+    expect(result.current.map(({ seq, type }) => [seq, type])).toEqual([[8, 'item.updated'], [12, 'turn.started'], [13, 'item.delta']])
+  })
+
+  it('replaces an event of the same seq with the snapshot', () => {
+    const { result } = renderHook(() => useRunEvents('run-1'))
+    const source = FakeFeed.last
+    source.emit('ui-event', started(1))
+    source.emit('ui-event', delta(2, 'Hi'))
+    source.snapshot(updated(2, 'Hi'))
+    expect(result.current.map(({ seq, type }) => [seq, type])).toEqual([[1, 'item.started'], [2, 'item.updated']])
+  })
+
+  it('keeps open items across a same-run cursor advance, clears on a run change, and does not compact again at once', async () => {
+    const onCompact = vi.fn()
+    const carryOver = (events: RunEvent[]) => openItemSnapshots(events, events)
+    const { result, rerender } = renderHook(({ id, afterSeq }) => useRunEvents(id, { afterSeq, compactAt: 3, onCompact, carryOver }), {
+      initialProps: { id: 'run-1', afterSeq: 0 },
+    })
+    const first = FakeFeed.last
+    first.emit('ui-event', started(1))
+    first.emit('ui-event', delta(2, 'Hel'))
+    first.emit('ui-event', delta(3, 'lo'))
+    await act(async () => {}) // the compaction request is a microtask
+    expect(onCompact).toHaveBeenCalledTimes(1)
+
+    rerender({ id: 'run-1', afterSeq: 3 })
+    expect(FakeFeed.last).not.toBe(first)
+    expect(result.current).toEqual([expect.objectContaining({ seq: 3, type: 'item.updated', item: expect.objectContaining({ text: 'Hello' }) })])
+    FakeFeed.last.snapshot(updated(3, 'Hello'))
+    FakeFeed.last.emit('ui-event', delta(4, '!'))
+    expect(result.current.map(({ seq }) => seq)).toEqual([3, 4])
+    await act(async () => {})
+    expect(onCompact).toHaveBeenCalledTimes(1)
+
+    rerender({ id: 'run-2', afterSeq: 3 })
+    expect(result.current).toEqual([])
+  })
+})
+
+describe('openItemSnapshots', () => {
+  it('folds deltas onto an item opened earlier and skips closed or untouched items', () => {
+    const events = [
+      line(1, 'item.started', { item: { kind: 'message', id: 'open', role: 'assistant', text: 'A' } }),
+      line(2, 'item.started', { item: { kind: 'tool', id: 'tool', title: 'Run', output: '' } }),
+      line(3, 'item.started', { item: { kind: 'reasoning', id: 'done', text: '' } }),
+      line(4, 'item.delta', { itemId: 'open', field: 'text', delta: 'B' }),
+      line(5, 'item.delta', { itemId: 'done', field: 'text', delta: 'x' }),
+      line(6, 'item.completed', { item: { kind: 'reasoning', id: 'done', text: 'x' } }),
+      line(7, 'item.delta', { itemId: 'tool', field: 'output', delta: 'out' }),
+    ].map(data => parseRunEvent(data)!)
+    expect(openItemSnapshots(events, events.slice(3))).toEqual([
+      expect.objectContaining({ seq: 4, type: 'item.updated', item: expect.objectContaining({ id: 'open', text: 'AB' }) }),
+      expect.objectContaining({ seq: 7, type: 'item.updated', item: expect.objectContaining({ id: 'tool', output: 'out' }) }),
+    ])
+    expect(openItemSnapshots(events, events.slice(0, 3))).toEqual([])
   })
 })
 
