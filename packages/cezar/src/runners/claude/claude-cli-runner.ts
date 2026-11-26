@@ -28,6 +28,8 @@ import {
   type ClaudeUiMapping,
 } from './claude-ui-mapper.ts';
 
+import { closeClaudeStreams } from './claude-partial-messages.ts';
+
 export interface ClaudeCliRunnerOptions {
   /** Override the binary name/path; defaults to `claude` on PATH. */
   bin?: string;
@@ -524,6 +526,7 @@ export class ClaudeCliRunner implements AgentRunner {
     // ---- process cleanup -----------------------------------------------------
 
     const closeOutput = (): void => {
+      emitUi(closeClaudeStreams);
       if (deadline) clearTimeout(deadline);
       if (autoEndTimer) clearTimeout(autoEndTimer);
       if (refusalRetry && stdinOpen && !terminatedBySquawk && !timedOut) {

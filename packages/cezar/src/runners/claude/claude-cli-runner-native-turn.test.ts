@@ -80,7 +80,7 @@ function pipeSession() {
   };
   const starts = () => ui.filter(event => event.type === 'turn.started').map(event => (event as { turnId: string }).turnId);
   const finish = async () => { session.interrupt(); close(); await session.result; };
-  return { session, v1, ui, written, frames, starts, finish };
+  return { session, v1, ui, written, frames, starts, finish, close };
 }
 
 const init = { type: 'system', subtype: 'init', session_id: 'native-turn', model: 'claude-test' };
@@ -239,6 +239,33 @@ describe('Claude streaming turn announcement', () => {
       await f.frames({ ...parentText('hello'), message: { id: 'message-stream', role: 'assistant', content: [{ type: 'text', text: 'hello' }] } }, partial({ type: 'content_block_stop', index: 0 }), result('hello'));
       expect(f.starts()).toEqual(['turn_1', 'turn_2']);
       expect(f.v1.filter(e => e.type === 'text')).toHaveLength(v1Before + 1);
+    } finally { await f.finish(); }
+  });
+});
+
+
+describe('Claude partial-message completion on stdout close', () => {
+  it.each(['stop', 'eof'])('saves completed text and thinking snapshots after %s without a result', async mode => {
+    const f = pipeSession();
+    try {
+      // bound: wait for the opening stdin write before sending output.
+      await vi.waitFor(() => expect(f.written).toHaveLength(1), { timeout: 10_000 });
+      const partial = (event: unknown) => ({ type: 'stream_event', event, parent_tool_use_id: null });
+      await f.frames(init,
+        partial({ type: 'message_start', message: { id: 'unfinished' } }),
+        partial({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }),
+        partial({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'visible text' } }),
+        partial({ type: 'content_block_start', index: 1, content_block: { type: 'thinking', thinking: '' } }),
+        partial({ type: 'content_block_delta', index: 1, delta: { type: 'thinking_delta', thinking: 'visible reasoning' } }));
+      if (mode === 'stop') f.session.interrupt();
+      f.close();
+      await f.session.result;
+      const snapshots = f.ui.filter(e => e.type === 'item.completed' && (e.item.kind === 'message' || e.item.kind === 'reasoning'));
+      expect(snapshots).toEqual([
+        { type: 'item.completed', item: { kind: 'message', id: 'item_1', role: 'assistant', text: 'visible text' } },
+        { type: 'item.completed', item: { kind: 'reasoning', id: 'item_2', text: 'visible reasoning' } },
+      ]);
+      expect(f.v1.filter(e => e.type === 'text')).toEqual([]);
     } finally { await f.finish(); }
   });
 });

@@ -33,6 +33,14 @@ export function completeClaudeStreams(state: ClaudeUiMapperState): UiEvent[] {
   return events;
 }
 
+/** Flush a final snapshot even when process teardown produced no result frame. */
+export function closeClaudeStreams(state: ClaudeUiMapperState): ClaudeUiMapping {
+  return {
+    events: completeClaudeStreams(state),
+    state: { ...state, streamMessageId: undefined, streamBlocks: new Map(), stoppedStreamBlocks: new Map() },
+  };
+}
+
 function startBlock(event: Record<string, unknown>, state: ClaudeUiMapperState): ClaudeUiMapping {
   const raw = event.content_block;
   if (!record(raw) || (raw.type !== 'text' && raw.type !== 'thinking')) return { events: [], state };
