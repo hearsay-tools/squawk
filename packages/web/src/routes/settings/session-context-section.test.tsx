@@ -19,6 +19,7 @@ const VALID = 'version: 1\nrules:\n  - id: brief\n    on: session_start\n    tem
 interface FakeServer {
   file: SessionContextFile
   getStatus?: number
+  previewStatus?: number | undefined
   /** Resolves the first GET when set: lets a case look at the page before the file arrives. */
   hold?: Promise<void>
   /** Resolves each PUT when set: lets a case type while a save is on its way. */
@@ -48,6 +49,7 @@ function serve(server: FakeServer) {
       const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, string | null>) : {}
       if (url.endsWith('/session-context/preview')) {
         server.previews.push({ content: body.content as string, role: body.role as string })
+        if (server.previewStatus) return json({ error: 'context.yaml must be at most 262144 bytes' }, server.previewStatus)
         const problems = problemsOf(body.content as string)
         const preview: SessionContextPreview = {
           problems,
@@ -192,6 +194,20 @@ describe('SessionContextSection', () => {
     expect(await screen.findByText(/Could not read context.yaml again: disk on fire/, undefined, { timeout: 10_000 })).toBeTruthy() // bound: the query retries before it fails
     expect(editor().value).toBe(mine)
     expect(screen.queryByText('Session context did not load')).toBeNull()
+  })
+
+  it('says why the preview failed, keeps Save off and retries on request', async () => {
+    const server: FakeServer = { file: fileOf(), puts: [], previews: [], previewStatus: 400 }
+    serve(server)
+    renderSection()
+    await screen.findByLabelText('context.yaml rules')
+    type(VALID.replace('Hello', 'Big'))
+    expect(await screen.findByText(/The preview failed: context.yaml must be at most 262144 bytes/)).toBeTruthy()
+    expect(screen.queryByText('Checking…')).toBeNull()
+    expect(saveButton().disabled).toBe(true)
+    server.previewStatus = undefined
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+    await waitFor(() => expect(saveButton().disabled).toBe(false))
   })
 
   it('says what failed when the file does not load', async () => {

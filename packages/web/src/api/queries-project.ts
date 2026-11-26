@@ -170,6 +170,8 @@ export function useSessionContextPreview(content: string, role: SessionContextRo
     queryFn: ({ signal }) => postSessionContextPreview({ content, role }, { signal }),
     placeholderData: keepPreviousData,
     staleTime: 0,
+    // Each edit asks again, and a refused draft (400) stays refused: show the failure at once.
+    retry: false,
   })
 }
 

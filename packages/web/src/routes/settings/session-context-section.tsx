@@ -109,6 +109,7 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
   const settled = useSettled(content)
   const preview = useSessionContextPreview(settled, role)
   const current = preview.data !== undefined && !preview.isPlaceholderData && settled === content
+  const previewError = preview.isError && !preview.isFetching && settled === content ? preview.error.message : null
   const problems = useMemo(() => preview.data?.problems ?? [], [preview.data])
   const put = usePutSessionContext()
 
@@ -161,6 +162,7 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
   return {
     started: file.exists || draft !== null, content, dirty, setDraft, role, setRole, pane, setPane, failure, showDisk,
     toggleDisk: () => setShowDisk((shown) => !shown), inputRef, preview: preview.data, current, problems,
+    previewError, retryPreview: () => void preview.refetch(),
     saving: put.isPending, edit, insert, goToLine, discard, save,
   }
 }
@@ -183,6 +185,12 @@ function SessionContextEditor({ file, refetch }: { file: SessionContextFile; ref
         <SaveFailureNotice failure={state.failure} showDisk={state.showDisk} onShowDisk={state.toggleDisk} onOverwrite={() => state.save(file.version)} />
       )}
       {state.showDisk && <DiskVersion content={file.content} />}
+      {state.previewError && (
+        <div data-slot="session-context-preview-error" role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-danger/45 bg-danger/10 p-3 text-[13px]">
+          <span className="mr-auto">The preview failed: {state.previewError}. Save stays off until the draft is checked.</span>
+          <Button variant="outline" onClick={state.retryPreview}>Check again</Button>
+        </div>
+      )}
       {problems.length > 0 && <ProblemList problems={problems} onLine={state.goToLine} />}
       <PaneTabs pane={state.pane} onPane={state.setPane} />
       <div className="grid items-start gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
@@ -193,7 +201,7 @@ function SessionContextEditor({ file, refetch }: { file: SessionContextFile; ref
         >
           <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
             <code className="font-mono text-[12px] break-all">{file.path}</code>
-            <FileStatus problems={problems.length} current={current} dirty={state.dirty} />
+            <FileStatus problems={problems.length} current={current} failed={state.previewError !== null} dirty={state.dirty} />
             {writable && (
               <Button data-slot="session-context-add-rule" variant="outline" className="ml-auto" onClick={() => state.edit(addRule(content))}>
                 <PlusIcon /> Add rule
@@ -287,7 +295,7 @@ function SaveBar(props: {
   )
 }
 
-function FileStatus({ problems, current, dirty }: { problems: number; current: boolean; dirty: boolean }) {
+function FileStatus({ problems, current, failed, dirty }: { problems: number; current: boolean; failed: boolean; dirty: boolean }) {
   return (
     <span className="flex flex-wrap gap-1.5" aria-live="polite">
       {current && problems > 0 && (
@@ -296,7 +304,8 @@ function FileStatus({ problems, current, dirty }: { problems: number; current: b
         </Badge>
       )}
       {current && problems === 0 && <Badge variant="outline" className="border-success/40 text-[11px] text-success">Valid</Badge>}
-      {!current && <Badge variant="outline" className="text-[11px]">Checking…</Badge>}
+      {!current && !failed && <Badge variant="outline" className="text-[11px]">Checking…</Badge>}
+      {failed && <Badge variant="outline" className="border-danger/45 text-[11px] text-danger">Not checked</Badge>}
       {dirty && <Badge variant="outline" className="border-conflict/50 text-[11px] text-conflict">Unsaved</Badge>}
     </span>
   )
