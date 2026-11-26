@@ -8,7 +8,6 @@ import { automationsEnabled } from './automations/enabled.ts';
 import { automationCliCommand, automationsPrompt } from './automations/prompts.ts';
 import { productEnvEntries } from './core/product-env.ts';
 import { registerLaunchPart, sealLaunchParts, type LaunchPartDefinition } from './core/launch-registry.ts';
-import { jobInstructions } from './jobs/command.ts';
 import { agentWebhooksPrompt, webhookCliCommand } from './webhooks/prompt.ts';
 import { registryEntry } from './workspace/registry-entry.ts';
 import { agentWebhooks } from './workspace/webhooks.ts';
@@ -43,15 +42,8 @@ export const artifactsLaunchPart: LaunchPartDefinition = {
   },
 };
 
-/** The long-command part. Moves into the bundled jobs feature in hearsay-tools/squawk#4314. */
-export const jobsLaunchPart: LaunchPartDefinition = {
-  id: 'jobs',
-  order: 40,
-  contribute: () => ({ prompt: jobInstructions() }),
-};
-
 export const BUILT_IN_LAUNCH_PARTS: readonly LaunchPartDefinition[] = [
-  automationsLaunchPart, webhooksLaunchPart, artifactsLaunchPart, jobsLaunchPart,
+  automationsLaunchPart, webhooksLaunchPart, artifactsLaunchPart,
 ];
 
 /** Register the built-in launch parts. A second call registers the same objects, which the registry ignores. */

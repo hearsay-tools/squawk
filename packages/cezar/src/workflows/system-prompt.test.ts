@@ -15,7 +15,7 @@ import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { handoffInstructions } from '../handoff.ts';
 import { artifactInstructions } from '../artifacts/lifecycle.ts';
-import { jobInstructions } from '../jobs/command.ts';
+import { jobInstructions } from '../features/jobs/command.ts';
 import { RunStore, type RunRecord } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { WorkflowDef } from './types.ts';

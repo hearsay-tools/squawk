@@ -321,12 +321,6 @@
     },
     {
       "file": "packages/cezar/src/workflows/run/run-settlement.ts",
-      "target": "packages/cezar/src/jobs/job.ts",
-      "count": 1,
-      "reason": "feature:jobs: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/run-settlement.ts",
       "target": "packages/cezar/src/preview/registration.ts",
       "count": 1,
       "reason": "feature:preview: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"

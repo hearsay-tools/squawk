@@ -32,6 +32,13 @@ describe('findPackGaps', () => {
     expect(findPackGaps(goodPack, RUNNERS)).toEqual([]);
   });
 
+  it('requires the built entry of every bundled feature', () => {
+    expect(findPackGaps([...goodPack, 'dist/features/jobs/index.js'], RUNNERS, [], ['jobs'])).toEqual([]);
+    expect(findPackGaps(goodPack, RUNNERS, [], ['jobs'])).toEqual([
+      'dist/features/jobs/index.js is missing — boot would not load the jobs feature (run `npm run build`)',
+    ]);
+  });
+
   it('rejects a tarball without web/dist/index.html', () => {
     const gaps = findPackGaps(goodPack.filter((f) => f !== 'web/dist/index.html'), RUNNERS);
     expect(gaps).toHaveLength(1);

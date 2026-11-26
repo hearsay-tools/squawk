@@ -2,24 +2,12 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, realpathSync, readlinkSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 
-import { linuxBootId, type RecordedProcess } from '../core/process-stat.ts';
-
 /**
- * Synchronous process evidence: the boot check for recorded processes, and the cwd scan that
- * autosave cleanup still uses. Worker ownership never comes from the scan (ADR 0032).
+ * Synchronous process evidence: the cwd scan that autosave cleanup still uses. The boot check for
+ * recorded processes lives in `core/process-ownership.ts`. Worker ownership never comes from the
+ * scan (ADR 0032).
  * Unreadable cwd is no evidence; other uncertainty stays alive or unknown, never proven gone.
  */
-
-const LINUX_BOOT_ID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
-/** A known different boot proves that no descendant of this controller can still exist. */
-function controllerPredatesBoot(token: string | undefined, boot: string | undefined): boolean {
-  const recordedBoot = token?.match(/^(.+):\d+$/)?.[1];
-  return recordedBoot !== undefined && boot !== undefined && LINUX_BOOT_ID.test(recordedBoot) && LINUX_BOOT_ID.test(boot) && recordedBoot !== boot;
-}
-/** A different recorded Linux boot proves every original process group ended. */
-export function processPredatesCurrentBoot(entry: RecordedProcess): boolean {
-  return process.platform === 'linux' && controllerPredatesBoot(entry.startToken, linuxBootId());
-}
 
 /** The `/proc` reads the Linux scan makes; injectable for platform/error boundary coverage. */
 export type ProcReader = { readdir: () => string[]; readlink: (pid: string) => string };

@@ -1227,7 +1227,7 @@
     "packages/cezar/src/home/write-isolation.test.ts": 606,
     "packages/cezar/src/home/write-lock.test.ts": 64,
     "packages/cezar/src/index-project-paths.test.ts": 196,
-    "packages/cezar/src/jobs/job.test.ts": 17995,
+    "packages/cezar/src/features/jobs/job.test.ts": 17995,
     "packages/cezar/src/launch-read-matrix-capture.test.ts": 14641,
     "packages/cezar/src/launch-read-matrix-selectors.test.ts": 2228,
     "packages/cezar/src/launch-read-matrix.test.ts": 17528,

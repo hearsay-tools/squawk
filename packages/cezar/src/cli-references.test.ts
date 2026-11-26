@@ -9,7 +9,7 @@ import { OPERATIONS as TASK_OPERATIONS } from './task-cli/cli.ts';
 import { AUTOMATION_COMMANDS } from './automations/automation-cli.ts';
 import { WEBHOOK_COMMANDS } from './webhooks/cli.ts';
 import { ARTIFACT_COMMANDS } from './artifacts/cli.ts';
-import { JOB_ACTIONS } from './jobs/cli.ts';
+import { JOB_ACTIONS } from './features/jobs/cli.ts';
 import { BACKUP_COMMANDS } from './home/backup-args.ts';
 import { PROJECTS_SUBCOMMANDS } from './workspace/projects-cli.ts';
 import { DISCOVER_KINDS } from './discovery/cli.ts';

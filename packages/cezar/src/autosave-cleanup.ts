@@ -5,7 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { closeSync, constants, fsyncSync, lstatSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { processesWithCwdUnder, processPredatesCurrentBoot } from './delegation/process-liveness.ts';
+import { processesWithCwdUnder } from './delegation/process-liveness.ts';
+import { processPredatesCurrentBoot } from './core/process-ownership.ts';
 import { describeProcesses, processStartToken, recordedProcessLive } from './core/process-stat.ts';
 
 const processSchema = z.object({ pid: z.number().int().positive(), startToken: z.string().optional() });

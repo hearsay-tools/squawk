@@ -94,13 +94,15 @@ Inside a task they now resolve the default home because the cockpit's
 
 `hsq job start <name> -- <command>` runs a command under a supervisor that leads its own session,
 so it outlives the shell call, the turn and the agent session on every runner
-(hearsay-tools/cezarion#3097). `jobs/job.ts` owns the supervisor, its claim of the name and the
+(hearsay-tools/cezarion#3097). `hsq job` is the bundled jobs feature, `features/jobs/`, which registers
+its command, deletion gate and launch part through the plugin API. `features/jobs/job.ts` owns the supervisor, its claim of the name and the
 `<name>.<run>.log`, `<name>.<run>.exit` and `<name>.job.db` files; they live in `$TMPDIR` unless
 `--dir` names another directory. A task's `$TMPDIR` outlives the task while a job recorded in it
-runs (`jobRunsIn`; the archive asks it through the jobs deletion gate, `jobs/removal-slot.ts`): the task-end reap, archive and the startup sweep spare it, and the next of them
+runs (`jobRunsIn`; the archive asks it through the jobs deletion gate, `features/jobs/removal-slot.ts`): the task-end reap, archive and the startup sweep spare it, and the next of them
 that finds no job running removes it (hearsay-tools/squawk#3138). The end-time reap marks the end it
 kept the directory for, so later run events of that end, such as a read mark, keep it too
-(`jobHoldsScratch` in `workflows/run/run-settlement.ts`); once the run is archived, the mark holds
+(`jobHoldsScratch` in `features/jobs/removal-slot.ts`, which the reap reaches through the deletion
+gate with the run's end); once the run is archived, the mark holds
 nothing. `hsq job stop <name>` ends
 the job's whole process group, which the supervisor leads (hearsay-tools/squawk#3941). After the
 supervisor has exited, it ends the members left in the group only where the record's start token
@@ -108,8 +110,9 @@ proves this boot (Linux, the worker scope's rule in ADR 0032); elsewhere it repo
 signals nothing. Agents stop a job with it, never with
 `kill <pid>`: that signal reaches only the command, and a child that ignores SIGTERM keeps running.
 The launch prompt's
-"Long commands" part (`jobs/command.ts`) gives agents the full command; the `cezar_wait`
-description names it only as `hsq job start`, because the tool list also loads inside omp. A result is one JSON object on stdout and an error is one on stderr; `--help` prints text. The rules are in
+"Long commands" part (`features/jobs/command.ts`) gives agents the full command; the `cezar_wait`
+description names it only as `hsq job start`, because the tool list also loads inside omp. Without
+the jobs feature, the launch prompt has no such part and `cezar_wait` names no job command. A result is one JSON object on stdout and an error is one on stderr; `--help` prints text. The rules are in
 [the unified waits spec](../../.ai/specs/2026-10-17-unified-waits.md#the-job-command-2026-11-10).
 
 ## Legacy home recovery

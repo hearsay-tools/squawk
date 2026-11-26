@@ -5,10 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { autosaveDeletionGate } from '../../autosave-removal-slots.ts';
-import { jobsDeletionGate } from '../../jobs/removal-slot.ts';
 import { runDataDir } from '../../project-paths.ts';
 import { agentShortTmpDir, agentTmpDir, agentTmpDirLocations, agentTmpDirMayExist, agentTmpEnv, sweepAgentTmpDirs } from '../../runs/agent-tmpdir.ts';
-import type { DeletionKind } from '../../runs/removal-slots.ts';
+import type { DeletionGateContext, DeletionKind } from '../../runs/removal-slots.ts';
 import { sealTestRunSlots } from '../../runs/removal-slots.testkit.ts';
 import { setRunStatus } from '../../runs/run-store.testkit.ts';
 import { RunStore } from '../../runs/store.ts';
@@ -16,13 +15,17 @@ import { unused } from '../unused.testkit.ts';
 import { RunSettlement } from './run-settlement.ts';
 
 // The two scratch paths ask the removal slots for `scratch` (spec 2026-11-21-run-lifecycle-and-store-ports,
-// "Removal cases"): a gate that refuses keeps the scratch. This file's gate refuses the runs a case names.
+// "Removal cases"): a gate that refuses keeps the scratch. This file's gate refuses the runs and the
+// directories a case names.
 const asked: string[] = [];
+const contexts: (DeletionGateContext | undefined)[] = [];
 const refused = new Set<string>();
-sealTestRunSlots({ gates: [{ name: 'test scratch gate', refuse: (runId, kind) => {
+const refusedDirs = new Set<string>();
+sealTestRunSlots({ gates: [{ name: 'test scratch gate', refuse: (runId, kind, _dataDir, context) => {
   asked.push(`${runId}:${kind}`);
+  contexts.push(context);
   return refused.has(runId) ? 'the test keeps this scratch' : undefined;
-} }] });
+}, refuseDirectory: dir => (refusedDirs.has(dir) ? 'the test keeps this directory' : undefined) }] });
 
 let root: string;
 let dataDir: string;
@@ -30,7 +33,9 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'cez-scratch-slots-'));
   dataDir = join(root, '.ai/cezar');
   asked.length = 0;
+  contexts.length = 0;
   refused.clear();
+  refusedDirs.clear();
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
@@ -70,6 +75,13 @@ describe('the terminal scratch reap', () => {
     expect(asked).toEqual([`${id}:scratch`]);
     expect(agentTmpDirMayExist(dataDir, id)).toBe(false);
   });
+
+  it('hands the gates the end it reaps after and whether the run is archived', () => {
+    const id = endedRun();
+    settlement().reapTerminalScratch(id);
+    const run = store.getRun(id)!;
+    expect(contexts).toEqual([{ finishedAt: run.finishedAt, archived: run.archived }]);
+  });
 });
 
 describe('the startup orphan sweep', () => {
@@ -82,6 +94,32 @@ describe('the startup orphan sweep', () => {
 
     expect(asked).toEqual(expect.arrayContaining([`${kept}:scratch`, `${swept}:scratch`]));
     expect([agentTmpDirMayExist(dataDir, kept), agentTmpDirMayExist(dataDir, swept)]).toEqual([true, false]);
+  });
+
+  it('passes no run end to the gates', () => {
+    agentTmpEnv(dataDir, randomUUID(), {});
+    sweepAgentTmpDirs(dataDir, []);
+    expect(contexts).toEqual([undefined]);
+  });
+
+  it('keeps an orphan directory a gate refuses by directory, and sweeps the other', () => {
+    const [kept, swept] = [randomUUID(), randomUUID()];
+    for (const id of [kept, swept]) agentTmpEnv(dataDir, id, {});
+    refusedDirs.add(agentTmpDirLocations(dataDir, kept)[0]!);
+
+    sweepAgentTmpDirs(dataDir, []);
+
+    expect([agentTmpDirMayExist(dataDir, kept), agentTmpDirMayExist(dataDir, swept)]).toEqual([true, false]);
+  });
+
+  it('keeps a short directory a gate refuses by directory', () => {
+    const id = randomUUID();
+    const dir = shortDir(id);
+    refusedDirs.add(dir);
+
+    sweepAgentTmpDirs(dataDir, []);
+
+    expect(existsSync(dir)).toBe(true);
   });
 
   /** A short directory `t/<id8>` whose marker names the run, as `agentTmpEnv` mints it. */
@@ -178,14 +216,6 @@ describe('the startup orphan sweep of a moved project', () => {
 
 describe('the built-in gates for scratch', () => {
   const kinds: DeletionKind[] = ['history', 'worktree', 'archive-tmp', 'scratch'];
-
-  it('the jobs gate keeps scratch and an archived member tmp directory while a job runs in it', () => {
-    const id = randomUUID();
-    agentTmpEnv(dataDir, id, {});
-    // A record that cannot be read may belong to a supervisor that still runs (`jobRunsIn`).
-    writeFileSync(join(agentTmpDirLocations(dataDir, id)[0]!, 'bench.job.db'), 'damaged');
-    expect(kinds.map(kind => jobsDeletionGate.refuse(id, kind, dataDir) !== undefined)).toEqual([false, false, true, true]);
-  });
 
   it('the autosave gate keeps scratch, history and the worktree while its cleanup evidence cannot be read', () => {
     const id = randomUUID();

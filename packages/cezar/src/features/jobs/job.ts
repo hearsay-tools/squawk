@@ -3,17 +3,16 @@ import { randomUUID } from 'node:crypto';
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { constants, tmpdir } from 'node:os';
 import { join, posix, resolve } from 'node:path';
-import { JOB_EXIT_SUFFIX, JOB_NAME, JOB_RECORD_SUFFIX } from '../process-wait/job-exit-file.ts';
+import { JOB_EXIT_SUFFIX, JOB_NAME, JOB_RECORD_SUFFIX } from '../../process-wait/job-exit-file.ts';
 import { DatabaseSync } from 'node:sqlite';
-import { processPredatesCurrentBoot } from '../delegation/process-liveness.ts';
-import { ownCgroup } from '../core/os-cgroup.ts';
-import { startBreakawayProcess } from '../core/os-win-job.ts';
-import { SESSION_CGROUP_PREFIX } from '../core/session-containment.ts';
-import { recordedProcessLive } from '../core/process-stat.ts';
-import { pidExists } from '../core/process-stat.ts';
-import { processGroupAlive } from '../core/session-process.ts';
-import { groupOwned } from '../worker-scope/groups.ts';
-import { processStartToken, startOwnedGroup, stopGroup } from '../detached-process.ts';
+import { groupOwned, processPredatesCurrentBoot } from '../../core/process-ownership.ts';
+import { ownCgroup } from '../../core/os-cgroup.ts';
+import { startBreakawayProcess } from '../../core/os-win-job.ts';
+import { SESSION_CGROUP_PREFIX } from '../../core/session-containment.ts';
+import { recordedProcessLive } from '../../core/process-stat.ts';
+import { pidExists } from '../../core/process-stat.ts';
+import { processGroupAlive } from '../../core/session-process.ts';
+import { processStartToken, startOwnedGroup, stopGroup } from '../../detached-process.ts';
 import { ownCommand } from './command.ts';
 
 /**

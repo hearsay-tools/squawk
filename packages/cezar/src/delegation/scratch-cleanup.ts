@@ -1,6 +1,6 @@
 import { autosaveCleanupIds } from '../autosave-cleanup.ts';
-import { agentTmpDirLocations, agentTmpDirMayExist, removeAgentTmpDir, sweepAgentTmpDirs } from '../runs/agent-tmpdir.ts';
-import { jobRunsIn } from '../jobs/job.ts';
+import { agentTmpDirMayExist, removeAgentTmpDir, sweepAgentTmpDirs } from '../runs/agent-tmpdir.ts';
+import { deletionRefusal } from '../runs/removal-slots.ts';
 import { workerEvidenceRunIds } from '../runs/worker-execution.ts';
 import type { RunStore } from '../runs/store.ts';
 import { noJitter, retryDelayMs, SCRATCH_BACKOFF, type Backoff } from './retry-backoff.ts';
@@ -46,7 +46,7 @@ export class WorkerScratchCleanup {
     // their scratch is theirs.
     if (autosaves) sweepAgentTmpDirs(this.dataDir, [...new Set([...live.filter(run =>
       this.busy(run.id) || ['queued', 'running', 'waiting'].includes(run.status)).map(run => run.id), ...owners,
-      ...this.store.claims.listForeignClaimedRunIds(), ...(autosaves ?? [])])], dir => jobRunsIn([dir]));
+      ...this.store.claims.listForeignClaimedRunIds(), ...(autosaves ?? [])])]);
     if (!retained || !autosaves) { // failed enumeration must not permanently lose a wake source
       this.recoveryTimer = setTimeout(() => this.recover(), 60_000); this.recoveryTimer.unref?.();
     }
@@ -120,8 +120,8 @@ export class WorkerScratchCleanup {
     try {
       if (generation && resourceId && execution?.generation === generation && !this.busy(id) &&
         this.store.workerExecutions.workerScratchResourcesSafe(id, generation, resourceId) &&
-        // A job started in the scratch keeps it until the job ends (hearsay-tools/squawk#3138).
-        !jobRunsIn(agentTmpDirLocations(this.dataDir, id))) removeAgentTmpDir(this.dataDir, id);
+        // A deletion gate keeps the scratch, as a running job does (hearsay-tools/squawk#3138).
+        deletionRefusal(id, 'scratch', this.dataDir) === undefined) removeAgentTmpDir(this.dataDir, id);
     } catch { /* Transient evidence/read failures retain the durable intent for another wake. */ }
     // Uncertainty has no age limit or force-delete exit; it backs off instead.
     this.arm(id, attempts + 1, retryDelayMs(attempts, this.backoff, noJitter), now);

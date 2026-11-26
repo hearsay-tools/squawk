@@ -16,6 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findPackGaps } from '../dist/pack-check.js';
 import { bundledRunnerIds } from '../dist/plugin/bundled-runners.js';
+import { bundledFeatureFolders } from '../dist/plugin/bundled-features.js';
 import { listRunnerAssets } from './copy-runner-assets.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -43,7 +44,9 @@ if (files.length === 0) {
 const srcRunnersDir = path.join(repoRoot, 'src/runners');
 const runnerIds = bundledRunnerIds(srcRunnersDir);
 const runnerAssets = listRunnerAssets(srcRunnersDir, runnerIds).map((rel) => `dist/runners/${rel}`);
-const gaps = findPackGaps(files, runnerIds, runnerAssets);
+// The bundled features the source declares: each must ship its built plugin entry.
+const featureIds = bundledFeatureFolders(path.join(repoRoot, 'src/features')).map((folder) => folder.id);
+const gaps = findPackGaps(files, runnerIds, runnerAssets, featureIds);
 if (gaps.length > 0) {
   console.error('check:pack: the npm tarball would ship a broken cockpit:');
   for (const gap of gaps) console.error(`  - ${gap}`);
@@ -51,4 +54,4 @@ if (gaps.length > 0) {
 }
 
 const uiFiles = files.filter((f) => f.startsWith('web/dist/')).length;
-console.log(`check:pack ok — ${files.length} files, ${uiFiles} under web/dist (shell + assets present), bundled runners ${runnerIds.join(', ')}, ${runnerAssets.length} runner asset(s)`);
+console.log(`check:pack ok — ${files.length} files, ${uiFiles} under web/dist (shell + assets present), bundled runners ${runnerIds.join(', ')}, ${runnerAssets.length} runner asset(s), bundled features ${featureIds.join(', ') || 'none'}`);

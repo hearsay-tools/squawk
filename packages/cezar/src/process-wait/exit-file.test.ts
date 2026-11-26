@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { confineExitFile, readExitCode } from './exit-file.ts';
-import { superviseJob } from '../jobs/job.ts';
+import { superviseJob } from '../features/jobs/job.ts';
 import { readdirSync } from 'node:fs';
 
 // hearsay-tools/cezarion#1446: the exit file is the one thing Squawk reads for a process wait. It

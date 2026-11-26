@@ -1,4 +1,9 @@
-import { expect, it, vi } from 'vitest';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
+import { afterEach, expect, it, vi } from 'vitest';
+
+afterEach(() => { vi.doUnmock('../plugin/bundled-features.ts'); });
 
 it('enforces register then seal, conflicts, and reference idempotency', async () => {
   vi.resetModules();
@@ -9,6 +14,8 @@ it('enforces register then seal, conflicts, and reference idempotency', async ()
   expect(() => registry.registeredCliCommands()).toThrow(/unsealed/);
   expect(() => registry.hasCliCommand('fixture')).toThrow(/unsealed/);
   expect(registry.knownCliCommand('fixture')).toBeUndefined();
+  // Before the seal, agent-facing text may name any command: nothing proves it absent yet.
+  expect(registry.cliCommandAdvertised('job')).toBe(true);
   registry.registerCliCommand(command);
   registry.registerCliCommand(command);
   expect(() => registry.registerCliCommand({ ...command })).toThrow(/conflicting/);
@@ -18,6 +25,7 @@ it('enforces register then seal, conflicts, and reference idempotency', async ()
   expect(registry.cliCommandsSealed()).toBe(true);
   expect(registry.hasCliCommand('fixture')).toBe(true);
   expect(registry.cliCommand('fixture')).toBe(command);
+  expect([registry.cliCommandAdvertised('fixture'), registry.cliCommandAdvertised('job')]).toEqual([true, false]);
   expect(registry.registeredCliCommands()).toEqual([command]);
   expect(() => registry.registerCliCommand({ ...command, name: 'late' })).toThrow(/sealed/);
 });
@@ -51,6 +59,11 @@ it('renders and dispatches a custom command without core edits', async () => {
 
 it('passes root arguments to runtime predicates before loading the command', async () => {
   vi.resetModules();
+  // This table is sealed before boot, so a bundled feature that adds a command cannot join it: load none.
+  const noFeatures = join(tmpdir(), `hsq-no-features-${randomUUID()}`);
+  vi.doMock('../plugin/bundled-features.ts', async original => ({
+    ...await original<typeof import('../plugin/bundled-features.ts')>(), bundledFeaturesDir: () => noFeatures,
+  }));
   const { registerCliCommand, sealCliCommands } = await import('./cli-registry.ts');
   const { registeredRunners } = await import('./runner-registry.ts');
   const { runSlotsSealed } = await import('../runs/removal-slots.ts');

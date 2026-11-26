@@ -30,11 +30,15 @@ export const PLUGIN_ENTRY_FILES: readonly string[] = [
  *    runner from that entry, so a runner without one is missing from the cockpit.
  *  And (spec 2026-11-25-self-contained-runner-folders, Decision 3):
  *  - every copied runner `.mjs` asset in `runnerAssetFiles` (`dist/runners/<id>/...`).
+ *  And (spec 2026-11-26-launch-slot-and-bundled-jobs § 4):
+ *  - `dist/features/<id>/index.js` for each id of `bundledFeatureIds`: boot loads each bundled
+ *    feature from that entry, so a feature without one is missing from the product.
  */
 export function findPackGaps(
   packedFiles: readonly string[],
   bundledRunnerIds: readonly string[],
   runnerAssetFiles: readonly string[] = [],
+  bundledFeatureIds: readonly string[] = [],
 ): string[] {
   const gaps: string[] = [];
   if (!packedFiles.includes('web/dist/index.html')) {
@@ -53,6 +57,10 @@ export function findPackGaps(
   }
   for (const asset of runnerAssetFiles) {
     if (!packedFiles.includes(asset)) gaps.push(`${asset} is missing — runner asset was not copied into dist/ (run \`npm run build\`)`);
+  }
+  for (const id of bundledFeatureIds) {
+    const entry = `dist/features/${id}/index.js`;
+    if (!packedFiles.includes(entry)) gaps.push(`${entry} is missing — boot would not load the ${id} feature (run \`npm run build\`)`);
   }
   return gaps;
 }

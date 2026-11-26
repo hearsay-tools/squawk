@@ -5,6 +5,7 @@ import { testHome } from './home/test-home.testkit.ts';
 import type { CliDeps } from './cli-dispatch.ts';
 import { BUILT_IN_RUNNER_IDS } from './core/built-in-runner-ids.testkit.ts';
 import { bundledRunnersDir } from './plugin/bundled-runners.ts';
+import { bundledFeaturesDir } from './plugin/bundled-features.ts';
 
 // Real dispatch from an unsealed process, as `hsq` starts: the command line picks the boot.
 const home = testHome();
@@ -90,10 +91,11 @@ describe('plugin commands at dispatch', () => {
     const { processStub } = await dispatch(['plugins', '--json']);
     expect(processStub.exitCode).toBe(0);
     const report = JSON.parse(log.mock.calls[0]![0] as string);
-    // The bundled runners load first, through the same loader, then the host folder.
-    expect(report.folders).toEqual([bundledRunnersDir(), home.plugins]);
+    // The bundled runners and features load first, through the same loader, then the host folder.
+    expect(report.folders).toEqual([bundledRunnersDir(), bundledFeaturesDir(), home.plugins]);
     expect(report.loaded).toEqual([
       ...BUILT_IN_RUNNER_IDS.map(id => expect.objectContaining({ name: id, source: 'bundled', contributions: expect.objectContaining({ runners: [id] }) })),
+      expect.objectContaining({ name: 'jobs', source: 'bundled', contributions: expect.objectContaining({ cliCommands: ['job'], removalSlots: 1, launchParts: ['jobs'] }) }),
       expect.objectContaining({ name: 'greeter', source: 'host', contributions: expect.objectContaining({ cliCommands: ['greet'] }) }),
     ]);
     expect(report.failed).toEqual([expect.objectContaining({ name: 'empty', error: 'missing index.mjs or index.js' })]);
@@ -104,7 +106,7 @@ describe('plugin commands at dispatch', () => {
     const { prepareCommandRuntime } = await import('./subcommands.ts');
     await prepareCommandRuntime('serve');
     expect((await import('./core/cli-registry.ts')).cliCommand('greet')?.name).toBe('greet');
-    expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([bundledRunnersDir(), home.plugins]);
+    expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([bundledRunnersDir(), bundledFeaturesDir(), home.plugins]);
   });
 
   it('loads plugin commands for help without preparing Home', async () => {
@@ -116,7 +118,9 @@ describe('plugin commands at dispatch', () => {
     const help = deps.console.log.mock.calls[0]![0] as string;
     expect(help).toContain('run `hsq plugins` to list them');
     expect(help).toContain('hsq greet <name>');
-    expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([bundledRunnersDir(), home.plugins]);
+    // The bundled jobs feature's command is in help too (spec 2026-11-26-launch-slot-and-bundled-jobs § 5).
+    expect(help).toContain('hsq job start <name> -- <cmd>');
+    expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([bundledRunnersDir(), bundledFeaturesDir(), home.plugins]);
   });
 
   it.each([
