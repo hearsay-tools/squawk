@@ -219,6 +219,7 @@ export const Markdown = memo(function Markdown({
     const links = fileContext ? [[taskLinks, fileContext] satisfies [typeof taskLinks, typeof fileContext]] : []
     const images = document && imageSrc ? [[documentImages, instance] satisfies [typeof documentImages, typeof instance]] : []
     return {
+      key: instance.instance,
       remark: [...(breaks ? HARD_BREAKS : Object.values(defaultRemarkPlugins)), ...links, ...images],
       components: {
         ...(fileContext || document ? { a: ({ href, children, node }: { href?: string | undefined; children?: React.ReactNode; node?: object | undefined }) => {
@@ -235,6 +236,9 @@ export const Markdown = memo(function Markdown({
   }, [fileContext, breaks, document, imageSrc])
   return (
     <Streamdown
+      // Streamdown's memo comparator ignores plugins for parsing and custom components.
+      // Reset only when those contextual options change, never on a text append.
+      key={contextual.key}
       className={inline ? 'thread-markdown thread-markdown-inline' : 'thread-markdown'}
       plugins={STREAMDOWN_PLUGINS}
       shikiTheme={SHIKI_THEME}

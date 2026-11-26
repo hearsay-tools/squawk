@@ -53,6 +53,28 @@ describe('Markdown', () => {
     expect(nextProps.isAnimating).toBeUndefined()
   })
 
+  it('updates file links when task scope changes without a text change', () => {
+    const view = (runId: string) => <TaskFileScope runId={runId}><Markdown>{'[file](/tmp/a.md)'}</Markdown></TaskFileScope>
+    const { rerender } = render(view('task-a'))
+    expect(screen.getByRole('link', { name: 'file' }).getAttribute('href')).toBe('/tasks/task-a/files?path=%2Ftmp%2Fa.md')
+    rerender(view('task-b'))
+    expect(screen.getByRole('link', { name: 'file' }).getAttribute('href')).toBe('/tasks/task-b/files?path=%2Ftmp%2Fa.md')
+  })
+
+  it('updates hard breaks without a text change', () => {
+    const { container, rerender } = render(<Markdown>{'one\ntwo'}</Markdown>)
+    expect(container.querySelector('br')).toBeNull()
+    rerender(<Markdown breaks>{'one\ntwo'}</Markdown>)
+    expect(container.querySelector('br')).not.toBeNull()
+  })
+
+  it('updates a document image resolver without a text change', () => {
+    const { container, rerender } = render(<Markdown document imageSrc={() => '/raw/one.png'}>{'![shot](shot.png)'}</Markdown>)
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(new URL('/raw/one.png', window.location.href).href)
+    rerender(<Markdown document imageSrc={() => '/raw/two.png'}>{'![shot](shot.png)'}</Markdown>)
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(new URL('/raw/two.png', window.location.href).href)
+  })
+
   it('opens absolute and file URL links in this task Files view', () => {
     render(<TaskFileContext.Provider value={{ runId: 'task-one', projectId: 'other' }}>
       <Markdown>{'[ADR](/tmp/decision.md) and [spaced](file:///tmp/a%20b.md)'}</Markdown>
