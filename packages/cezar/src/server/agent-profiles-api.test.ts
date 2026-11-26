@@ -12,6 +12,7 @@ import { agentAccountsPath } from '../paths.ts';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { loadAgentAccounts, mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
+import { enableRemoteSettings } from '../remote-settings.ts';
 import { clearProjectProbeCache, registerProject } from '../workspace/projects.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
@@ -176,7 +177,7 @@ describe('agent profiles API', () => {
         isDefault: false,
       });
       // `~` is stored as written and expanded only for `path`.
-      expect(body.profile.path.startsWith('~')).toBe(false);
+      expect(body.profile.path?.startsWith('~')).toBe(false);
     });
 
     it('falls back to the folder name when no label is given', async () => {
@@ -663,30 +664,129 @@ describe('agent profiles API', () => {
       process.env.CEZ_REMOTE = '1';
     });
 
-    it('withholds the listing — the absolute paths are the host disclosure', async () => {
+    it('lists configured accounts without host paths and exposes project-id selections', async () => {
+      const project = await registerProject(repoRoot, undefined, testHome());
+      const dir = claudeDir('claude-work');
+      await mergeWriteAgentAccounts((store) => {
+        store.accounts.push({ id: 'work', provider: 'claude', configDir: dir, label: 'Work', addedAt: '' });
+        store.selections[project.root] = { claude: 'work' };
+      }, testHome());
+
       const body = await list();
-      expect(body).toMatchObject({ editable: false, profiles: [] });
+      expect(body.editable).toBe(false);
+      expect(body.selections).toEqual({});
+      expect(body.projectSelections[project.id]).toEqual({ claude: 'work' });
+      expect(body.projectSelections.default).toEqual({ claude: 'work' });
+      const work = body.profiles.find((p) => p.id === 'work');
+      expect(work).toMatchObject({ id: 'work', provider: 'claude', label: 'Work', isDefault: false });
+      for (const profile of body.profiles) {
+        expect(profile.configDir).toBeUndefined();
+        expect(profile.path).toBeUndefined();
+      }
+      expect(JSON.stringify(body)).not.toContain(home);
+      expect(JSON.stringify(body)).not.toContain(repoRoot);
     });
 
-    it('refuses the per-account status read — a probe is host state a hosted client is not trusted with', async () => {
-      const { status, body } = await send('GET', '/api/v1/workspace/agent-profiles/default:claude/status');
-      expect(status).toBe(409);
-      expect(body.error).toContain('hosted mode');
+    it('allows per-account status reads and project selection without exposing host paths', async () => {
+      const project = await registerProject(repoRoot, undefined, testHome());
+      const dir = claudeDir('claude-work');
+      await mergeWriteAgentAccounts((store) => {
+        store.accounts.push({ id: 'work', provider: 'claude', configDir: dir, label: 'Work', addedAt: '' });
+      }, testHome());
+
+      const defaultStatus = await send('GET', '/api/v1/workspace/agent-profiles/default:claude/status');
+      expect(defaultStatus.status).toBe(200);
+      const workStatus = await send('GET', '/api/v1/workspace/agent-profiles/work/status');
+      expect(workStatus.status).toBe(200);
+
+      const selected = await send('PUT', '/api/v1/workspace/agent-profiles/selection', {
+        projectId: 'default',
+        provider: 'claude',
+        profileId: 'work',
+      });
+      expect(selected.status).toBe(200);
+      const selectedBody = selected.body as unknown as {
+        selections: Record<string, unknown>;
+        projectSelections: Record<string, unknown>;
+      };
+      expect(selectedBody.selections).toEqual({});
+      expect(selectedBody.projectSelections[project.id]).toEqual({ claude: 'work' });
+      expect(selectedBody.projectSelections.default).toEqual({ claude: 'work' });
+      expect(JSON.stringify(selected.body)).not.toContain(repoRoot);
+      expect((await loadAgentAccounts(testHome())).selections[project.root]).toEqual({ claude: 'work' });
     });
 
-    it('409s every mutator and persists nothing', async () => {
+    it('409s account management mutations without remote-settings admin and persists nothing', async () => {
       for (const [method, path, payload] of [
         ['POST', '/api/v1/workspace/agent-profiles', { provider: 'claude', configDir: '/tmp/x' }],
         ['PATCH', '/api/v1/workspace/agent-profiles/work', { label: 'x' }],
         ['DELETE', '/api/v1/workspace/agent-profiles/work', undefined],
-        ['PUT', '/api/v1/workspace/agent-profiles/selection',
-          { projectId: 'default', provider: 'claude', profileId: null }],
       ] as const) {
         const { status, body } = await send(method, path, payload);
         expect(status, `${method} ${path}`).toBe(409);
-        expect(body.error).toContain('hosted mode');
+        expect(body.error).toContain('remote-settings enable');
       }
       expect((await loadAgentAccounts(testHome())).accounts).toEqual([]);
+    });
+
+    it('allows full account management and returns copyable CLI connect commands when remote-settings is granted', async () => {
+      await enableRemoteSettings(4321, process.env, new Date(), testHome());
+      delete process.env.CEZ_DRY_RUN;
+      const providerAuth = new ProviderAuthService({
+        platform: 'linux',
+        runCommand: async () => ({ stdout: '{"loggedIn":false}', stderr: '', exitCode: 1 }),
+      });
+      const openTerminal = vi.fn(async () => true);
+      const app = makeApp({ squawkPort: () => 4321, providerAuth, openTerminal });
+
+      const createdRes = await apiRequest(app, '/api/v1/workspace/agent-profiles', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ provider: 'claude', label: 'Work', configDir: claudeDir('claude-work') }),
+      });
+      expect(createdRes.status).toBe(201);
+      const created = (await createdRes.json()) as AgentProfileResponse;
+      expect(created.profile.configDir).toBe(claudeDir('claude-work'));
+
+      const listed = (await (await apiRequest(app, '/api/v1/workspace/agent-profiles')).json()) as AgentProfilesResponse;
+      expect(listed.editable).toBe(true);
+      expect(listed.profiles.find((p) => p.id === created.profile.id)?.path).toBe(claudeDir('claude-work'));
+
+      const connectRes = await apiRequest(app, '/api/v1/providers/connect', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ provider: 'claude', profileId: created.profile.id }),
+      });
+      expect(connectRes.status).toBe(409);
+      const connectBody = (await connectRes.json()) as { error: string; command?: string };
+      expect(connectBody.error).toContain('Run this command on the machine hosting Squawk');
+      expect(connectBody.command).toContain('CLAUDE_CONFIG_DIR=');
+      expect(openTerminal).not.toHaveBeenCalled();
+
+      const renamedRes = await apiRequest(app, `/api/v1/workspace/agent-profiles/${created.profile.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ label: 'Apptension' }),
+      });
+      expect(renamedRes.status).toBe(200);
+
+      const deletedRes = await apiRequest(app, `/api/v1/workspace/agent-profiles/${created.profile.id}`, {
+        method: 'DELETE',
+      });
+      expect(deletedRes.status).toBe(200);
+    });
+
+    it('keeps non-loopback binds read-only even when the port has a remote-settings grant', async () => {
+      await enableRemoteSettings(4321, process.env, new Date(), testHome());
+      const app = makeApp({ squawkPort: () => 4321, bindHost: '0.0.0.0' });
+      const listed = (await (await apiRequest(app, '/api/v1/workspace/agent-profiles')).json()) as AgentProfilesResponse;
+      expect(listed.editable).toBe(false);
+      const created = await apiRequest(app, '/api/v1/workspace/agent-profiles', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ provider: 'claude', configDir: claudeDir('claude-work') }),
+      });
+      expect(created.status).toBe(409);
     });
   });
 
@@ -737,11 +837,9 @@ describe('agent profiles API', () => {
       expect(spawns).toBeGreaterThan(warmed);
     });
 
-    it('refuses a named account in hosted mode BEFORE resolving it', async () => {
-      // Every sibling route gates first. Resolving first would read the store, build a command
-      // carrying the account's absolute path — which both the success body and the hosted 409 echo —
-      // and answer `unknown account: <id>` for a wrong id, an enumeration oracle for ids the hosted
-      // listing deliberately withholds.
+    it('refuses a named account in hosted mode without settingsAdmin BEFORE resolving it', async () => {
+      // Without `settingsAdmin`, resolving first would build a command carrying the account's
+      // absolute host path. Refuse before resolving so no host path or account id error leaks.
       const { body: created } = await send('POST', '/api/v1/workspace/agent-profiles', {
         provider: 'claude',
         configDir: claudeDir('claude-klaudiusz'),
@@ -757,7 +855,7 @@ describe('agent profiles API', () => {
         const answer = (await res.json()) as { error: string; command?: string };
         // No host path, and the same words whether or not the id exists.
         expect(answer.command).toBeUndefined();
-        expect(answer.error).toContain('managed from the machine that owns the checkout');
+        expect(answer.error).toContain('remote-settings enable');
         expect(JSON.stringify(answer)).not.toContain(home);
       }
     });

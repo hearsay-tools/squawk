@@ -77,7 +77,7 @@ describe('workspace model catalog API', () => {
     expect(calls).toBe(1);
   });
 
-  it('uses the selected account home and refuses unknown or hosted account requests', async () => {
+  it('uses the selected account home in local and hosted mode and refuses unknown accounts', async () => {
     const homes: Array<string | undefined> = [];
     const discover = async (options?: ModelDiscoveryContext) => {
       homes.push(options?.accountHome);
@@ -96,8 +96,8 @@ describe('workspace model catalog API', () => {
     expect((await apiRequest(server, path)).status).toBe(200);
     expect(homes).toEqual([join(root, 'native-account')]);
     expect((await apiRequest(server, '/api/v1/models?runner=antigravity&profileId=unknown')).status).toBe(400);
-    expect((await apiRequest(createApp({ ...deps, bindHost: '0.0.0.0' }), path)).status).toBe(409);
-    expect(homes).toHaveLength(1);
+    expect((await apiRequest(createApp({ ...deps, bindHost: '0.0.0.0' }), path)).status).toBe(200);
+    expect((await apiRequest(createApp({ ...deps, bindHost: '0.0.0.0' }), '/api/v1/models?runner=antigravity&profileId=unknown')).status).toBe(400);
   });
 
   it('degrades discovery failures to an unavailable 200 response', async () => {

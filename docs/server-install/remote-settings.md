@@ -39,8 +39,12 @@ With a grant, every user that cockpit admits can:
 - read and save every Agent config file, including the files in the agent's home directory, and
   see the user MCP servers in `~/.claude.json`;
 - save the project's worktree setup commands;
-- complete browser sign-in to a runner's discovered account or an existing named account, which
+- complete browser sign-in to a runner's discovered account or a named account, which
   writes credentials on the host. Hosted sign-in uses the consent link and pasted redirect.
+- add, rename, repoint and remove agent accounts in **Settings → Agents**, see their host config
+  paths, and get copyable host sign-in commands for CLI-login runners. (Choosing pre-configured
+  accounts per task or per project works on every remote cockpit without a grant, with host paths
+  hidden.)
 - install, update and remove a managed agent CLI, such as the Antigravity CLI, from
   **Settings → Agents**, which downloads an executable that later runs on the host.
 
@@ -48,8 +52,8 @@ That is **host command execution as the cockpit's user**. Enable it only when th
 the people you would trust with a shell on this machine.
 
 It does not grant anything else. The terminal, file manager and editor buttons stay unavailable,
-and so do agent account creation, editing, listing and project browsing outside the projects folder.
-The cockpit shows a warning above both editors while it has a grant.
+and so does project browsing outside the projects folder.
+The cockpit shows a warning above each granted settings editor while it has a grant.
 
 ## When it applies
 

@@ -1,6 +1,7 @@
 import { streamSSE } from 'hono/streaming';
 import type { ProjectContext } from './project-context.ts';
 import type { ProviderId } from '../core/provider-auth.ts';
+import { productIdentity } from '../home/identity.ts';
 import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
 import type { resolveCapabilities } from './capabilities.ts';
 import type { createProviderStatus, resolveServerDeps } from './server-deps.ts';
@@ -9,9 +10,11 @@ import type { createProviderStatus, resolveServerDeps } from './server-deps.ts';
  *  request's `ProjectContext` on the context, handlers read `c.get('project')`. */
 export type ProjectApiEnv = { Variables: { project: ProjectContext; stoppedOnAdoption?: boolean } };
 
-export const hostedProfileRefusal = {
-  error: 'agent accounts are managed from the machine that owns the checkout (this cockpit runs in hosted mode)',
-};
+export function remoteAccountAdminRefusal(): { error: string } {
+  return {
+    error: `agent accounts are read-only on this remote cockpit — run \`${productIdentity().command} remote-settings enable\` on the host to allow managing them`,
+  };
+}
 
 export const UI_STATE_BODY_LIMIT = 128 * 1024; // 128 KiB
 

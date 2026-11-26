@@ -47,7 +47,9 @@ export function agentPickerRows(profiles: readonly AgentProfile[], runners: Runn
       // folder the CLI has not written yet is called out rather than left looking fine: a run under
       // it fails on auth BY DESIGN — it must not quietly fall back to another login — so the place
       // to say so is where the choice is made.
-      desc: login.exists ? login.configDir : `${login.configDir} — folder not created yet`,
+      desc: login.configDir
+        ? (login.exists ? login.configDir : `${login.configDir} — folder not created yet`)
+        : (login.exists ? '' : 'Not initialized on host yet'),
       missing: !login.exists,
       ...(login.isDefault || login.status === undefined ? {} : { accountStatus: login.status.status }),
     }))

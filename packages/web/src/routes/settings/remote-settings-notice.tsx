@@ -1,14 +1,14 @@
 import { productCommand } from '@/lib/product-name'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect } from 'react'
-import { queryKeys, useHealth } from '@/api/queries'
+import { queryKeys, useHealth, workspaceQueryKeys } from '@/api/queries'
 
 /**
- * Re-reads whether this cockpit may edit host settings: health (the capability) and the Agent
- * config listing (its `editable` flag). The host operator grants and withdraws remote settings
- * administration outside the cockpit, and a remote cockpit gets no live health push, so the section
- * and each file editor re-read both when they open, and again after the server refuses a save. Returns the refresh, which
- * resolves once both reads end.
+ * Re-reads whether this cockpit may edit host settings: health (the capability), the Agent
+ * config listing and the agent accounts listing (their `editable` flags). The host operator grants
+ * and withdraws remote settings administration outside the cockpit, and a remote cockpit gets no
+ * live health push, so each section re-reads them when it opens, and again after the server
+ * refuses a save. Returns the refresh, which resolves once all reads end.
  */
 export function useSettingsAdminRefresh(): () => Promise<void> {
   const queryClient = useQueryClient()
@@ -17,6 +17,7 @@ export function useSettingsAdminRefresh(): () => Promise<void> {
       queryClient.invalidateQueries({ queryKey: queryKeys.health }),
       // `exact`: the open file's query shares this prefix, and refetching it would replace a draft.
       queryClient.invalidateQueries({ queryKey: queryKeys.agentConfig, exact: true }),
+      queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.agentProfiles, exact: true }),
     ])
   }, [queryClient])
   useEffect(() => {
