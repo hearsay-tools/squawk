@@ -13,11 +13,13 @@ import { child, children, nameOf, stringOf, type AstRule, type EsNode } from './
  * token or code punctuation: `\s`, `\b`, a group, a brace, `*`, a quote, a character class,
  * `\.meta`, or after one space a quote, a brace, `*`, `(` or a declaration keyword. A keyword that
  * is one alternative of a group, as in `(?:import|export)`, is syntax too. So is a keyword at a line
- * start (`^`, `\n`, `(?:^|\n)`, then optional white space), unless one space and a word follow it.
+ * start (`^`, `\n`, `(?:^|\n)`, then optional `\s`, `[ \t]` or space tokens with `*`, `+` or `?`),
+ * unless one space and a word follow it.
  *
  * It leaves out prose (the keyword, one space and a word, as in "files import the changed files"),
- * a keyword after `-` or `@` (`--import`, CSS `@import`) or before `-` (`require-e2e`), and a
- * pattern built from parts: a variable, `+` concatenation or a call. Those are accepted limits of a
+ * a keyword after `-` or `@` (`--import`, CSS `@import`) or before `-` (`require-e2e`), a line start
+ * with other white space forms (`\t*`, `[\t ]*`, `\s{0,4}`, ` {2}`), `^import x from` (one space and a
+ * word read as prose), and a pattern built from parts: a variable, `+` concatenation or a call. Those are accepted limits of a
  * syntax rule (docs/sdlc/lint.md § New safety guards).
  */
 
