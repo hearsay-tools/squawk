@@ -53,11 +53,12 @@ describe('service-ready worker-wait fixture (hearsay-tools/cezarion#1752)', () =
     const started = parent();
     await load.reached;
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    for (let elapsed = 0; elapsed < 3 * STARTUP_STALL_MS; elapsed += STARTUP_STALL_MS / 2) {
-      store.eventLog.appendEvent(startingRun(), { type: 'note', message: `still loading after ${elapsed} ms` });
-      await vi.advanceTimersByTimeAsync(STARTUP_STALL_MS / 2);
-    }
-    vi.useRealTimers(); load.release();
+    try {
+      for (let elapsed = 0; elapsed < 3 * STARTUP_STALL_MS; elapsed += STARTUP_STALL_MS / 2) {
+        store.eventLog.appendEvent(startingRun(), { type: 'note', message: `still loading after ${elapsed} ms` });
+        await vi.advanceTimersByTimeAsync(STARTUP_STALL_MS / 2);
+      }
+    } finally { vi.useRealTimers(); load.release(); }
     const p = await started;
     expect(store.eventLog.readEvents(p.id).some(event => event.type === 'session')).toBe(true);
   });
@@ -68,11 +69,12 @@ describe('service-ready worker-wait fixture (hearsay-tools/cezarion#1752)', () =
     const failure = expect(started).rejects.toThrow(/made no progress for 15000 ms before its session started, at step task:\nevents of run/);
     await load.reached;
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    // The guard counts from the run's latest write or event.
-    store.eventLog.appendEvent(startingRun(), { type: 'note', message: 'last progress' });
-    await vi.advanceTimersByTimeAsync(STARTUP_STALL_MS);
-    await failure;
-    vi.useRealTimers(); load.fail(new Error('released after the stall'));
+    try {
+      // The guard counts from the run's latest write or event.
+      store.eventLog.appendEvent(startingRun(), { type: 'note', message: 'last progress' });
+      await vi.advanceTimersByTimeAsync(STARTUP_STALL_MS);
+      await failure;
+    } finally { vi.useRealTimers(); load.fail(new Error('released after the stall')); }
   });
 
   it('fails at once, with the run\'s error, when the run fails before its session starts', async () => {
