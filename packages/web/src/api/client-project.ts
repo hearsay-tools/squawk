@@ -31,9 +31,13 @@ import type {
   Runner,
   SaveWorkflowInput,
   SaveWorkflowResponse,
+  SessionContextFile,
+  SessionContextPreview,
+  SessionContextPreviewRequest,
   SetAgentConfigInput,
   SetConfigInput,
   SetConfigResponse,
+  SetSessionContextInput,
   UiState,
   UpdateAutomationInput,
   WorkflowsResponse,
@@ -285,6 +289,30 @@ export async function putAgentConfigFile(
       json: body,
     }),
     `/agent-config/${encodeURIComponent(id)}`,
+  )
+}
+
+/** The selected project's `context.yaml`, as a launch reads it (hearsay-tools/squawk#4308). */
+export async function getSessionContext(opts: ReadOptions = {}): Promise<SessionContextFile> {
+  return unwrap(
+    await cez.api.v1.p[':projectId']['session-context'].$get({ param: { projectId: queryScope() } }, init(opts)),
+    '/session-context',
+  )
+}
+
+/** Save `context.yaml` over the version the editor read; 409 on a newer disk version, 400 on problems. */
+export async function putSessionContext(body: SetSessionContextInput): Promise<SessionContextFile> {
+  return unwrap(
+    await cez.api.v1.p[':projectId']['session-context'].$put({ param: { projectId: queryScope() }, json: body }),
+    '/session-context',
+  )
+}
+
+/** Render a draft for one role without saving it. */
+export async function postSessionContextPreview(body: SessionContextPreviewRequest, opts: ReadOptions = {}): Promise<SessionContextPreview> {
+  return unwrap(
+    await cez.api.v1.p[':projectId']['session-context'].preview.$post({ param: { projectId: queryScope() }, json: body }, init(opts)),
+    '/session-context/preview',
   )
 }
 

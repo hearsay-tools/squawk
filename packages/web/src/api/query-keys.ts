@@ -56,6 +56,11 @@ export const queryKeys = {
     return [queryScope(), 'agent-config'] as const
   },
   agentConfigFile: (id: string) => [queryScope(), 'agent-config', 'file', id] as const,
+  /** Settings → Session context (hearsay-tools/squawk#4308): the file, and one preview per draft and role. */
+  get sessionContext() {
+    return [queryScope(), 'session-context'] as const
+  },
+  sessionContextPreview: (content: string, role: string) => [queryScope(), 'session-context', 'preview', role, content] as const,
   /** The worktree management panel (`GET /api/worktrees`, #483). */
   get worktrees() {
     return [queryScope(), 'worktrees'] as const

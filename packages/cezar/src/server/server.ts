@@ -71,6 +71,7 @@ import { createAutomationsRouteBundles } from './automations-routes.ts';
 import { createGithubRoutes } from './github-routes.ts';
 import { createOpenTargetsRoutes, createRepoRoutes, createWorktreesRoutes } from './repo-routes.ts';
 import { createFsBrowseRoutes, createRunsIndexRoutes, createWorkspaceConfigRoutes, createWorkspaceEventsRoutes } from './workspace-routes.ts';
+import { createSessionContextRoutes } from './session-context-routes.ts';
 import { createAgentConfigRoutes, createAgentWebhooksRoutes, createConfigRoutes, createPlanRoutes, createSkillsRoutes, createSseRoutes, createUiStateRoutes, createWorkflowsRoutes } from './project-settings-routes.ts';
 import { createRunsRoutes, withLiveUsage } from './runs-routes.ts';
 export interface ServerDeps extends ActivityServerDeps {
@@ -861,7 +862,8 @@ export function createApp(deps: ServerDeps) {
     .route('/', githubRoutes)
     .route('/', repoRoutes)
     .route('/', configRoutes)
-    .route('/', agentConfigRoutes);
+    .route('/', agentConfigRoutes)
+    .route('/', createSessionContextRoutes());
   projectRoutePaths = new Set(v1.routes.filter((route) => route.method !== 'ALL')
     .flatMap((route) => [V1_PREFIX, V1_SCOPED_PREFIX].map((prefix) => `${route.method} ${prefix}${route.path}`)));
 

@@ -1,12 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { normalizeSidebarLimits } from '@open-mercato/cezar-api-client/contract/workspace'
 import { queryScope } from '@open-mercato/cezar-api-client/utils/project-scope'
-import type { SetAgentConfigInput } from '@open-mercato/cezar-api-client'
+import type { SessionContextRole, SetAgentConfigInput, SetSessionContextInput } from '@open-mercato/cezar-api-client'
 import { projectAddress } from './run-address'
 import { queryKeys } from './query-keys'
 import {
   getAgentConfig,
   getAgentConfigFile,
+  getSessionContext,
+  postSessionContextPreview,
+  putSessionContext,
   getConfig,
   getRepo,
   getRepoBranches,
@@ -149,6 +152,39 @@ export function useAgentConfigFile(id: string | null) {
     queryKey: queryKeys.agentConfigFile(id ?? ''),
     queryFn: ({ signal }) => getAgentConfigFile(id as string, { signal }),
     enabled: id !== null,
+  })
+}
+
+/** The selected project's `context.yaml` (Settings → Session context). */
+export function useSessionContext() {
+  return useQuery({
+    queryKey: queryKeys.sessionContext,
+    queryFn: ({ signal }) => getSessionContext({ signal }),
+  })
+}
+
+/** The server's render of a draft: its problems and each block. Keeps the last answer while the next loads. */
+export function useSessionContextPreview(content: string, role: SessionContextRole) {
+  return useQuery({
+    queryKey: queryKeys.sessionContextPreview(content, role),
+    queryFn: ({ signal }) => postSessionContextPreview({ content, role }, { signal }),
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+    // Each edit asks again, and a refused draft (400) stays refused: show the failure at once.
+    retry: false,
+  })
+}
+
+export function usePutSessionContext() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    // The key is taken when the save starts, with the request: a save that ends after a project
+    // switch writes only the project it started in.
+    onMutate: () => ({ fileKey: queryKeys.sessionContext }),
+    mutationFn: (body: SetSessionContextInput) => putSessionContext(body),
+    onSuccess: (result, _body, context) => {
+      if (context) queryClient.setQueryData(context.fileKey, result)
+    },
   })
 }
 

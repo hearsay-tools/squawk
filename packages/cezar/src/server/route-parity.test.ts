@@ -187,6 +187,9 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
       'GET /agent-config',
       'GET /agent-config/:id',
       'PUT /agent-config/:id',
+      'GET /session-context',
+      'PUT /session-context',
+      'POST /session-context/preview',
       'DELETE /runs/:id',
       'PATCH /runs/:id',
       'GET /repo/commit/:sha',
@@ -239,6 +242,8 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
     await expectParity('/ui-state', json('PUT', 'nonsense'));
     await expectParity('/config', json('PUT', { maxParallel: 99 }));
     await expectParity('/agent-config/no-such-file', json('PUT', { content: '{}', version: null }));
+    await expectParity('/session-context', json('PUT', { content: 7, version: null }));
+    await expectParity('/session-context/preview', json('POST', { content: '', role: 'nobody' }));
     await expectParity('/workflows/parse', json('POST', { yaml: '' }));
     // 404: unknown ids.
     await expectParity('/runs/no-such-run/archive', json('POST', {}));
