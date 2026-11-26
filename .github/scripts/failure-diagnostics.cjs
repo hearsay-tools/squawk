@@ -80,14 +80,25 @@ function causesForStep({run, job, step, log}) {
     tests[i].hasDiagnostic = Boolean(diagnostic);
   }
   // The Vitest file-duration reporter (vitest-file-duration.mjs) prints one line per file under
-  // its header. Its milliseconds vary per run, so the file and the crossed limit key the cause.
-  const capHeader = lines.findIndex(line => /\bVitest file duration cap failed:/.test(line));
-  const caps = capHeader < 0 ? [] : lines.slice(capHeader + 1).flatMap((line, offset) => {
-    const match = line.match(/^(\S+\.(?:test|spec)\.[cm]?[jt]sx?): .*; (hard|soft) limit (\d+) ms\b/);
-    if (!match) return [];
-    const title = `Vitest file duration cap: ${match[1]} at or over the ${match[2]} limit ${match[3]} ms`;
-    return [{key:`duration-cap:${match[1]}:${match[2]}`,title,index:capHeader + 1 + offset,kind:'error',failureIdentity:title}];
-  });
+  // each of its headers. Its milliseconds vary per run, so the file and the crossed limit key a
+  // cap cause; a file that did not finish is keyed by the file alone.
+  const reporterBlock = (header, row, cause) => {
+    const at = lines.findIndex(line => header.test(line));
+    return at < 0 ? [] : lines.slice(at + 1).flatMap((line, offset) => {
+      const match = line.match(row);
+      return match ? [{...cause(match), index:at + 1 + offset, kind:'error'}] : [];
+    });
+  };
+  const caps = [
+    ...reporterBlock(/\bVitest file duration cap failed:/, /^(\S+\.(?:test|spec)\.[cm]?[jt]sx?): .*; (hard|soft) limit (\d+) ms\b/, match => {
+      const title = `Vitest file duration cap: ${match[1]} at or over the ${match[2]} limit ${match[3]} ms`;
+      return {key:`duration-cap:${match[1]}:${match[2]}`,title,failureIdentity:title};
+    }),
+    ...reporterBlock(/\bVitest test files that did not finish:/, /^(\S+\.(?:test|spec)\.[cm]?[jt]sx?): did not finish\b/, match => {
+      const title = `Vitest test file did not finish: ${match[1]}`;
+      return {key:`unfinished-file:${match[1]}`,title,failureIdentity:title};
+    }),
+  ];
   const candidates = tests.length ? [] : lines.flatMap((line, index) => {
     if (!/(?:\b\w*Error:|npm (?:ERR!|error) |##\[error\])/.test(line)) return [];
     if (/Process completed with exit code|command failed|exit status/i.test(line)) return [];
