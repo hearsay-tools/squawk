@@ -66,8 +66,8 @@ function HandoffCard() {
 function LoadingShape() {
   return (
     <div data-slot="session-context-loading" aria-busy="true" aria-label="Loading session context" className="grid gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-      <Skeleton className="h-[420px] rounded-lg motion-reduce:animate-none" />
-      <Skeleton className="h-[420px] rounded-lg motion-reduce:animate-none max-md:hidden" />
+      <Skeleton className="h-[420px] rounded-lg" />
+      <Skeleton className="h-[420px] rounded-lg max-md:hidden" />
     </div>
   )
 }
