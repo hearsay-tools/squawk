@@ -1,5 +1,5 @@
 import { posix } from 'node:path';
-import type { AstRule, EsNode, Visitors } from './ast-rule.ts';
+import { child, children, nameOf, stringOf, type AstRule, type EsNode, type Visitors } from './ast-rule.ts';
 import { IMPORT_NODE_TYPES, importSpecifier } from './layer-import.ts';
 
 /**
@@ -11,10 +11,11 @@ import { IMPORT_NODE_TYPES, importSpecifier } from './layer-import.ts';
  * Scope: every non-test source file, and a feature file that imports another feature's folder.
  * Tests, testkits, specs, `.d.ts` files and `__fixtures__/` stay out: a test may exercise a feature
  * directly. The rule reads the specifier of each `import` and `export … from` declaration
- * (type-only ones included), a literal `import()`, a literal `import('…')` type and an
- * `import x = require('…')`. A relative specifier resolves against the file; a package specifier
- * (`@hearsay-tools/squawk/…` or the workspace name) counts with or without `src/` or `dist/`. A
- * computed specifier is out of scope. There is no baseline: every finding fails lint.
+ * (type-only ones included), a literal `import()`, a literal `import('…')` type, an
+ * `import x = require('…')`, and a literal `require('…')` call. A relative specifier resolves
+ * against the file; a package specifier (`@hearsay-tools/squawk/…` or the workspace name) counts
+ * with or without `src/` or `dist/`. A computed specifier is out of scope. There is no baseline:
+ * every finding fails lint.
  */
 const SRC = 'packages/cezar/src/';
 const FEATURES = `${SRC}features/`;
@@ -49,12 +50,19 @@ export function featureTarget(file: string, specifier: string | undefined): stri
 const message = (target: string, folder: string) =>
   `Nothing outside a bundled feature folder imports it: ${target} is inside ${folder}. Register what the feature adds through the plugin API in its index.ts instead (hearsay-tools/squawk#4314).`;
 
+function requireSpecifier(node: EsNode): string | undefined {
+  return nameOf(child(node, 'callee')) === 'require' ? stringOf(children(node, 'arguments')[0]) : undefined;
+}
+
 export function bundledFeatureImportVisitors(report: (node: EsNode, message: string) => void, file: string): Visitors {
-  const inspect = (node: EsNode) => {
-    const target = featureTarget(file, importSpecifier(node));
+  const check = (node: EsNode, specifier: string | undefined) => {
+    const target = featureTarget(file, specifier);
     if (target !== undefined) report(node, message(target, featureFolder(target.endsWith('/') ? target : `${target}/`)!));
   };
-  return Object.fromEntries(IMPORT_NODE_TYPES.map(type => [type, inspect]));
+  return {
+    ...Object.fromEntries(IMPORT_NODE_TYPES.map(type => [type, (node: EsNode) => check(node, importSpecifier(node))])),
+    CallExpression: node => check(node, requireSpecifier(node)),
+  };
 }
 
 export const bundledFeatureImport: AstRule = {

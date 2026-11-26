@@ -42,6 +42,8 @@ describe('bundled-feature-import (hearsay-tools/squawk#4314)', () => {
       "import type { SquawkPluginApi } from '@hearsay-tools/squawk/plugin';",
       "import { spawn } from 'node:child_process';",
       'const load = (id: string) => import(`../../features/${id}/index.ts`);',
+      "const note = readFile('../../features/jobs/job.ts');",
+      "const runtime = require('../../runs/removal-slots.js');",
     ],
     invalid: [
       "import { jobRunsIn } from '../../features/jobs/job.ts';",
@@ -53,6 +55,8 @@ describe('bundled-feature-import (hearsay-tools/squawk#4314)', () => {
       "const load = () => import('../../features/jobs/cli.ts');",
       "type Job = import('../../features/jobs/job.ts').StoppedJob;",
       "import job = require('../../features/jobs/job.ts');",
+      "const job = require('../../features/jobs/job.js');",
+      "const setup = require('@hearsay-tools/squawk/features/jobs/index.js');",
       "import setup from '@hearsay-tools/squawk/dist/features/jobs/index.js';",
       "const load = () => import('@hearsay-tools/squawk/features/jobs/index.js');",
     ],
@@ -70,7 +74,7 @@ describe('bundled-feature-import (hearsay-tools/squawk#4314)', () => {
   });
 
   it('lets a feature import its own folder and core code', () => {
-    expect(checkRule(bundledFeatureImport, feature, "import { jobRunsIn } from './job.ts';\nimport { agentTmpDirLocations } from '../../runs/agent-tmpdir.ts';\n")).toEqual([]);
+    expect(checkRule(bundledFeatureImport, feature, "import { jobRunsIn } from './job.ts';\nconst local = require('./job.js');\nimport { agentTmpDirLocations } from '../../runs/agent-tmpdir.ts';\n")).toEqual([]);
   });
 
   it('names the target and its folder in the finding', () => {
