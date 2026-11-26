@@ -1,5 +1,5 @@
 import type { RunnerFacts } from '@hearsay-tools/squawk/plugin';
-// Live Google Antigravity CLI 1.5.14–1.5.18 probes (hearsay-tools/squawk#4058, #4060, #4197);
+// Live Google Antigravity CLI 1.5.14–1.5.18 probes (hearsay-tools/squawk#4058, hearsay-tools/squawk#4060, hearsay-tools/squawk#4197);
 // docs/runners/antigravity-wire.md names the fixture behind each value.
 // systemPromptOnResume: the CLI saves the session/new system prompt with the session and appends
 // a resent one, so a resume never resends it; it prepends it to the opening turn, as Codex does.

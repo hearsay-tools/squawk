@@ -109,3 +109,43 @@ export class BoundedJsonlTailer {
     if (this.tail.length > LINE_BYTES) { this.tail = ''; this.skippingLine = true; }
   }
 }
+
+/** Serialized timer-driven poller shared by parent and child Antigravity transcript readers. */
+export class TranscriptPoller {
+  private timer: NodeJS.Timeout | undefined;
+  private reading: Promise<void> | undefined;
+  closed = false;
+
+  constructor(
+    private readonly step: () => Promise<void>,
+    private readonly shouldContinue: () => boolean,
+    private readonly pollMs: number,
+    private readonly onError?: () => void,
+  ) {}
+
+  schedule(delay: number): void {
+    if (this.closed || this.timer) return;
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      void this.poll().then(() => { if (!this.closed && this.shouldContinue()) this.schedule(this.pollMs); });
+    }, delay);
+    this.timer.unref?.();
+  }
+
+  poll(): Promise<void> {
+    this.reading ??= this.step().catch(() => { this.onError?.(); }).finally(() => { this.reading = undefined; });
+    return this.reading;
+  }
+
+  async waitIdle(): Promise<void> {
+    clearTimeout(this.timer);
+    this.timer = undefined;
+    while (this.reading) await this.reading;
+  }
+
+  close(): void {
+    this.closed = true;
+    clearTimeout(this.timer);
+    this.timer = undefined;
+  }
+}

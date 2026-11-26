@@ -6,6 +6,7 @@ import {
   TRANSCRIPT_MAX_FLUSH_CHUNKS,
   TRANSCRIPT_OUTPUT_CHARS,
   TRANSCRIPT_READ_BYTES,
+  TranscriptPoller,
   antigravityTranscriptPath,
   transcriptCallKey,
   transcriptHookItem,
@@ -161,30 +162,38 @@ interface Pending { call: TranscriptCall; item?: UiToolItem; spawn?: boolean; de
 export class AntigravityToolOutputs {
   private tailer: BoundedJsonlTailer | undefined;
   private broken = false;
-  private closed = false;
-  private timer: NodeJS.Timeout | undefined;
-  private reading: Promise<void> | undefined;
   private readonly transcript = new AntigravityTranscript();
   private readonly pending = new Map<string, Pending>();
   private readonly seen = new Set<string>();
+  private readonly poller: TranscriptPoller;
   constructor(
     private readonly amend: (item: UiToolItem) => void,
     private readonly now: () => number = Date.now,
     private readonly onHook?: (item: UiHookItem) => void,
     private readonly readBytes = TRANSCRIPT_READ_BYTES,
     private readonly subagents?: SubagentTranscriptHooks,
-  ) {}
+  ) {
+    this.poller = new TranscriptPoller(
+      () => this.read(),
+      () => {
+        this.expire();
+        return Boolean(this.onHook || this.subagents || [...this.pending.values()].some(pending => pending.item || pending.spawn));
+      },
+      POLL_MS,
+      () => { this.broken = true; this.pending.clear(); },
+    );
+  }
 
   /** The session is open: read its transcript from its current end. */
   open(path: string): void {
     this.tailer = new BoundedJsonlTailer(path, true, this.readBytes);
-    if (this.onHook || this.subagents) this.schedule(POLL_MS);
+    if (this.onHook || this.subagents) this.poller.schedule(POLL_MS);
   }
 
   /** A wire update. A call takes its transcript slot when it first appears; a terminal update with
    *  no result starts the wait for its row, and one with a result gives the slot up. */
   observe(update: Record<string, unknown>): void {
-    if (this.closed || this.broken || !this.tailer) return;
+    if (this.poller.closed || this.broken || !this.tailer) return;
     const call = wireCall(update);
     if (!call) return;
     if (!this.seen.has(call.id)) { this.seen.add(call.id); this.transcript.start(call); }
@@ -192,7 +201,7 @@ export class AntigravityToolOutputs {
     if (!transcriptCall(update)) { this.transcript.drop(call.id); return; }
     const spawn = call.name === 'invoke_subagent' && update.status === 'completed' && !!this.subagents?.onSpawn;
     if (!this.pending.has(call.id)) this.pending.set(call.id, { call, spawn, deadline: this.now() + TRANSCRIPT_WAIT_MS });
-    if (spawn) this.schedule(0);
+    if (spawn) this.poller.schedule(0);
   }
 
   /** The mapped tool item closed with no output: amend it once its row is read. */
@@ -201,37 +210,21 @@ export class AntigravityToolOutputs {
     if (!pending || pending.spawn) return;
     if (item.output) { this.pending.delete(item.id); return; }
     pending.item = item;
-    this.schedule(0);
+    this.poller.schedule(0);
   }
 
-  close(): void { this.closed = true; clearTimeout(this.timer); this.pending.clear(); }
+  close(): void { this.poller.close(); this.pending.clear(); }
 
   /** One read of appended rows, then amend what resolved. Tests call it directly. */
-  poll(): Promise<void> {
-    this.reading ??= this.read().catch(() => { this.broken = true; this.pending.clear(); }).finally(() => { this.reading = undefined; });
-    return this.reading;
-  }
+  poll(): Promise<void> { return this.poller.poll(); }
 
   /** Wait for any in-flight read, then drain unread exit bytes in bounded chunks. */
   async flush(): Promise<void> {
-    clearTimeout(this.timer);
-    this.timer = undefined;
-    while (this.reading) await this.reading;
-    for (let chunk = 0; chunk < TRANSCRIPT_MAX_FLUSH_CHUNKS && !this.closed && !this.broken && this.tailer; chunk++) {
+    await this.poller.waitIdle();
+    for (let chunk = 0; chunk < TRANSCRIPT_MAX_FLUSH_CHUNKS && !this.poller.closed && !this.broken && this.tailer; chunk++) {
       await this.poll();
       if (!this.tailer.hasMore) break;
     }
-  }
-
-  private schedule(delay: number): void {
-    if (this.closed || this.timer) return;
-    this.timer = setTimeout(() => { this.timer = undefined; void this.poll().then(() => this.next()); }, delay);
-    this.timer.unref?.();
-  }
-
-  private next(): void {
-    this.expire();
-    if (this.onHook || this.subagents || [...this.pending.values()].some(pending => pending.item || pending.spawn)) this.schedule(POLL_MS);
   }
 
   private expire(): void {
@@ -240,13 +233,13 @@ export class AntigravityToolOutputs {
   }
 
   private async read(): Promise<void> {
-    if (this.closed || this.broken || !this.tailer) return;
+    if (this.poller.closed || this.broken || !this.tailer) return;
     this.expire();
     await this.tailer.readNext(row => this.transcript.addRow(row));
-    for (const hook of this.transcript.drainHooks()) if (!this.closed) this.onHook?.(hook);
+    for (const hook of this.transcript.drainHooks()) if (!this.poller.closed) this.onHook?.(hook);
     for (const [id, pending] of this.pending) this.resolvePending(id, pending);
     for (const delivery of this.transcript.drainChildMessages()) {
-      if (!this.closed) this.subagents?.onMessage?.(delivery.childId, delivery.body);
+      if (!this.poller.closed) this.subagents?.onMessage?.(delivery.childId, delivery.body);
     }
   }
 
@@ -255,7 +248,7 @@ export class AntigravityToolOutputs {
     const output = this.transcript.output(id);
     if (output === undefined) return;
     this.pending.delete(id);
-    if (this.closed) return;
+    if (this.poller.closed) return;
     if (pending.spawn) {
       const childId = parseSpawnedSubagentId(output);
       if (childId) this.subagents?.onSpawn?.(id, childId);
