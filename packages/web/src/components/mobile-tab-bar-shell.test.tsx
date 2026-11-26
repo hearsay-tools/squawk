@@ -110,4 +110,20 @@ describe('AppShell mobile tab bar (#621)', () => {
     expect(fab()).toBeNull()
   })
 
+  it.each(['/p/cezarion/', '/tasks'])('shows the gold New task button and clears room for it on the task list %s', (entry) => {
+    renderShell(entry)
+    expect(fab()?.getAttribute('data-variant')).toBe('primary')
+    expect(document.querySelector('[data-slot="main"]')?.className).toContain('max-md:pb-24')
+  })
+
+  it.each(['/p/cezarion/activity', '/p/cezarion/git', '/p/cezarion/settings', '/activity', '/tools'])(
+    'keeps the tab bar but drops the New task button and its room on %s',
+    (entry) => {
+      renderShell(entry)
+      expect(tabBar()).not.toBeNull()
+      expect(fab()).toBeNull()
+      expect(document.querySelector('[data-slot="main"]')?.className).not.toContain('max-md:pb-24')
+    },
+  )
+
 })

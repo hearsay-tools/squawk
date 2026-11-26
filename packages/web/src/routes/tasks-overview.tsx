@@ -17,6 +17,7 @@ import { queryKeys, useArchivedRuns, useAutomationNames, useHealth, usePinRun, u
 import type { ArchivedRunsResponse, RunSummary } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { DiffStatLabel } from '@/components/diff-stat'
+import { Dash, TaskPageHeader } from './task-list-parts'
 import { DirectionalUsage, directionalUsageLabel } from '@/components/directional-usage'
 import { TitleEditInput } from '@/components/editable-title'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -210,10 +211,10 @@ export function TasksOverview({
   // drop the task at the top of the active list by a click that looked like it did nothing.
   const pinToggle = view === 'archived' ? undefined : onTogglePin
   return (
-    <TaskTitleEditorProvider runs={archivedPages ? [...all, ...archivedPages.runs] : all} onRename={onRename}><TaskListFocusBoundary layout={`${desktop}:${detailedTable}`} revision={groups} visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, expandedColumns])} data-route="tasks" data-presentation={detailedTable ? 'resources' : 'summary'} className="flex min-h-full flex-col gap-[22px] px-[18px] pt-6 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-9">
+    <TaskTitleEditorProvider runs={archivedPages ? [...all, ...archivedPages.runs] : all} onRename={onRename}><TaskListFocusBoundary layout={`${desktop}:${detailedTable}`} revision={groups} visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, expandedColumns])} data-route="tasks" data-presentation={detailedTable ? 'resources' : 'summary'} className="flex min-h-full flex-col gap-4 px-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pb-9">
       {/* One set of search/view controls across breakpoints keeps query and selection intact.
           Mobile places search above the list filters; the shell already supplies its title. */}
-      <header ref={headerRef} className="flex shrink-0 flex-col gap-[22px]">
+      <header ref={headerRef} className="flex shrink-0 flex-col gap-4">
         <TasksHeading projectName={projectName} detailedTable={detailedTable} />
         <div className="flex gap-6 border-b border-border">
           <OverviewTab view="active" current={view} onSelect={onViewChange} count={derived.activeCount}>
@@ -255,7 +256,6 @@ export function TasksOverview({
           detailedTable={detailedTable}
           onToggleDetailed={() => setDetailedTable((value) => !value)}
         />
-        <Button asChild data-slot="new-task-inline" className="min-h-11 inline-flex max-md:hidden"><Link to="/new"><PlusIcon aria-hidden="true" />New task</Link></Button>
         </div>
         <TaskOriginRow origin={origin} counts={derived.originTotals} automations={automations} onChange={setOrigin} labels={groups.map((group) => group.label)} onSetAll={folds.setAll} />
       </header>
@@ -330,7 +330,8 @@ function useUrlQuery(urlQuery: string, onQueryChange: TasksQueryWriter | undefin
 }
 function TasksHeading({ projectName, detailedTable }: { projectName?: string | undefined; detailedTable: boolean }) {
   return (
-    <div className="flex flex-col gap-2"><h1 className="text-[30px] font-semibold tracking-tight">Project tasks</h1><p className="text-[13px] text-muted-foreground">{projectName ? `${projectName} · ` : ''}{detailedTable ? 'Every resource column shown. Fold columns without losing the saved view.' : 'Review runs, pull requests and resource usage.'}</p></div>
+    <TaskPageHeader title="Project tasks" subtitle={<>{projectName ? `${projectName} · ` : ''}{detailedTable ? 'Every resource column shown. Fold columns without losing the saved view.' : 'Review runs, pull requests and resource usage.'}</>}
+      action={<Button asChild variant="primary" data-slot="new-task-inline" className="min-h-11 inline-flex max-md:hidden"><Link to="/new"><PlusIcon aria-hidden="true" />New task</Link></Button>} />
   )
 }
 /** Use the caller's URL origin when present; otherwise keep page state, starting at All. An
@@ -677,7 +678,7 @@ const SummaryTaskRow = React.memo(function SummaryTaskRow({ run, queuePosition, 
         const detailId = `task-resources-${run.id}`
         return <div role="rowgroup">
           <div role="row" aria-rowindex={rowIndex} data-status={run.status} data-slot="task-summary-row" data-run-id={run.id} className="task-summary-grid group/row">
-            <div role="cell" className="py-5 pr-4 align-top">
+            <div role="cell" className="min-w-0 py-4 pr-4">
               <TitleCell run={run} to={`/tasks/${run.id}`} onRename={onRename} onTogglePin={onTogglePin} />
               <div className="mt-1"><RunOriginLine run={run} automationName={automationName} /></div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -1398,9 +1399,6 @@ function MobileResources({ run, showTokens, showCost }: { run: RunSummary; showT
 }
 
 /** An honest em dash: this cell has nothing true to show. */
-function Dash() {
-  return <span className="text-xs text-soft-foreground">—</span>
-}
 function BranchChip({ branch }: { branch: string }) {
   return (
     <span

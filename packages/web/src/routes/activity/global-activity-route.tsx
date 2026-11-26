@@ -46,7 +46,7 @@ export function GlobalActivityRoute() {
   const { motion, paused, reduced } = useActivityMotion(activity.data, 'workspace')
 
   return (
-    <div data-route="activity-global" data-activity-paused={paused ? 'true' : undefined} className="flex min-h-full w-full flex-col gap-4 px-[18px] py-6 md:px-7">
+    <div data-route="activity-global" data-activity-paused={paused ? 'true' : undefined} className="flex min-h-full w-full flex-col gap-4 px-4 pb-6 md:px-9">
       <ActivityHeader name="All projects" now={activity.data ? now : undefined} stale={activity.isError}>
         <ScopeSwitch scope="all" projectId={projectId} />
       </ActivityHeader>

@@ -34,4 +34,12 @@ describe('Button', () => {
 
     expect((button as HTMLButtonElement).disabled).toBe(true)
   })
+
+  it('turns a disabled primary button neutral at full opacity', () => {
+    render(<Button disabled>Label</Button>)
+    const classes = screen.getByRole('button').className.split(' ')
+
+    for (const name of ['disabled:bg-muted', 'disabled:text-muted-foreground', 'disabled:border-border', 'disabled:opacity-100']) expect(classes).toContain(name)
+    expect(classes).not.toContain('disabled:opacity-50')
+  })
 })

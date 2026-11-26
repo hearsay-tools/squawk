@@ -7,7 +7,7 @@
     "packages/cezar/src/server-install/platforms/ubuntu-vps.ts": 1004,
     "packages/web/e2e/agent-browser.ts": 1139,
     "packages/web/src/routes/github/github.tsx": 1242,
-    "packages/web/src/routes/global-tasks.tsx": 1069,
-    "packages/web/src/routes/tasks-overview.tsx": 1619
+    "packages/web/src/routes/global-tasks.tsx": 1067,
+    "packages/web/src/routes/tasks-overview.tsx": 1617
   }
 }

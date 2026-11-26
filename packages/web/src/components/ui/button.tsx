@@ -13,7 +13,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-action text-action-foreground pointer-hover:brightness-[0.96]",
+        // Disabled gold at half opacity washes out in both themes, so it turns neutral instead.
+        primary: "bg-action text-action-foreground pointer-hover:brightness-[0.96] disabled:border disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100",
         contrast: "bg-contrast text-contrast-foreground pointer-hover:brightness-[0.96]",
         outline: "border border-border bg-card text-foreground pointer-hover:bg-muted",
         ghost: "text-muted-foreground pointer-hover:bg-muted pointer-hover:text-foreground",

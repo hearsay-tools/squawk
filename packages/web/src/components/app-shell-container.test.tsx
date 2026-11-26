@@ -575,6 +575,25 @@ describe('document title wiring', () => {
     await waitFor(() => expect(document.title).toBe(`cezar — Tasks · Squawk`))
   })
 
+  it.each([
+    ['/tasks', 'Workspace/All tasks'],
+    ['/activity', 'Workspace/Activity'],
+    ['/tools', 'Workspace/Tools'],
+    ['/settings/global/projects', 'Workspace/Settings'],
+  ])('names the workspace on %s as %s, with no project and no branch', async (entry, text) => {
+    serve({ '/api/v1/health': HEALTH_WITH_BOOT, '/api/v1/projects': REGISTRY, '/api/v1/run-summaries': [] })
+    renderShell(entry)
+
+    await waitFor(() => expect(document.querySelector('[data-slot="desktop-breadcrumb"]')?.textContent).toBe(text))
+  })
+
+  it('names an unknown project route Not found', async () => {
+    serve({ '/api/v1/health': HEALTH_WITH_BOOT, '/api/v1/projects': REGISTRY, '/api/v1/run-summaries': [] })
+    renderShell('/p/cezar/no-such-page')
+
+    await waitFor(() => expect(document.querySelector('[data-slot="desktop-breadcrumb"]')?.textContent).toContain('cezar/Not found'))
+  })
+
   it('keeps global settings and a no-repo task route free of invented project context', async () => {
     serve({
       '/api/v1/health': { ...HEALTH_WITH_BOOT, repo: null },

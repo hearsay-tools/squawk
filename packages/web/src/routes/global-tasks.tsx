@@ -5,6 +5,7 @@ import { TaskListItems, TaskListFocusBoundary } from '@/components/task-list-ite
 import { runAddress } from '@/api/run-address'
 import { useRunCacheWriter } from '@/api/use-run-cache-writer'
 import './task-lists.css'
+import { Dash, TaskPageHeader } from './task-list-parts'
 import { useMutation } from '@tanstack/react-query'
 import { ArchiveRestoreIcon, EyeIcon, EyeOffIcon } from 'lucide-react'
 import { ArchiveIcon, PlusIcon, SearchIcon, SlidersHorizontalIcon, XIcon } from '@/components/design-icons'
@@ -22,6 +23,7 @@ import {
 } from '@/api/queries'
 import type { ProjectListEntry, RunIndexEntry } from '@open-mercato/cezar-api-client'
 import { FacetFilter, SegmentedControl, ToggleChip } from '@/components/facet-filter'
+import { DiffStatLabel } from '@/components/diff-stat'
 import { Pill } from '@/components/pill'
 import { ReferenceList } from '@/components/reference-overflow'
 import { ReferenceStatusProvider } from '@/components/reference-status'
@@ -304,9 +306,10 @@ export function GlobalTasksRoute() {
   )
 
   return (
-    <TaskListFocusBoundary layout={groupBy} revision={groups} visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, filterDetailsOpen])} data-route="global-tasks" data-presentation={groupBy === 'none' ? 'summary' : 'cards'} data-filter-details={filterDetailsOpen} className="flex min-h-full flex-col gap-[22px] px-[18px] pt-6 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-9">
-      <header className="flex shrink-0 flex-col gap-[22px]">
-        <div className="flex flex-col gap-2"><h1 className="text-[30px] font-semibold tracking-tight">All tasks</h1><p className="text-[13px] text-muted-foreground">{groupBy === 'none' ? 'Every project. One place to review what your agents have shipped.' : 'Filter across projects and act on each run without opening the session.'}</p></div>
+    <TaskListFocusBoundary layout={groupBy} revision={groups} visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, filterDetailsOpen])} data-route="global-tasks" data-presentation={groupBy === 'none' ? 'summary' : 'cards'} data-filter-details={filterDetailsOpen} className="flex min-h-full flex-col gap-4 px-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pb-9">
+      <header className="flex shrink-0 flex-col gap-4">
+        <TaskPageHeader title="All tasks" subtitle={groupBy === 'none' ? 'Every project. One place to review what your agents have shipped.' : 'Filter across projects and act on each run without opening the session.'}
+          action={<Button asChild variant="primary" data-slot="new-task-inline" className="min-h-11 max-md:hidden"><Link to={scopeTo(projects.data?.bootProject ?? 'default', '/new')}><PlusIcon aria-hidden="true" />New task</Link></Button>} />
         <div className="flex items-center gap-6 border-b border-border">
           <ViewTab view="active" current={view} onSelect={setView}>
             Active
@@ -321,12 +324,11 @@ export function GlobalTasksRoute() {
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="min-w-0 basis-full md:flex-1 md:basis-auto">{search}</div>
           <Button variant="outline" aria-expanded={filterDetailsOpen} onClick={() => setFilterDetailsOpen((open) => !open)}><SlidersHorizontalIcon aria-hidden="true" />Filters</Button>
-          <Button asChild className="min-h-11"><Link to={scopeTo(projects.data?.bootProject ?? 'default', '/new')}><PlusIcon aria-hidden="true" />New task</Link></Button>
         </div>
         <TaskOriginRow origin={origin} counts={originTotals} automations={automations} onChange={setOrigin} labels={statusGroups.map((group) => group.label)} onSetAll={folds.setAll} />
       </header>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-[22px]">
+      <div className="flex min-w-0 flex-1 flex-col gap-4">
         <FilterBar
           filters={filters}
           onToggle={toggle}
@@ -825,7 +827,7 @@ export const TaskRow = React.memo(function TaskRow({
       <div role={cellRole} data-slot="global-task-workflow" className="text-[13px] text-muted-foreground">
         {run.workflow}
       </div>
-      <div role={cellRole} data-slot="global-task-diff" className="text-xs text-muted-foreground"><span title="Change totals are available in the project task list">—</span></div>
+      <div role={cellRole} data-slot="global-task-diff" className="text-xs text-muted-foreground">{run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}</div>
       <div role={cellRole} data-slot="global-task-references">
         {references.length > 0 ? (
           <ReferenceChips references={references} run={run} repoBase={task.project?.repoUrl} />
@@ -1062,8 +1064,4 @@ export function TagChip({ tag, className }: { tag: string; className?: string | 
       {tag}
     </span>
   )
-}
-
-function Dash() {
-  return <span className="text-xs text-soft-foreground">—</span>
 }

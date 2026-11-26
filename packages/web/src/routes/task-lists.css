@@ -41,14 +41,8 @@
   [data-presentation="summary"] [data-slot="global-task-age"] { grid-column: 5; grid-row: 1; text-align: start; }
   [data-presentation="summary"] [data-slot="global-task-actions"] { margin: 0; }
   [data-presentation="summary"] [data-slot="global-task-actions"] > span { gap: 8px; }
-  [data-slot="tasks-summary"] [data-slot="task-summary-row"] > [role="cell"] { height: 102px; }
-  [data-slot="tasks-summary"] [data-slot="task-summary-row"] > [role="cell"]:first-child { vertical-align: middle; }
   [data-slot="tasks-summary"] [data-slot="task-summary-row"] > [role="cell"]:first-child > div { margin-block-start: 8px; }
   [data-slot="tasks-summary"] [aria-controls^="task-resources-"] { min-height: 26px; }
-}
-
-@media (min-width: 768px) {
-  [data-slot="tasks-summary"] [data-slot="task-summary-row"] > [role="cell"]:first-child { padding-block-start: 12px; padding-block-end: 12px; }
 }
 
 [data-filter-details="false"] [data-slot="group-controls"],
@@ -56,7 +50,6 @@
 [data-filter-details="false"] [data-slot="no-tags-hint"] { display: none; }
 [data-slot="global-tasks-filters"] > div:first-child { gap: 10px; }
 [data-slot="global-tasks-filters"] button { border-radius: 8px; }
-[data-presentation="cards"] > header h1 { font-size: 28px; font-weight: 400; }
 [data-slot="global-task-diff"] { display: none; }
 @media (min-width: 768px) {
   [data-presentation="summary"] [data-slot="global-task-diff"] { display: block; }
@@ -69,9 +62,6 @@
 
 /* No done-pill override (#617): a done run's pill is the same dot + label as every other
    status, a green filled dot, never a teal chip with the dot hidden. */
-@media (max-width: 767px) {
-  [data-route="tasks"] h1, [data-route="global-tasks"] h1 { font-size: 25px; }
-}
 
 @media (max-width: 767px) {
   [data-slot="tasks-toolbar"] [data-slot="archive-finished"] { min-height: 44px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); }
@@ -99,9 +89,7 @@
   [data-presentation="cards"] [data-slot="global-task-actions"] { grid-row: 4; }
 }
 
-[data-slot="tasks-summary"] [data-slot="diff-stat"], [data-slot="mobile-task-meta"] [data-slot="diff-stat"] { font-family: inherit; font-weight: 400; white-space: nowrap; }
-[data-slot="tasks-summary"] [data-slot="diff-stat"] > span { color: var(--muted-foreground); }
-[data-slot="mobile-task-meta"] [data-slot="diff-stat"] > span { color: var(--accent-text); }
+[data-slot="tasks-summary"] [data-slot="diff-stat"], [data-slot="mobile-task-meta"] [data-slot="diff-stat"], [data-slot="global-task-diff"] [data-slot="diff-stat"] { font-family: inherit; font-weight: 400; white-space: nowrap; }
 [data-slot="tasks-toolbar"] [data-slot="archive-finished"] { min-height: 44px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); }
 
 @media (max-width: 767px) {
@@ -117,11 +105,9 @@
   [data-slot="other-projects"] a { border: 1px solid var(--border); min-height: 44px; color: var(--foreground); }
 }
 
-[data-route="tasks"] h1, [data-presentation="summary"][data-route="global-tasks"] h1 { line-height: 1.2; letter-spacing: -0.7px; }
 [data-slot="tasks-toolbar"] [data-slot="button"] { font-size: 12px; font-weight: 500; }
 @media (max-width: 767px) {
   [data-slot="tasks-toolbar"] { align-items: start; }
-  [data-slot="tasks-toolbar"] [data-slot="new-task-inline"] { grid-column: 1; justify-self: start; margin-inline-end: 0; }
   [data-slot="task-card"] > div:first-child > a { font-size: 13px; line-height: 1.6; }
   [data-slot="mobile-task-meta"] { margin-block-start: 10px; }
 }
@@ -135,8 +121,7 @@
 
 @media (min-width: 768px) {
   [data-route="tasks"][data-presentation="resources"] > header { flex-direction: row; flex-wrap: wrap; gap: 12px; align-items: center; }
-  [data-route="tasks"][data-presentation="resources"] > header > div:first-child { width: 100%; margin-block-end: 10px; }
-  [data-route="tasks"][data-presentation="resources"] h1 { font-size: 28px; font-weight: 400; }
+  [data-route="tasks"][data-presentation="resources"] > header > div:first-child { width: 100%; }
   [data-route="tasks"][data-presentation="resources"] > header > div:nth-child(2) { border: 0; gap: 8px; }
   [data-route="tasks"][data-presentation="resources"] > header > div:nth-child(2) > button { min-height: 40px; border: 1px solid var(--border); border-radius: 8px; padding-block: 10px; padding-inline: 14px; background: var(--card); }
   [data-route="tasks"][data-presentation="resources"] [data-slot="tasks-toolbar"] { flex: 1; }
@@ -147,7 +132,6 @@
   [data-route="tasks"] [data-slot="tasks-toolbar"] > div:has(input) { grid-column: 1 / -1; }
   [data-route="tasks"] [data-slot="archive-finished"] { grid-column: 1; }
 }
-[data-route="tasks"][data-presentation="resources"] [data-slot="new-task-inline"],
 [data-slot="table-title-editor"] button:first-of-type { background: var(--accent-strong); color: var(--accent-strong-foreground); }
 
 /* Summary references use the design's plain status label. The shared chip still

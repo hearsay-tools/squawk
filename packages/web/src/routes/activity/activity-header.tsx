@@ -42,7 +42,7 @@ export function ScopeSwitch({ scope, projectId }: { scope: 'project' | 'all'; pr
  *  the last read or frame failed, it says the view is not updating; the last snapshot stays. */
 function LiveClock({ now, stale }: { now: number; stale: boolean }) {
   return (
-    <span data-slot="activity-clock" data-stale={stale ? 'true' : undefined} className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground tabular-nums">
+    <span data-slot="activity-clock" data-stale={stale ? 'true' : undefined} className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground tabular-nums">
       <span data-tone="success" className={cn('inline-flex size-[12px] items-center justify-center', !stale && 'activity-pulse')}>
         <StatusDot tone={stale ? 'neutral' : 'success'} aria-hidden="true" />
       </span>
@@ -54,11 +54,13 @@ function LiveClock({ now, stale }: { now: number; stale: boolean }) {
 
 export function ActivityHeader({ name, now, stale = false, children }: { name: string; now?: number | undefined; stale?: boolean; children: ReactNode }) {
   return (
-    <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <h1 className="min-w-0 truncate text-[18px] font-semibold">
-        Activity <span className="font-normal text-muted-foreground">· {name}</span>
-      </h1>
-      {now === undefined ? null : <LiveClock now={now} stale={stale} />}
+    <header data-slot="page-header" className="flex flex-wrap items-start justify-between gap-4 pt-7 pb-1">
+      <div className="min-w-0">
+        <h1 className="truncate text-[26px] md:text-[28px] font-semibold tracking-tight leading-[1.2] text-foreground">
+          Activity <span className="text-muted-foreground">· {name}</span>
+        </h1>
+        {now === undefined ? null : <p className="mt-1"><LiveClock now={now} stale={stale} /></p>}
+      </div>
       {children}
     </header>
   )

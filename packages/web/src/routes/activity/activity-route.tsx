@@ -31,7 +31,7 @@ export function ProjectActivityRoute() {
   const notice = project ? projectNotice(project) : undefined
   if (!project) {
     return (
-      <div data-route="activity" className="min-h-full w-full px-[18px] py-6 md:px-7">
+      <div data-route="activity" className="min-h-full w-full px-4 pb-6 md:px-9">
         <ActivityHeader name={projectId ?? 'project'}><ScopeSwitch scope="project" projectId={projectId} /></ActivityHeader>
         <div role="alert" className="mt-6 flex items-center gap-3 text-[13px] text-muted-foreground">
           {activity.error ? `Could not load activity: ${activity.error.message}` : 'This project has no activity snapshot.'}
@@ -41,7 +41,7 @@ export function ProjectActivityRoute() {
     )
   }
   return (
-    <div data-route="activity" data-activity-paused={paused ? 'true' : undefined} className="flex min-h-full w-full flex-col gap-4 px-[18px] py-6 md:px-7">
+    <div data-route="activity" data-activity-paused={paused ? 'true' : undefined} className="flex min-h-full w-full flex-col gap-4 px-4 pb-6 md:px-9">
       <ActivityHeader name={project.name} now={now} stale={activity.isError}>
         <ScopeSwitch scope="project" projectId={projectId ?? project.projectId} />
       </ActivityHeader>
