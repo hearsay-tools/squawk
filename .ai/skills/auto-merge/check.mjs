@@ -58,7 +58,7 @@ export const NEVER = [
     'packages/web/src/test/wait-baseline.ts',
   ] },
   { why: 'agent instructions or contracts', globs: [
-    '**/AGENTS.md', '**/CLAUDE.md', 'CODE_REVIEW.md', 'SDLC.md', 'AGENT_PROTOCOL.md',
+    '**/AGENTS.md', '**/CLAUDE.md', 'VISION.md', 'CONVENTIONS.md', 'CODE_REVIEW.md', 'SDLC.md', 'AGENT_PROTOCOL.md',
     '.ai/specs/2026-09-04-harness-parity-matrix.md', '.ai/skills/**', '.ai/agentic.config.json', '.ai/trackers/**',
     '.ai/browsers/**', 'docs/sdlc/**', 'packages/web/e2e/README.md', 'packages/web/docs/**',
     '{.agents,.claude,.codex,.cursor,.opencode}/**',
