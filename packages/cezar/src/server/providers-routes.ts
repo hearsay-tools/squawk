@@ -193,6 +193,7 @@ export function createProvidersRoutes(deps: ProvidersRouteDeps) {
 }
 
 export interface AgentProfilesRouteDeps {
+  bootRoot: string;
   home: Home;
   capabilities: ServerCapabilitiesFn;
   providerAuth: ProviderAuthService;
@@ -205,6 +206,7 @@ export interface AgentProfilesRouteDeps {
 
 export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
   const {
+    bootRoot,
     home,
     capabilities,
     providerAuth,
@@ -246,8 +248,8 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
     for (const project of projects) assign(project.id, project.root);
     if (bootId !== undefined) {
       if (out[bootId] === undefined) {
-        const bootRoot = await projectRootFor(bootId).catch(() => null);
-        if (bootRoot !== null) assign(bootId, bootRoot);
+        const resolvedBootRoot = (await projectRootFor(bootId).catch(() => null)) ?? bootRoot;
+        assign(bootId, resolvedBootRoot);
       }
       if (out[bootId] !== undefined) out.default = out[bootId];
     }
@@ -454,7 +456,8 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
             else current.selections[root] = selection;
           }, home);
         } catch (err) {
-          return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+          console.error('[hsq] failed to save agent account selection:', err);
+          return c.json({ error: 'Could not save account selection.' }, 500);
         }
         return c.json({
           selections: capabilities().settingsAdmin ? store.selections : {},
@@ -477,7 +480,7 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
             removed = removedProvider !== undefined;
           }, home);
         } catch (err) {
-          return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+          return c.json({ error: writeErrorMessage(err) }, 500);
         }
         if (!removed) return c.json({ error: `unknown account: ${id}` }, 404);
         providerAuth.forgetProfileStatus(removedProvider, id);

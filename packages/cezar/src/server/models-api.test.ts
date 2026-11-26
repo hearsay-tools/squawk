@@ -96,8 +96,14 @@ describe('workspace model catalog API', () => {
     expect((await apiRequest(server, path)).status).toBe(200);
     expect(homes).toEqual([join(root, 'native-account')]);
     expect((await apiRequest(server, '/api/v1/models?runner=antigravity&profileId=unknown')).status).toBe(400);
-    expect((await apiRequest(createApp({ ...deps, bindHost: '0.0.0.0' }), path)).status).toBe(200);
-    expect((await apiRequest(createApp({ ...deps, bindHost: '0.0.0.0' }), '/api/v1/models?runner=antigravity&profileId=unknown')).status).toBe(400);
+    const hostedDeps = {
+      ...deps,
+      modelCatalog: new RunnerModelCatalog({ adapters: { antigravity: { discover } } }),
+      bindHost: '0.0.0.0',
+    };
+    expect((await apiRequest(createApp(hostedDeps), path)).status).toBe(200);
+    expect(homes).toEqual([join(root, 'native-account'), join(root, 'native-account')]);
+    expect((await apiRequest(createApp(hostedDeps), '/api/v1/models?runner=antigravity&profileId=unknown')).status).toBe(400);
   });
 
   it('degrades discovery failures to an unavailable 200 response', async () => {

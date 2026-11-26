@@ -728,6 +728,7 @@ export function createApp(deps: ServerDeps) {
   });
 
   const agentProfilesRoutes = createAgentProfilesRoutes({
+    bootRoot,
     home: deps.home,
     capabilities,
     providerAuth,

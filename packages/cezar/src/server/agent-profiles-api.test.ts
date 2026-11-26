@@ -687,6 +687,44 @@ describe('agent profiles API', () => {
       expect(JSON.stringify(body)).not.toContain(repoRoot);
     });
 
+    it('populates default projectSelections from bootRoot when the boot project is unregistered', async () => {
+      const dir = claudeDir('claude-work');
+      await mergeWriteAgentAccounts((store) => {
+        store.accounts.push({ id: 'work', provider: 'claude', configDir: dir, label: 'Work', addedAt: '' });
+        store.selections[repoRoot] = { claude: 'work' };
+      }, testHome());
+
+      const body = await list();
+      expect(body.editable).toBe(false);
+      expect(body.selections).toEqual({});
+      expect(body.projectSelections.default).toEqual({ claude: 'work' });
+      expect(JSON.stringify(body)).not.toContain(repoRoot);
+    });
+
+    it('does not leak host paths when saving a project selection fails', async () => {
+      const project = await registerProject(repoRoot, undefined, testHome());
+      const dir = claudeDir('claude-work');
+      await mergeWriteAgentAccounts((store) => {
+        store.accounts.push({ id: 'work', provider: 'claude', configDir: dir, label: 'Work', addedAt: '' });
+      }, testHome());
+      // Clearing with profileId: null skips profile lookup and hits mergeWriteAgentAccounts directly.
+      rmSync(agentAccountsPath(testHome()), { force: true });
+      mkdirSync(agentAccountsPath(testHome()), { recursive: true });
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const failed = await send('PUT', '/api/v1/workspace/agent-profiles/selection', {
+          projectId: project.id,
+          provider: 'claude',
+          profileId: null,
+        });
+        expect(failed.status).toBe(500);
+        expect(failed.body.error).toBe('Could not save account selection.');
+        expect(JSON.stringify(failed.body)).not.toContain(home);
+      } finally {
+        errSpy.mockRestore();
+      }
+    });
+
     it('allows per-account status reads and project selection without exposing host paths', async () => {
       const project = await registerProject(repoRoot, undefined, testHome());
       const dir = claudeDir('claude-work');

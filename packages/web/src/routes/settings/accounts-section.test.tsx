@@ -562,6 +562,30 @@ describe('the global Agents section', () => {
     expect(within(rowFor('work') as HTMLElement).getByRole('button', { name: 'Connect' })).toBeTruthy()
   })
 
+  it('refreshes health and agent profiles when a mutation is refused after remote-settings is withdrawn', async () => {
+    const withWork = [...DEFAULTS, profile({ id: 'work', label: 'Work' })]
+    serve(
+      { editable: true, profileCapableProviders: ['claude', 'codex'], selections: {}, profiles: withWork },
+      { deleteStatus: 409, deleteError: 'agent accounts are read-only on this remote cockpit' },
+    )
+    renderAccounts(RUNNERS_RESPONSE, true, false)
+
+    await waitForRow('work')
+    const profileReadsBefore = requests.filter((r) => r.method === 'GET' && r.url === '/api/v1/workspace/agent-profiles').length
+    const healthReadsBefore = requests.filter((r) => r.method === 'GET' && r.url === '/api/v1/health').length
+
+    fireEvent.click(rowFor('work')!.querySelector('[data-action="account-remove"]')!)
+    await waitFor(() => expect(document.querySelector('[data-action="accounts-remove-confirm"]')).not.toBeNull())
+    fireEvent.click(document.querySelector('[data-action="accounts-remove-confirm"]')!)
+
+    await waitFor(() =>
+      expect(requests.filter((r) => r.method === 'GET' && r.url === '/api/v1/workspace/agent-profiles').length).toBeGreaterThan(profileReadsBefore),
+    )
+    await waitFor(() =>
+      expect(requests.filter((r) => r.method === 'GET' && r.url === '/api/v1/health').length).toBeGreaterThan(healthReadsBefore),
+    )
+  })
+
   it('offers hosted browser sign-in with the host grant on discovered and named accounts', async () => {
     const antigravityAccounts = [
       profile({
