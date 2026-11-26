@@ -24,6 +24,7 @@ import type { HumanWaits } from './human-waits.ts';
 import * as inputReceipts from './input-receipts.ts';
 
 import type { AgentEvent, AgentSession } from '../../core/agent-runner.ts';
+import { topLevelModelWork } from '../../core/managed-session.ts';
 import { UiEventSink } from '../../runs/ui-event-sink.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { ExecutionEmit, LaunchCiTools, LaunchDelegation, RunModuleContext, SessionTurn } from './types.ts';
@@ -281,6 +282,9 @@ export function makeUiSink(context: RunModuleContext, host: SessionHelperHost, r
   });
 }
 
+/** Each run's open top-level v2 items: their deltas show the model working. */
+const openModelItems = new WeakMap<ActiveRun, Set<string>>();
+
 /** Native backend asks arrive before turn-end. Persist and park immediately
  * so the cockpit shows attention and the run releases its workspace slot. */
 export function handleRunnerUiEvent(context: RunModuleContext, host: SessionHelperHost, runId: string, state: ActiveRun, sink: UiEventSink, event: UiEvent, emitting: AgentSession | undefined): void {
@@ -291,6 +295,7 @@ export function handleRunnerUiEvent(context: RunModuleContext, host: SessionHelp
   host.trackSubagentEvent(runId, state, event);
   host.noteNoWaitNudgeContent(runId, state, emitting, event);
   host.noteNudgeActivity(runId, state, emitting, event);
+  noteModelWork(state, event);
   if (isRunnerActivity(event)) {
     // Activity answers the nudge. A refused one's bound was the idle timer. One still owed its
     // acknowledgement stays until it arrives (hearsay-tools/squawk#2443).
@@ -323,6 +328,15 @@ export function handleRunnerUiEvent(context: RunModuleContext, host: SessionHelp
     if (!state.inputState.writingInput) host.supersedeOnRunnerResume(runId);
     host.resumeParkedRun(runId, state);
   }
+}
+
+/** Streamed v2 model work is real content, as v1 text is: the harness is working. */
+function noteModelWork(state: ActiveRun, event: UiEvent): void {
+  let open = openModelItems.get(state);
+  if (!open) { open = new Set(); openModelItems.set(state, open); }
+  if (!topLevelModelWork(open, event)) return;
+  clearUnreadInputTimer(state);
+  clearHeldHumanInputTimer(state);
 }
 
 export function handlePermissionRequested(context: RunModuleContext, host: SessionHelperHost, runId: string, state: ActiveRun, requestId: string): void {

@@ -4,6 +4,7 @@ import { startManagedSession } from './managed-session.ts';
 import { DEFAULT_NO_PROGRESS_TIMEOUT_MS as LIMIT } from './runner-runtime.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import { classifyProviderError } from './provider-error.ts';
+import type { UiEvent } from './ui-events.ts';
 
 function fixture(respondPermission?: (requestId: string, optionId: string) => boolean) {
   vi.useFakeTimers();
@@ -47,6 +48,24 @@ describe('managed open-turn watchdog', () => {
     const message = (f.events.find(e => e.type === 'error') as { message: string }).message;
     expect(message).not.toContain('provider was failing');
     expect(classifyProviderError(message)).toBeNull();
+  });
+
+  it.each([
+    ['a nested item starts: kept', [{ type: 'item.started', item: { kind: 'message', id: 'child', role: 'assistant', text: '', parentItemId: 'task' } }], true],
+    ['an untracked delta: kept', [{ type: 'item.delta', itemId: 'child', field: 'text', delta: 'x' }], true],
+    ['a top-level item starts: cleared', [{ type: 'item.started', item: { kind: 'message', id: 'reply', role: 'assistant', text: '' } }], false],
+    ['a top-level delta: cleared', [{ type: 'item.started', item: { kind: 'message', id: 'reply', role: 'assistant', text: '' } },
+      { type: 'note', message: 'Reconnecting... 2/5 — stream disconnected before completion' }, { type: 'item.delta', itemId: 'reply', field: 'text', delta: 'x' }], false],
+  ] satisfies [string, (UiEvent | AgentEvent)[], boolean][])('provider note after %s', async (_case, stream, kept) => {
+    const f = fixture();
+    f.emit({ type: 'note', message: 'Reconnecting... 2/5 — stream disconnected before completion' });
+    for (const event of stream) {
+      if (event.type === 'note') f.emit(event);
+      else f.options.onUiEvent!(event as UiEvent);
+    }
+    await vi.advanceTimersByTimeAsync(LIMIT);
+    const message = (f.events.find(e => e.type === 'error') as { message: string }).message;
+    expect(message.includes('provider was failing')).toBe(kept);
   });
 
   it('defaults to 30 minutes, resets on activity, and retains the slot until actual exit', async () => {
