@@ -23,7 +23,8 @@ import { defineRunner } from '../../core/runner-definition.ts';
 import { codexRunner } from '../../runners/codex/definition.ts';
 import { claudeRunner } from '../../runners/claude/definition.ts';
 
-sealTestRunners(claudeRunner, codexRunner, defineRunner({ ...codexRunner, id: 'custom-runner' }));
+sealTestRunners(claudeRunner, codexRunner, defineRunner({ ...codexRunner, id: 'custom-runner' }),
+  defineRunner({ ...codexRunner, id: 'pooled-runner', models: { ...codexRunner.models, quotaPool: model => (model.startsWith('g-') ? 'g' : 'other') } }));
 
 let root: string;
 let store: RunStore;
@@ -202,9 +203,20 @@ it('copies the selected account before hold participant callbacks run', () => {
   const held = atTaskHead.heldAccount(run, 'claude', () => {
     run.agentProfile = 'changed';
     return { deadline: new Set(['claude:pinned']), inFlight: new Set() };
-  });
+  }, { repoRoot: root, home: testHome() });
   expect(held).toBe(true);
   expect(run.agentProfile).toBe('changed');
+});
+
+// hearsay-tools/squawk#4343: with the models lock on, a step runs the runner's default model, so the
+// queued run's own model names no pool and any pool hold on its account blocks it.
+it('a pool hold blocks a queued run in another pool only while the models lock is on', () => {
+  const run = makeRunRecord({ status: RUN_STATUS.queued, model: 'g-fast', workflowDef: { name: 'quick-task', source: 'file', steps: [{ id: 'task' }] } });
+  const holds = () => ({ deadline: new Set(['pooled-runner:default\u001fother']), inFlight: new Set<string>() });
+  expect(atTaskHead.heldAccount(run, 'pooled-runner', holds, { repoRoot: root, home: testHome() })).toBe(false);
+  mkdirSync(join(root, '.ai/cezar'), { recursive: true });
+  writeFileSync(join(root, '.ai/cezar/config.json'), JSON.stringify({ modelsLocked: true }));
+  expect(atTaskHead.heldAccount(run, 'pooled-runner', holds, { repoRoot: root, home: testHome() })).toBe(true);
 });
 
 it('P6-25 task metadata reads the current model lock after input acceptance', async () => {

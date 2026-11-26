@@ -187,7 +187,7 @@ export class RunLine {
     if (!queued || historyDeletionPending(this.context.store, id)) return true;
     if (this.host.admitted(id) && !this.host.activeHas(id)) return false;
     if (executionBlockedByRootFinish(this.context.store, queued)) return false;
-    return !atTaskHead.heldFor(this.host.withExecutionAccount(queued), holds, fallbackRunner);
+    return !atTaskHead.heldFor(this.host.withExecutionAccount(queued), holds, fallbackRunner, this.context);
   }
 
   /**
