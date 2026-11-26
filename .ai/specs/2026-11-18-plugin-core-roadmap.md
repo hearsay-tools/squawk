@@ -51,7 +51,7 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 | 2 | A typed run lifecycle, and a narrower run store | Done: epic hearsay-tools/squawk#4007, [spec](2026-11-21-run-lifecycle-and-store-ports.md), [ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md) |
 | 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Done: epic hearsay-tools/squawk#4152, [spec](2026-11-23-open-registries-and-tables.md), [ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md) |
 | 4 | Loader and package format | Done (first version, host folder only): epic hearsay-tools/squawk#4188, [spec](2026-11-24-plugin-loader-and-runner-kit.md), [ADR 0070](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md); self-contained runner folders done (epic hearsay-tools/squawk#4232, [spec](2026-11-25-self-contained-runner-folders.md), [ADR 0071](../../docs/adr/0071-keep-runner-folders-self-contained.md)); project plugins, a trust gate and npm or git installation wait for a later epic |
-| 5 | Move features out of the core, smallest first | Not filed; the first slice is a launch slot for environment variables and prompt text |
+| 5 | Move features out of the core, smallest first | First epic filed: hearsay-tools/squawk#4309, a launch slot and jobs as the first bundled feature plugin. Later epics are not filed |
 | 6 | Cockpit slots | Not filed |
 
 Steps 0 to 3 pay off with no outside plugin: the code is modular and every change is internal.
@@ -204,16 +204,41 @@ stay bundled, import `z` from `@hearsay-tools/squawk/plugin`, resolve native moc
 ### Step 5: move features out
 
 Each feature becomes a built-in plugin and takes its routes out of `server/server.ts`. The
-order is by size and by how deep the feature reaches into the run store: listeners such as
-webhooks and the activity view first, then preview and automations, then the forge.
+order is by size and by how deep the feature reaches into the run store and the server.
 `feature:workers` is the deepest; the layer map spec plans no removal for it.
 
 The first slice is a launch slot: a registration through which a feature adds environment
-variables or prompt text to an agent launch. `workflows/run/launch-context.ts` imports
-automations, webhooks and artifacts code for exactly that today, and a plugin that sets a
-provider base URL would need the same slot.
+variables or prompt text to an agent launch. `workflows/run/launch-context.ts` and
+`workflows/run/session-events.ts` import automations, webhooks, artifacts and jobs code for
+exactly that today, and a plugin that sets a provider base URL would need the same slot.
+
+The first epic (hearsay-tools/squawk#4309) adds that slot and loads jobs through the plugin
+loader, as bundled runners load. A measurement at `265976e09` on 2026-11-26 chose jobs: it has
+457 lines, no HTTP route and no cockpit view. The epic proposes that it needs the launch slot
+and no other new registration; its spec confirms that.
+
+The epic's proof has two parts. First, `layer-import.baseline.json` goes from 83 entries to 76.
+The launch slot removes six: four in `launch-context.ts` (one artifacts module, two automations
+modules, one webhooks module) and two in `session-events.ts` (one artifacts module, one jobs
+module). The jobs move removes the seventh: `workflows/run/run-settlement.ts` imports
+`jobs/job.ts`. Second, no file outside the jobs folder imports it. The baseline cannot show
+that, because `cez/layer-import` checks core files only and a `shell` file may import a
+feature.
+
+The other three features that use the launch slot each have a server part. Webhooks is tied
+to task start and to the project settings routes. Artifacts has routes, a WebSocket topic and
+an index that starts with the server. Automations has routes, a scheduler and a store for each project, and it starts tasks.
+The next epic therefore adds a slot for HTTP routes and for server start and stop, with the
+first feature that needs it. The typed client is computed from a static chain of routes in
+`server/server.ts`, so that epic's spec decides how the client keeps a bundled feature's
+routes. Automations is the proposed first feature: its cockpit page already hides when the
+feature is off.
 
 ### Step 6: cockpit slots
+
+The cockpit shell and the basics are core (owner decision, 2026-11-26). Until this step, a
+feature's view stays in the cockpit and hides when the feature's plugin is not loaded. This
+step moves each view to its plugin.
 
 First the server describes slots as data: a navigation item, a settings section, a task tab.
 Then a plugin panel is HTML in the sandboxed frame that the report reader uses
@@ -266,7 +291,7 @@ The owner decides each of these in the spec of the step that needs it.
 | --- | --- | --- |
 | Who writes plugins: only this team, or other people | Step 4 | Only this team: the plan ends after step 3 plus step 5 inside the repository, with no loader, trust gate or API promise |
 | Do plugins run inside the Squawk process or in a child process | Step 4 | pi runs an extension with all of pi's permissions. Squawk runs unattended and holds logins, so that answer does not transfer |
-| Is the cockpit part of the core | Step 6 | If not, the core is `hsq run` and the API, and the cockpit is the largest built-in plugin |
+| Is the cockpit part of the core | Step 6 | Decided on 2026-11-26: the shell and the basics are core, and feature views move to their plugins in step 6. The other answer made the core `hsq run` and the API, with the cockpit as the largest built-in plugin |
 
 ## Not planned
 
