@@ -70,60 +70,69 @@ export function WbMetadata({
   onLoadWorkflow: (workflow: WorkflowDef) => void
 }) {
   return (
-    <section data-slot="wb-metadata" className="flex min-w-0 flex-col gap-3">
-      <div data-slot="wb-load" className="flex flex-col items-start gap-2">
-        <label htmlFor="workflow-load" className="text-xs text-muted-foreground">
+    <section data-slot="wb-metadata" className="flex min-w-0 flex-col gap-4">
+      <div data-slot="wb-load" className="flex flex-col items-start gap-1.5">
+        <label htmlFor="workflow-load" className="text-xs font-medium text-muted-foreground">
           Load an existing workflow
         </label>
-        <div className="relative max-w-full"><ChevronDownIcon aria-hidden="true" className="pointer-events-none absolute left-3 top-3.5 size-4 text-muted-foreground" />
-        <select
-          id="workflow-load"
-          value={workflows.some((w) => w.name === trimmedName) ? trimmedName : ''}
-          onChange={(event) => {
-            const workflow = workflows.find((w) => w.name === event.target.value)
-            if (workflow) onLoadWorkflow(workflow)
-          }}
-          className="h-11 max-w-full rounded-lg border border-border bg-card pl-9 pr-3 text-xs font-medium appearance-none focus-visible:outline-2 focus-visible:outline-ring"
-        >
-          <option value="" disabled>
-            Choose a workflow
-          </option>
-          {workflows.map((workflow) => (
-            <option
-              key={workflow.name}
-              value={workflow.name}
-              data-slot="wb-load-option"
-              data-name={workflow.name}
-            >
-              {workflow.name}
+        <div className="relative inline-flex max-w-full items-center">
+          <select
+            id="workflow-load"
+            value={workflows.some((w) => w.name === trimmedName) ? trimmedName : ''}
+            onChange={(event) => {
+              const workflow = workflows.find((w) => w.name === event.target.value)
+              if (workflow) onLoadWorkflow(workflow)
+            }}
+            className="h-10 min-w-[220px] max-w-full appearance-none rounded-lg border border-border bg-card pr-9 pl-3.5 text-xs font-medium text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:h-11"
+          >
+            <option value="" disabled>
+              Choose a workflow
             </option>
-          ))}
-        </select></div>
+            {workflows.map((workflow) => (
+              <option
+                key={workflow.name}
+                value={workflow.name}
+                data-slot="wb-load-option"
+                data-name={workflow.name}
+              >
+                {workflow.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDownIcon aria-hidden="true" className="pointer-events-none absolute right-3 size-4 text-muted-foreground" />
+        </div>
       </div>
-      <label htmlFor="workflow-name" className="text-xs font-semibold">
-        Workflow name
-      </label>
-      <Input
-        id="workflow-name"
-        ref={nameRef}
-        data-slot="wb-name"
-        aria-label="Workflow name"
-        spellCheck={false}
-        value={draft.name}
-        onChange={(event) => onDraft({ ...draft, name: event.target.value })}
-        className="h-12 bg-card text-sm"
-      />
-      <label htmlFor="workflow-description" className="text-xs font-semibold">
-        Description
-      </label>
-      <Textarea
-        id="workflow-description"
-        data-slot="wb-description"
-        aria-label="Description"
-        value={draft.description}
-        onChange={(event) => onDraft({ ...draft, description: event.target.value })}
-        className="min-h-[72px] bg-card p-3.5 text-sm"
-      />
+      <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-[minmax(200px,280px)_minmax(0,1fr)] md:items-start">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="workflow-name" className="text-xs font-semibold text-foreground">
+            Workflow name
+          </label>
+          <Input
+            id="workflow-name"
+            ref={nameRef}
+            data-slot="wb-name"
+            aria-label="Workflow name"
+            spellCheck={false}
+            value={draft.name}
+            onChange={(event) => onDraft({ ...draft, name: event.target.value })}
+            className="h-10 bg-card text-sm max-md:h-11"
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="workflow-description" className="text-xs font-semibold text-foreground">
+            Description
+          </label>
+          <Textarea
+            id="workflow-description"
+            data-slot="wb-description"
+            aria-label="Description"
+            rows={1}
+            value={draft.description}
+            onChange={(event) => onDraft({ ...draft, description: event.target.value })}
+            className="min-h-10 bg-card px-3 py-2 text-sm max-md:min-h-11"
+          />
+        </div>
+      </div>
     </section>
   )
 }
@@ -747,12 +756,12 @@ export function StepCardBody({
       {description ? (
         <div
           data-slot="wb-step-summary"
-          className="mt-3 break-words text-xs leading-relaxed text-muted-foreground"
+          className="mt-1.5 break-words text-xs leading-relaxed text-muted-foreground"
         >
           {description}
         </div>
       ) : null}
-      <p data-slot="wb-step-kind" className="mt-3 text-[12px] text-link-foreground">
+      <p data-slot="wb-step-kind" className="mt-1.5 text-[11.5px] text-link-foreground">
         {stepKindLabel(step)}
       </p>
       {!overlay ? (

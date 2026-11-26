@@ -57,10 +57,12 @@ export function GitToolbar({
     <div
       data-slot="git-toolbar"
       data-health-ready={healthReady}
-      className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-[18px] py-[22px] md:px-9 [&_button]:min-h-11"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-4 md:px-9 [&_button]:min-h-11"
     >
-      {branch ? <BranchChip branch={branch} /> : null}
-      {stat ? <AnimatedDiffStat stat={stat} /> : null}
+      <span className="flex min-w-0 items-center gap-2.5">
+        {branch ? <BranchChip branch={branch} /> : null}
+        {stat ? <AnimatedDiffStat stat={stat} /> : null}
+      </span>
 
       {/* Its own row item, not one more button in the group below: at 360px the group already
           fills a line, and one 44px button more pushed the overflow menu off the screen. As a
@@ -72,17 +74,20 @@ export function GitToolbar({
         </span>
       ) : null}
 
-      <span className={cn('flex items-center gap-1', onPreviewChange ? 'max-md:ml-auto' : 'ml-auto')}>
+      <span className={cn('flex items-center gap-2', onPreviewChange ? 'max-md:ml-auto' : 'ml-auto')}>
         {/* View toggles — layout preferences, not git actions, so not the policy's business.
             Hidden below md: phones force unified+wrap (the parent owns that rule). */}
-        <span className="hidden items-center gap-1 md:flex">
+        <span className="hidden items-center gap-1.5 md:flex">
           <DiffViewToggles mode={mode} wrap={wrap} onModeChange={onModeChange} onWrapChange={onWrapChange} />
         </span>
+        <span aria-hidden="true" className="hidden h-5 w-px bg-border md:block" />
 
-        {bar.secondary.map((action) => (
-          <ActionButton key={action.id} action={action} variant="outline" onAction={onAction} />
-        ))}
-        <ActionButton action={bar.primary} variant="primary" onAction={onAction} />
+        <span className="flex items-center gap-1.5">
+          {bar.secondary.map((action) => (
+            <ActionButton key={action.id} action={action} variant="outline" onAction={onAction} />
+          ))}
+          <ActionButton action={bar.primary} variant="primary" onAction={onAction} />
+        </span>
 
         {bar.menu.length > 0 ? (
           <DropdownMenu>

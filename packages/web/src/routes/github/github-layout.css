@@ -24,12 +24,9 @@
   [data-slot='gh-hand'] { padding: 16px; }
   [data-slot='gh-merge-box'] { padding: 16px; }
 }
-[data-slot='gh-tabs'] > a, .gh-utility { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding-block: 10px; padding-inline: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); font-size: 12px; color: var(--foreground); }
-[data-slot='gh-tabs'] > a[aria-current='page'] { background: var(--accent-strong); color: var(--accent-strong-foreground); border-color: var(--accent-strong); }
+.gh-utility { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding-block: 8px; padding-inline: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); font-size: 12px; font-weight: 500; color: var(--foreground); transition: background-color 120ms ease, color 120ms ease; }
+.gh-utility:hover:not(:disabled) { background: var(--muted); }
 .gh-utility:disabled { opacity: .5; }
-@media (max-width: 767px) {
-  [data-slot='gh-tabs'] { flex-direction: column; align-items: flex-start; }
-}
 [data-slot='gh-hand'] > [data-slot='prompt-template-trigger'] { align-self: flex-start; min-height: 44px; border-radius: 8px; padding-block: 0; padding-inline: 12px; }
 
 @media (max-width: 767px) {
@@ -40,22 +37,17 @@
 [data-slot='gh-merge-box'] h3 { font-size: 18px; font-weight: 400; }
 [data-slot='gh-merge-box'] ul { margin-block-start: 20px; font-size: 13px; }
 [data-slot='gh-merge-box'] ul > li + li { margin-block-start: 16px; }
-[data-slot='gh-merge-box'] select + button { background: var(--accent-strong); color: var(--accent-strong-foreground); }
 
-[data-route='github'] [data-slot='gh-tabs'] > a { border: none; border-block-end: 2px solid transparent; border-radius: 0; background: transparent; padding-inline: 0; color: var(--muted-foreground); }
-[data-route='github'] [data-slot='gh-tabs'] > a[aria-current='page'] { color: var(--accent-text); border-color: var(--accent-strong); }
-[data-route='github'] [data-slot='gh-tabs'] { flex-direction: row; flex-wrap: wrap; }
-
-[data-slot='gh-merge-confirm'] [data-variant='primary'] { background: var(--accent-strong); color: var(--accent-strong-foreground); }
+[data-route='github'] [data-slot='gh-tabs'] { flex-direction: row; flex-wrap: wrap; gap: 20px; border-block-end: 1px solid var(--border); }
+[data-route='github'] [data-slot='gh-tabs'] > a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; border: none; border-block-end: 2px solid transparent; border-radius: 0; background: transparent; padding-block: 8px; padding-inline: 0; margin-block-end: -1px; font-size: 13px; font-weight: 500; color: var(--muted-foreground); }
+[data-route='github'] [data-slot='gh-tabs'] > a[aria-current='page'] { color: var(--foreground); font-weight: 600; border-color: var(--accent-text); }
 
 [data-slot='gh-merge-box']:not([data-eligibility='ready']) h3 { color: var(--pending-strong); }
 
 /* Confirmed 193-frame source, GitHub list and handoff: retain extra live metadata and
    utility actions while matching the document hierarchy and control geometry. */
-[data-slot='gh-tabs'] .gh-utility:first-of-type { margin-inline-start: auto; }
-[data-route='github'] [data-slot='gh-tabs'] { gap: 24px; border-block-end: 1px solid var(--border); }
 [data-slot='gh-header'] > div:first-child { row-gap: 8px; }
-[data-slot='gh-search'] { border-radius: 8px; padding-inline-start: 36px; font-size: 12px; }
+[data-slot='gh-search'] { border-radius: 8px; padding-inline-start: 34px; font-size: 13px; }
 [data-slot='gh-rows'] { gap: 0; }
 [data-slot='gh-row-item'][data-divided] { border-block-start: 1px solid var(--border); }
 [data-slot='gh-row'] { padding-block: 14px; padding-inline: 12px; border-radius: 8px; }
@@ -71,7 +63,6 @@
    disabled PickerPill's span wrapper, where `.gh-field > button` no longer matches. */
 .gh-field [data-slot='account-pill'] { width: 100%; }
 @media (max-width: 767px) {
-  [data-slot='gh-tabs'] .gh-utility:first-of-type { margin-inline-start: 0; }
   [data-slot='gh-detail-inner'] { padding: 16px; }
 }
 
@@ -80,8 +71,6 @@
 [data-slot='gh-row-labels'] > span + span::before { content: '·'; margin-inline-end: 4px; }
 [data-slot='gh-row'] > span:nth-child(2) { order: 2; }
 
-[data-slot='gh-merge-box'] [data-variant='primary'] { background: var(--accent-strong); color: var(--accent-strong-foreground); }
-
 [data-slot='gh-merge-box'][data-conflicting='true'] h3 { color: var(--conflict); }
 [data-slot='gh-bypass-warning'] { color: var(--pending-strong); }
 @media (max-width: 767px) {
@@ -89,16 +78,13 @@
   [data-route='github'] [data-slot='gh-filter-toolbar'] > div:first-child { width: 100%; flex-basis: auto; }
 }
 
-/* #622 final board, desktop main header: a 15px title, 22px facet tabs with a full-bleed rule,
-   and a 32px toolbar of 12.5px controls (radius 7). A phone keeps the 44px touch targets above. */
+/* Desktop workspace header: full-bleed tab rule aligned to the 36px (md:px-9) page gutter,
+   active tab underlined with --accent-text, and compact 34px filter toolbar controls. */
 @media (min-width: 768px) {
-  [data-route='github'] [data-slot='gh-tabs'] { gap: 22px; min-height: 0; margin-inline: -28px; padding-inline: 28px; }
-  [data-route='github'] [data-slot='gh-tabs'] > a:not(.gh-utility) { min-height: 0; padding-block: 0 10px; padding-inline: 0; margin-block-end: -1px; font-size: 13px; font-weight: 600; }
-  [data-route='github'] [data-slot='gh-tabs'] > a:not([aria-current='page']) { color: var(--muted-foreground); font-weight: 500; }
-  [data-route='github'] [data-slot='gh-tabs'] > a[aria-current='page'] { color: var(--foreground); border-color: var(--foreground); }
-  [data-route='github'] [data-slot='gh-tabs'] .gh-utility { min-height: 28px; padding-block: 0; padding-inline: 10px; margin-block-end: 8px; border-radius: 7px; font-size: 12px; }
+  [data-route='github'] [data-slot='gh-tabs'] { gap: 22px; min-height: 0; margin-inline: -36px; padding-inline: 36px; }
+  [data-route='github'] [data-slot='gh-tabs'] > a { min-height: 0; padding-block: 0 10px; padding-inline: 0; }
+  [data-route='github'] [data-slot='gh-tabs'] .gh-utility { min-height: 30px; padding-block: 0; padding-inline: 10px; margin-block-end: 8px; border-radius: 7px; font-size: 12px; }
   [data-route='github'] [data-slot='gh-filter-toolbar'] { gap: 8px; }
-  [data-route='github'] [data-slot='gh-filter-toolbar'] :is(input, button, select) { min-height: 32px; height: 32px; padding-block: 0; border-radius: 7px; font-size: 12.5px; }
-  [data-route='github'] [data-slot='gh-filter-toolbar'] :is(button, select):not([aria-pressed='true']) { color: var(--muted-foreground); }
+  [data-route='github'] [data-slot='gh-filter-toolbar'] :is(input, button) { min-height: 34px; height: 34px; padding-block: 0; border-radius: 7px; font-size: 12.5px; }
   [data-route='github'] [data-slot='gh-filter-toolbar'] [data-slot='gh-search'] { padding-inline-start: 32px; color: var(--foreground); }
 }

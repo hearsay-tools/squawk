@@ -3,15 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router'
 import { WorkspaceToolsRoute } from './workspace-tools'
 
-const mocks = vi.hoisted(() => ({ refetch: vi.fn(), copy: vi.fn(), allAvailable: false }))
+const mocks = vi.hoisted(() => ({ refetch: vi.fn(), copy: vi.fn(), allAvailable: false, hint: 'Install the Codex CLI' }))
 vi.mock('@/api/queries', () => ({
-  useHealth: () => ({ data: { version: '1.2.3', repoRoot: '/local/repo', checks: [{ name: 'git', available: true, version: '2.50' }, mocks.allAvailable ? { name: 'codex', available: true, version: '0.9' } : { name: 'codex', available: false, hint: 'Install the Codex CLI' }], capabilities: {} }, refetch: mocks.refetch, isFetching: false, isError: false }),
+  useHealth: () => ({ data: { version: '1.2.3', repoRoot: '/local/repo', checks: [{ name: 'git', available: true, version: '2.50' }, mocks.allAvailable ? { name: 'codex', available: true, version: '0.9' } : { name: 'codex', available: false, hint: mocks.hint }], capabilities: {} }, refetch: mocks.refetch, isFetching: false, isError: false }),
   useProjects: () => ({ data: { projectsDir: '/local/projects' } }),
 }))
 vi.mock('@/components/add-project-dialog', () => ({ AddProjectDialog: () => <div role="dialog" aria-label="Choose local folder" /> }))
 vi.mock('@/components/clone-project-dialog', () => ({ CloneProjectDialog: () => <div role="dialog" aria-label="Clone repository" /> }))
 vi.mock('@/components/create-project-dialog', () => ({ CreateProjectDialog: () => <div role="dialog" aria-label="New project" /> }))
-afterEach(() => { cleanup(); vi.clearAllMocks(); mocks.allAvailable = false; vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.clearAllMocks(); mocks.allAvailable = false; mocks.hint = 'Install the Codex CLI'; vi.unstubAllGlobals() })
 
 describe('Workspace tools', () => {
   it('opens all three project flows from the shared workspace page', () => {
@@ -59,5 +59,13 @@ describe('Workspace tools', () => {
     render(<MemoryRouter><WorkspaceToolsRoute /></MemoryRouter>)
     expect(screen.queryByRole('link', { name: /Set up/ })).toBeNull()
     expect(screen.getByRole('link', { name: 'Tool settings ›' })).toBeTruthy()
+  })
+
+  it('renders backticked CLI commands as code chips and capitalizes leading Install', () => {
+    mocks.hint = 'install gh and run `gh auth login`'
+    const { container } = render(<MemoryRouter><WorkspaceToolsRoute /></MemoryRouter>)
+    const hint = container.querySelector('[data-slot="tool-hint"]')!
+    expect(hint.textContent).toBe('Install gh and run gh auth login')
+    expect(hint.querySelector('code')?.textContent).toBe('gh auth login')
   })
 })

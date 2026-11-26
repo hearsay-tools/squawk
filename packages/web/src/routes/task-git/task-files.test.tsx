@@ -510,3 +510,23 @@ it('explains a directory entered in the file-path control instead of blanking th
   fireEvent.click(screen.getByRole('button', { name: 'Open file' }))
   expect(await screen.findByText('Choose a file inside this directory.')).toBeTruthy()
 })
+
+it('strips absolute worktree prefixes in the file preview header', async () => {
+  stubFetch({
+    'GET /api/v1/runs/r1/file-link?path=src%2Fauth%2Ftokens.ts': () =>
+      jsonResponse({
+        type: 'file',
+        path: '/home/dev/repo/.ai/cezar/worktrees/r1/src/auth/tokens.ts',
+        source: 'worktree',
+        size: 18,
+        binary: false,
+        tooLarge: false,
+        content: 'export const x = 1\n',
+      }),
+  })
+  renderFilesRoute('?path=src/auth/tokens.ts')
+  await waitFor(() =>
+    expect(document.querySelector('[data-slot="file-preview-head"]')?.textContent).toContain('src/auth/tokens.ts'),
+  )
+  expect(document.querySelector('[data-slot="file-preview-head"]')?.textContent).not.toContain('.ai/cezar/worktrees')
+})

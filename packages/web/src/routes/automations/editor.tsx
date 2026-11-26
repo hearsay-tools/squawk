@@ -40,10 +40,22 @@ function sectionOf(message: string): Section {
   return 'form'
 }
 
-function Section({ title, failure, section, children }: { title: string; failure?: Failure | undefined; section: Section; children: ReactNode }) {
+function Section({
+  title,
+  hideLegend = false,
+  failure,
+  section,
+  children,
+}: {
+  title: string
+  hideLegend?: boolean
+  failure?: Failure | undefined
+  section: Section
+  children: ReactNode
+}) {
   return (
-    <fieldset className="grid min-w-0 gap-4 rounded-xl border p-5 max-md:p-4!">
-      <legend className="px-0">{title}</legend>
+    <fieldset className="grid min-w-0 gap-3 rounded-xl border border-border bg-card p-4">
+      <legend className={hideLegend ? 'sr-only' : 'mb-1 text-sm font-semibold text-foreground'}>{title}</legend>
       {children}
       {failure?.section === section && !failure.conflict ? <p role="alert" className="text-sm break-words text-destructive">{failure.message}</p> : null}
     </fieldset>
@@ -103,9 +115,9 @@ function TaskFields({ draft, patch, saving, automation }: {
 }) {
   return (
     <>
-      <div className="grid gap-2">
+      <div className="grid gap-1.5">
         <Label htmlFor="automation-prompt">Prompt</Label>
-        <Textarea id="automation-prompt" value={draft.prompt} onChange={(event) => patch({ prompt: event.target.value })} rows={4} required />
+        <Textarea id="automation-prompt" value={draft.prompt} onChange={(event) => patch({ prompt: event.target.value })} rows={3} required />
         <p className="text-xs break-words text-muted-foreground">
           {draft.kind === 'schedule'
             ? <>Available: {'{{date}}'} {'{{time}}'} {'{{project}}'} {'{{automation}}'}. A run-context block is appended automatically.</>
@@ -225,11 +237,11 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
       title={automation ? 'Edit automation' : 'New automation'}
       subtitle="Define when it runs and the ordinary task it launches."
     >
-      <form className="automation-editor grid min-w-0 gap-5 md:grid-cols-[minmax(0,1fr)_320px] md:items-start" onSubmit={submit}>
-        <div className="grid min-w-0 gap-5">
-          <Section title="Name" section="name" failure={failure}>
-            <div className="grid gap-2">
-              <Label htmlFor="automation-name">Name</Label>
+      <form className="automation-editor grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_320px] md:items-start" onSubmit={submit}>
+        <div className="grid min-w-0 gap-3.5">
+          <Section title="Name" hideLegend section="name" failure={failure}>
+            <div className="grid gap-1.5">
+              <Label htmlFor="automation-name" className="text-sm font-semibold text-foreground">Name</Label>
               <Input id="automation-name" value={draft.name} onChange={(event) => patch({ name: event.target.value })} required />
             </div>
           </Section>
@@ -254,7 +266,7 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
             </div>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={saving}>{saving ? 'Saving…' : saveLabel}</Button>
+            <Button type="submit" variant="primary" disabled={saving}>{saving ? 'Saving…' : saveLabel}</Button>
             <Button type="button" variant="outline" asChild><Link to="/automations">Cancel</Link></Button>
           </div>
           {automation ? (
@@ -330,7 +342,7 @@ function EnginePills({ draft, patch }: { draft: AutomationDraft; patch: (next: P
           icon={icon(TerminalIcon)}
           fieldLabel
           ariaLabel="Runner"
-          label={draft.runner ?? 'default'}
+          label={draft.runner ? runnerPickerLabel(registered.data, draft.runner) : 'default'}
           value={draft.runner ?? ''}
           disabled={!registered.data}
           options={[{ value: '', label: 'default', desc: 'The project’s default runner' }, ...runners.map((id) => ({ value: id, label: runnerPickerLabel(registered.data, id) }))]}

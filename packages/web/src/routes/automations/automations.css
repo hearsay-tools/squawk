@@ -1,0 +1,25 @@
+/* Automations route overrides: guarantee Variant A typography, gold --action primary buttons,
+ * and compact editor rhythm even when task-flows.css is loaded elsewhere in the SPA session. */
+[data-route='automations'] > header h1 {
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+[data-route='automations'] [data-slot='button'][data-variant='primary'] {
+  background: var(--action);
+  color: var(--action-foreground);
+  font-weight: 600;
+}
+
+[data-route='automations'] .automation-editor fieldset {
+  padding: 16px;
+  gap: 12px;
+}
+
+[data-route='automations'] .automation-editor legend {
+  float: none;
+  width: auto;
+  margin-block-end: 0;
+  font-size: 14px;
+  font-weight: 600;
+}

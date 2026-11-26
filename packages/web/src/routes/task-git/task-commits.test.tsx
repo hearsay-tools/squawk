@@ -40,6 +40,24 @@ const CHANGES: ChangesPayload = {
   stat: { adds: 1, dels: 0, files: 1 },
 }
 
+const COMMIT_DETAIL = {
+  sha: 'a'.repeat(40),
+  subject: 'Add the notes',
+  author: 'Agent',
+  when: '2 hours ago',
+  stat: { adds: 3, dels: 1, files: 1 },
+  files: [
+    {
+      path: 'notes.md',
+      status: 'added',
+      adds: 3,
+      dels: 1,
+      binary: false,
+      patch: 'diff --git a/notes.md b/notes.md\n--- /dev/null\n+++ b/notes.md\n@@ -0,0 +1,2 @@\n+hello\n+world\n',
+    },
+  ],
+}
+
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
 
 function renderCommits(run: ApiRun, commits: RunCommitsResponse) {
@@ -47,6 +65,7 @@ function renderCommits(run: ApiRun, commits: RunCommitsResponse) {
     const path = String(input).replace('?archived=recent', '')
     if (path === '/api/v1/runs/r1') return json(run)
     if (path === '/api/v1/runs/r1/commits') return json(commits)
+    if (path === `/api/v1/runs/r1/commit/${'a'.repeat(40)}`) return json(COMMIT_DETAIL)
     if (path === '/api/v1/runs/r1/changes') return json(CHANGES)
     if (path === '/api/v1/run-summaries') return json([])
     return json({})
@@ -63,11 +82,15 @@ function renderCommits(run: ApiRun, commits: RunCommitsResponse) {
 }
 
 describe('the Commits tab route', () => {
-  it('lists the task commits, each linking to its diff, and the files they changed', async () => {
+  it('lists the task commits, auto-selects the first commit with its diff and stats, and lists changed files', async () => {
     renderCommits(RUN, COMMITS)
     await waitFor(() => expect(screen.getByRole('heading', { name: '2 commits in this task' })).toBeTruthy())
     const links = [...document.querySelectorAll('[data-slot="task-commits"] a')].map((a) => a.getAttribute('href'))
     expect(links).toEqual([`/tasks/r1/commits/${'a'.repeat(40)}`, `/tasks/r1/commits/${'b'.repeat(40)}`])
+    await waitFor(() => expect(document.querySelector('[data-slot="task-commit-preview"]')).not.toBeNull())
+    await waitFor(() => expect(document.querySelector('[data-slot="task-commit-preview"] [data-slot="diff-file"]')).not.toBeNull())
+    expect(document.querySelector('[data-slot="task-commit-preview"]')?.textContent).toContain('+3')
+    expect(document.querySelector('[data-slot="task-commit-preview"]')?.textContent).toContain('−1')
     await waitFor(() => expect(screen.getByRole('heading', { name: '1 changed files' })).toBeTruthy())
   })
 

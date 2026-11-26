@@ -62,6 +62,19 @@ function GithubItemBackLink({ backLink }: { backLink: { to: string } | null }) {
   )
 }
 
+/** Compact single-box styling for Streamdown code fences inside GitHub bodies and comments:
+ *  removes the nested double border, collapses empty language headers, and floats the copy
+ *  action in the top-right corner so single-line fences have no blank vertical band above them. */
+const GH_MARKDOWN_CLASS = cn(
+  'text-sm',
+  '[&_[data-streamdown="code-block"]]:relative [&_[data-streamdown="code-block"]]:my-2.5 [&_[data-streamdown="code-block"]]:gap-0 [&_[data-streamdown="code-block"]]:overflow-hidden [&_[data-streamdown="code-block"]]:rounded-lg [&_[data-streamdown="code-block"]]:border [&_[data-streamdown="code-block"]]:border-border [&_[data-streamdown="code-block"]]:bg-background [&_[data-streamdown="code-block"]]:p-0 [&_[data-streamdown="code-block"]]:![content-visibility:visible] [&_[data-streamdown="code-block"]]:![contain-intrinsic-size:auto]',
+  '[&_[data-streamdown="code-block-header"]]:h-7 [&_[data-streamdown="code-block-header"]]:border-b [&_[data-streamdown="code-block-header"]]:border-border [&_[data-streamdown="code-block-header"]]:bg-muted/40 [&_[data-streamdown="code-block-header"]]:px-3 [&_[data-streamdown="code-block-header"]]:text-[11px]',
+  '[&_[data-streamdown="code-block-header"][data-language=""]]:hidden [&_[data-streamdown="code-block-header"]:not([data-language])]:hidden [&_[data-streamdown="code-block-header"]:has(>span:empty)]:hidden',
+  '[&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:absolute [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:top-1 [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:right-1.5 [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:mt-0 [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:h-auto',
+  '[&_[data-streamdown="code-block-actions"]]:border-0 [&_[data-streamdown="code-block-actions"]]:bg-transparent [&_[data-streamdown="code-block-actions"]]:p-0 [&_[data-streamdown="code-block-actions"]]:backdrop-blur-none',
+  '[&_[data-streamdown="code-block-body"]]:rounded-none [&_[data-streamdown="code-block-body"]]:border-0 [&_[data-streamdown="code-block-body"]]:bg-transparent [&_[data-streamdown="code-block-body"]]:px-3.5 [&_[data-streamdown="code-block-body"]]:py-2.5 [&_[data-streamdown="code-block-body"]]:pr-10',
+)
+
 function GithubItemMeta({
   item,
   kindWord,
@@ -78,7 +91,7 @@ function GithubItemMeta({
   deletions: number | undefined
 }) {
   return (
-    <p data-slot="gh-meta" className="flex flex-wrap items-center gap-x-1.5 font-mono text-[11px] text-soft-foreground">
+    <p data-slot="gh-meta" className="flex flex-wrap items-center gap-x-1.5 font-mono text-[11px] text-muted-foreground">
       <span>#{item.number}</span>·<span>{kindWord}</span>·<span>opened by {item.author}</span>·
       <span>{shortAge(item.createdAt)} ago</span>
       {commentCount ? (
@@ -177,11 +190,11 @@ function GithubItemConversation({
 }) {
   return (
     <>
-      <div data-slot="gh-body" className="mt-5 text-sm">
+      <div data-slot="gh-body" className={cn('mt-5', GH_MARKDOWN_CLASS)}>
         {body ? (
           <Markdown>{body}</Markdown>
         ) : (
-          <p className="text-soft-foreground">(no description)</p>
+          <p className="text-muted-foreground">(no description)</p>
         )}
       </div>
       <GithubThread item={item} colors={colors} />
@@ -418,7 +431,7 @@ function GithubThread({ item, colors }: { item: GithubItem; colors: Record<strin
     <section data-slot="gh-thread" className="mt-6 border-t border-border pt-5">
       <h3
         data-slot="gh-thread-header"
-        className="mb-4 text-[11px] font-semibold tracking-wide text-soft-foreground uppercase"
+        className="mb-4 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
       >
         {/* "Activity", not "Comments": heading a twenty-row list `Comments · 2` would be
             incoherent once events render. The comment count stays as a secondary. This is a
@@ -711,7 +724,7 @@ function ThreadEntry({ comment }: { comment: GithubComment }) {
   const chip = comment.reviewState ? REVIEW_CHIP[comment.reviewState] : null
   return (
     <li data-slot="gh-thread-entry" data-kind={comment.kind} className="min-w-0">
-      <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[11px] text-soft-foreground">
+      <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
         <Avatar url={comment.avatarUrl} login={comment.author} />
         <span className="font-sans font-medium text-foreground">{comment.author}</span>
         <span>{shortAge(comment.createdAt)}</span>
@@ -734,8 +747,8 @@ function ThreadEntry({ comment }: { comment: GithubComment }) {
           <ExternalLinkIcon aria-hidden="true" className="size-2.5" />
         </a>
       </div>
-      <div data-slot="gh-thread-body" className="text-sm">
-        {comment.body ? <Markdown>{comment.body}</Markdown> : <p className="text-soft-foreground">(no body)</p>}
+      <div data-slot="gh-thread-body" className={GH_MARKDOWN_CLASS}>
+        {comment.body ? <Markdown>{comment.body}</Markdown> : <p className="text-muted-foreground">(no body)</p>}
       </div>
     </li>
   )

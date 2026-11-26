@@ -290,13 +290,10 @@ export function GithubRoute({
     // The route ends with one scrollport-height workspace, with no bottom padding:
     // at maximum page scroll its tabs align with main's top without sticky overlap.
     // Phone stays stacked document-flow. (#523)
-    <div ref={layout.routeRef} data-route="github" className="flex min-h-full flex-col gap-3 px-[18px] pt-[18px] pb-[calc(90px+env(safe-area-inset-bottom))] md:gap-[22px] md:px-7 md:pt-4 md:pb-4">
+    <div ref={layout.routeRef} data-route="github" className="flex min-h-full flex-col gap-3 px-4 pt-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:gap-5 md:px-9 md:pt-5 md:pb-4">
       <GithubMasthead view={view} activeFilter={activeFilter} isDesktop={isDesktop} rawFilterParam={rawFilterParam} n={n} gh={gh} />
-      <div ref={layout.workspaceRef} data-slot="gh-workspace" data-stacked={layout.panesStacked} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:h-[calc(var(--gh-workspace-height,calc(100dvh-4rem))-1rem)] md:flex-none md:gap-[22px]">
-        <header
-          data-slot="gh-header"
-          className="flex shrink-0 flex-col gap-3 bg-background md:gap-[22px]"
-        >
+      <div ref={layout.workspaceRef} data-slot="gh-workspace" data-stacked={layout.panesStacked} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:h-[calc(var(--gh-workspace-height,calc(100dvh-4rem))-1rem)] md:flex-none md:gap-5">
+        <header data-slot="gh-header" className="flex shrink-0 flex-col gap-3 bg-background md:gap-4">
           <GithubTabs
             view={view}
             isDesktop={isDesktop}
@@ -601,8 +598,7 @@ function GithubMasthead({ view, activeFilter, isDesktop, rawFilterParam, n, gh }
 }) {
   return (
     <div data-slot="gh-masthead" className="flex min-w-0 shrink-0 flex-col gap-1 md:flex-row md:items-baseline md:gap-3">
-      {/* The board's desktop title is the list on screen ("Issues · No task yet"), 15px; a phone keeps "GitHub". */}
-      <h1 className="text-2xl font-semibold tracking-tight md:text-[15px] md:tracking-normal">
+      <h1 className="text-[20px] font-semibold tracking-tight text-foreground">
         {isDesktop ? `${view === 'issues' ? 'Issues' : 'Pull requests'} · ${ACTIVE_FILTER_LABEL[activeFilter]}` : 'GitHub'}
       </h1>
       {rawFilterParam !== null && n === undefined ? (
@@ -612,14 +608,14 @@ function GithubMasthead({ view, activeFilter, isDesktop, rawFilterParam, n, gh }
             Back to filters
           </Link>
           {activeFilter !== 'all' ? (
-            <span data-slot="gh-active-filter" className="truncate text-xs text-soft-foreground">
+            <span data-slot="gh-active-filter" className="truncate text-xs text-muted-foreground">
               {[...ISSUE_ROWS, ...PR_ROWS].find((row) => row.id === activeFilter)?.label}
             </span>
           ) : null}
         </div>
       ) : null}
       {gh.repo ? (
-        <span className="min-w-0 truncate text-[13px] text-muted-foreground md:text-[11px] md:text-soft-foreground">
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
           <span data-slot="gh-repo">{gh.repo}</span>
           <span data-slot="gh-synced"> · {gh.syncedAt ? `Synced ${shortAge(gh.syncedAt)} ago` : 'Not synced yet'}</span>
         </span>
@@ -647,28 +643,24 @@ function GithubTabs({ view, isDesktop, gh, automationsAvailable, onSaveView, ref
       <TabLink to="/github/prs" active={view === 'prs'} onClick={() => onSaveView('prs')}>
         Pull requests · {gh.prsTotal ?? gh.prs.length}
       </TabLink>
-      {automationsAvailable ? (
-        <Link
-          to="/automations/new"
+      <div data-slot="gh-tab-actions" className="ml-auto flex flex-wrap items-center gap-2 max-md:ml-0">
+        {automationsAvailable ? (
+          <Link to="/automations/new" className="gh-utility">
+            Set up automations
+          </Link>
+        ) : null}
+        <button
+          type="button"
+          data-slot="gh-refresh"
+          title="Refresh from GitHub"
+          disabled={refreshing}
+          onClick={onRefresh}
           className="gh-utility"
         >
-          Set up automations
-        </Link>
-      ) : null}
-      <button
-        type="button"
-        data-slot="gh-refresh"
-        title="Refresh from GitHub"
-        disabled={refreshing}
-        onClick={onRefresh}
-        className="gh-utility"
-      >
-        <RefreshCwIcon size={16}
-          aria-hidden="true"
-          className={cn('size-3.5', refreshing && 'motion-safe:animate-spin')}
-        />
-        Refresh
-      </button>
+          <RefreshCwIcon size={16} aria-hidden="true" className={cn('size-3.5', refreshing && 'motion-safe:animate-spin')} />
+          Refresh
+        </button>
+      </div>
     </div>
   )
 }
@@ -683,11 +675,11 @@ function GithubFilterToolbar({ view, gh, filters, labelOptions, labelColors, sea
   searchPayload: GithubSearchData | null
 }) {
   return (
-    <div data-slot="gh-filter-toolbar" className="flex flex-wrap items-center gap-2.5">
+    <div data-slot="gh-filter-toolbar" className="flex flex-wrap items-center gap-2">
       <div className="relative min-w-0 basis-full md:flex-1 md:basis-auto">
         <SearchIcon size={16}
           aria-hidden="true"
-          className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-soft-foreground"
+          className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
         />
         <input
           type="search"
@@ -696,7 +688,7 @@ function GithubFilterToolbar({ view, gh, filters, labelOptions, labelColors, sea
           placeholder={view === 'issues' ? 'Filter issues…' : 'Filter pull requests…'}
           value={filters.query}
           onChange={(event) => filters.setQuery(event.target.value)}
-          className="min-h-11 w-full rounded-md border border-input bg-card py-1 pr-2 pl-7 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="min-h-11 w-full rounded-lg border border-border bg-card py-1 pr-2.5 pl-8 text-[13px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         />
       </div>
       <LabelFilter
@@ -707,7 +699,15 @@ function GithubFilterToolbar({ view, gh, filters, labelOptions, labelColors, sea
       />
       {view === 'issues' ? <IssueFilters data={{ ...gh, issues: [...gh.issues, ...(searchPayload?.items ?? [])] }} assignees={filters.effectiveAssignees} projectId={filters.activeProject}
         onAssigneesChange={filters.changeAssignees} onProjectChange={filters.setProjectFilter} /> : null}
-      <button type="button" disabled={!filters.filtering} className="min-h-11 min-w-11 rounded-md border border-border bg-card px-4 text-xs disabled:opacity-50" onClick={filters.clearFilters}>Clear filters</button>
+      <button
+        type="button"
+        disabled={!filters.filtering}
+        data-slot="gh-clear-filters"
+        className="min-h-11 min-w-11 rounded-md border border-border bg-card px-3.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:text-muted-foreground disabled:opacity-70"
+        onClick={filters.clearFilters}
+      >
+        Clear filters
+      </button>
     </div>
   )
 }

@@ -81,9 +81,46 @@ export function FilePreview({ runId, path, className }: { runId: string; path: s
   return <FileEntryView runId={runId} entry={entry.data} className={className} />
 }
 
+/** Strip a managed worktree root prefix so file headers show clean repo-relative paths. */
+export function formatDisplayFilePath(
+  entryPath: string,
+  worktreePath?: string | null,
+  relativeHint?: string | null,
+): string {
+  const trimmedWorktree = worktreePath?.replace(/\/+$/, '')
+  if (trimmedWorktree && entryPath.startsWith(`${trimmedWorktree}/`)) {
+    return entryPath.slice(trimmedWorktree.length + 1)
+  }
+  const worktreeMatch = /^.*\/\.ai\/(?:cezar|squawk)\/worktrees\/[^/]+\/(.+)$/.exec(entryPath)
+  if (worktreeMatch?.[1]) return worktreeMatch[1]
+  if (entryPath.startsWith('/') && relativeHint && !relativeHint.startsWith('/')) {
+    const cleanHint = relativeHint.replace(/^\.?\//, '')
+    if (cleanHint && (entryPath === `/${cleanHint}` || entryPath.endsWith(`/${cleanHint}`))) {
+      return cleanHint
+    }
+  }
+  return entryPath
+}
+
+function resolveEntryPresentation(
+  entry: Extract<WorktreeEntry, { type: 'file' }>,
+  documentPreview: boolean,
+  source: boolean,
+) {
+  const markdown = documentPreview && /\.(?:md|markdown)$/i.test(entry.path)
+  const html = documentPreview && isHtmlPath(entry.path)
+  const safeImage = /\.(?:png|jpe?g|gif|webp|bmp|ico|avif)$/i.test(entry.path)
+  const kind = documentPreview && safeImage && entry.size <= 10 * 1024 * 1024 ? 'image' : previewKind(entry)
+  const toggle = (markdown || html) && kind === 'text'
+  const showImage = kind === 'image' && (!documentPreview || safeImage)
+  const rendered: 'markdown' | 'html' | null = source ? null : markdown ? 'markdown' : html ? 'html' : null
+  return { html, kind, toggle, showImage, rendered }
+}
+
 export function FileEntryView({
   runId,
   entry,
+  displayPath,
   className,
   imageUrl,
   downloadUrl,
@@ -93,6 +130,7 @@ export function FileEntryView({
 }: {
   runId: string
   entry: Extract<WorktreeEntry, { type: 'file' }>
+  displayPath?: string | undefined
   className?: string | undefined
   imageUrl?: string
   downloadUrl?: string
@@ -102,25 +140,24 @@ export function FileEntryView({
   documentPreview?: boolean
 }) {
   const [source, setSource] = useState(false)
-  const markdown = documentPreview && /\.(?:md|markdown)$/i.test(entry.path)
-  const html = documentPreview && isHtmlPath(entry.path)
-  const safeImage = /\.(?:png|jpe?g|gif|webp|bmp|ico|avif)$/i.test(entry.path)
-  const kind = documentPreview && safeImage && entry.size <= 10 * 1024 * 1024 ? 'image' : previewKind(entry)
-  // Only readable text has a rendered view to toggle: too-large and binary files show their state.
-  const toggle = (markdown || html) && kind === 'text'
+  const shownPath = displayPath ?? formatDisplayFilePath(entry.path)
+  const view = resolveEntryPresentation(entry, documentPreview, source)
+  const hasActions = Boolean(snapshot || downloadUrl || view.toggle)
   return (
     <Pane className={className}>
       <header
         data-slot="file-preview-head"
-        className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2 text-xs"
+        className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-xs"
       >
-        <span className="min-w-0 truncate font-mono font-medium">{entry.path}</span>
-        <span className="ml-auto shrink-0 tabular-nums text-soft-foreground">{formatFileSize(entry.size)}</span>
+        <span className="min-w-0 truncate font-mono font-medium text-foreground" title={shownPath}>
+          {shownPath}
+        </span>
+        <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">{formatFileSize(entry.size)}</span>
       </header>
-      {snapshot || downloadUrl || toggle ? <PreviewActions snapshot={snapshot} downloadUrl={downloadUrl} source={toggle ? source : null}
-        onSource={() => setSource(value => !value)} readerHref={html && kind === 'text' ? readerHref : undefined} /> : null}
-      <EntryBody runId={runId} entry={entry} kind={kind} showImage={kind === 'image' && (!documentPreview || safeImage)}
-        rendered={source ? null : markdown ? 'markdown' : html ? 'html' : null} imageUrl={imageUrl} />
+      {hasActions ? <PreviewActions snapshot={snapshot} downloadUrl={downloadUrl} source={view.toggle ? source : null}
+        onSource={() => setSource(value => !value)} readerHref={view.html && view.kind === 'text' ? readerHref : undefined} /> : null}
+      <EntryBody runId={runId} entry={entry} kind={view.kind} showImage={view.showImage}
+        rendered={view.rendered} imageUrl={imageUrl} />
     </Pane>
   )
 }

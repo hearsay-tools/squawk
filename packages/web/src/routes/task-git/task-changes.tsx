@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { FileDiffIcon, GitCommitHorizontalIcon } from '@/components/design-icons'
+import { ChevronDownIcon, FileDiffIcon, GitCommitHorizontalIcon } from '@/components/design-icons'
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router'
 
@@ -11,6 +11,7 @@ import { canPreviewMarkdown, Diff, type DiffHandle, type DiffMode } from '@/comp
 import { toast } from '@/components/ui/toaster'
 import { gitActionPolicy, type GitActionId } from '@/lib/git-actions'
 import { useIsDesktop } from '@/lib/use-desktop'
+import { cn } from '@/lib/utils'
 
 import { engineOwnsRun } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { lastSessionId } from '../task-thread/run-actions'
@@ -243,20 +244,53 @@ function ChangesLayout({
   localHandoff: boolean | undefined
   onOpenInApp: (path: string) => void
 }) {
+  const [mobileTreeOpen, setMobileTreeOpen] = useState(false)
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-stretch gap-5 md:flex-row md:items-start px-[18px] pb-9 pt-0 [--diff-sticky-top:0px] md:[--diff-sticky-top:1rem] md:px-9">
+    <div className="flex min-h-0 flex-1 flex-col items-stretch gap-4 px-4 pb-9 pt-0 [--diff-sticky-top:0px] md:flex-row md:items-start md:gap-5 md:px-9 md:[--diff-sticky-top:1rem]">
       {/* The tree column: sticky under the header so long diffs scroll beside it, and its OWN
-          scroller. Sticky alone is not enough — a tree taller than the viewport grows the page
-          instead, so the only way to reach its last file was to drag the shared `main` scroller
-          (and the diff with it) to the bottom. Capping the pane at the space left under the
-          sticky chrome gives the list its own scrollbar; `overscroll-contain` keeps a wheel
-          inside it from chaining into the diff once it bottoms out. */}
+          scroller. On mobile (<md), collapses into a compact disclosure bar so the diff starts
+          high on the screen. */}
       <aside
         data-slot="changes-tree-pane"
-        className="md:sticky md:top-4 max-h-[calc(100dvh_-_64px_-_var(--diff-sticky-top)_-_1rem)] w-full md:w-60 shrink-0 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-3.5 md:block lg:w-[250px]"
+        className="w-full shrink-0 rounded-xl border border-border bg-card md:sticky md:top-4 md:max-h-[calc(100dvh_-_64px_-_var(--diff-sticky-top)_-_1rem)] md:w-60 md:overflow-y-auto md:overscroll-contain md:p-3.5 lg:w-[250px]"
       >
-        <h2 className="mb-3 border-b border-border pb-3 text-xs font-semibold">Changed files</h2>
-        <ChangesTree root={tree} selected={selected} onSelect={selectFile} />
+        <button
+          type="button"
+          data-slot="changes-tree-toggle"
+          aria-expanded={mobileTreeOpen}
+          onClick={() => setMobileTreeOpen((open) => !open)}
+          className="flex min-h-11 w-full items-center justify-between gap-2 px-3.5 py-2 text-left text-xs font-semibold text-foreground md:hidden"
+        >
+          <span>
+            Changed files{' '}
+            <span className="font-normal text-muted-foreground">({files.length})</span>
+          </span>
+          <ChevronDownIcon
+            size={16}
+            aria-hidden="true"
+            className={cn(
+              'size-4 shrink-0 text-muted-foreground motion-safe:transition-transform',
+              mobileTreeOpen && 'rotate-180',
+            )}
+          />
+        </button>
+        <h2 className="mb-3 hidden border-b border-border pb-3 text-xs font-semibold md:block">Changed files</h2>
+        <div
+          className={cn(
+            mobileTreeOpen
+              ? 'border-t border-border px-3.5 py-3 md:border-t-0 md:p-0'
+              : 'hidden md:block',
+          )}
+        >
+          <ChangesTree
+            root={tree}
+            selected={selected}
+            onSelect={(path) => {
+              selectFile(path)
+              setMobileTreeOpen(false)
+            }}
+          />
+        </div>
       </aside>
       <Diff
         files={files}

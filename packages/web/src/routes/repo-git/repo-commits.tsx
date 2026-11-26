@@ -38,7 +38,7 @@ export function RepoCommitsSection({ repo, info }: { repo: RepoResponse; info: R
   if (log.length === 0) {
     return (
       <>
-        {incoming ? <div className="px-[8px] pt-[12px] md:px-[20px]">{incoming}</div> : null}
+        {incoming ? <div className="px-4 pt-5 md:px-9">{incoming}</div> : null}
         <CenteredState
           icon={<GitCommitHorizontalIcon size={16} />}
           tone="neutral"
@@ -50,22 +50,22 @@ export function RepoCommitsSection({ repo, info }: { repo: RepoResponse; info: R
     )
   }
   return (
-    <div data-slot="repo-commits" className="flex flex-col gap-[2px] px-[8px] pt-[12px] pb-[20px] md:px-[20px]">
+    <div data-slot="repo-commits" className="flex flex-col gap-4 px-4 pt-5 pb-9 md:px-9">
       {incoming}
       {days.map((day) => (
-        <section key={day.label} data-slot="repo-commit-day" aria-label={day.label} className="flex flex-col">
-          <h2 className="px-[10px] pt-[14px] pb-[4px] text-[11px] font-medium text-soft-foreground">{day.label}</h2>
-          <ul className="flex flex-col">
+        <section key={day.label} data-slot="repo-commit-day" aria-label={day.label} className="flex flex-col gap-1.5">
+          <h2 className="text-xs font-medium text-muted-foreground">{day.label}</h2>
+          <ul className="flex flex-col divide-y divide-border rounded-xl border border-border bg-card">
             {day.commits.map((commit) => (
-              <li key={commit.hash} className="flex min-h-[52px] items-center gap-[14px] rounded-[6px] hover:bg-sidebar-row-hover">
+              <li key={commit.hash} className="flex min-h-[52px] items-center gap-3.5 first:rounded-t-xl last:rounded-b-xl hover:bg-sidebar-row-hover">
                 <Link
                   to={`/git/commits/${commit.hash}`}
                   data-slot="commit-row"
                   data-sha={commit.hash}
-                  className="flex min-h-[52px] min-w-0 flex-1 flex-col justify-center gap-[3px] rounded-[6px] px-[10px] py-[6px] focus-visible:outline-2 focus-visible:outline-ring"
+                  className="flex min-h-[52px] min-w-0 flex-1 flex-col justify-center gap-0.5 px-4 py-2 focus-visible:outline-2 focus-visible:outline-ring"
                 >
-                  <span data-slot="commit-row-subject" className="truncate text-[13px] text-foreground">{commit.subject}</span>
-                  <span data-slot="commit-row-meta" className="flex min-w-0 items-center gap-[6px] text-[11px] text-soft-foreground">
+                  <span data-slot="commit-row-subject" className="truncate text-[13px] font-medium text-foreground">{commit.subject}</span>
+                  <span data-slot="commit-row-meta" className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
                     <span className="shrink-0 font-mono">{commit.hash}</span>
                     <span className="truncate">· {commit.author} · {shortGitAge(commit.when)}</span>
                   </span>
@@ -85,7 +85,7 @@ export function RepoCommitsSection({ repo, info }: { repo: RepoResponse; info: R
  *  subject it does not recognise), never that a person wrote the commit, so it claims nothing about
  *  authorship. Hidden below `md`, where the row has no room beside its subject. */
 function CommitSource({ source }: { source: LogEntry['source'] }) {
-  const cell = 'hidden max-w-[45%] shrink-0 items-center gap-[5px] pr-[10px] text-[11.5px] text-soft-foreground md:flex'
+  const cell = 'hidden max-w-[45%] shrink-0 items-center gap-[5px] pr-4 text-[11.5px] text-muted-foreground md:flex'
   if (!source) {
     return (
       <span data-slot="commit-source" data-source="unknown" className={cell}>
@@ -120,7 +120,7 @@ function IncomingBar({ info, tracking }: { info: RepoInfo; tracking: RepoTrackin
   const checkout = useGitCheckout(queryScope(), info)
   const pullRef = useRef<HTMLButtonElement>(null)
   return (
-    <div data-slot="git-incoming" className="mb-[4px] flex min-h-[40px] items-center gap-[8px] rounded-[8px] border border-border px-[10px] py-[6px]">
+    <div data-slot="git-incoming" className="flex min-h-[44px] items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-2">
       <ArrowDownToLineIcon aria-hidden="true" className="size-[14px] shrink-0 text-inbox-count-foreground" />
       <span className="min-w-0 flex-1 text-[12.5px] text-muted-foreground">
         {tracking.behind} commit{tracking.behind === 1 ? '' : 's'} on {tracking.ref} {tracking.behind === 1 ? 'is' : 'are'} not in your checkout yet
@@ -131,7 +131,7 @@ function IncomingBar({ info, tracking }: { info: RepoInfo; tracking: RepoTrackin
         data-action="repo-pull-incoming"
         disabled={!checkout.hasRemote || checkout.pulling}
         onClick={() => void checkout.pull()}
-        className="inline-flex h-[26px] shrink-0 items-center gap-[4px] rounded-[6px] bg-muted px-[10px] text-[12px] font-medium text-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 max-md:h-11 [&>svg]:size-[12px]"
+        className="inline-flex h-[28px] shrink-0 items-center gap-[4px] rounded-[6px] bg-muted px-[10px] text-[12px] font-medium text-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 max-md:h-11 [&>svg]:size-[12px]"
       >
         {checkout.pulling ? <LoaderCircleIcon aria-hidden="true" className="motion-safe:animate-spin" /> : <ArrowDownIcon aria-hidden="true" />}
         Pull
@@ -153,7 +153,7 @@ function CommitDiffView({ sha }: { sha: string }) {
       backLabel="All recent commits"
       slot="repo-commit"
       className="flex min-h-0 flex-1 flex-col"
-      diffClassName="px-4 py-4 [--diff-sticky-top:1rem] md:px-6"
+      diffClassName="px-4 py-4 [--diff-sticky-top:1rem] md:px-9"
     />
   )
 }

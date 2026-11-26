@@ -5,7 +5,7 @@ import { getRunnerSkills } from '@/api/client'
 import { runnerDisplayName, useResolvedRunner, useRunners } from '@/api/runners'
 import { useAgentAccounts } from '@/api/agent-accounts'
 import { queryKeys, useConfig, useRunnerSkills } from '@/api/queries'
-import { RefreshCwIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
+import { ChevronDownIcon, RefreshCwIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toaster'
@@ -32,15 +32,17 @@ export function SkillsRoute() {
   const refresh = useRereadSkills(runner, query.account)
   const skills = query.data ?? []
   return (
-    <div data-route="skills" className="mx-auto grid min-h-full w-full max-w-[1100px] grid-cols-1 content-start gap-5 px-[18px] py-6 md:p-9 max-md:[padding-block-end:5rem]">
-      <header>
-        <h1 className="text-[25px] font-semibold tracking-tight md:text-[30px]">Skills</h1>
-        <p className="mt-1 text-[13px] text-muted-foreground">The skills each agent loads in this project, as its runner reports them.</p>
+    <div data-route="skills" className="grid min-h-full w-full grid-cols-1 content-start gap-5 px-4 pt-7 pb-9 md:px-9 max-md:[padding-block-end:5rem]">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-semibold tracking-tight leading-[1.2] text-foreground md:text-[28px]">Skills</h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">The skills each agent loads in this project, as its runner reports them.</p>
+        </div>
       </header>
       <div className="flex flex-wrap items-center gap-2">
         <RunnerSwitch runner={runner} onChange={(next) => { setRunner(next); setAccount(null) }} />
         <AccountSelect runner={runner} account={account} onChange={setAccount} />
-        <span className="ml-auto text-xs text-soft-foreground" data-slot="skills-count">
+        <span className="ml-auto text-xs text-muted-foreground" data-slot="skills-count">
           {query.list ? `${skills.length} ${skills.length === 1 ? 'skill' : 'skills'}${query.list.source === 'cache' ? ' · from cache' : ''}` : null}
         </span>
         <Button variant="outline" size="sm" onClick={() => void refresh.run()} disabled={refresh.running || query.isPending} data-slot="skills-refresh">
@@ -50,7 +52,7 @@ export function SkillsRoute() {
       <div className="relative">
         <SearchIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input aria-label="Search skills" placeholder="Filter by name or description…" value={search}
-          onChange={(event) => setSearch(event.target.value)} className="h-10 bg-card pl-9 text-[13px]" />
+          onChange={(event) => setSearch(event.target.value)} className="h-10 rounded-lg border-border bg-card pl-9 text-[13px]" />
       </div>
       <SkillNotices query={query} />
       {query.isPending
@@ -90,11 +92,14 @@ function AccountSelect({ runner, account, onChange }: { runner: Runner; account:
   const accounts = useAgentAccounts().accounts.filter((entry) => entry.provider === runner)
   if (accounts.length === 0) return null
   return (
-    <select aria-label="Account" value={account ?? ''} onChange={(event) => onChange(event.target.value || null)}
-      className="h-[38px] rounded-md border border-border bg-card px-2.5 text-[13px] text-foreground focus-visible:outline-2">
-      <option value="">Account: project default</option>
-      {accounts.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
-    </select>
+    <div className="relative inline-flex items-center">
+      <select aria-label="Account" value={account ?? ''} onChange={(event) => onChange(event.target.value || null)}
+        className="h-[38px] appearance-none rounded-lg border border-border bg-card pr-8 pl-3 text-[13px] text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+        <option value="">Account: project default</option>
+        {accounts.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
+      </select>
+      <ChevronDownIcon aria-hidden="true" className="pointer-events-none absolute right-2.5 size-3.5 text-muted-foreground" />
+    </div>
   )
 }
 

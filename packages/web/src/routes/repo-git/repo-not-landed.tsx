@@ -84,7 +84,7 @@ export function RepoNotLandedSection() {
   const [deleting, setDeleting] = useState<RepoBranchEntry | null>(null)
 
   if (branches.isPending) {
-    return <p data-slot="not-landed-loading" role="status" className="px-[28px] py-[20px] text-[13px] text-soft-foreground">Loading branches…</p>
+    return <p data-slot="not-landed-loading" role="status" className="px-4 py-5 text-[13px] text-muted-foreground md:px-9">Loading branches…</p>
   }
   if (branches.isError) {
     return (
@@ -100,8 +100,8 @@ export function RepoNotLandedSection() {
   const groups = notLandedGroups(branches.data.branches)
   const retained = retainedFinishedTasks(branches.data.branches)
   const retainedNote = retained > 0 ? (
-    <p data-slot="not-landed-retained" className="flex items-start gap-[6px] px-[10px] pt-[6px] text-[11.5px] leading-[17px] text-soft-foreground">
-      <InfoIcon aria-hidden="true" className="mt-[2.5px] size-[12px] shrink-0" />
+    <p data-slot="not-landed-retained" className="flex max-w-4xl items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+      <InfoIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
       <span>
         {retained} finished task{retained === 1 ? ' still has its' : 's still have their'} worktree and commits not on the base, so {retained === 1 ? 'it is' : 'they are'} not listed here.
         {' '}They show here once the worktree is reclaimed in <Link to={GIT_SECTION_PATH.cleanup} className="underline underline-offset-2 hover:text-foreground">Cleanup</Link>.
@@ -115,7 +115,7 @@ export function RepoNotLandedSection() {
 
   return (
     <ReferenceStatusProvider projectId={scope} repoBase={repoBase} requests={requests}>
-      <div data-slot="repo-not-landed" className="flex flex-col gap-[2px] px-[8px] pt-[12px] pb-[calc(90px+env(safe-area-inset-bottom))] md:px-[20px] md:pb-[20px]">
+      <div data-slot="repo-not-landed" className="flex flex-col gap-4 px-4 pt-5 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pb-9">
         {!branches.data.prStateKnown ? <ForgeNote /> : null}
         {retainedNote}
         {groups.length === 0 ? (
@@ -129,15 +129,15 @@ export function RepoNotLandedSection() {
               : 'Every finished task\'s commits are on the base branch, or it made none.'}
           />
         ) : (
-          <>
+          <div className="flex max-w-4xl flex-col gap-5">
             {groups.map((group) => (
-              <section key={group.key} data-slot="not-landed-group" data-group={group.key} aria-label={group.title} className="flex flex-col">
-                <h2 className="flex min-w-0 flex-wrap items-baseline gap-x-[6px] px-[10px] pt-[14px] pb-[6px] text-[11px] text-soft-foreground">
-                  <span className="font-medium">{group.title}</span>
-                  <span>{group.rows.length}</span>
+              <section key={group.key} data-slot="not-landed-group" data-group={group.key} aria-label={group.title} className="flex flex-col gap-1.5">
+                <h2 className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{group.title}</span>
+                  <span className="tabular-nums">{group.rows.length}</span>
                   {group.note ? <span>· {group.note}</span> : null}
                 </h2>
-                <ul className="flex flex-col">
+                <ul className="flex flex-col divide-y divide-border rounded-xl border border-border bg-card">
                   {group.rows.map((entry) => (
                     <NotLandedRow
                       key={entry.name}
@@ -149,11 +149,11 @@ export function RepoNotLandedSection() {
                 </ul>
               </section>
             ))}
-            <p data-slot="not-landed-note" className="flex items-start gap-[6px] px-[10px] pt-[14px] text-[11.5px] leading-[17px] text-soft-foreground">
-              <InfoIcon aria-hidden="true" className="mt-[2.5px] size-[12px] shrink-0" />
+            <p data-slot="not-landed-note" className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+              <InfoIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
               Delete branch is in each row's … menu. It confirms and names the commits it drops. Nothing on this list can be bulk-deleted.
             </p>
-          </>
+          </div>
         )}
       </div>
       <DeleteBranchDialog entry={deleting} onClose={() => setDeleting(null)} />
@@ -164,8 +164,8 @@ export function RepoNotLandedSection() {
 /** The squash-merge caveat, shown when `prStateKnown` is false. Information, never an error. */
 export function ForgeNote({ className }: { className?: string | undefined }) {
   return (
-    <p data-slot="git-no-forge" className={cn('flex items-start gap-[6px] px-[10px] pt-[6px] text-[11.5px] leading-[17px] text-soft-foreground', className)}>
-      <InfoIcon aria-hidden="true" className="mt-[2.5px] size-[12px] shrink-0" />
+    <p data-slot="git-no-forge" className={cn('flex max-w-4xl items-start gap-2 text-xs leading-relaxed text-muted-foreground', className)}>
+      <InfoIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
       {NO_FORGE_NOTE}.
     </p>
   )
@@ -177,7 +177,7 @@ function NotLandedRow({ entry, finishedAt, onDelete }: {
   onDelete: () => void
 }) {
   return (
-    <li data-slot="not-landed-row" data-branch={entry.name} data-branch-class={entry.class} className="flex min-h-[56px] items-center gap-[12px] rounded-[6px] px-[10px] py-[6px] hover:bg-sidebar-row-hover">
+    <li data-slot="not-landed-row" data-branch={entry.name} data-branch-class={entry.class} className="flex min-h-[54px] items-center gap-3 px-4 py-2.5 first:rounded-t-xl last:rounded-b-xl hover:bg-sidebar-row-hover">
       <NotLandedTitleAndMeta entry={entry} finishedAt={finishedAt} />
       <NotLandedPr entry={entry} />
       <NotLandedActions entry={entry} onDelete={onDelete} />

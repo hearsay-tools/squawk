@@ -1,4 +1,4 @@
-import { CircleHelpIcon, EyeIcon, WrapTextIcon } from 'lucide-react'
+import { EyeIcon, Rows2Icon, WrapTextIcon } from 'lucide-react'
 import { GitBranchIcon, Columns2Icon } from '@/components/design-icons'
 
 import type { DiffMode } from '@/components/diff'
@@ -28,19 +28,22 @@ export function DiffViewToggles({
         data-slot="diff-mode-toggle"
         role="group"
         aria-label="Diff layout"
-        className="flex items-center gap-2"
+        className="inline-flex items-center rounded-lg border border-border bg-card p-0.5"
       >
         <ModeButton current={mode} value="unified" onModeChange={onModeChange} />
         <ModeButton current={mode} value="split" onModeChange={onModeChange} />
       </span>
       <Button
-        variant="ghost"
+        variant="outline"
         size="icon-sm"
         data-slot="wrap-toggle"
         aria-pressed={wrap}
         aria-label="Wrap long lines"
         title="Wrap long lines"
-        className={cn('size-11', wrap && 'bg-muted text-foreground')}
+        className={cn(
+          'size-11 rounded-lg',
+          wrap ? 'border-accent-text/40 bg-muted text-accent-text' : 'text-muted-foreground hover:text-foreground',
+        )}
         onClick={() => onWrapChange(!wrap)}
       >
         <WrapTextIcon aria-hidden="true" />
@@ -67,13 +70,16 @@ export function MarkdownPreviewToggle({
   const label = preview ? 'Show Markdown as a diff' : 'Preview Markdown'
   return (
     <Button
-      variant="ghost"
+      variant="outline"
       size="icon-sm"
       data-slot="markdown-preview-toggle"
       aria-pressed={preview}
       aria-label="Preview Markdown"
       title={label}
-      className={cn('size-11', preview && 'bg-muted text-foreground')}
+      className={cn(
+        'size-11 rounded-lg',
+        preview ? 'border-accent-text/40 bg-muted text-accent-text' : 'text-muted-foreground hover:text-foreground',
+      )}
       onClick={() => onPreviewChange(!preview)}
     >
       <EyeIcon aria-hidden="true" />
@@ -98,11 +104,17 @@ function ModeButton({
       aria-pressed={active}
       onClick={() => onModeChange(value)}
       className={cn(
-        'inline-flex items-center gap-2 min-h-11 rounded-lg border border-border bg-card px-3 text-xs font-medium capitalize',
-        active ? 'border-accent-text/40 text-accent-text' : 'text-muted-foreground hover:text-foreground',
+        'inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-xs font-medium capitalize transition-colors outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50',
+        active
+          ? 'bg-muted text-foreground'
+          : 'text-muted-foreground pointer-hover:text-foreground',
       )}
     >
-      {value === 'unified' ? <CircleHelpIcon aria-hidden="true" className="size-4" /> : <Columns2Icon size={16} aria-hidden="true" className="size-4" />}
+      {value === 'unified' ? (
+        <Rows2Icon aria-hidden="true" className="size-4" />
+      ) : (
+        <Columns2Icon size={16} aria-hidden="true" className="size-4" />
+      )}
       {value}
     </button>
   )

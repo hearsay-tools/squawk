@@ -52,13 +52,16 @@ export function RepoChangesSection() {
     <section data-slot="repo-changes" className="flex min-h-0 flex-1 flex-col">
       <div
         data-slot="repo-changes-toolbar"
-        className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-[18px] py-[22px] md:px-9"
+        className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 py-4 md:px-9"
       >
-        <span className="text-sm">{changes.data ? `${changes.data.stat.files} files changed ·` : 'Uncommitted changes'}</span>
-        {changes.data ? <AnimatedDiffStat stat={changes.data.stat} /> : null}
-        <span className="ml-auto flex items-center gap-1">
+        {changes.data ? (
+          <AnimatedDiffStat stat={changes.data.stat} />
+        ) : (
+          <span className="text-sm text-muted-foreground">Uncommitted changes</span>
+        )}
+        <span className="ml-auto flex items-center gap-1.5">
           {/* Same rule as the task toolbar: these toggles exist ≥md only — phones force unified+wrap. */}
-          <span className="hidden items-center gap-1 md:flex">
+          <span className="hidden items-center gap-1.5 md:flex">
             <DiffViewToggles mode={mode} wrap={wrap} onModeChange={setMode} onWrapChange={setWrap} />
           </span>
           {/* Every width, like the task toolbar's — see `MarkdownPreviewToggle`. */}
@@ -67,7 +70,7 @@ export function RepoChangesSection() {
       </div>
 
       {changes.isPending ? (
-        <p data-slot="changes-loading" className="px-4 py-6 text-center text-xs text-soft-foreground md:px-9">
+        <p data-slot="changes-loading" className="px-4 py-6 text-center text-xs text-muted-foreground md:px-9">
           Loading changes…
         </p>
       ) : changes.isError ? (
@@ -87,7 +90,7 @@ export function RepoChangesSection() {
           subtitle="No uncommitted changes in the main working tree. Edits show up here as they happen."
         />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col items-stretch gap-5 md:flex-row md:items-start px-[18px] pb-9 pt-0 [--diff-sticky-top:1rem] md:px-9">
+        <div className="flex min-h-0 flex-1 flex-col items-stretch gap-5 px-4 pb-9 pt-0 [--diff-sticky-top:1rem] md:flex-row md:items-start md:px-9">
           {/* Same deal as the task Changes tab: sticky AND its own scroller, so a long file list
               never has to drag the diff to the bottom to show its last row. */}
           <aside

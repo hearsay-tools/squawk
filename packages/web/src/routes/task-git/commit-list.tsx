@@ -1,7 +1,9 @@
-import { FileDiffIcon, GitCommitHorizontalIcon, SearchIcon } from '@/components/design-icons'
+import { GitCommitHorizontalIcon, SearchIcon } from '@/components/design-icons'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Virtualizer } from 'virtua'
 
+import type { DiffStat } from '@open-mercato/cezar-api-client'
+import { DiffStatLabel } from '@/components/diff-stat'
 import { Input } from '@/components/ui/input'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
@@ -32,7 +34,7 @@ import { cn } from '@/lib/utils'
 export const COMMIT_VIRTUALIZE_THRESHOLD = 150
 
 /** Desktop history-row estimate. Virtua measures expanded mobile rows after mounting. */
-const ROW_HEIGHT_PX = 77
+const ROW_HEIGHT_PX = 56
 
 export interface CommitListItem {
   sha: string
@@ -43,9 +45,23 @@ export interface CommitListItem {
   href: string
   /** The sha as displayed; the task list abbreviates, the repo log is already short. */
   shaLabel: string
+  /** Optional ± diff stat for the commit when already fetched. */
+  stat?: DiffStat | undefined
 }
 
-export function CommitList({ slot, commits, className, heading }: { slot: string; commits: CommitListItem[]; className?: string | undefined; heading?: ReactNode }) {
+export function CommitList({
+  slot,
+  commits,
+  selectedSha,
+  className,
+  heading,
+}: {
+  slot: string
+  commits: CommitListItem[]
+  selectedSha?: string | undefined
+  className?: string | undefined
+  heading?: ReactNode
+}) {
   const [query, setQuery] = useState('')
   const normalizedQuery = query.trim().toLowerCase()
   const filtered = normalizedQuery ? commits.filter(commit => commit.subject.toLowerCase().includes(normalizedQuery)) : commits
@@ -76,13 +92,15 @@ export function CommitList({ slot, commits, className, heading }: { slot: string
     return () => window.removeEventListener('resize', measure)
   }, [virtual])
 
-  const rows = filtered.map((commit) => <CommitRow key={commit.sha} commit={commit} detailed={slot === 'task-commits' && commits.length === 1} />)
+  const rows = filtered.map((commit) => (
+    <CommitRow key={commit.sha} commit={commit} selected={selectedSha !== undefined && commit.sha === selectedSha} />
+  ))
 
   return (
     <>
-      <label className="relative mb-[22px] block">
-        <SearchIcon size={16} aria-hidden="true" className="pointer-events-none absolute top-3.5 left-3 size-4 text-muted-foreground" />
-        <Input aria-label="Search commit messages" placeholder="Search commit messages…" value={query} onChange={event => setQuery(event.target.value)} className="h-11 bg-card pl-10" />
+      <label className="relative mb-3 block">
+        <SearchIcon size={16} aria-hidden="true" className="pointer-events-none absolute top-3 left-3 size-4 text-muted-foreground" />
+        <Input aria-label="Search commit messages" placeholder="Search commit messages…" value={query} onChange={event => setQuery(event.target.value)} className="h-10 rounded-lg border-border bg-card pl-10" />
       </label>
       <div
         ref={(el) => {
@@ -91,9 +109,9 @@ export function CommitList({ slot, commits, className, heading }: { slot: string
         }}
         data-slot={slot}
         data-virtualized={virtual}
-        className={cn('flex flex-col divide-y divide-border rounded-xl border border-border bg-card px-4 py-1 md:px-5', className)}
+        className={cn('flex flex-col divide-y divide-border rounded-xl border border-border bg-card px-3 py-1 md:px-4', className)}
       >
-        {heading ? <div className="flex min-h-14 flex-wrap items-center gap-2 py-4">{heading}</div> : null}
+        {heading ? <div className="flex min-h-11 flex-wrap items-center gap-2 py-2.5">{heading}</div> : null}
         {filtered.length === 0 ? <p role="status" className="py-5 text-sm text-muted-foreground">No loaded commits match your search.</p> : null}
         {virtual ? (
           // No `shift`: commit logs are newest-first and only ever grow at the start on a
@@ -109,27 +127,32 @@ export function CommitList({ slot, commits, className, heading }: { slot: string
   )
 }
 
-function CommitRow({ commit, detailed }: { commit: CommitListItem; detailed: boolean }) {
+function CommitRow({ commit, selected }: { commit: CommitListItem; selected: boolean }) {
   return (
     // Not a <ul>/<li>: virtua inserts its own positioned wrapper between the list and the
     // items, which would break that parent/child contract. A plain list of links reads the
     // same to a screen reader here — each row's accessible name is its own link text.
-    <div className="[contain-intrinsic-block-size:auto_77px] [content-visibility:auto]">
+    <div className="[contain-intrinsic-block-size:auto_56px] [content-visibility:auto]">
       <Link
         data-slot="commit-row"
         data-sha={commit.sha}
+        data-selected={selected ? 'true' : undefined}
+        aria-current={selected ? 'true' : undefined}
         to={commit.href}
-        className={cn("flex min-h-[76px] min-w-0 flex-col items-start gap-3 rounded-sm py-4 hover:bg-muted", !detailed && "md:flex-row md:items-center md:py-3")}
+        className={cn(
+          'flex min-h-11 min-w-0 items-center gap-2.5 rounded-md px-2 py-2.5 transition-colors hover:bg-muted',
+          selected && 'bg-muted/70',
+        )}
       >
-        <GitCommitHorizontalIcon size={16} aria-hidden="true" className={cn("shrink-0 text-accent-text", detailed ? "size-[22px]" : "size-4")} />
-        <span className={cn("min-w-0 w-full", !detailed && "md:w-auto md:flex-1")}>
-          <span className={cn("block font-normal", detailed ? "text-[22px] leading-snug" : "text-[13px] md:truncate")}>{commit.subject}</span>
-          <span className="mt-1 block truncate text-[11px] text-soft-foreground">
-            {commit.author} · {commit.when}
+        <GitCommitHorizontalIcon size={16} aria-hidden="true" className="size-4 shrink-0 text-accent-text" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-medium text-foreground">{commit.subject}</span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+            <span className="truncate">{commit.author} · {commit.when}</span>
+            {commit.stat ? <DiffStatLabel stat={commit.stat} /> : null}
           </span>
         </span>
-        <span className="shrink-0 rounded-md bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground">{commit.shaLabel}</span>
-        {detailed ? <span className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-action px-3 text-xs font-medium text-action-foreground"><FileDiffIcon size={16} aria-hidden="true" className="size-4" />View changes</span> : null}
+        <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">{commit.shaLabel}</span>
       </Link>
     </div>
   )

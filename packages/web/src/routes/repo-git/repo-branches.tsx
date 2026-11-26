@@ -75,25 +75,25 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
   }
 
   return (
-    <section data-slot="repo-branches" className="grid min-w-0 grid-cols-1 gap-5 px-[18px] py-[22px] md:grid-cols-[minmax(0,1fr)_290px] md:px-9">
+    <section data-slot="repo-branches" className="grid min-w-0 grid-cols-1 gap-5 px-4 py-5 md:grid-cols-[minmax(0,1fr)_290px] md:px-9">
       <div className="min-w-0 rounded-xl border border-border bg-card p-5">
         <h2 className="sr-only">Branches</h2>
         <label className="relative block">
-        <SearchIcon size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-3.5 size-4 text-muted-foreground" />
+        <SearchIcon size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
         <Input
           aria-label="Filter branches"
           placeholder="Filter branches…"
           value={branchQuery}
           onChange={(event) => setBranchQuery(event.target.value)}
-          className="h-11 pl-10"
+          className="h-10 rounded-lg border-border bg-card pl-10"
         />
         </label>
-        <ul data-slot="repo-branch-list" className="mt-4 flex min-w-0 flex-col divide-y divide-border border-t border-border md:max-h-[40rem] md:overflow-y-auto md:overscroll-contain">
+        <ul data-slot="repo-branch-list" className="mt-3.5 flex min-w-0 flex-col divide-y divide-border border-t border-border md:max-h-[40rem] md:overflow-y-auto md:overscroll-contain">
           {filteredBranches.map((name) => {
             const current = name === info.branch
             const entry = byName.get(name)
             return (
-              <li key={name} data-slot="branch-row" data-branch={name} data-branch-class={entry?.class} className="flex min-h-20 flex-col items-start justify-center gap-2 py-3 md:flex-row md:items-center md:justify-start md:py-2.5">
+              <li key={name} data-slot="branch-row" data-branch={name} data-branch-class={entry?.class} className="flex min-h-12 flex-col items-start justify-center gap-1.5 py-2 md:flex-row md:items-center md:justify-start md:gap-2.5 md:py-2">
                 <span className="flex min-w-0 items-center gap-[8px]">
                   {entry?.runId ? (
                     <Link
@@ -105,7 +105,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
                       {name}
                     </Link>
                   ) : (
-                    <span className={cn('min-w-0 truncate text-[13px]', current && 'font-normal')}>{name}</span>
+                    <span className={cn('min-w-0 truncate text-[13px]', current && 'font-medium')}>{name}</span>
                   )}
                   {entry ? <BranchClassLabel entry={entry} /> : null}
                 </span>
@@ -113,7 +113,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
                 {name.startsWith('cez/') && !current ? null : current ? (
                   <span
                     data-slot="branch-current"
-                    className="md:ml-auto flex shrink-0 items-center rounded-md bg-accent-strong/10 px-2 py-1.5 text-[12px] font-medium text-accent-text"
+                    className="md:ml-auto flex shrink-0 items-center rounded-md bg-accent-strong/10 px-2 py-1 text-[12px] font-medium text-accent-text"
                   >
                     Current
                   </span>
@@ -122,7 +122,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
                     variant="outline"
                     size="sm"
                     data-action="switch-branch"
-                    className="md:ml-auto h-11"
+                    className="h-8 max-md:h-11 no-hover:h-11 md:ml-auto"
                     disabled={branchAction.isPending}
                     onClick={() => branchAction.mutate(name)}
                   >
@@ -134,7 +134,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
             )
           })}
           {filteredBranches.length === 0 ? (
-            <li data-slot="branch-empty" className="py-3 text-xs text-soft-foreground">
+            <li data-slot="branch-empty" className="py-3 text-xs text-muted-foreground">
               No branches match “{branchQuery.trim()}”.
             </li>
           ) : null}
@@ -143,7 +143,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
 
       <div className="min-w-0 self-start rounded-xl border border-border bg-card p-5">
         <h2 className="text-base font-semibold">Create a branch</h2>
-        <form data-slot="branch-create" className="mt-7 flex flex-col items-stretch gap-3" onSubmit={submitCreate}>
+        <form data-slot="branch-create" className="mt-5 flex flex-col items-stretch gap-3" onSubmit={submitCreate}>
           <label htmlFor="new-branch-name" className="text-sm font-medium">Branch name</label>
           <p className="-mt-1 text-xs text-muted-foreground">Create from the selected base.</p>
           <Input
@@ -180,20 +180,20 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
 function ForgePullRequests() {
   const github = useGithub({ limit: 20 })
   return (
-    <div data-slot="repo-prs" className="max-w-xl">
-      <h2 className="text-xs font-semibold tracking-wide text-soft-foreground uppercase">Open pull requests</h2>
+    <div data-slot="repo-prs" className="min-w-0 rounded-xl border border-border bg-card p-5 md:col-span-2">
+      <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Open pull requests</h2>
       {github.isPending ? (
-        <p className="mt-2 text-xs text-soft-foreground">Loading pull requests…</p>
+        <p className="mt-3 text-xs text-muted-foreground">Loading pull requests…</p>
       ) : github.isError ? (
-        <p className="mt-2 text-xs text-soft-foreground">{github.error.message}</p>
+        <p className="mt-3 text-xs text-muted-foreground">{github.error.message}</p>
       ) : !github.data.available ? (
-        <p data-slot="repo-prs-unavailable" className="mt-2 text-xs text-soft-foreground">
+        <p data-slot="repo-prs-unavailable" className="mt-3 text-xs text-muted-foreground">
           {github.data.reason ?? 'The forge is unreachable right now.'}
         </p>
       ) : github.data.prs.length === 0 ? (
-        <p className="mt-2 text-xs text-soft-foreground">No open pull requests.</p>
+        <p className="mt-3 text-xs text-muted-foreground">No open pull requests.</p>
       ) : (
-        <ul className="mt-2 flex flex-col divide-y divide-border">
+        <ul className="mt-3 flex flex-col divide-y divide-border border-t border-border">
           {github.data.prs.map((pr) => (
             <PullRequestRow key={pr.number} pr={pr} />
           ))}

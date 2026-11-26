@@ -145,12 +145,22 @@ export function AutomationLogScreen({ automationId, automationName, timeZone, re
 /** `readOnly`: an archived schedule's log, which offers no Retry; the server refuses one anyway. */
 export function InlineLog({ automationId, automationName, timeZone, showName = false, readOnly = false }: { automationId: string; automationName?: string; timeZone: string; showName?: boolean; readOnly?: boolean }) {
   const { records, error, refresh } = useAutomationLog(automationId)
+  const heading = `Recent activity${showName && automationName ? ` · ${automationName}` : ''}`
+  if (!error && records && records.length === 0) {
+    return (
+      <section data-slot="automation-inline-log" className="mt-3 flex flex-wrap items-center gap-x-2 border-t border-border pt-2.5 text-xs text-muted-foreground">
+        <h3 className="font-medium text-foreground">{heading}</h3>
+        <span aria-hidden="true">·</span>
+        <p>Nothing has run yet.</p>
+      </section>
+    )
+  }
   return (
-    <section data-slot="automation-inline-log" className="mt-4 min-w-0 border-t pt-4">
-      <h3 className="mb-3 text-sm font-medium">Recent activity{showName && automationName ? ` · ${automationName}` : ''}</h3>
+    <section data-slot="automation-inline-log" className="mt-3 min-w-0 border-t border-border pt-3">
+      <h3 className="mb-2 text-xs font-medium text-muted-foreground">{heading}</h3>
       {error && !records ? (
         <div className="grid justify-items-start gap-2"><PageState text={error} /><Button variant="outline" onClick={() => void refresh()}>Retry</Button></div>
-      ) : !records ? <p className="text-sm text-muted-foreground">Loading activity…</p> : records.length === 0 ? <p className="text-sm text-muted-foreground">Nothing has run yet.</p> : (
+      ) : !records ? <p className="text-xs text-muted-foreground">Loading activity…</p> : (
         <LogRows records={records.slice(0, 5)} all={records} timeZone={timeZone} onRetried={() => void refresh()} readOnly={readOnly} />
       )}
     </section>

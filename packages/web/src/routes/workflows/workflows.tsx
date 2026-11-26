@@ -230,7 +230,7 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
     return (
       <div
         data-route="workflows"
-        className="@container mx-auto min-h-full w-full px-[18px] py-6 md:p-9"
+        className="@container min-h-full w-full px-4 pt-7 pb-9 md:px-9"
       >
         <CenteredState
           icon={<TriangleAlertIcon />}
@@ -324,12 +324,12 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
   return (
     <div
       data-route="workflows"
-      className="@container mx-auto min-h-full w-full px-[18px] py-6 md:p-9"
+      className="@container min-h-full w-full px-4 pt-7 pb-9 md:px-9"
     >
-      <header className="mb-[22px] flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-[25px] font-semibold md:text-[30px]">Workflows</h1>
-          <p className="mt-2 text-xs text-muted-foreground md:text-[13px]">
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-semibold tracking-tight leading-[1.2] text-foreground md:text-[28px]">Workflows</h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">
             Portable skill chains. Steps run from top to bottom.
           </p>
         </div>
@@ -355,7 +355,7 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
           setOverId(null)
         }}
       >
-        <div className="flex min-w-0 flex-col gap-[22px] pb-[calc(32px+env(safe-area-inset-bottom))]">
+        <div className="flex min-w-0 flex-col gap-4 pb-[calc(32px+env(safe-area-inset-bottom))]">
           <WbMetadata
             workflows={workflows}
             draft={draft}
@@ -536,7 +536,7 @@ function Canvas({
       data-slot="wb-steps"
       data-dragging={dragging || undefined}
       className={cn(
-        'relative mt-4 rounded-lg transition-colors',
+        'relative mt-3 rounded-lg transition-colors',
         isOver ? 'border-accent-strong/60 bg-accent-strong/5' : 'border-muted-foreground/25',
       )}
     >
@@ -551,7 +551,7 @@ function Canvas({
         </p>
       ) : (
         <SortableContext items={steps.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <ol className="flex flex-col gap-4">
+          <ol className="flex flex-col gap-2.5">
             {steps.map((step, index) => (
               <StepCard
                 key={step.id}

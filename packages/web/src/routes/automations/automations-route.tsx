@@ -33,7 +33,7 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
   // gated server — and a submit inside that window POSTs straight into a 409.
   if (availability === 'unknown') {
     return (
-      <div data-route="automations" className="task-flow-page flex min-h-full flex-col">
+      <div data-route="automations" className="flex min-h-full flex-col px-4 py-7 md:px-9">
         <PageState text="Loading automations…" />
       </div>
     )
@@ -42,7 +42,7 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
   // Before every mode branch, so all four `/automations*` routes degrade the same way.
   if (availability === 'unavailable') {
     return (
-      <div data-route="automations" className="task-flow-page flex min-h-full flex-col">
+      <div data-route="automations" className="flex min-h-full flex-col px-4 py-7 md:px-9">
         <CenteredState
           icon={<ZapIcon />}
           tone="neutral"
@@ -65,7 +65,7 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
   if (!data) {
     return error
       ? <PageFrame title="Automations" subtitle="Could not load automations."><div className="grid justify-items-start gap-3"><PageState text={error} /><Button variant="outline" onClick={() => void refresh()}>Retry</Button></div></PageFrame>
-      : <div data-route="automations" className="task-flow-page flex min-h-full flex-col"><PageState text="Loading automations…" /></div>
+      : <div data-route="automations" className="flex min-h-full flex-col px-4 py-7 md:px-9"><PageState text="Loading automations…" /></div>
   }
 
   const forge = { available: data.available, ...(data.reason ? { reason: data.reason } : {}) }

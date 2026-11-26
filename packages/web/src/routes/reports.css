@@ -1,10 +1,14 @@
 .reports-row { position: relative; }
-.reports-open { display: flex; align-items: center; min-block-size: 44px; }
+.reports-open { display: inline-flex; align-items: center; }
 .reports-open::after { content: ''; position: absolute; inset: 0; }
-.reports-task { position: relative; z-index: 1; display: flex; align-items: center; min-block-size: 44px; }
+.reports-task { position: relative; z-index: 1; display: inline-flex; align-items: center; }
+@media (hover: none), (max-width: 767px) {
+  .reports-open { min-block-size: 44px; }
+  .reports-task { min-block-size: 44px; }
+}
 .reports-open:focus-visible { outline: 2px solid transparent; }
 .reports-row:has(.reports-open:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
-.reports-task:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.reports-task:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
 .reports-row:active { background: var(--sidebar-row-selected); }
 @media (hover: hover) and (pointer: fine) {
   .reports-row:hover { background: var(--sidebar-row-hover); }

@@ -75,18 +75,21 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
     <PageFrame
       title="Automations"
       subtitle={`Schedules and GitHub checks run while Squawk is open.`}
-      action={<Button asChild><Link to="/automations/new">New automation</Link></Button>}
+      action={<Button variant="primary" asChild><Link to="/automations/new">New automation</Link></Button>}
     >
       {error && !data ? (
         <div className="grid justify-items-start gap-3"><PageState text={error} /><Button variant="outline" onClick={() => void refresh()}>Retry</Button></div>
       ) : !data ? <PageState text="Loading automations…" /> : (
         <>
-          <SchedulerStatus data={data} />
-          {onArchivedChange ? (
-            <div className="mb-4 flex flex-wrap gap-2">
-              <ChipButton pressed={archived} onClick={() => onArchivedChange(!archived)}>Archived</ChipButton>
-            </div>
-          ) : null}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+            {onArchivedChange ? (
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter automations">
+                <ChipButton pressed={!archived} onClick={() => onArchivedChange(false)}>Active</ChipButton>
+                <ChipButton pressed={archived} onClick={() => onArchivedChange(!archived)}>Archived</ChipButton>
+              </div>
+            ) : <span />}
+            <SchedulerStatus data={data} />
+          </div>
           {archived && data.automations.length === 0 ? (
             <PageState text="No archived one-time schedules." />
           ) : data.automations.length === 0 ? (
@@ -96,7 +99,7 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
               title="No automations yet"
               subtitle="Create one paused, preview it, then enable it."
               heading="h2"
-              actions={<Button asChild><Link to="/automations/new">New automation</Link></Button>}
+              actions={<Button variant="primary" asChild><Link to="/automations/new">New automation</Link></Button>}
             />
           ) : (
             <ul className="grid gap-3" aria-label="Automations">
@@ -124,7 +127,7 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
 function SchedulerStatus({ data }: { data: AutomationsResponse }) {
   const tone = data.scheduler.state === 'scheduled' ? 'text-success' : 'text-muted-foreground'
   return (
-    <p data-slot="automation-scheduler" className={cn('mb-4 text-xs break-words', tone)}>
+    <p data-slot="automation-scheduler" className={cn('text-xs break-words', tone)}>
       {`Scheduler ${data.scheduler.state === 'scheduled' ? 'running' : 'idle'} · GitHub ${data.available ? 'available' : 'unavailable'}${data.reason ? ` · ${data.reason}` : ''} · ${data.timeZone}`}
     </p>
   )

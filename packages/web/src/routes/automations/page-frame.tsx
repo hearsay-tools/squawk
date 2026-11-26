@@ -1,17 +1,17 @@
-import '../task-flows.css'
+import './automations.css'
 import type { ReactNode } from 'react'
 
-/** The page chrome every automations screen shares: title, subtitle, an action row, then the body.
- *  16 px gutters under `md`, where `.task-flow-page`'s 36 px would eat a 390 px viewport. */
+/** Shared Variant A page frame for automations screens: md:px-9 px-4 gutter, 28px semibold
+ *  title + subtitle on the left, and the primary CTA right-aligned on the top title row. */
 export function PageFrame({ title, subtitle, action, children }: { title: string; subtitle: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <main data-route="automations" className="task-flow-page w-full max-w-full min-w-0 max-md:p-4!">
-      <header className="mb-6 flex flex-col items-start gap-5 max-md:mb-4 max-md:gap-3">
+    <main data-route="automations" className="w-full max-w-full min-w-0 px-4 pt-7 pb-9 md:px-9">
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="mb-2 text-[28px] font-medium max-md:text-[22px]">{title}</h1>
-          <p className="text-sm text-muted-foreground">{subtitle}</p>
+          <h1 className="text-[26px] font-semibold tracking-tight leading-[1.2] text-foreground md:text-[28px]">{title}</h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">{subtitle}</p>
         </div>
-        {action}
+        {action ? <div className="shrink-0">{action}</div> : null}
       </header>
       {children}
     </main>
@@ -19,5 +19,5 @@ export function PageFrame({ title, subtitle, action, children }: { title: string
 }
 
 export function PageState({ text }: { text: string }) {
-  return <div role="status" className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">{text}</div>
+  return <div role="status" className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">{text}</div>
 }

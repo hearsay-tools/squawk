@@ -1158,11 +1158,21 @@ describe('groupCommitRuns', () => {
   })
 })
 
+async function selectProjectBoard(label: string) {
+  Element.prototype.scrollIntoView = vi.fn()
+  Element.prototype.hasPointerCapture = vi.fn(() => false)
+  const trigger = await screen.findByRole('combobox', { name: 'Project board' })
+  fireEvent.keyDown(trigger, { key: 'Enter' })
+  fireEvent.click(await screen.findByRole('option', { name: label }))
+  return trigger
+}
+
 describe('issue assignee and board controls', () => {
   const filteredData = { ...GITHUB, viewerLogin: 'alice', projects: [{ id: 'P1', title: 'Delivery', url: 'https://github.com/users/acme/projects/1' }], issues: [
     { ...ISSUE_142, assignees: ['alice'], projectIds: ['P1'] },
     { ...ISSUE_139, assignees: ['bob'], projectIds: [] },
   ] }
+
   it('composes Assigned to me with the board and search, then clears every filter', async () => {
     stubFetch({ 'GET /api/v1/github?limit=50': () => jsonResponse(filteredData) })
     renderAt('/github')
@@ -1170,7 +1180,7 @@ describe('issue assignee and board controls', () => {
     expect(rows().map(r => r.textContent).join()).toContain(ISSUE_142.title)
     expect(rows().map(r => r.textContent).join()).not.toContain(ISSUE_139.title)
     expect(screen.queryByText('Project board')).toBeNull()
-    fireEvent.change(screen.getByRole('combobox', { name: 'Project board' }), { target: { value: 'P1' } })
+    await selectProjectBoard('Delivery')
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search issues' }), { target: { value: 'no match' } })
     expect(rows()).toHaveLength(0)
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
@@ -1240,9 +1250,9 @@ it('keeps legacy metadata usable with disabled personal filtering and no board p
 it('renders a disabled No boards picker on the filter row when projects is empty', async () => {
   stubFetch({ 'GET /api/v1/github?limit=50': () => jsonResponse({ ...GITHUB, viewerLogin: 'alice', projects: [] }) })
   renderAt('/github')
-  const picker = await screen.findByRole('combobox', { name: 'Project board' }) as HTMLSelectElement
+  const picker = await screen.findByRole('combobox', { name: 'Project board' }) as HTMLButtonElement
   expect(picker.disabled).toBe(true)
-  expect([...picker.options].map(option => option.textContent)).toEqual(['No boards'])
+  expect(picker.textContent).toContain('No boards')
   expect(screen.queryByText('No linked project boards.')).toBeNull()
 })
 
@@ -1256,7 +1266,7 @@ it.each([[], undefined])('does not restore a stale board selection after refresh
     'GET /api/v1/github?limit=50&refresh=1': () => jsonResponse(++refreshes === 1 ? { ...boardData, projects } : boardData),
   })
   renderAt('/github')
-  fireEvent.change(await screen.findByRole('combobox', { name: 'Project board' }), { target: { value: 'P1' } })
+  await selectProjectBoard('Delivery')
   expect(rows()).toHaveLength(1)
   fireEvent.click(screen.getByTitle('Refresh from GitHub'))
   await waitFor(() => expect(rows()).toHaveLength(2))
@@ -1264,7 +1274,7 @@ it.each([[], undefined])('does not restore a stale board selection after refresh
   await waitFor(() => expect((screen.getByTitle('Refresh from GitHub') as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(screen.getByTitle('Refresh from GitHub'))
   const picker = await screen.findByRole('combobox', { name: 'Project board' })
-  expect((picker as HTMLSelectElement).value).toBe('')
+  expect(picker.getAttribute('data-value')).toBe('')
   expect(rows()).toHaveLength(2)
 })
 
@@ -1337,19 +1347,18 @@ it.each(['ready', 'unavailable', 'network'] as const)('keeps the board filter an
     [`GET /api/v1/github/projects?generation=${generation}`]: () => new Promise<Response>(resolve => { finish = resolve }),
   })
   renderAt('/github')
-  const picker = await screen.findByRole('combobox', { name: 'Project board' })
-  fireEvent.change(picker, { target: { value: 'P1' } })
+  const picker = await selectProjectBoard('Delivery')
   expect(rows()).toHaveLength(1)
   fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
   await screen.findByText(/Refreshing project boards/)
-  expect((picker as HTMLSelectElement).value).toBe('P1')
+  expect(picker.getAttribute('data-value')).toBe('P1')
   expect(rows()).toHaveLength(2)
   await waitFor(() => expect(finish).toBeTypeOf('function'))
   finish(state === 'network' ? new Response('offline', { status: 503 }) : jsonResponse(state === 'ready'
     ? { generation, state, projects: boardData.projects, membership: { 142: ['P1'], 139: [] } }
     : { generation, state, reason: 'Project lookup failed.' }))
   await waitFor(() => expect(screen.queryByText(/Refreshing project boards/)).toBeNull())
-  expect((picker as HTMLSelectElement).value).toBe('P1')
+  expect(picker.getAttribute('data-value')).toBe('P1')
   expect(rows()).toHaveLength(state === 'ready' ? 1 : 2)
   if (state !== 'ready') expect(screen.getByText(/Previous memberships are shown/)).toBeTruthy()
 })
