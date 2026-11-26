@@ -319,3 +319,26 @@ it.each([-1, 0, 1])('delivers or resets at the complete SSE wire boundary (%i)',
     }
   } finally { controller.abort(); await reader.cancel() }
 })
+
+it('sends an explicit snapshot frame for active content behind the SSE cursor', async () => {
+  store.eventLog.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'typing', text: '' } });
+  store.eventLog.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'live text' });
+  store.eventLog.appendEvent(runId, { type: 'note', text: 'later persisted event' });
+  const controller = new AbortController();
+  const response = await apiRequest(app, '/api/v1/workspace/run-events', {
+    method: 'POST', signal: controller.signal, headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ runs: [{ projectId: 'boot', runId, afterSeq: 3 }] }),
+  });
+  const reader = response.body!.getReader();
+  let wire = '';
+  try {
+    while (!wire.includes('"type":"snapshot"')) {
+      const next = await reader.read();
+      if (next.done) throw new Error('stream ended before snapshot');
+      wire += new TextDecoder().decode(next.value);
+    }
+    const data = wire.split('\n').find(line => line.startsWith('data: ') && line.includes('"type":"snapshot"'))!;
+    expect(JSON.parse(data.slice(6))).toMatchObject({ type: 'snapshot', projectId: 'boot', runId, name: 'ui-event',
+      event: { seq: 2, type: 'item.updated', item: { text: 'live text' } } });
+  } finally { controller.abort(); await reader.cancel(); }
+});

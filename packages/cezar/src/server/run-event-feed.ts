@@ -19,6 +19,7 @@ function parsePersistedRunEvent(line: string): RunEvent | undefined {
 interface RunEventBatchScan {
   offset: number;
   afterSeq: number;
+  lowSnapshotCount: number;
   events: LiveRunBatch['events'];
   bytes: number;
   hasMore: boolean;
@@ -31,7 +32,7 @@ interface RunEventBatchScan {
 function acceptRunEvent(scan: RunEventBatchScan, event: RunEvent, length: number, byteLimit: number): boolean {
   if (event.seq <= scan.afterSeq) return true;
   if (length > byteLimit) throw new LiveFeedReset('event exceeds live batch limit — reload history');
-  if (scan.events.length >= LIVE_EVENT_LIMIT || scan.bytes + length > byteLimit) {
+  if (scan.events.length + scan.lowSnapshotCount >= LIVE_EVENT_LIMIT || scan.bytes + length > byteLimit) {
     scan.hasMore = true;
     return false;
   }
@@ -77,13 +78,14 @@ function consumePersistedLine(
  * Later writes wait for the next capture: otherwise a newer persisted event could
  * acknowledge live content emitted during the scan but absent from the snapshots.
  * Keep the byte offset at the first unaccepted persisted record. */
-export async function readRunEventBatch(dataDir: string, demand: LiveRunDemand, signal: AbortSignal, byteLimit = LIVE_BYTE_LIMIT, snapshot?: ReturnType<ProjectContext['store']['liveReadSnapshot']>): Promise<LiveRunBatch> {
+async function scanRunEventBatch(dataDir: string, demand: LiveRunDemand, signal: AbortSignal, byteLimit = LIVE_BYTE_LIMIT, snapshot?: ReturnType<ProjectContext['store']['liveReadSnapshot']>): Promise<{ batch: LiveRunBatch; sizeLimited: boolean }> {
   signal.throwIfAborted();
   const start = demand.cursor ? decodeLiveCursor(demand.cursor) : { offset: 0, boundarySeq: 0 };
   const scan: RunEventBatchScan = {
     offset: start.offset,
     afterSeq: Math.max(demand.afterSeq, start.boundarySeq),
     events: [],
+    lowSnapshotCount: 0,
     bytes: 0,
     hasMore: false,
     laterWrites: false,
@@ -91,6 +93,15 @@ export async function readRunEventBatch(dataDir: string, demand: LiveRunDemand, 
     snapshotIndex: 0,
     ...(snapshot ? { snapshot } : {}),
   };
+  const lowSeqSnapshots = scan.snapshots.filter(event => event.seq <= scan.afterSeq);
+  scan.lowSnapshotCount = lowSeqSnapshots.length;
+  for (const event of lowSeqSnapshots) {
+    scan.bytes += Buffer.byteLength(JSON.stringify(event)) + 1;
+  }
+  if (lowSeqSnapshots.length > LIVE_EVENT_LIMIT || scan.bytes > byteLimit) {
+    throw new LiveFeedReset('snapshots exceed live batch limit — reload history');
+  }
+  scan.snapshots = scan.snapshots.filter(event => event.seq > scan.afterSeq);
   let pending: Buffer = Buffer.alloc(0);
   outer: for await (const chunk of streamHistoryAfter(dataDir, demand.runId, scan.offset, signal)) {
     pending = pending.length ? Buffer.concat([pending, chunk]) : chunk;
@@ -105,11 +116,19 @@ export async function readRunEventBatch(dataDir: string, demand: LiveRunDemand, 
   }
   signal.throwIfAborted();
   if (!scan.hasMore) acceptSnapshotsBefore(scan, Infinity, byteLimit);
+  if (scan.hasMore && !scan.events.length && lowSeqSnapshots.length) {
+    throw new LiveFeedReset('snapshots leave no room for replay — reload history');
+  }
   // No newline means a writer is still appending: do not acknowledge that partial record.
-  return {
+  return { sizeLimited: scan.hasMore, batch: {
+    ...(lowSeqSnapshots.length ? { snapshots: lowSeqSnapshots } : {}),
     type: 'batch', projectId: demand.projectId, runId: demand.runId, events: scan.events, afterSeq: scan.afterSeq, hasMore: scan.hasMore || scan.laterWrites,
     cursor: Buffer.from(JSON.stringify({ v: 1, kind: 'live', offset: scan.offset, boundarySeq: scan.afterSeq })).toString('base64url'),
-  };
+  } };
+}
+
+export async function readRunEventBatch(...args: Parameters<typeof scanRunEventBatch>): Promise<LiveRunBatch> {
+  return (await scanRunEventBatch(...args)).batch;
 }
 
 /** Freeze the finite scan even for a cold store with no in-memory sequence yet.
@@ -128,11 +147,24 @@ export async function readFiniteRunFeed(
   finally { unsubscribe(); }
 }
 
+/** Snapshot delivery restores open items without acknowledging any event sequence. */
+async function replayLowSnapshots(
+  snapshot: ReturnType<ProjectContext['store']['liveReadSnapshot']>, afterSeq: number,
+  write: ((event: RunEvent) => Promise<void>) | undefined, stopped: Promise<void>, signal: AbortSignal,
+): Promise<void> {
+  for (const event of snapshot.events) {
+    if (event.seq > afterSeq) continue;
+    await Promise.race([write?.(event), stopped]);
+    signal.throwIfAborted();
+  }
+  snapshot.events = snapshot.events.filter(event => event.seq > afterSeq);
+}
+
 /** Attach before reading; serialize replay and live writes; bound slow-client memory. */
 export async function subscribeRunFeed(
   context: Pick<ProjectContext, 'store' | 'dataDir'>,
   demand: LiveRunDemand,
-  handlers: { event(event: RunEvent): Promise<void>; reset(reason: string, status?: 409 | 413): void },
+  handlers: { snapshot?(event: RunEvent): Promise<void>; event(event: RunEvent): Promise<void>; reset(reason: string, status?: 409 | 413): void },
   signal: AbortSignal,
   byteLimit = LIVE_BYTE_LIMIT,
 ): Promise<void> {
@@ -152,7 +184,9 @@ export async function subscribeRunFeed(
   let wake: (() => void) | undefined;
   const reset = (reason: string, status: 409 | 413 = 409) => { if (!controller.signal.aborted) { stop(); handlers.reset(reason, status); } };
   const onEvent = ({ runId, event }: { runId: string; event: RunEvent }) => {
-    if (runId !== demand.runId || event.seq <= maxSeq || controller.signal.aborted) return;
+    if (runId !== demand.runId || controller.signal.aborted) return;
+    liveSnapshot.throughSeq = Math.min(liveSnapshot.throughSeq, event.seq - 1);
+    if (event.seq <= maxSeq) return;
     const bytes = Buffer.byteLength(JSON.stringify(event));
     pendingBytes += bytes;
     if (pendingBytes > byteLimit) { reset('live buffer exceeded — reload history'); return; }
@@ -164,6 +198,7 @@ export async function subscribeRunFeed(
     'run.event': onEvent,
     'run.deleted': ({ runId }) => { if (runId === demand.runId) reset('run removed'); },
   });
+  const liveSnapshot = context.store.liveReadSnapshot(demand.runId);
   const detached = () => {
     unsubscribe();
     pending = [];
@@ -171,9 +206,11 @@ export async function subscribeRunFeed(
   };
   controller.signal.addEventListener('abort', detached, { once: true });
   try {
+    if (demand.cursor) maxSeq = Math.max(maxSeq, decodeLiveCursor(demand.cursor).boundarySeq);
+    await replayLowSnapshots(liveSnapshot, maxSeq, handlers.snapshot, stopped, controller.signal);
     let cursor = demand.cursor;
     do {
-      const batch = await readRunEventBatch(context.store.claims.sourceDataDir(demand.runId), { ...demand, ...(cursor ? { cursor } : {}), afterSeq: maxSeq }, controller.signal, byteLimit);
+      const { batch, sizeLimited } = await scanRunEventBatch(context.store.claims.sourceDataDir(demand.runId), { ...demand, ...(cursor ? { cursor } : {}), afterSeq: maxSeq }, controller.signal, byteLimit, { ...liveSnapshot, events: liveSnapshot.events.filter(event => event.seq > maxSeq) });
       for (const event of batch.events) {
         controller.signal.throwIfAborted();
         if (event.seq <= maxSeq) continue;
@@ -182,7 +219,7 @@ export async function subscribeRunFeed(
       }
       maxSeq = Math.max(maxSeq, batch.afterSeq);
       cursor = batch.cursor;
-      if (!batch.hasMore) break;
+      if (!sizeLimited) break;
     } while (!controller.signal.aborted);
     while (!controller.signal.aborted) {
       // RunStore assigns one monotonic clock per run; ignore duplicate/reordered replays.

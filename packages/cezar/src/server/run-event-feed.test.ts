@@ -60,7 +60,7 @@ describe('bounded persisted feed', () => {
     let afterSeq = 0;
     const seen: RunEvent[] = [];
     for (let i = 0; i < 3; i++) {
-      const page = await readRunEventBatch(dataDir, { ...demand(), cursor, afterSeq }, signal(), 150, snapshots);
+      const page = await readRunEventBatch(dataDir, { ...demand(), cursor, afterSeq }, signal(), 150, { ...snapshots, events: snapshots.events.filter(event => event.seq > afterSeq) });
       seen.push(...page.events);
       cursor = page.cursor; afterSeq = page.afterSeq;
       expect(page.events).toHaveLength(1);
@@ -187,4 +187,46 @@ describe('ordered replay/live handoff', () => {
     } finally { controller.abort(); await task; }
   });
 
+});
+
+describe('active item replay', () => {
+  function activeItem() {
+    store.eventLog.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id: 'typing', text: '' } });
+    store.eventLog.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: 'before' });
+    store.eventLog.appendEvent(runId, { type: 'note', text: 'persisted after delta' });
+  }
+  it('returns snapshots behind the finite cursor without advancing it', async () => {
+    activeItem();
+    const batch = await readFiniteRunFeed({ store, dataDir }, { ...demand(), afterSeq: 3 }, signal());
+    expect(batch).toMatchObject({ events: [], afterSeq: 3, snapshots: [{ seq: 2, type: 'item.updated', item: { text: 'before' } }] });
+  });
+  it.each([0, 3])('replays active content at afterSeq %i and drains writes beyond the fence', async afterSeq => {
+    activeItem();
+    const controller = new AbortController();
+    const seen: number[] = [];
+    const snapshots: RunEvent[] = [];
+    let complete!: () => void;
+    const received = new Promise<void>(resolve => { complete = resolve; });
+    const capture = store.liveReadSnapshot.bind(store);
+    const context = { dataDir, store: Object.create(store) as RunStore };
+    context.store.liveReadSnapshot = id => {
+      const snapshot = capture(id);
+      // Append after capture but before the scanner resumes filesystem IO.
+      queueMicrotask(() => {
+        store.eventLog.emitEphemeral(runId, { type: 'item.delta', itemId: 'typing', field: 'text', delta: ' after' });
+        store.eventLog.appendEvent(runId, { type: 'item.completed', item: { kind: 'message', id: 'typing', text: 'before after' } });
+      });
+      return snapshot;
+    };
+    const task = subscribeRunFeed(context, { ...demand(), afterSeq }, {
+      snapshot: async event => { snapshots.push(event); },
+      event: async event => { seen.push(event.seq); if (event.seq === 5) complete(); },
+      reset: reason => { throw new Error(reason); },
+    }, controller.signal);
+    try {
+      await received;
+      expect(seen).toEqual(afterSeq === 0 ? [1, 2, 3, 4, 5] : [4, 5]);
+      expect(snapshots.map(event => event.seq)).toEqual(afterSeq === 0 ? [] : [2]);
+    } finally { controller.abort(); await task; }
+  });
 });

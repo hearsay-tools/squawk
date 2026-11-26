@@ -25,6 +25,7 @@ export const liveRunErrorSchema = identity.extend({
 export const liveRunBatchSchema = identity.extend({
   type: z.literal('batch'),
   events: z.array(runHistoryEventSchema).max(LIVE_EVENT_LIMIT),
+  snapshots: z.array(runHistoryEventSchema).max(LIVE_EVENT_LIMIT).optional(),
   cursor: runHistoryCursorSchema,
   afterSeq: z.number().int().nonnegative(),
   hasMore: z.boolean(),
@@ -42,6 +43,7 @@ export const liveRunFrameSchema = z.union([
   z.object({ type: z.literal('ready'), generation: z.string() }),
   z.object({ type: z.literal('ping') }),
   identity.extend({ type: z.literal('event'), name: z.enum(['run-event', 'ui-event']), event: runHistoryEventSchema }),
+  identity.extend({ type: z.literal('snapshot'), name: z.literal('ui-event'), event: runHistoryEventSchema }),
   liveRunErrorSchema,
 ]);
 export type LiveRunFrame = z.infer<typeof liveRunFrameSchema>;
