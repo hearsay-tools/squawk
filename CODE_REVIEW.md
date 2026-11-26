@@ -107,7 +107,7 @@ the old and new form.
 Changes to a run state or how a run leaves an existing state (an exit trigger or
 recovery path), a hold, park or resume, cross-run relationship, ToolGrant mapping,
 running task's worktree files, detached process, lock or ownership check, restored
-client state, or deleted or retired rule text need the applicable
+client state, or a spec or plan that deletes or retires rule text need the applicable
 [case tables](.ai/specs/TEMPLATE.md#case-tables) in the spec or plan before implementation.
 
 ## CI surface rules
