@@ -46,6 +46,12 @@ describe('parseSessionContextText: problems for the editor', () => {
     expect(parsed.problems).toEqual([{ line: 1, rule: null, message: expect.stringMatching(/^Invalid YAML: /) }]);
   });
 
+  it('reports a self-referencing version without throwing', () => {
+    const parsed = parseSessionContextText('version: &v [*v]\nrules: []\n');
+    expect(parsed.rules).toEqual([]);
+    expect(parsed.problems).toEqual([{ line: 1, rule: null, message: 'version must be 1, not a list' }]);
+  });
+
   it('refuses another version and a non-list rules key, on their lines', () => {
     expect(parseSessionContextText('version: 2\nrules: []\n').problems).toEqual([
       { line: 1, rule: null, message: 'version must be 1, not 2' },

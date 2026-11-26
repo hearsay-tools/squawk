@@ -248,6 +248,56 @@ describe('SessionContextSection', () => {
     expect(server.file.content).toBe('version: 1\n# theirs\n')
   })
 
+  it('moves between Parent and Worker with the arrow keys, with one tab stop', async () => {
+    const server: FakeServer = { file: fileOf(), puts: [], previews: [] }
+    serve(server)
+    renderSection()
+    await screen.findByLabelText('context.yaml rules')
+    const parent = screen.getByRole('radio', { name: 'parent' })
+    const worker = screen.getByRole('radio', { name: 'worker' })
+    expect([parent.tabIndex, worker.tabIndex]).toEqual([0, -1])
+    fireEvent.keyDown(parent, { key: 'ArrowRight' })
+    expect(worker.getAttribute('aria-checked')).toBe('true')
+    expect(document.activeElement).toBe(worker)
+    expect([parent.tabIndex, worker.tabIndex]).toEqual([-1, 0])
+    await waitFor(() => expect(server.previews.at(-1)?.role).toBe('worker'))
+  })
+
+  it('moves between the Edit and Preview tabs with the arrow keys', async () => {
+    serve({ file: fileOf(), puts: [], previews: [] })
+    renderSection()
+    await screen.findByLabelText('context.yaml rules')
+    const edit = screen.getByRole('tab', { name: 'edit' })
+    const preview = screen.getByRole('tab', { name: 'preview' })
+    expect([edit.tabIndex, preview.tabIndex]).toEqual([0, -1])
+    expect(edit.getAttribute('aria-controls')).toBeTruthy()
+    fireEvent.keyDown(edit, { key: 'ArrowRight' })
+    expect(preview.getAttribute('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(preview)
+  })
+
+  it('lets the reader scroll and focus a long preview block', async () => {
+    serve({ file: fileOf(), puts: [], previews: [] })
+    renderSection()
+    await screen.findByLabelText('context.yaml rules')
+    const text = await screen.findByLabelText('handoff text')
+    expect(text.tabIndex).toBe(0)
+  })
+
+  it('keeps the draft counted as unsent when the file turns read only after a refused save', async () => {
+    const server: FakeServer = { file: fileOf(), puts: [], previews: [] }
+    serve(server)
+    renderSection()
+    await screen.findByLabelText('context.yaml rules')
+    server.file = fileOf({ version: null, content: '', writable: false, readOnlyReason: 'Squawk cannot edit it: it is not valid UTF-8.' })
+    type(VALID.replace('Hello', 'Mine'))
+    await waitFor(() => expect(saveButton().disabled).toBe(false))
+    fireEvent.click(saveButton())
+    expect(await screen.findByText(/not valid UTF-8/)).toBeTruthy()
+    expect(editor().value).toBe(VALID.replace('Hello', 'Mine'))
+    expect(hasUnsentInput()).toBe(true)
+  })
+
   it('says what failed when the file does not load', async () => {
     serve({ file: fileOf(), getStatus: 500, puts: [], previews: [] })
     renderSection()

@@ -133,6 +133,12 @@ describe('session context: budget', () => {
     expect(context.prefix).toContain('\nok\n');
   });
 
+  it('does not count trailing newlines that the block drops, so a block that fits still applies', () => {
+    writeFileSync(join(worktree, 'pad.txt'), '\n'.repeat(SESSION_CONTEXT_LIMIT_BYTES - 1));
+    rules(`version: 1\nrules:\n${rule('padded', 'ok{{file:pad.txt}}')}`);
+    expect(byId(buildSessionContext(input()), 'padded')?.status).toBe('applied');
+  });
+
   it('counts UTF-8 bytes, not characters', () => {
     // 4-byte characters: the prefix is within the limit in characters but over it in bytes.
     const fourByte = '😀';

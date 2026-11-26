@@ -177,11 +177,14 @@ export function useSessionContextPreview(content: string, role: SessionContextRo
 
 export function usePutSessionContext() {
   const queryClient = useQueryClient()
-  // Captured at render: a save that ends after a project switch writes the project it started in.
-  const fileKey = queryKeys.sessionContext
   return useMutation({
+    // The key is taken when the save starts, with the request: a save that ends after a project
+    // switch writes only the project it started in.
+    onMutate: () => ({ fileKey: queryKeys.sessionContext }),
     mutationFn: (body: SetSessionContextInput) => putSessionContext(body),
-    onSuccess: (result) => queryClient.setQueryData(fileKey, result),
+    onSuccess: (result, _body, context) => {
+      if (context) queryClient.setQueryData(context.fileKey, result)
+    },
   })
 }
 

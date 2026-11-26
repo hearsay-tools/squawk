@@ -81,12 +81,23 @@ function intoFlowList(text: string, start: number, last: Ranged | undefined, id:
   return placed(lead, id, `, on: session_start, target: both, template: "${STARTER_TEXT}" }${text.slice(at)}`)
 }
 
-/** After the last item of a block list, at the indentation of its first item. */
+/**
+ * After the last item of a block list, at the indentation of its first item. Nothing before the
+ * list's end is trimmed: a keep-chomped template (`|+`) owns its trailing blank lines.
+ */
 function intoBlockList(text: string, firstStart: number, valueEnd: number, id: string): Inserted {
   const lineStart = text.lastIndexOf('\n', firstStart - 1) + 1
   const indent = /^[ \t]*/.exec(text.slice(lineStart))![0]
-  const end = text.slice(0, valueEnd).replace(/\s*$/, '').length
-  return placed(`${text.slice(0, end)}\n${indent}- id: `, id, ruleTail(indent) + text.slice(end))
+  const head = text.slice(0, valueEnd)
+  if (head.endsWith('\n')) return placed(`${head}${indent}- id: `, id, `${ruleTail(indent)}\n${text.slice(valueEnd)}`)
+  return placed(`${head}\n${indent}- id: `, id, ruleTail(indent) + text.slice(valueEnd))
+}
+
+/** A flow mapping with no `rules` key: add the key and a one-item list before its closing brace. */
+function intoFlowMapping(text: string, mapEnd: number, hasItems: boolean, id: string): Inserted {
+  const close = text.lastIndexOf('}', mapEnd)
+  const [open, rest] = flowList()
+  return placed(`${text.slice(0, close).replace(/\s*$/, '')}${hasItems ? ', ' : ''}rules: ${open}`, id, rest + text.slice(close))
 }
 
 /** No `rules` list to insert into: add the key if it is missing, and the rule at the end. */
@@ -100,6 +111,15 @@ function atEnd(text: string, id: string): Inserted {
  * Add a starter rule to the `rules` list, as a text insert where the list is. An empty draft gets
  * `version` and `rules` first. A draft that does not parse gets the rule at its end.
  */
+/** Into an existing rules list, flow or block; undefined when the list gives no place to insert. */
+function intoList(text: string, rules: unknown, id: string): Inserted | undefined {
+  if (!isSeq(rules) || !rules.range) return undefined
+  const last = rules.items.at(-1) as Ranged | undefined
+  if (rules.flow) return intoFlowList(text, rules.range[0], last, id)
+  const first = (rules.items[0] as Ranged | undefined)?.range?.[0]
+  return first === undefined ? undefined : intoBlockList(text, first, rules.range[1], id)
+}
+
 export function addRule(text: string): Inserted {
   const id = freeRuleId(text)
   if (text.trim() === '') return atEnd('version: 1\n', id)
@@ -111,12 +131,9 @@ export function addRule(text: string): Inserted {
   if (keyStart !== undefined && (rules === null || (isScalar(rules) && rules.value === null))) {
     return underNullKey(text, keyStart, rules as Ranged | null, root?.flow === true, id)
   }
-  if (isSeq(rules) && rules.range) {
-    const last = rules.items.at(-1) as Ranged | undefined
-    if (rules.flow) return intoFlowList(text, rules.range[0], last, id)
-    const first = (rules.items[0] as Ranged | undefined)?.range?.[0]
-    if (first !== undefined) return intoBlockList(text, first, rules.range[1], id)
-  }
+  const listed = intoList(text, rules, id)
+  if (listed) return listed
+  if (!pair && root?.flow && root.range) return intoFlowMapping(text, root.range[1], root.items.length > 0, id)
   return atEnd(text, id)
 }
 

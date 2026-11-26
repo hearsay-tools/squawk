@@ -168,7 +168,7 @@ export function parseSessionContextText(text: string): ParsedSessionContext {
   const root = isMap(doc.contents) ? doc.contents : undefined;
   const { version, rules } = value as { version?: unknown; rules?: unknown };
   if (version !== 1) {
-    const found = JSON.stringify(version ?? null);
+    const found = describeValue(version);
     const message = version === undefined ? 'version: 1 is required' : `version must be 1, not ${found}`;
     return fatal(`unsupported version ${found}; expected 1`, message, keyLine(root, 'version', lineAt) ?? 1);
   }
@@ -218,6 +218,13 @@ function ruleProblems(rules: unknown[], nodes: Array<YamlNode | undefined>, line
     }
   });
   return problems.sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
+}
+
+/** A rejected value for a message: scalars as JSON, collections by kind (they can be circular). */
+function describeValue(value: unknown): string {
+  if (Array.isArray(value)) return 'a list';
+  if (typeof value === 'object' && value !== null) return 'a mapping';
+  return JSON.stringify(value ?? null);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -395,25 +402,53 @@ function renderBlock(id: string, body: string, source?: string): string {
 type Rendered = { ok: true; text: string; sources: string[] } | { ok: false; reason: string; sources: string[] };
 
 /**
+ * The bytes a block body will have, counted as its pieces arrive. A run of LF at the end is held
+ * apart: `renderBlock` drops it, so it counts only once later text follows it.
+ */
+class RenderedSize {
+  private committed = 0;
+  private lfRun = 0;
+
+  add(text: string): void {
+    const body = text.replace(/\n+$/, '');
+    const run = text.length - body.length;
+    if (body === '') {
+      this.lfRun += run;
+      return;
+    }
+    this.committed += this.lfRun + Buffer.byteLength(body, 'utf8');
+    this.lfRun = run;
+  }
+
+  get over(): boolean {
+    return this.committed > SESSION_CONTEXT_LIMIT_BYTES;
+  }
+}
+
+/**
  * Expand a template in one pass over the template text only: a value or file content that
  * holds `{{…}}` stays literal. Every token is resolved before anything is emitted, so one bad
- * token skips the whole rule instead of shipping a half-rendered block.
+ * token skips the whole rule instead of shipping a half-rendered block. Once the body alone is
+ * over the limit the block cannot fit, so rendering stops: repeated includes must not grow a
+ * small template into an unbounded string.
  */
 function renderTemplate(template: string, input: SessionContextInput): Rendered {
   const sources: string[] = [];
   const values: string[] = [];
-  // The rendered size so far. Once it alone is over the limit the block cannot fit, so stop:
-  // repeated includes must not grow a small template into an unbounded string.
-  let size = Buffer.byteLength(template.replace(TOKEN, ''), 'utf8');
+  const size = new RenderedSize();
+  const tooLarge = (): Rendered => ({ ok: false, reason: `does not fit the ${SESSION_CONTEXT_LIMIT_BYTES}-byte limit`, sources });
+  let literalStart = 0;
   for (const match of template.matchAll(TOKEN)) {
+    size.add(template.slice(literalStart, match.index));
+    literalStart = match.index + match[0].length;
     const token = match[1]!;
     if (token.startsWith('file:')) {
       const path = token.slice('file:'.length).trim();
       sources.push(path);
       const file = readIncludedFile(input.cwd, path);
       if (!file.ok) return { ok: false, reason: `file ${path}: ${file.reason}`, sources };
-      size += Buffer.byteLength(file.text, 'utf8');
-      if (size > SESSION_CONTEXT_LIMIT_BYTES) return { ok: false, reason: `does not fit the ${SESSION_CONTEXT_LIMIT_BYTES}-byte limit`, sources };
+      size.add(file.text);
+      if (size.over) return tooLarge();
       values.push(file.text);
       continue;
     }
@@ -422,7 +457,7 @@ function renderTemplate(template: string, input: SessionContextInput): Rendered 
     }
     const value = input.variables[token as SessionContextVariable];
     if (value === undefined) return { ok: false, reason: `variable {{${token}}} is not available for this launch`, sources };
-    size += Buffer.byteLength(value, 'utf8');
+    size.add(value);
     values.push(value);
   }
   let index = 0;

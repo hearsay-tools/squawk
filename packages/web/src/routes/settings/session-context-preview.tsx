@@ -1,6 +1,8 @@
 import type { SessionContextPreview, SessionContextPreviewBlock, SessionContextRole } from '@open-mercato/cezar-api-client'
 import { Badge } from '@/components/ui/badge'
+import { useRef, type KeyboardEvent } from 'react'
 import { cn } from '@/lib/utils'
+import { valueForKey } from './session-context-keys'
 
 const TARGET_LABEL: Record<NonNullable<SessionContextPreviewBlock['target']>, string> = {
   'built-in': 'built in',
@@ -22,12 +24,14 @@ const bytes = (n: number) => `${n.toLocaleString('en-US')} B`
  * block by block, and how much of the 64 KiB limit it uses.
  */
 export function SessionContextPreviewPanel({
+  id,
   preview,
   role,
   onRole,
   pending,
   className,
 }: {
+  id?: string | undefined
   preview: SessionContextPreview | undefined
   role: SessionContextRole
   onRole: (role: SessionContextRole) => void
@@ -36,6 +40,7 @@ export function SessionContextPreviewPanel({
 }) {
   return (
     <section
+      id={id}
       data-slot="session-context-preview"
       aria-labelledby="session-context-preview-title"
       aria-busy={pending}
@@ -48,24 +53,7 @@ export function SessionContextPreviewPanel({
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <span id="session-context-role" className="text-[12px] text-soft-foreground">Preview as</span>
-          <div role="radiogroup" aria-labelledby="session-context-role" className="inline-flex overflow-hidden rounded-md border border-[var(--control-border)]">
-            {(['parent', 'worker'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={role === value}
-                data-slot="session-context-role"
-                onClick={() => onRole(value)}
-                className={cn(
-                  'min-h-11 px-4 text-[13px] capitalize text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring',
-                  role === value && 'bg-muted text-foreground',
-                )}
-              >
-                {value}
-              </button>
-            ))}
-          </div>
+          <RoleRadios role={role} onRole={onRole} />
           <span className="text-[12px] text-soft-foreground">Files come from the project checkout. Task values are samples.</span>
         </div>
         {preview ? <ByteMeter used={preview.usedBytes} limit={preview.limitBytes} blocks={preview.blocks} /> : <div className="h-[38px]" />}
@@ -74,6 +62,45 @@ export function SessionContextPreviewPanel({
         {preview?.blocks.map((block, index) => <PreviewBlock key={`${block.id}-${index}`} block={block} role={role} />)}
       </ul>
     </section>
+  )
+}
+
+const ROLES = ['parent', 'worker'] as const
+
+/** A radio group: one tab stop on the checked role, arrow keys move and select. */
+function RoleRadios({ role, onRole }: { role: SessionContextRole; onRole: (role: SessionContextRole) => void }) {
+  const buttons = useRef(new Map<SessionContextRole, HTMLButtonElement>())
+  const onKeyDown = (event: KeyboardEvent) => {
+    const next = valueForKey(ROLES, role, event.key)
+    if (next === undefined) return
+    event.preventDefault()
+    onRole(next)
+    buttons.current.get(next)?.focus()
+  }
+  return (
+    <div role="radiogroup" aria-labelledby="session-context-role" onKeyDown={onKeyDown} className="inline-flex overflow-hidden rounded-md border border-[var(--control-border)]">
+      {ROLES.map((value) => (
+        <button
+          key={value}
+          ref={(element) => {
+            if (element) buttons.current.set(value, element)
+            else buttons.current.delete(value)
+          }}
+          type="button"
+          role="radio"
+          aria-checked={role === value}
+          tabIndex={role === value ? 0 : -1}
+          data-slot="session-context-role"
+          onClick={() => onRole(value)}
+          className={cn(
+            'min-h-11 px-4 text-[13px] capitalize text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring',
+            role === value && 'bg-muted text-foreground',
+          )}
+        >
+          {value}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -116,7 +143,12 @@ function PreviewBlock({ block, role }: { block: SessionContextPreviewBlock; role
       </div>
       {block.reason && <p className="text-[12px] text-conflict">{block.reason}</p>}
       {block.text !== null && (
-        <pre className="max-h-28 overflow-hidden rounded-md bg-background px-2.5 py-2 font-mono text-[12px] whitespace-pre-wrap text-muted-foreground">
+        // Scrolls, and takes keyboard focus, so every returned line can be read.
+        <pre
+          tabIndex={0}
+          aria-label={`${block.id} text`}
+          className="max-h-28 overflow-auto rounded-md bg-background px-2.5 py-2 font-mono text-[12px] whitespace-pre-wrap text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
+        >
           {block.text}
           {block.truncated ? '\n…' : ''}
         </pre>

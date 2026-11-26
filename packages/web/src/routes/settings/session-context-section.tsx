@@ -1,5 +1,5 @@
 import { FileStackIcon, PlusIcon } from 'lucide-react'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 
 import { ApiError } from '@/api/client'
 import { usePutSessionContext, useSessionContext, useSessionContextPreview } from '@/api/queries'
@@ -13,6 +13,7 @@ import { toast } from '@/components/ui/toaster'
 import { cn } from '@/lib/utils'
 import { useUnsentDraft } from '@/lib/version-reload'
 import { SessionContextPreviewPanel } from './session-context-preview'
+import { valueForKey } from './session-context-keys'
 import { FILE_TOKEN_LABEL, SESSION_CONTEXT_TOKENS, addRule, insertToken, lineRange } from './session-context-draft'
 
 const DOCS_URL = 'https://github.com/hearsay-tools/squawk/blob/main/docs/context-injection.md'
@@ -113,7 +114,8 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
 
   const content = draft ?? file.content
   const dirty = content !== file.content
-  useUnsentDraft(file.writable && dirty)
+  // A draft counts as unsent even when the file has turned read only under it.
+  useUnsentDraft(dirty)
 
   const settled = useSettled(content)
   const preview = useSessionContextPreview(settled, role)
@@ -210,6 +212,7 @@ function SessionContextEditor({ file, refetch }: { file: SessionContextFile; ref
       <PaneTabs pane={state.pane} onPane={state.setPane} />
       <div className="grid items-start gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <section
+          id={PANE_IDS.edit}
           data-slot="session-context-file"
           aria-label="context.yaml"
           className={cn('flex flex-col overflow-hidden rounded-lg border border-border bg-card', state.pane !== 'edit' && 'max-md:hidden')}
@@ -236,6 +239,7 @@ function SessionContextEditor({ file, refetch }: { file: SessionContextFile; ref
           {writable && <TokenChips onInsert={state.insert} />}
         </section>
         <SessionContextPreviewPanel
+          id={PANE_IDS.preview}
           preview={state.preview}
           role={state.role}
           onRole={state.setRole}
@@ -256,13 +260,31 @@ function SessionContextEditor({ file, refetch }: { file: SessionContextFile; ref
   )
 }
 
+const PANES = ['edit', 'preview'] as const
+const PANE_IDS: Record<Pane, string> = { edit: 'session-context-edit-panel', preview: 'session-context-preview-panel' }
+
+/** A tab list: one tab stop on the selected tab, arrow keys move and select (phones only). */
 function PaneTabs({ pane, onPane }: { pane: Pane; onPane: (pane: Pane) => void }) {
+  const tabs = useRef(new Map<Pane, HTMLButtonElement>())
+  const onKeyDown = (event: KeyboardEvent) => {
+    const next = valueForKey(PANES, pane, event.key)
+    if (next === undefined) return
+    event.preventDefault()
+    onPane(next)
+    tabs.current.get(next)?.focus()
+  }
   return (
-    <div role="tablist" aria-label="Session context view" className="flex overflow-hidden rounded-md border border-[var(--control-border)] md:hidden">
-      {(['edit', 'preview'] as const).map((value) => (
+    <div role="tablist" aria-label="Session context view" onKeyDown={onKeyDown} className="flex overflow-hidden rounded-md border border-[var(--control-border)] md:hidden">
+      {PANES.map((value) => (
         <button
           key={value}
+          ref={(element) => {
+            if (element) tabs.current.set(value, element)
+            else tabs.current.delete(value)
+          }}
           type="button"
+          tabIndex={pane === value ? 0 : -1}
+          aria-controls={PANE_IDS[value]}
           role="tab"
           data-slot="session-context-pane"
           data-pane={value}

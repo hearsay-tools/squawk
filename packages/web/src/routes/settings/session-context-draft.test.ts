@@ -42,6 +42,20 @@ describe('session context draft edits', () => {
     expect(text.slice(...select)).toBe('new-rule')
   })
 
+  it('keeps the blank lines a keep-chomped template ends with', () => {
+    const before = 'version: 1\nrules:\n  - id: a\n    on: session_start\n    template: |+\n      old\n\n'
+    const { text } = addRule(before)
+    const rules = (parse(text) as { rules: { id: string; template: string }[] }).rules
+    expect(rules.map((r) => r.id)).toEqual(['a', 'new-rule'])
+    expect(rules[0]!.template).toBe((parse(before) as { rules: { template: string }[] }).rules[0]!.template)
+  })
+
+  it('adds the rules key inside a flow mapping that has none', () => {
+    const { text, select } = addRule('{version: 1}\n')
+    expect(parse(text)).toMatchObject({ version: 1, rules: [{ id: 'new-rule' }] })
+    expect(text.slice(...select)).toBe('new-rule')
+  })
+
   it('picks a free id when an existing id is quoted', () => {
     const { text } = addRule('version: 1\nrules:\n  - id: "new-rule"\n    on: session_start\n    template: x\n')
     expect((parse(text) as { rules: { id: string }[] }).rules.map((r) => r.id)).toEqual(['new-rule', 'new-rule-2'])

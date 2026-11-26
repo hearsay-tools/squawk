@@ -126,6 +126,13 @@ async function writeChecked(projectRoot: string, path: string, content: string, 
   try {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(tmp, content, 'utf8');
+    // Another editor may have written the file while this one staged. Check again just before the
+    // rename; the rename itself cannot compare and swap, so this narrows the window, not closes it.
+    const staged = answer(projectRoot, path, await readCurrent(projectRoot, path));
+    if (staged.version !== version || !staged.writable) {
+      await rm(tmp, { force: true });
+      return { ok: false, status: 409, error: 'context.yaml changed on disk since you opened it. Show the disk version, or overwrite it.' };
+    }
     await rename(tmp, path);
   } catch (error) {
     await rm(tmp, { force: true });
