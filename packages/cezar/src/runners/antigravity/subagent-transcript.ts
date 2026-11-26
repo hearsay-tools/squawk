@@ -107,7 +107,7 @@ export class AntigravityChildTranscripts {
   constructor(private readonly emit: (event: UiEvent) => void, private readonly readBytes = TRANSCRIPT_READ_BYTES) {
     this.poller = new TranscriptPoller(
       () => this.readAll(),
-      () => [...this.children.values()].some(child => !child.closed),
+      () => this.hasOpenChildren(),
       POLL_MS,
     );
   }
@@ -148,13 +148,14 @@ export class AntigravityChildTranscripts {
 
   poll(): Promise<void> { return this.poller.poll(); }
 
-  /** Drains unread rows for a killed child and stops polling it. */
+  /** Drains unread rows for a killed child and resumes polling any surviving open children. */
   async closeChild(childId: string): Promise<void> {
     const child = this.children.get(childId.toLowerCase());
     if (!child || child.closed) return;
+    child.closed = true;
     await this.poller.waitIdle();
     await this.drainChild(child);
-    child.closed = true;
+    if (!this.poller.closed && this.hasOpenChildren()) this.poller.schedule(POLL_MS);
   }
 
   async flushAll(): Promise<void> {
@@ -169,8 +170,12 @@ export class AntigravityChildTranscripts {
     for (const child of this.children.values()) child.closed = true;
   }
 
+  private hasOpenChildren(): boolean {
+    return [...this.children.values()].some(child => !child.closed);
+  }
+
   private async drainChild(child: ChildState): Promise<void> {
-    for (let chunk = 0; chunk < TRANSCRIPT_MAX_FLUSH_CHUNKS && !this.poller.closed && !child.closed; chunk++) {
+    for (let chunk = 0; chunk < TRANSCRIPT_MAX_FLUSH_CHUNKS && !this.poller.closed; chunk++) {
       await this.readChild(child);
       if (!child.tailer.hasMore) break;
     }

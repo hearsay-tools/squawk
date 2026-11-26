@@ -195,4 +195,29 @@ describe('Antigravity subagent tracking and child transcripts', () => {
       expect.objectContaining({ kind: 'hook', parentItemId: 'call_parent', event: 'SessionStart' }),
     ]);
   });
+
+  it('keeps polling surviving children after closeChild closes a killed sibling', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'antigravity-sibling-')); dirs.push(dir);
+    const pathA = join(dir, 'a.jsonl');
+    const pathB = join(dir, 'b.jsonl');
+    const childA = '11111111-1111-4111-8111-111111111111';
+    const childB = '22222222-2222-4222-8222-222222222222';
+    const events: UiEvent[] = [];
+    let resolveSibling!: () => void;
+    const siblingSeen = new Promise<void>(resolve => { resolveSibling = resolve; });
+    const tailer = new AntigravityChildTranscripts(event => {
+      events.push(event);
+      if (event.type === 'item.completed' && event.item.kind === 'message' && event.item.text === 'still running') resolveSibling();
+    });
+    try {
+      await writeFile(pathA, '');
+      await writeFile(pathB, '');
+      tailer.openChild(childA, 'call_a', pathA);
+      tailer.openChild(childB, 'call_b', pathB);
+      await tailer.closeChild(childA);
+      await appendFile(pathB, `${JSON.stringify({ step_index: 1, type: 'PLANNER_RESPONSE', status: 'DONE', content: 'still running' })}\n`);
+      await siblingSeen;
+      expect(events).toContainEqual(expect.objectContaining({ type: 'item.completed', item: expect.objectContaining({ parentItemId: 'call_b', text: 'still running' }) }));
+    } finally { tailer.close(); }
+  });
 });
