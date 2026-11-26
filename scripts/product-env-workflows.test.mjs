@@ -14,9 +14,9 @@ test('nightly producers pin both release channel aliases to the same value', () 
   }
 });
 
-test('both E2E builders pin the preferred flag over a conflicting inherited value', async () => {
+test('E2E builder pins the preferred flag over a conflicting inherited value', async () => {
   const { execFileSync } = await import('node:child_process');
-  for (const path of ['../.ai/scripts/build-e2e.sh', '../.github/workflows/e2e-spec-map.yml']) {
+  for (const path of ['../.ai/scripts/build-e2e.sh']) {
     const source = readFileSync(new URL(path, import.meta.url), 'utf8');
     const prefix = source.match(/NODE_ENV=production [^\n]*?(?=npm run build)/)?.[0];
     assert.ok(prefix, path);

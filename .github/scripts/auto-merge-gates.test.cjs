@@ -76,7 +76,6 @@ const BOT_WORKFLOWS = {
   'workaround-expiry.yml': 'files expired workaround issues',
   'refresh-test-durations.yml': 'opens a pull request with shard timings',
   'transcript-facts-responsiveness.yml': 'measures transcript lag',
-  'e2e-spec-map.yml': 'maps browser specs to the source they cover',
   'test-env-windows.yml': 'probes the Windows test environment',
   'worker-scope-native.yml': 'probes worker process scopes in a delegated cgroup',
 };

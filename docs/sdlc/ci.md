@@ -36,8 +36,10 @@ a split happens before the push. Split a file's change across PRs, or generate l
 at test time.
 Pure whole-file deletions (removed files with no additions) are exempt from the per-file size and missing-patch checks because no content remains to review. NUL-byte diffs, incomplete file lists, replacements and edited renames keep the existing rules.
 
-Main PRs start heavy verification (unit tests, build/package, Vitest and browser shards)
-as soon as their queue proof, change classification and immutable PR inputs are ready.
+Main PRs start heavy verification (unit tests, build/package and Vitest shards; cockpit
+browser shards skip on PRs and run on merge groups, `main` pushes without queue proof, and
+manual dispatches) as soon as their queue proof, change classification and immutable PR
+inputs are ready.
 **Unit tests (package)** and **Unit tests (scripts)** run the two groups of
 `npm run test:unit` in parallel. The root command still runs both in sequence.
 **Build and package** runs the build,
@@ -291,30 +293,20 @@ jobs upload no coverage. A failing selected test fails its job;
 it never triggers a full-suite retry. The base fetch is bounded to 100 commits.
 A missing merge-base costs a full run instead of silently skipping tests.
 
-Browser jobs fetch the PR base branch's current tip and call
-`scripts/e2e-affected.mjs --ci --base=origin/<base branch>`; the event's base SHA can be older
-than the tested merge's base parent. The selector reads the newest successful `e2e-spec-map.yml`
-map on `main` and selects from the PR's own changes, from the merge-base with that tip. Merges
-after the map's commit do not count, except that mapped files they changed add their specs
-when the PR touches mapped code. Its log prints each changed file with its spec count and
-reason. A PR runs browser specs only
-when the selector returns a list shorter than the full set. When the selector
-chooses every spec, chooses no spec or fails, the PR runs no browser spec: the log
-and the job summary state the reason, and the step prints
-`TEST_E2E_STATUS=not-selected`. `require-e2e-passed.cjs` accepts that marker only
-when `GITHUB_EVENT_NAME` is `pull_request_target`, so the browser jobs and `verify`
-stay green on the PR and every other event still requires `passed`. The merge queue runs every spec on every full-matrix entry, so a
-browser failure the PR run does not see fails the queue entry instead. A shorter
-selection still requires `TEST_E2E_STATUS=passed`; missing browsers fail
-verification. The token used to download the map has read-only Actions and
-repository scopes.
+Pull request runs skip the eight cockpit browser E2E shards (`hearsay-tools/squawk#3728`).
+Measured over 50 full-matrix PR runs, the spec map produced 0 genuine browser-relevant short
+selections while costing about 750 job-minutes per day on `main` pushes, so `e2e-spec-map.yml`
+was removed. `verify` accepts a skipped `cockpit-browser` result on `pull_request_target`
+(never a failed or cancelled one), while merge groups, `main` pushes without queue proof,
+and manual dispatches still run all eight browser shards and require `TEST_E2E_STATUS=passed`.
+A browser failure surfaces in the merge queue before merge.
 
 Docs-only, infra-only and verified release-stamp skips remain as before. Merge
 groups and manual dispatches run full suites. Main pushes reuse eligible exact-SHA
 queue proof or run full CI as a fallback. Merge groups retain the whole-shard
-rerun, trusted flake reports and Squeal recording. The local selectors
-without `--ci` retain their iteration behavior, including an error on unmatched
-unit changes and a skip when no browser spec reaches a change.
+rerun, trusted flake reports and Squeal recording. The local unit selector
+without `--ci` retains its iteration behavior, including an error on unmatched
+unit changes.
 
 ### CI verification
 
@@ -325,9 +317,10 @@ failure and the fixed result, including lease and checkout isolation.
 Required verification includes the unit groups, build/package and shard jobs,
 plus the complexity and clone gates. Typecheck, workflow lint, citations, classification and policy ratchets
 feed the `Review preflight` gate. Heavy jobs wait only for their skip inputs:
-unit tests and build/package need queue proof and immutable PR inputs; Vitest and browser shards
-also need change-surface and PR-shape classification. They run beside typecheck and
-preflight. `verify` requires all of them. Other events keep their existing test inventory. The eight Vitest shards and the eight cockpit browser shards use the exact Node version in
+unit tests and build/package need queue proof and immutable PR inputs; Vitest also needs
+change-surface and PR-shape classification; cockpit browser shards skip PR runs and need
+queue proof, change-surface and PR-shape classification. They run beside typecheck and
+preflight. `verify` requires all of them (accepting skipped browser shards on PRs). Other events keep their existing test inventory. The eight Vitest shards and the eight cockpit browser shards use the exact Node version in
 `.node-version`; typecheck, unit tests and build/package use
 exactly the `engines.node` minimum (Node 24.21.0). Every job installs Node without a GitHub API call (§ Node setup without GitHub API calls):
 
@@ -363,7 +356,8 @@ reports both. The pull request for that issue records the queue run time before 
 
 The required check keeps its name, **Unit, build, E2E, and package**. It requires
 typecheck, both unit groups and build/package on every change surface. Full-matrix changes also
-require all eight Vitest shards and all eight cockpit browser shards. Pull requests
+require all eight Vitest shards, plus all eight cockpit browser shards on merge groups,
+`main` pushes without queue proof, and manual dispatches (PR runs skip browser shards). Pull requests
 and merge groups require the complexity and clone gates. Packaged CLI E2E and
 cockpit browser E2E stay separate named checks. The aggregate and snapshot jobs
 remain on GitHub-hosted Ubuntu. Develop snapshot publishing still waits for this aggregate. Same-repository
@@ -378,7 +372,7 @@ Missing `NPM_TOKEN` produces an explicit dry run. The publisher serializes each
 PR's snapshots without cancelling an active publish and rechecks eligibility
 after waiting.
 
-Cockpit shards run on separate VMs, each owning its server, `CEZ_HOME`, test-env descriptor and browser namespace. The browser sequencer uses measured durations in `.github/cockpit-test-durations.json` to select each slice; `fileParallelism: false` keeps tests sequential within each shard. The matrix uses `fail-fast: false` so a failure does not cancel evidence from the other shards. The aggregate waits on the entire matrix and requires its result to be `success`.
+Cockpit shards run on separate VMs, each owning its server, `CEZ_HOME`, test-env descriptor and browser namespace. The browser sequencer uses measured durations in `.github/cockpit-test-durations.json` to select each slice; `fileParallelism: false` keeps tests sequential within each shard. The matrix uses `fail-fast: false` so a failure does not cancel evidence from the other shards. The aggregate waits on the entire matrix and requires its result to be `success` on merge groups, unproved `main` pushes and manual dispatches (pull requests accept `skipped`).
 
 Local `npm run test:e2e:local` builds once and runs four duration-weighted shards
 concurrently, with separate worktrees, app ports, `CEZ_HOME` directories, descriptors,

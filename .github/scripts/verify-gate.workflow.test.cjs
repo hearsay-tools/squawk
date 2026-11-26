@@ -47,10 +47,14 @@ test('heavy jobs start without waiting for typecheck or preflight', () => {
   }
 });
 test('passing cheap gates never excuse missing, blocked or failed tests', () => {
-  for (const id of heavy) assert.equal(evaluate(ci.jobs[id].if, context()), true, id);
-  for (const key of ['UNIT_TESTS_RESULT', 'BUILD_AND_PACKAGE_RESULT', 'VITEST_RESULT', 'COCKPIT_BROWSER_RESULT']) {
+  for (const id of ['build-and-package', 'vitest']) assert.equal(evaluate(ci.jobs[id].if, context()), true, id);
+  assert.equal(evaluate(ci.jobs['cockpit-browser'].if, context()), false, 'PR skips browser shards');
+  for (const key of ['UNIT_TESTS_RESULT', 'BUILD_AND_PACKAGE_RESULT', 'VITEST_RESULT']) {
     for (const result of ['failure', 'skipped', 'cancelled', '']) assert.notEqual(shell('verify', { [key]: result }).status, 0);
   }
+  for (const result of ['failure', 'cancelled', '']) assert.notEqual(shell('verify', { COCKPIT_BROWSER_RESULT: result }).status, 0);
+  assert.equal(shell('verify', { COCKPIT_BROWSER_RESULT: 'skipped' }).status, 0);
+  assert.notEqual(shell('verify', { EVENT_NAME: 'merge_group', QUEUE_ADMISSION_RESULT: 'success', COCKPIT_BROWSER_RESULT: 'skipped' }).status, 0);
   assert.equal(shell('verify').status, 0);
 });
 // Queue admission runs only for a merge group. There it gates the required
@@ -101,7 +105,7 @@ for (const event of ['pull_request_target', 'merge_group', 'workflow_dispatch', 
       const ctx = context(event);
       ctx.needs.typecheck = { result };
       ctx.needs.preflight.result = result;
-      for (const id of heavy) assert.equal(evaluate(ci.jobs[id].if, ctx), true, id);
+      for (const id of heavy) assert.equal(evaluate(ci.jobs[id].if, ctx), !(event === 'pull_request_target' && id === 'cockpit-browser'), id);
       for (const key of ['TYPECHECK_RESULT', 'PREFLIGHT_RESULT']) {
         assert.notEqual(shell('verify', { EVENT_NAME: event, [key]: result }).status, 0, key);
       }
@@ -111,7 +115,8 @@ for (const event of ['pull_request_target', 'merge_group', 'workflow_dispatch', 
 test('heavy PR jobs require immutable test inputs, while non-PR jobs tolerate the skipped resolver', () => {
   for (const result of ['failure', 'cancelled', 'skipped', '']) {
     const ctx = context(); ctx.needs['pr-test-input'].result = result;
-    for (const id of heavy) assert.equal(evaluate(ci.jobs[id].if, ctx), false, id);
+    for (const id of ['build-and-package', 'vitest']) assert.equal(evaluate(ci.jobs[id].if, ctx), false, id);
+    assert.equal(evaluate(ci.jobs['cockpit-browser'].if, ctx), false, 'cockpit-browser skips PRs');
   }
   for (const event of ['merge_group', 'workflow_dispatch', 'push']) {
     const ctx = context(event); ctx.needs['pr-test-input'].result = 'skipped';
