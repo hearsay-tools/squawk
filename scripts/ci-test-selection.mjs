@@ -24,20 +24,3 @@ export function unitFiles(selection, run = execFileSync) {
   const files = [...new Set([...graph, ...selection.tests])];
   return files.length ? { files } : { reason: 'Vitest selection matched no test file' };
 }
-
-/**
- * PR CI runs browser specs only for a selection shorter than the full set. Every other
- * answer returns `skip`, the reason PR CI runs no spec; the merge queue runs every spec.
- */
-export function browserFiles(select, total) {
-  let chosen;
-  try {
-    chosen = select();
-  } catch (error) {
-    return { skip: `the selector failed: ${String(error?.message ?? error).split('\n')[0]}` };
-  }
-  const why = chosen.reason ? `: ${chosen.reason}` : '';
-  if (chosen.all || chosen.specs.length >= total) return { chosen, skip: `the selector chose every spec${why}` };
-  if (chosen.specs.length === 0) return { chosen, skip: `the selector chose no spec${why}` };
-  return { chosen };
-}
