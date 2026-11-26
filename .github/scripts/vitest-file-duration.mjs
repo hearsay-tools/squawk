@@ -73,6 +73,7 @@ export default class FileDurationReporter {
   }
 
   onInit(vitest) {
+    this.vitest = vitest;
     this.root = vitest.config.root;
     this.list = join(vitest.config.root, CAP_FAILURES_FILE);
     if (!this.watching) watchWorkerExits(exit => this.exits.push(exit));
@@ -80,7 +81,7 @@ export default class FileDurationReporter {
   }
 
   /** @param {ReadonlyArray<{ project: { name: string }, moduleId: string }>} [specifications] */
-  onTestRunStart(specifications = []) {
+  async onTestRunStart(specifications = []) {
     this.pending.clear();
     this.results = [];
     this.failures = [];
@@ -88,7 +89,15 @@ export default class FileDurationReporter {
     this.unfinished = [];
     this.exits = [];
     if (this.list) rmSync(this.list, { force: true });
-    for (const specification of specifications) this.plan(specification);
+    for (const specification of await this.shardOf(specifications)) this.plan(specification);
+  }
+
+  // Vitest reports every file of the run before the pool keeps this shard's part, so the
+  // reporter asks the configured sequencer for the same part.
+  shardOf(specifications) {
+    const config = this.vitest?.config;
+    if (!config?.shard) return specifications;
+    return new config.sequence.sequencer(this.vitest).shard([...specifications]);
   }
 
   // A worker that dies before its file is collected leaves only the planned specification.

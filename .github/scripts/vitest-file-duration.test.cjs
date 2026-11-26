@@ -16,7 +16,7 @@ async function reporter(options = {}) {
   const { default: Reporter } = await import(reporterUrl);
   const instance = new Reporter({ durations: {}, changedFilesList: undefined, ...options });
   instance.root = '/repo';
-  instance.onTestRunStart();
+  await instance.onTestRunStart();
   return instance;
 }
 
@@ -156,7 +156,7 @@ test('the manifest supplies the weights when none are given', async () => {
   const { default: Reporter } = await import(reporterUrl);
   const instance = new Reporter({ changedFilesList: undefined });
   instance.root = '/repo';
-  instance.onTestRunStart();
+  await instance.onTestRunStart();
   assert.equal(finish(end(instance, moduleResult(1))).exitCode, 0);
 });
 
@@ -173,13 +173,29 @@ test('a planned file that never reports a result is named, annotated and listed 
   const instance = new Reporter({ durations: {}, changedFilesList: undefined });
   instance.onInit({ config: { root: dir } });
   const spec = file => ({ project: { name: 'server' }, moduleId: join(dir, file) });
-  instance.onTestRunStart([spec('done.test.ts'), spec('dies.test.ts')]);
+  await instance.onTestRunStart([spec('done.test.ts'), spec('dies.test.ts')]);
   end(instance, { ...moduleResult(10, 'passed'), moduleId: join(dir, 'done.test.ts') });
   const result = assertFailure(instance, /^Vitest test files that did not finish:\ndies\.test\.ts: did not finish; the run ended before the file reported a result$/);
   assert.deepEqual(result.annotations, [
     '::error file=dies.test.ts,title=Vitest test files that did not finish::dies.test.ts: did not finish; the run ended before the file reported a result',
   ]);
   assert.equal(readFileSync(join(dir, 'node_modules/.vite/vitest/file-duration-cap.txt'), 'utf8'), `${join(dir, 'dies.test.ts')}\n`);
+});
+
+test('a sharded run plans only the files the configured sequencer gives its shard', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'cap-shard-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const { default: Reporter } = await import(reporterUrl);
+  const instance = new Reporter({ durations: {}, changedFilesList: undefined });
+  class Sequencer {
+    constructor(ctx) { assert.equal(ctx, vitest); }
+    async shard(specifications) { return specifications.filter(item => item.moduleId.endsWith('mine.test.ts')); }
+  }
+  const vitest = { config: { root: dir, shard: { index: 1, count: 2 }, sequence: { sequencer: Sequencer } } };
+  instance.onInit(vitest);
+  const spec = file => ({ project: { name: 'server' }, moduleId: join(dir, file) });
+  await instance.onTestRunStart([spec('mine.test.ts'), spec('other-shard.test.ts')]);
+  assertFailure(instance, /^Vitest test files that did not finish:\nmine\.test\.ts: did not finish/);
 });
 
 test('a Vitest worker that exits on its own is reported with its exit code and signal', async () => {
@@ -204,6 +220,29 @@ test('a Vitest worker that exits on its own is reported with its exit code and s
   assert.equal(result.exitCode, 0, 'a worker exit alone leaves the verdict to Vitest');
   assert.equal(result.output, 'Vitest test files that did not finish:\n'
     + 'Vitest worker 1 exited unexpectedly: exit code null, signal SIGKILL\nVitest worker 4 exited unexpectedly: exit code 134, signal none');
+});
+
+test('a real sharded Vitest run passes every shard whose files all finish', () => {
+  const root = resolve(__dirname, '../..');
+  mkdirSync(join(root, '.ai/qa'), { recursive: true });
+  const probe = mkdtempSync(join(root, '.ai/qa/vitest-shard-'));
+  try {
+    for (const name of ['a', 'b', 'c']) writeFileSync(join(probe, `${name}.test.ts`), `import { test, expect } from 'vitest'
+test('passes', () => expect(1).toBe(1))
+`);
+    writeFileSync(join(probe, 'vitest.config.mjs'), `import { defineConfig } from 'vitest/config'
+import Reporter from ${JSON.stringify(reporterUrl)}
+export default defineConfig({ test: { include: ['*.test.ts'], reporters: ['default', new Reporter()] } })
+`);
+    for (const shard of ['1/2', '2/2']) {
+      const result = spawnSync(join(root, 'node_modules/.bin/vitest'), ['run', '--config', join(probe, 'vitest.config.mjs'), `--shard=${shard}`], { cwd: probe, encoding: 'utf8' });
+      const output = result.stdout + result.stderr;
+      assert.equal(result.status, 0, output);
+      assert.doesNotMatch(output, /did not finish/);
+    }
+  } finally {
+    rmSync(probe, { recursive: true, force: true });
+  }
 });
 
 test('a real Vitest run names the file whose worker died and the signal that ended it', () => {
