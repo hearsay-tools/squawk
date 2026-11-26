@@ -933,18 +933,18 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
 
 const squawkExtensionArgs = [
   '--extension',
-  expect.stringMatching(/scripts\/pi-retry-degraded-service\.mjs$/),
+  expect.stringMatching(/runners\/pi\/extensions\/pi-retry-degraded-service\.mjs$/),
   '--extension',
-  expect.stringMatching(/scripts\/pi-runaway-reply-guard\.mjs$/),
+  expect.stringMatching(/runners\/pi\/extensions\/pi-runaway-reply-guard\.mjs$/),
   '--extension',
-  expect.stringMatching(/scripts\/pi-project-skills\.mjs$/),
+  expect.stringMatching(/runners\/pi\/extensions\/pi-project-skills\.mjs$/),
 ];
 
 /** The default-list tail (hearsay-tools/cezarion#1305): no allowlist, the named built-ins activated by the extension. */
 const defaultToolArgs = (builtins: string) => [
   '--no-builtin-tools',
   '--extension',
-  expect.stringMatching(/scripts\/pi-default-tools\.mjs$/),
+  expect.stringMatching(/runners\/pi\/extensions\/pi-default-tools\.mjs$/),
   '--cezar-builtin-tools',
   builtins,
 ];
@@ -959,11 +959,11 @@ describe('pi RPC argv', () => {
       const args = buildPiArgs(spec);
       const extensions = args.flatMap((arg, index) => (arg === '--extension' ? [args[index + 1]!] : []));
       expect(extensions.slice(0, 3)).toEqual([
-        expect.stringMatching(/scripts\/pi-retry-degraded-service\.mjs$/),
-        expect.stringMatching(/scripts\/pi-runaway-reply-guard\.mjs$/),
-        expect.stringMatching(/scripts\/pi-project-skills\.mjs$/),
+        expect.stringMatching(/runners\/pi\/extensions\/pi-retry-degraded-service\.mjs$/),
+        expect.stringMatching(/runners\/pi\/extensions\/pi-runaway-reply-guard\.mjs$/),
+        expect.stringMatching(/runners\/pi\/extensions\/pi-project-skills\.mjs$/),
       ]);
-      if (spec.squawkTools) expect(extensions[3]).toMatch(/scripts\/pi-ci-wait\.mjs$/);
+      if (spec.squawkTools) expect(extensions[3]).toMatch(/runners\/pi\/extensions\/pi-ci-wait\.mjs$/);
       expect(existsSync(extensions[1]!)).toBe(true);
       expect(existsSync(extensions[2]!)).toBe(true);
     }
@@ -1095,7 +1095,7 @@ describe('pi tool selection (hearsay-tools/cezarion#1305)', () => {
       '--mode', 'rpc', ...squawkExtensionArgs, '--tools', named,
     ]);
     expect(buildPiArgs({ ...base, toolGrant: { kind: 'explicit', tools: [...stepDefault, 'mcp__plug__word'] }, squawkTools: ci })).toEqual([
-      '--mode', 'rpc', ...squawkExtensionArgs, '--extension', expect.stringMatching(/scripts\/pi-ci-wait\.mjs$/),
+      '--mode', 'rpc', ...squawkExtensionArgs, '--extension', expect.stringMatching(/runners\/pi\/extensions\/pi-ci-wait\.mjs$/),
       '--tools', [named, ...squawkToolNames({})].join(','),
     ]);
   });
@@ -1103,11 +1103,11 @@ describe('pi tool selection (hearsay-tools/cezarion#1305)', () => {
   it('admits the Squawk tools through the CI extension on the default path, not through a list', () => {
     const args = buildPiArgs({ ...base, toolGrant: { kind: 'step-default', tools: stepDefault }, squawkTools: ci });
     expect(extensions(args)).toEqual([
-      expect.stringMatching(/scripts\/pi-retry-degraded-service\.mjs$/),
-      expect.stringMatching(/scripts\/pi-runaway-reply-guard\.mjs$/),
-      expect.stringMatching(/scripts\/pi-project-skills\.mjs$/),
-      expect.stringMatching(/scripts\/pi-ci-wait\.mjs$/),
-      expect.stringMatching(/scripts\/pi-default-tools\.mjs$/),
+      expect.stringMatching(/runners\/pi\/extensions\/pi-retry-degraded-service\.mjs$/),
+      expect.stringMatching(/runners\/pi\/extensions\/pi-runaway-reply-guard\.mjs$/),
+      expect.stringMatching(/runners\/pi\/extensions\/pi-project-skills\.mjs$/),
+      expect.stringMatching(/runners\/pi\/extensions\/pi-ci-wait\.mjs$/),
+      expect.stringMatching(/runners\/pi\/extensions\/pi-default-tools\.mjs$/),
     ]);
     expect(args).not.toContain('--tools');
     expect(args[args.indexOf('--cezar-builtin-tools') + 1]!.split(',').filter((name) => name.startsWith('cezar_'))).toEqual([]);
@@ -1124,7 +1124,7 @@ describe('pi tool selection (hearsay-tools/cezarion#1305)', () => {
     expect(toolFlags(buildPiArgs({ ...base, toolGrant: { kind: 'explicit', tools: ['Read'] } }))).toEqual(['--tools']);
     expect(buildPiArgs({ ...base, toolGrant: { kind: 'explicit', tools: ['Read'] } })).toEqual(['--mode', 'rpc', ...squawkExtensionArgs, '--tools', 'read']);
     expect(buildPiArgs({ ...base, toolGrant: { kind: 'explicit', tools: ['Read'] }, squawkTools: ci })).toEqual([
-      '--mode', 'rpc', ...squawkExtensionArgs, '--extension', expect.stringMatching(/scripts\/pi-ci-wait\.mjs$/),
+      '--mode', 'rpc', ...squawkExtensionArgs, '--extension', expect.stringMatching(/runners\/pi\/extensions\/pi-ci-wait\.mjs$/),
       '--tools', ['read', ...squawkToolNames({})].join(','),
     ]);
   });

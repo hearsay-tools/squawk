@@ -1,11 +1,11 @@
 import { piBaseArgs } from './pi-args.ts';
 import { adoptRpcSessionId, armEndWatchdog, dispatchPiTurnMessage, isRecord, number, parseRpcLine, piRpcError as rpcError, PiRpcInput, PiTextBlocks, settlePiFamilyExit, string, toPiPrompt, truncate, waitForExit } from '@hearsay-tools/squawk/plugin/pi-rpc';
-import { boundOutputDrainAfterExit, buildChildEnv, DEFAULT_RUNNER_TIMINGS, openingContent, readNdjson, SessionEndedBeforeAcknowledgement, signalSession, spawnSessionLeader, squawkToolNames, summarizeRunnerStderr, unknownToolGrant, validSkillMessage, waitForEofExit } from '@hearsay-tools/squawk/plugin/runtime';
+import { boundOutputDrainAfterExit, buildChildEnv, DEFAULT_RUNNER_TIMINGS, nativeMockPath, openingContent, readNdjson, SessionEndedBeforeAcknowledgement, signalSession, spawnSessionLeader, squawkToolNames, summarizeRunnerStderr, unknownToolGrant, validSkillMessage, waitForEofExit } from '@hearsay-tools/squawk/plugin/runtime';
 import { productEnv, type AgentEvent, type AgentRunner, type AgentRunResult, type AgentRunSpec, type AgentSession, type AgentToolCallRecord, type ContentBlock, type InputDelivery, type PiEndWatchdog, type PiTurnMessages, type SessionOptions, type ToolGrant } from '@hearsay-tools/squawk/plugin';
-import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseEffort } from '@hearsay-tools/squawk/plugin/runtime';
 import { PI_FACTS } from './facts.js';
+import { PI_MOCK } from './mock.js';
 import { PI_SPEC_SUPPORT, PI_MINIMAL_ARGS } from './spec-support.js';
 import { createPiUiState, mapPiRpcMessage, piFlushProviderError, piProviderErrorMessage, piTurnStarted } from './pi-ui-mapper.js';
 import { PiRunawayReplyRetry, RUNAWAY_REPLY_RETRY_ID, RUNAWAY_REPLY_RETRY_NOTE, RUNAWAY_REPLY_RETRY_PROMPT } from './runaway-reply.ts';
@@ -34,7 +34,7 @@ export class PiRunner implements AgentRunner {
   private lastSession: AgentSession | null = null;
 
   constructor(opts: PiRunnerOptions = {}) {
-    this.bin = opts.bin ?? productEnv('PI_BIN') ?? (productEnv('DRY_RUN') === '1' ? mockPiPath() : 'pi');
+    this.bin = opts.bin ?? productEnv('PI_BIN') ?? (productEnv('DRY_RUN') === '1' ? nativeMockPath(PI_MOCK) : 'pi');
     this.timeoutMs = opts.timeoutMs;
   }
 
@@ -465,7 +465,7 @@ export function buildPiArgs(spec: AgentRunSpec): string[] {
   // extension offers them to an untrusted one without trusting it (hearsay-tools/cezarion#1295).
   const args = piBaseArgs({ projectSkills: !spec.minimal });
   if (spec.minimal) args.push(...PI_MINIMAL_ARGS);
-  if (spec.squawkTools) args.push('--extension', fileURLToPath(new URL('../../../scripts/pi-ci-wait.mjs', import.meta.url)));
+  if (spec.squawkTools) args.push('--extension', fileURLToPath(new URL('./extensions/pi-ci-wait.mjs', import.meta.url)));
   if (spec.sessionId) args.push(spec.resume ? '--session' : '--session-id', spec.sessionId);
   if (spec.systemPrompt) args.push('--append-system-prompt', spec.systemPrompt);
   if (spec.model) args.push('--model', spec.model);
@@ -516,7 +516,7 @@ function piToolArgs(spec: AgentRunSpec, allowedTools: readonly string[], bashAll
 }
 
 function piDefaultToolsExtensionPath(): string {
-  return fileURLToPath(new URL('../../../scripts/pi-default-tools.mjs', import.meta.url));
+  return fileURLToPath(new URL('./extensions/pi-default-tools.mjs', import.meta.url));
 }
 
 /** Native message types that end a text block; a prompt or response ack is not one. */
@@ -534,7 +534,7 @@ function restorePiMessageEndError(value: unknown): void {
   }
 }
 
-/** The hints scripts/pi-retry-degraded-service.mjs prefixes so pi-ai retries the error. */
+/** The hints extensions/pi-retry-degraded-service.mjs prefixes so pi-ai retries the error. */
 const PI_RETRY_HINTS = [
   '[cezar:retry-xai-degraded] Service unavailable: ',
   '[cezar:retry-stream-closed] stream was interrupted: ',
@@ -586,13 +586,4 @@ function wrapSpawnError(error: NodeJS.ErrnoException, bin: string): Error {
     return new Error(`\`${bin}\` not found on PATH — install pi and run \`pi\` once to configure a provider`);
   }
   return error;
-}
-
-/** Path to the bundled mock (`scripts/mock-pi-rpc.mjs`), for CEZ_DRY_RUN=1. */
-function mockPiPath(): string {
-  // Resolved the same way `mockClaudePath` is, rather than through `new URL().pathname`:
-  // on Windows that yields a leading-slash `/C:/…` which `spawn` cannot execute.
-  const here = dirname(fileURLToPath(import.meta.url));
-  // here = <pkg>/dist/runners/pi (built) or <pkg>/src/runners/pi (tsx dev).
-  return resolvePath(here, '..', '..', '..', 'scripts', 'mock-pi-rpc.mjs');
 }

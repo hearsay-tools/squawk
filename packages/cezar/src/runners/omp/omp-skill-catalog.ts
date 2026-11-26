@@ -1,5 +1,4 @@
-import { z } from 'zod';
-import type { SkillCatalog, SkillDiscoveryOptions } from '@hearsay-tools/squawk/plugin';
+import { z, type SkillCatalog, type SkillDiscoveryOptions } from '@hearsay-tools/squawk/plugin';
 import { skillOutput, skillProbe } from '@hearsay-tools/squawk/plugin/runtime';
 const listSchema = z.object({ skills: z.array(z.object({ name: z.string(), description: z.string().optional(),
   filePath: z.string(), source: z.string() })),

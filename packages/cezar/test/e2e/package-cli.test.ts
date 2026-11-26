@@ -79,8 +79,6 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { CiToolController } from ${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/ci-wait/controller.js')).href)};
 import { createRunner } from ${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/core/runner-registry.js')).href)};
 import { installPluginResolveHook } from ${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/plugin/resolve-hook.js')).href)};
-import piExtension from ${JSON.stringify(pathToFileURL(join(packageRoot, 'scripts/pi-ci-wait.mjs')).href)};
-import ompExtension from ${JSON.stringify(pathToFileURL(join(packageRoot, 'scripts/omp-ci-wait.mjs')).href)};
 import { registerBuiltInTools, sealBuiltInTools } from ${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/built-in-tools.js')).href)};
 import { registerBuiltInWaitKinds, sealBuiltInWaitKinds } from ${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/built-in-wait-kinds.js')).href)};
 installPluginResolveHook();
@@ -92,7 +90,14 @@ registerBuiltInWaitKinds();
 sealBuiltInWaitKinds();
 registerBuiltInTools();
 sealBuiltInTools();
-await probe({ Client, StdioClientTransport, CiToolController, createRunner, piExtension, ompExtension }, JSON.parse(process.argv[2]));
+await probe({
+  Client,
+  StdioClientTransport,
+  CiToolController,
+  createRunner,
+  piExtensionUrl: ${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/runners/pi/extensions/pi-ci-wait.mjs')).href)},
+  ompExtensionUrl: ${JSON.stringify(pathToFileURL(join(packageRoot, 'dist/runners/omp/omp-ci-wait.mjs')).href)},
+}, JSON.parse(process.argv[2]));
 `);
     const scenario: CiProbeScenario = { kind: WAIT_KIND.pr, phase: WAIT_PHASE.open, source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_wait };
     const ciSmoke = await execFile(process.execPath, [smoke, JSON.stringify(scenario)], { cwd: consumerDir, env: { ...process.env, NODE_OPTIONS: '', NODE_PATH: '' }, timeout: 20_000 });

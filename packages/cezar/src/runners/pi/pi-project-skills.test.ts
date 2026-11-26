@@ -8,7 +8,7 @@ type Trust = boolean | 'no-api';
 
 /** Runs the extension's handler in a child node, the way pi loads it, with HOME pinned to `home`. */
 function discover(cwd: string, trust: Trust, home: string): { events: string[]; result: unknown } {
-  const extensionUrl = new URL('../../../scripts/pi-project-skills.mjs', import.meta.url);
+  const extensionUrl = new URL('./extensions/pi-project-skills.mjs', import.meta.url);
   const ctx = trust === 'no-api' ? '{}' : `{ isProjectTrusted: () => ${trust} }`;
   const source = `
     import register from ${JSON.stringify(extensionUrl.href)};

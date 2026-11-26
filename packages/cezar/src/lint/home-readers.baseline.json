@@ -13,6 +13,12 @@
       "reason": "Read OS-user browser caches and Applications paths."
     },
     {
+      "file": "packages/cezar/src/runners/pi/extensions/pi-project-skills.mjs",
+      "kind": "homedir",
+      "calls": 1,
+      "reason": "Discover the OS user's ~/.agents/skills directory to exclude it from untrusted project skill discovery."
+    },
+    {
       "file": "packages/cezar/src/server-install/npx-cache.ts",
       "kind": "homedir",
       "calls": 1,

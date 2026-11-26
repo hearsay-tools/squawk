@@ -1,11 +1,11 @@
-import { openingContent, skillOf, validSkillMessage, SessionEndedBeforeAcknowledgement, ompRequestedTools, ownLookup, signalSession, spawnSessionLeader, buildChildEnv, squawkToolNames, readNdjson, summarizeRunnerStderr, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from '@hearsay-tools/squawk/plugin/runtime';
+import { openingContent, skillOf, validSkillMessage, SessionEndedBeforeAcknowledgement, ompRequestedTools, ownLookup, signalSession, spawnSessionLeader, buildChildEnv, squawkToolNames, readNdjson, summarizeRunnerStderr, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS, nativeMockPath } from '@hearsay-tools/squawk/plugin/runtime';
 import { productEnv, type PiEndWatchdog, type PiTurnMessages, type PiSkillSubmission, type AgentEvent, type AgentRunResult, type AgentRunSpec, type InputDelivery, type AgentRunner, type AgentSession, type AgentToolCallRecord, type ContentBlock, type SessionOptions, type ToolGrant, type SkillInputIdentity, type UiEvent } from '@hearsay-tools/squawk/plugin';
 import { isRecord, parseRpcLine, ompRpcError as rpcError, string, toPiPrompt, truncate, waitForExit, adoptRpcSessionId, armEndWatchdog, dispatchPiTurnMessage, PiRpcInput, PiTextBlocks, settlePiFamilyExit } from '@hearsay-tools/squawk/plugin/pi-rpc';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseEffort } from '@hearsay-tools/squawk/plugin/runtime';
 import { OMP_FACTS } from './facts.js';
+import { OMP_MOCK } from './mock.js';
 import { OMP_SPEC_SUPPORT, OMP_MINIMAL_ARGS } from './spec-support.js';
 import {
   createOmpUiState,
@@ -135,7 +135,7 @@ export function buildOmpArgs(
 ): string[] {
   const args = ['--mode', 'rpc'];
   if (spec.minimal) args.push(...OMP_MINIMAL_ARGS);
-  if (spec.squawkTools) args.push('--extension', ompScriptPath('omp-ci-wait.mjs'));
+  if (spec.squawkTools) args.push('--extension', fileURLToPath(new URL('./omp-ci-wait.mjs', import.meta.url)));
   // OMP has no --session-id: a fresh session mints its id, which get_state reports.
   if (spec.resume && spec.sessionId) args.push('--resume', spec.sessionId);
   if (spec.systemPrompt) args.push('--append-system-prompt', spec.systemPrompt);
@@ -151,10 +151,6 @@ export function buildOmpArgs(
   if (selection.flag === 'tools') args.push('--tools', selection.tools.join(','));
   else if (selection.flag === 'no-tools') args.push('--no-tools');
   return args;
-}
-
-function ompScriptPath(name: string): string {
-  return fileURLToPath(new URL(`../../../scripts/${name}`, import.meta.url));
 }
 
 export interface OmpRunnerOptions {
@@ -189,7 +185,7 @@ export class OmpRunner implements AgentRunner {
   private lastSession: AgentSession | null = null;
 
   constructor(opts: OmpRunnerOptions = {}) {
-    this.bin = opts.bin ?? productEnv('OMP_BIN') ?? (productEnv('DRY_RUN') === '1' ? mockOmpPath() : 'omp');
+    this.bin = opts.bin ?? productEnv('OMP_BIN') ?? (productEnv('DRY_RUN') === '1' ? nativeMockPath(OMP_MOCK) : 'omp');
     this.timeoutMs = opts.timeoutMs;
     this.killGraceMs = opts.killGraceMs;
   }
@@ -799,12 +795,5 @@ function wrapSpawnError(error: NodeJS.ErrnoException, bin: string): Error {
     return new Error(`\`${bin}\` not found on PATH: install OMP (https://omp.sh) and run \`omp login\``);
   }
   return error;
-}
-
-/** Path to the bundled mock (`scripts/mock-omp-rpc.mjs`), for CEZ_DRY_RUN=1; as pi-runner.ts `mockPiPath`. */
-function mockOmpPath(): string {
-  const here = dirname(fileURLToPath(import.meta.url));
-  // here = <pkg>/dist/runners/omp (built) or <pkg>/src/runners/omp (tsx dev).
-  return resolvePath(here, '..', '..', '..', 'scripts', 'mock-omp-rpc.mjs');
 }
 

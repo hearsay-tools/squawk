@@ -10,7 +10,7 @@ type Outcome = { flags: Array<[string, unknown]>; events: string[]; calls: strin
  * active tools since the previous step.
  */
 function drive(flag: unknown, initial: string[], steps: Step[]): Outcome {
-  const extensionUrl = new URL('../../../scripts/pi-default-tools.mjs', import.meta.url);
+  const extensionUrl = new URL('./extensions/pi-default-tools.mjs', import.meta.url);
   const source = `
     import register from ${JSON.stringify(extensionUrl.href)};
     const flags = new Map();

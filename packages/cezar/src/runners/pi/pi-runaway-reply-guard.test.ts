@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import registerPiRunawayReplyGuard from '../../../scripts/pi-runaway-reply-guard.mjs';
+import registerPiRunawayReplyGuard from './extensions/pi-runaway-reply-guard.mjs';
 
 type Step =
   | { on: 'message_start' | 'message_end'; message: Record<string, unknown> }
