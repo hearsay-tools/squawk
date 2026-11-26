@@ -1,3 +1,5 @@
+import { isMap, isSeq, parseDocument } from 'yaml'
+
 /**
  * Pure text edits for Settings → Session context. Squawk never re-serializes `context.yaml`:
  * every change is a text insert, so comments and formatting stay as the user wrote them.
@@ -11,7 +13,7 @@ export const SESSION_CONTEXT_TOKENS = [
 /** Shown for `file:` in the chip row; inserts `{{file:docs/example.md}}` with the path selected. */
 export const FILE_TOKEN_LABEL = 'file:<path>'
 
-const RULE_ID = /^\s*-\s*id:\s*(\S+)/gm
+const RULE_ID = /(?:^\s*-\s*|\{\s*)id:\s*([^\s,}]+)/gm
 
 /** A rule id the draft does not use yet: `new-rule`, then `new-rule-2`, … */
 function freeRuleId(text: string): string {
@@ -22,20 +24,45 @@ function freeRuleId(text: string): string {
   return `new-rule-${n}`
 }
 
-/** Append a starter rule. An empty draft gets the `version` and `rules` keys first. */
+const STARTER_TEXT = 'Text for every session.'
+
+function blockRule(id: string, indent: string): string {
+  return [`${indent}- id: ${id}`, `${indent}  on: session_start`, `${indent}  target: both`, `${indent}  template: |`, `${indent}    ${STARTER_TEXT}`].join('\n')
+}
+
+/**
+ * Add a starter rule to the `rules` list, as a text insert where the list is: inside the brackets
+ * of a flow list, or after the last item of a block list at its indentation. An empty draft gets
+ * `version` and `rules` first. A draft that does not parse gets the rule at its end.
+ */
 export function addRule(text: string): { text: string; select: [number, number] } {
   const id = freeRuleId(text)
-  const rule = `  - id: ${id}\n    on: session_start\n    target: both\n    template: |\n      Text for every session.\n`
-  let head = text
-  if (head.trim() === '') head = 'version: 1\nrules:\n'
-  else {
-    // An empty flow list (`rules: []`) cannot take a block item after it: make it a block key.
-    head = head.replace(/^rules:[ \t]*\[[ \t]*\]/m, 'rules:')
-    if (!head.endsWith('\n')) head += '\n'
-    if (!/^rules:/m.test(head)) head += 'rules:\n'
+  if (text.trim() === '') {
+    const head = 'version: 1\nrules:\n'
+    return { text: `${head}${blockRule(id, '  ')}\n`, select: [head.length + 8, head.length + 8 + id.length] }
   }
-  const at = head.length + rule.indexOf(id)
-  return { text: head + rule, select: [at, at + id.length] }
+  const doc = parseDocument(text)
+  const rules = doc.errors.length === 0 && isMap(doc.contents) ? doc.contents.get('rules', true) : undefined
+  if (isSeq(rules) && rules.flow && rules.range) {
+    // The closing bracket ends the node's value.
+    const close = text.lastIndexOf(']', rules.range[1])
+    const before = text.slice(0, close).replace(/\s*$/, '')
+    const lead = `${before}${rules.items.length > 0 ? ', ' : ''}{ id: `
+    const item = `${lead}${id}, on: session_start, target: both, template: "${STARTER_TEXT}" }`
+    return { text: item + text.slice(close), select: [lead.length, lead.length + id.length] }
+  }
+  if (isSeq(rules) && rules.items.length > 0 && rules.range) {
+    const first = (rules.items[0] as { range?: [number, number, number] }).range?.[0] ?? rules.range[0]
+    const lineStart = text.lastIndexOf('\n', first - 1) + 1
+    const indent = /^[ \t]*/.exec(text.slice(lineStart))![0]
+    const end = text.slice(0, rules.range[1]).replace(/\s*$/, '').length
+    const lead = `${text.slice(0, end)}\n${indent}- id: `
+    return { text: lead + blockRule(id, indent).slice(indent.length + 6) + text.slice(end), select: [lead.length, lead.length + id.length] }
+  }
+  let head = text.endsWith('\n') ? text : `${text}\n`
+  if (!/^rules:/m.test(head)) head += 'rules:\n'
+  const at = head.length + 8
+  return { text: `${head}${blockRule(id, '  ')}\n`, select: [at, at + id.length] }
 }
 
 /** Insert `{{token}}` over the selection. A `file:` token selects its path, ready to type over. */

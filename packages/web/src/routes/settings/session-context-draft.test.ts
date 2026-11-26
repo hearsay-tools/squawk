@@ -30,6 +30,22 @@ describe('session context draft edits', () => {
     expect(text).toContain('# none yet')
   })
 
+  it('adds to a non-empty flow list of rules inside the brackets', () => {
+    const before = 'version: 1\nrules: [{ id: a, on: session_start, template: x }]  # inline\n'
+    const { text, select } = addRule(before)
+    expect((parse(text) as { rules: { id: string }[] }).rules.map((r) => r.id)).toEqual(['a', 'new-rule'])
+    expect(text).toContain('# inline')
+    expect(text.slice(...select)).toBe('new-rule')
+  })
+
+  it('adds after the last rule when another key follows the list, at the list indentation', () => {
+    const before = 'rules:\n    - id: a\n      on: session_start\n      template: x\nversion: 1\n'
+    const { text, select } = addRule(before)
+    expect(parse(text)).toMatchObject({ version: 1, rules: [{ id: 'a' }, { id: 'new-rule', target: 'both' }] })
+    expect(text.endsWith('version: 1\n')).toBe(true)
+    expect(text.slice(...select)).toBe('new-rule')
+  })
+
   it('inserts a variable over the selection and puts the caret after it', () => {
     expect(insertToken('Hi X!', 3, 4, 'run.id')).toEqual({ text: 'Hi {{run.id}}!', select: [13, 13] })
   })
