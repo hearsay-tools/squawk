@@ -299,6 +299,7 @@ export interface FactCombination { name: string; line: number; facts: string[] }
 
 export function factCombinations(source: string, keys: Set<string> = FACT_KEYS()): FactCombination[] {
   // A cheap pre-filter: a fact source is spelled by one of these words, or reached through a module import.
+  // oxlint-disable-next-line cez/regex-module-syntax -- a plain-text pre-filter; the AST pass below decides
   if (!/RUNNER_FACTS|\bfacts\b|inputDelivery|systemPromptOnResume|RunnerFacts|\bimport\b/i.test(source)) return [];
   const scan = combinationVisitors(() => keys);
   let found: Scope[] = [];

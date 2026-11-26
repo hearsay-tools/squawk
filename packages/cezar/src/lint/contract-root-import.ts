@@ -1,8 +1,9 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from '@babel/parser';
-import { blankOnce, lineAt, repoRoot } from './source-rule.ts';
-import { child, children, nameOf, stringOf, type AstRule, type EsNode } from './ast-rule.ts';
+import { repoRoot } from './source-rule.ts';
+import { child, children, nameOf, stringOf, type AstRule, type EsNode, type Visitors } from './ast-rule.ts';
+import { scanSource } from './ast-tree.ts';
 
 /**
  * Contract values load through module subpaths, never through a package root
@@ -30,79 +31,13 @@ export interface RootImport { file: string; line: number; root: string; kind: Ki
 const rootOf = (specifier: string): string | undefined =>
   ROOTS.find((root) => specifier === root || specifier === `${root}/index`);
 
-/** What a declaration ending in `from '<root>'` is, by its text up to `from`; undefined when it is a type. */
-function declarationKind(head: string): Kind | undefined {
-  if (/^(?:import|export) type\b/.test(head)) return undefined;
-  if (/^export\b/.test(head)) return 're-export';
-  if (/^import \* as\b/.test(head)) return 'namespace';
-  if (head.startsWith('import {')) return 'value-import';
-  return 'default';
-}
-
-/**
- * The `=` of a type alias at a statement start. TypeScript needs the name on the line of `type`.
- * Type parameters end at the first `>` an `=` follows: the alias's own, or a parameter default's
- * inside the same alias.
- */
-const ALIAS_HEAD = /(?:^|[;{}\n])\s*(?:export\s+)?(?:declare\s+)?type[ \t]+[\w$]+\s*(?:<[\s\S]*?>)?\s*=(?!>)/g;
-/** A line that ends mid-type, and a line that starts mid-type: the type goes on past the break between. */
-const ENDS_OPEN = /(?:[=|&,<:?.]|=>)\s*$/;
-const STARTS_OPEN = /^\s*(?:[|&?:.,]|=>)/;
-
-/**
- * Whether the blanked `code` ends inside a type alias, where `import('<root>')` is a type query.
- * The alias opened last runs from its `=` to a `;` at its own bracket depth, a bracket that closes
- * past that depth, or a line break at that depth between two lines that neither ends nor starts
- * mid-type. Outside an alias, `typeof import(…)` is an expression that runs the import.
- */
-function insideTypeAlias(code: string): boolean {
-  const head = [...code.matchAll(ALIAS_HEAD)].at(-1);
-  if (head === undefined) return false;
-  let depth = 0;
-  for (let i = head.index + head[0].length; i < code.length; i++) {
-    const ch = code.charAt(i);
-    if ('([{'.includes(ch)) depth++;
-    else if (')]}'.includes(ch)) {
-      if (--depth < 0) return false;
-    } else if (depth === 0 && ch === ';') return false;
-    else if (depth === 0 && ch === '\n' && !ENDS_OPEN.test(code.slice(head.index, i)) && !STARTS_OPEN.test(code.slice(i + 1))) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/** Every runtime import of a package root in `source`. Strings and comments are blanked first. */
+/** Every runtime import of a package root in `source`, read from oxlint's syntax tree. */
 export function scanRootImports(file: string, source: string): RootImport[] {
-  const code = blankOnce(source);
   const sites: RootImport[] = [];
-  // `blank` keeps the quotes of each string and the backticks of each template, and turns their
-  // content to spaces at the same offsets. A template keeps its `${…}`, so one with a
-  // substitution never matches: no static scan can read its specifier.
-  for (const match of code.matchAll(/([`'"]) *\1/g)) {
-    const at = match.index;
-    const root = rootOf(source.slice(at + 1, at + match[0].length - 1));
-    if (root === undefined) continue;
-    const before = code.slice(0, at);
-    if (/\bimport\s*\(\s*$/.test(before)) {
-      if (!insideTypeAlias(before)) sites.push({ file, line: lineAt(source, at), root, kind: 'dynamic', names: [] });
-      continue;
-    }
-    if (/\bimport\s*$/.test(before)) {
-      sites.push({ file, line: lineAt(source, at), root, kind: 'side-effect', names: [] });
-      continue;
-    }
-    if (!/\bfrom\s*$/.test(before)) continue;
-    const keywords = [...before.matchAll(/\b(?:import|export)\b/g)];
-    const start = keywords.at(-1)?.index;
-    if (start === undefined) continue;
-    const head = before.slice(start).replace(/\s+/g, ' ').trim();
-    const kind = declarationKind(head);
-    if (kind === undefined) continue;
-    const braces = /\{([^}]*)\}/.exec(head)?.[1] ?? '';
-    const names = braces.split(',').map((name) => name.trim().replace(/\s+as\s+\S+$/, '')).filter(Boolean);
-    sites.push({ file, line: lineAt(source, start), root, kind, names });
-  }
+  scanSource(file, source, () => rootImportVisitors(file, (node, site) => {
+    const loc = node.loc as { start?: { line?: number } } | undefined;
+    sites.push({ ...site, line: loc?.start?.line ?? 1 });
+  }));
   return sites;
 }
 
@@ -157,7 +92,7 @@ export const scanned = (file: string): boolean =>
 
 let exemptions: Record<string, string> | undefined;
 
-/** The root import's syntax supplies the same diagnostic fields as the original scanner. */
+/** The kind, root and names of one root import node. */
 function rootImportNode(file: string, node: EsNode): RootImport | undefined {
   const specifier = child(node, 'source');
   const root = rootOf(stringOf(specifier) ?? '');
@@ -177,18 +112,24 @@ function rootImportNode(file: string, node: EsNode): RootImport | undefined {
   return { file, line: 1, root, kind, names };
 }
 
+/** Visitors that call `found` for each runtime import of a root. A type query inside a type alias is a type. */
+function rootImportVisitors(file: string, found: (node: EsNode, site: RootImport) => void): Visitors {
+  const inspect = (node: EsNode) => {
+    if (node.type === 'TSImportType') {
+      for (let parent = node.parent; parent; parent = parent.parent) if (parent.type === 'TSTypeAliasDeclaration') return;
+    }
+    const site = rootImportNode(file, node);
+    if (site) found(node, site);
+  };
+  return Object.fromEntries(['ImportDeclaration', 'ExportAllDeclaration', 'ExportNamedDeclaration', 'ImportExpression', 'TSImportType'].map(type => [type, inspect]));
+}
+
 export const contractRootImport: AstRule = {
   name: 'contract-root-import',
   description: 'Import contract values through module subpaths, never through a package root (hearsay-tools/cezarion#1237).',
   applies: (file) => scanned(file) && !(file in (exemptions ??= readExemptions())),
   create(report, context) {
-    const inspect = (node: EsNode) => {
-      if (node.type === 'TSImportType') {
-        for (let parent = node.parent; parent; parent = parent.parent) if (parent.type === 'TSTypeAliasDeclaration') return;
-      }
-      const site = rootImportNode(context.file, node);
-      if (site) report(node, `${hint(site)}. Import values from the subpaths named, or types as \`import type\` from the root (hearsay-tools/cezarion#1237).`);
-    };
-    return Object.fromEntries(['ImportDeclaration', 'ExportAllDeclaration', 'ExportNamedDeclaration', 'ImportExpression', 'TSImportType'].map(type => [type, inspect]));
+    return rootImportVisitors(context.file, (node, site) =>
+      report(node, `${hint(site)}. Import values from the subpaths named, or types as \`import type\` from the root (hearsay-tools/cezarion#1237).`));
   },
 };

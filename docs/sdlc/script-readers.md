@@ -5,6 +5,9 @@ package's syntax tree, not line regexes. For comments and source offsets, use
 its concrete syntax tree (`new Parser().parse(text)`). This keeps comments
 separate from scalar content, including `#` lines inside block scalars.
 
+Scripts that classify JS/TS syntax read a syntax tree too, as
+[lint.md § Syntax scans read a syntax tree](lint.md#syntax-scans-read-a-syntax-tree) says.
+
 Before implementation starts, a plan that introduces a hand-written shell or
 Markdown reader must list the edge cases it handles and those it excludes.
 
