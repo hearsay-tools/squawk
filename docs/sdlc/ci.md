@@ -237,7 +237,10 @@ marker changes which code jscpd counts, so adding, removing or moving one can
 change the total.
 
 Cross-package clones always fail, including inherited copies, except for the
-named file pair in the checker's exception list. Within one file, the sum of
+named file pair in the checker's exception list. CI runs the base branch's copy of
+`check-clones.cjs`, so a new `crossPackageExceptions` entry takes effect only
+after it merges: land it in its own pull request before the change that needs
+it. A failing run whose change edits the checker says so. Within one file, the sum of
 reported same-file clone tokens has its own merge-base ceiling. Equal or smaller
 totals pass, including re-cut fragments; an increase or a new same-file total
 fails. A file cannot borrow allowance from another file or cross-file pair.

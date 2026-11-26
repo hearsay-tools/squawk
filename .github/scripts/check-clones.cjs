@@ -10,6 +10,7 @@ const { parse } = require('@babel/parser');
 const git = (cwd, args, options = {}) => execFileSync('git', args, { cwd, encoding: 'utf8', ...options });
 const eligible = (name) => /^packages\/[^/]+\/src\//.test(name) || name.startsWith('packages/cezar/scripts/');
 
+const GATE = '.github/scripts/check-clones.cjs';
 const crossPackageExceptions = [{
   files: ['packages/cezar/src/lint/wait-baseline.ts', 'packages/web/src/test/wait-baseline.ts'],
   reason: 'The cockpit unit wait rule moved into lint in hearsay-tools/cezarion#2421; the browser wait discipline, M08, stays in packages/web and may not import packages/cezar by relative path; remove this entry when M08 moves into lint.',
@@ -232,6 +233,14 @@ function compare(baseline, head) {
   return failures;
 }
 
+/** CI runs the base branch's copy of this file, so an edit to it in the checked change has no effect yet. */
+function gateEditNotice(repo, mergeBase, headSha) {
+  if (!git(repo, ['diff', '--name-only', mergeBase, headSha, '--', GATE]).trim()) return '';
+  return `The change edits ${GATE}. CI judges a pull request with the base branch's trusted copy of this gate`
+    + ' and its crossPackageExceptions list, so that edit takes effect only after it merges.'
+    + ' Land the gate or exception change in its own pull request first.\n';
+}
+
 function check({ repo = process.cwd(), base = 'origin/main', head = 'HEAD' } = {}) {
   const mergeBase = git(repo, ['merge-base', base, head]).trim();
   const headSha = git(repo, ['rev-parse', '--verify', `${head}^{commit}`]).trim();
@@ -248,6 +257,7 @@ function check({ repo = process.cwd(), base = 'origin/main', head = 'HEAD' } = {
     const failures = compare(baseline, headReport);
     for (const failure of failures) process.stdout.write(`${failure}\n`);
     process.stdout.write(`Clone pairs: ${headReport.pairs.size}; violations: ${failures.length}\n`);
+    if (failures.length) process.stdout.write(gateEditNotice(repo, mergeBase, headSha));
     return failures.length ? 1 : 0;
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
