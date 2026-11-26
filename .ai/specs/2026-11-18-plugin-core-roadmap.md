@@ -220,9 +220,9 @@ and no other new registration; its spec confirms that. The epic's proof has two 
 it, which the baseline cannot show, because `cez/layer-import` checks core files only and a
 `shell` file may import a feature.
 
-Every other feature has a server part. Webhooks is tied to task start and to the project
-settings routes. Artifacts has routes, a WebSocket topic and an index that starts with the
-server. Automations has routes, a scheduler and a store for each project, and it starts tasks.
+The other three features that use the launch slot each have a server part. Webhooks is tied
+to task start and to the project settings routes. Artifacts has routes, a WebSocket topic and
+an index that starts with the server. Automations has routes, a scheduler and a store for each project, and it starts tasks.
 The next epic therefore adds a slot for HTTP routes and for server start and stop, with the
 first feature that needs it. The typed client is computed from a static chain of routes in
 `server/server.ts`, so that epic's spec decides how the client keeps a bundled feature's
