@@ -235,7 +235,10 @@ function reduceItem(fold: FoldState, event: RunEvent): void {
   if (!item) return
   const key = itemKey(event, item.id)
   const located = fold.itemsById.get(key)
-  upsertV2(fold, located?.turn ?? currentTurn(fold), item, key, event.type === 'item.completed' ? stamp(event.ts) : undefined)
+  const completed = event.type === 'item.completed'
+  // An open message or reasoning item still takes deltas; the view hides a half-written marker in it.
+  const streaming = !completed && (item.kind === 'message' || item.kind === 'reasoning')
+  upsertV2(fold, located?.turn ?? currentTurn(fold), item, key, completed ? stamp(event.ts) : undefined, streaming)
 }
 
 function reduceItemDelta(fold: FoldState, event: RunEvent): void {

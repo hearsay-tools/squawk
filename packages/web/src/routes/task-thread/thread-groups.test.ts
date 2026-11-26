@@ -301,6 +301,34 @@ describe('groupThreadItems — blank reasoning items (#528)', () => {
   })
 })
 
+/** A streaming `item.started` carries `text: ''`, and a stripped marker can leave a message
+ *  empty: both drop in pass 0, before nesting, like blank reasoning. */
+describe('groupThreadItems — blank messages', () => {
+  const message = (id: string, text: string, extra: Record<string, unknown> = {}): ThreadEntry =>
+    ({ kind: 'message', id, role: 'assistant', text, ...extra }) as ThreadEntry
+
+  it.each([['', 'empty'], ['  \n\t', 'whitespace']])('drops a top-level %s message (%s)', (text) => {
+    expect(groupThreadItems([message('m1', text)])).toEqual([])
+  })
+
+  it('drops an empty streaming message and keeps its sibling with text', () => {
+    const blocks = groupThreadItems([message('m1', '', { streaming: true }), message('m2', 'Real answer.')])
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0]).toMatchObject({ kind: 'entry', entry: { id: 'm2' } })
+  })
+
+  it('drops a blank message nested under a tool from its children list', () => {
+    const blocks = groupThreadItems([
+      tool('task', 'think', 'running', { name: 'Task', title: 'Task' }),
+      message('child-blank', ' ', { parentItemId: 'task' }),
+      message('child-text', 'Sub-agent text.', { parentItemId: 'task' }),
+    ])
+    expect(shape(blocks)).toEqual(['tool-card'])
+    if (blocks[0]?.kind !== 'tool-card') throw new Error('expected the Task tool card')
+    expect(blocks[0].children.map((child) => child.id)).toEqual(['child-text'])
+  })
+})
+
 describe('groupThreadItems — provider authorization recovery', () => {
   it('keeps the recovery callout as an ordinary top-level entry at the failure location', () => {
     const { turns } = reduceThread([

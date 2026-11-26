@@ -166,7 +166,11 @@ export interface ThreadPreviewServer {
 }
 
 /** Event time belongs to the web transcript, not the backend UiItem protocol. */
-export type ThreadMessage = Extract<UiItem, { kind: 'message' }> & { ts?: string | undefined }
+export type ThreadMessage = Extract<UiItem, { kind: 'message' }> & {
+  ts?: string | undefined
+  /** An open assistant message on the live latest turn: deltas still append to its text. */
+  streaming?: true | undefined
+}
 export type ThreadEntry = Exclude<UiItem, { kind: 'message' }> | ThreadMessage | ThreadNote | ThreadImage | ThreadAsk | ThreadPermission | ThreadProviderAuthRequired | ThreadConversationMessage | ThreadPreviewServer
 
 export interface ThreadTurn {
@@ -315,6 +319,16 @@ function stripDoneMarker(text: string, stripAsk: boolean): string {
     .join('\n')
 }
 
+/** A trailing line that is still becoming a protocol marker: `C`, `CE`, `CEZ`, a cut `CEZ:DONE`, `CEZ:PR=4`. */
+const PARTIAL_MARKER_LINE = /\s*(?:^|\n)C(?:E(?:Z(?::.*)?)?)?$/
+/** An inline turn-end marker still arriving after prose: a cut `CEZ:DONE` after `… done.`. */
+const PARTIAL_INLINE_MARKER = /[ \t]+CEZ(?::[A-Z]*)?$/
+
+/** Hide a half-streamed marker on an open message, so it does not flash before its strip. */
+function stripPartialMarkerTail(text: string): string {
+  return text.replace(PARTIAL_MARKER_LINE, '').replace(PARTIAL_INLINE_MARKER, '')
+}
+
 /**
  * Repair for legacy per-delta transcripts: codex/opencode runs recorded before the runners
  * coalesced v1 `text` per item persisted one `text` line PER STREAMING TOKEN, so the fold
@@ -327,17 +341,35 @@ function stripDoneMarker(text: string, stripAsk: boolean): string {
  * time — and strips markers on the CONCATENATION, catching `CEZ:DONE` split across tokens,
  * which per-event stripping let through. A run that reassembles nothing is kept untouched.
  */
-function dropLegacyDeltaRuns(draft: DraftTurn): void {
+interface OpenV2Message {
+  norm: string
+  firstSeq: number
+}
+
+/** A v1 run continues an open v2 message when one text is a prefix of the other. An open
+ *  message that is still empty owns the v1 prose that arrived after it started. */
+function continuesOpenMessage(open: readonly OpenV2Message[], runNorm: string, firstSeq: number): boolean {
+  if (runNorm === '') return false
+  return open.some((v2) =>
+    v2.norm === '' ? firstSeq > v2.firstSeq : v2.norm.startsWith(runNorm) || runNorm.startsWith(v2.norm),
+  )
+}
+
+function dropLegacyDeltaRuns(draft: DraftTurn, live: boolean): void {
   // Marker-insensitive comparison (stripAsk: true): the v1 side may or may not carry the
   // marker depending on server-side validation, so equality must ignore it either way.
   const norm = (text: string) => stripDoneMarker(text, true).replace(/\s+/g, '')
   const v2Norms = new Set<string>()
   const inOrder: string[] = []
-  for (const { origin, entry } of draft.entries) {
+  // Only a message still streaming on the live turn may match by prefix: v1 and v2 run ahead
+  // of each other there. Completed prose matches exactly, so v1-only prose stays visible.
+  const open: OpenV2Message[] = []
+  for (const { origin, entry, firstSeq, streaming } of draft.entries) {
     if (origin === 'v2' && entry.kind === 'message') {
       const n = norm(entry.text)
       v2Norms.add(n)
       inOrder.push(n)
+      if (live && streaming === true) open.push({ norm: n, firstSeq })
     }
   }
   if (inOrder.length === 0) return
@@ -347,7 +379,10 @@ function dropLegacyDeltaRuns(draft: DraftTurn): void {
   const flushRun = () => {
     // Single entries already had their chance in the exact-match filter above — only a
     // genuine run (≥2 fragments) is a delta artifact worth reassembling.
-    if (run.entries.length >= 2 && v2Norms.has(norm(run.texts.join('')))) {
+    const runNorm = norm(run.texts.join(''))
+    const first = run.entries[0]
+    const exact = run.entries.length >= 2 && v2Norms.has(runNorm)
+    if (first && (exact || continuesOpenMessage(open, runNorm, first.firstSeq))) {
       run = { entries: [], texts: [] }
       return
     }
@@ -369,7 +404,7 @@ function dropLegacyDeltaRuns(draft: DraftTurn): void {
 
 /** Deduplicate v1 prose only when this turn contains a matching v2 message. Compare
  *  marker-stripped, trimmed text; unmatched v1-only prose must remain visible. */
-function dropTwinnedV1Messages(draft: DraftTurn): void {
+function dropTwinnedV1Messages(draft: DraftTurn, live: boolean): void {
   const v2Texts = new Set<string>()
   for (const { origin, entry } of draft.entries) {
     // stripAsk: true — dedup equality must ignore the marker on both sides (see norm()).
@@ -380,7 +415,7 @@ function dropTwinnedV1Messages(draft: DraftTurn): void {
     (e) =>
       !(e.origin === 'v1' && e.entry.kind === 'message' && v2Texts.has(stripDoneMarker(e.entry.text, true).trim())),
   )
-  dropLegacyDeltaRuns(draft)
+  dropLegacyDeltaRuns(draft, live)
 }
 
 /** Fold assistant prose whose entire body echoes a fatal failure in the same turn (hearsay-tools/squawk#4018). */
@@ -423,6 +458,16 @@ function markPendingRequests(fold: FoldState): void {
   }
 }
 
+/** Assistant prose as the view reads it: markers stripped, and an open message on the live
+ *  turn flagged `streaming` with any half-written trailing marker hidden. */
+function assistantView(draft: DraftEntry, stripAsk: boolean, live: boolean): ThreadEntry {
+  const { entry } = draft
+  if (entry.kind !== 'message' || entry.role !== 'assistant') return entry
+  const text = stripDoneMarker(entry.text, stripAsk)
+  if (!(live && draft.streaming === true)) return { ...entry, text }
+  return { ...entry, text: stripPartialMarkerTail(text), streaming: true }
+}
+
 /** A draft turn as the view reads it, with protocol markers stripped from assistant prose. */
 function finishTurn(draft: DraftTurn, provisionalAsk: boolean): ThreadTurn {
   // The ask card renders the questions, so only then is the marker redundant (#473).
@@ -434,11 +479,7 @@ function finishTurn(draft: DraftTurn, provisionalAsk: boolean): ThreadTurn {
     ...(draft.startedAt !== undefined ? { startedAt: draft.startedAt } : {}),
     ...(draft.planEntries !== undefined ? { planEntries: draft.planEntries } : {}),
     ...(draft.completed !== undefined ? { completed: draft.completed } : {}),
-    items: draft.entries.map(({ entry }) =>
-      entry.kind === 'message' && entry.role === 'assistant'
-        ? { ...entry, text: stripDoneMarker(entry.text, stripAsk) }
-        : entry,
-    ),
+    items: draft.entries.map((entry) => assistantView(entry, stripAsk, provisionalAsk)),
     itemSeqs: itemSeqsOf(draft.entries),
   }
 }
@@ -454,13 +495,13 @@ function itemSeqsOf(entries: DraftEntry[]): Map<string, ItemSeqs> {
 export function reduceThread(events: RunEvent[], options: ThreadReduceOptions = {}): ThreadState {
   const fold = createFoldState()
   for (const event of events) applyThreadEvent(fold, event)
-  for (const draft of fold.turns) {
-    if (draft.v2Items) dropTwinnedV1Messages(draft)
+  const lastIndex = fold.turns.length - 1
+  for (const [index, draft] of fold.turns.entries()) {
+    if (draft.v2Items) dropTwinnedV1Messages(draft, options.activeTurn === true && index === lastIndex)
     foldDuplicateFailureMessages(draft)
     dropHumanInputEchoes(draft)
   }
   markPendingRequests(fold)
-  const lastIndex = fold.turns.length - 1
   return {
     // A completed v2 assistant item lands before the v1 turn-end handler can
     // parse the marker and emit ask.requested. Hide that provisional transport
