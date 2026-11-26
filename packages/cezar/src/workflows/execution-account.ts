@@ -1,4 +1,4 @@
-import { latestSession } from '@open-mercato/cezar-contract/run-predicates';
+import { latestSession, latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
 
 import type { RunRecord } from '../runs/store.ts';
 import { DEFAULT_RUNNER_ID } from '../core/runner-ids.ts';
@@ -21,4 +21,25 @@ export function executionAccount(
   const latest = latestSession(run);
   if (latest.sessionId !== undefined) return { runner: latest.backend, agentProfile: latest.profileId ?? run.agentProfile };
   return { runner: run.runner, agentProfile: run.agentProfile };
+}
+
+type ModelRun = Pick<RunRecord, 'model' | 'steps' | 'workflowDef' | 'workflowCursor'>;
+
+/**
+ * The named model of the run's current turn, for quota-pool holds (hearsay-tools/squawk#4343): the
+ * authored model of the workflow step that owns the latest session, else of the step a queued run
+ * starts at, else the run-level pin. Undefined means the runner's own default ("auto").
+ */
+export function executionModel(run: ModelRun): string | undefined {
+  return currentStepDefinition(run)?.model ?? run.model;
+}
+
+function currentStepDefinition(run: ModelRun) {
+  const steps = run.workflowDef?.steps;
+  if (!steps) return undefined;
+  const session = latestSessionStep(run.steps);
+  const stepId = session ? session.continuesStepId ?? session.id
+    : run.workflowCursor?.mode === 'start' ? run.workflowCursor.stepId
+      : run.steps.find(step => step.status === 'pending')?.id;
+  return stepId === undefined ? undefined : steps.find(step => step.id === stepId);
 }

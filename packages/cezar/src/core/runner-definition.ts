@@ -184,6 +184,12 @@ export interface RunnerModelData {
   readonly known: readonly string[];
   /** How a model id maps to a provider and to the wire (`core/model-identity.ts`). */
   readonly idMap: BackendModelMap;
+  /**
+   * The provider quota pool a named model draws on, when one account holds several pools that
+   * close apart (hearsay-tools/squawk#4343). A usage-limit hold then closes only that pool.
+   * Undefined, or no function: the runner cannot name the pool, so the hold closes the account.
+   */
+  readonly quotaPool?: (model: string) => string | undefined;
 }
 
 /** A runner's `models` part: its model data and the reader of its native default model. */

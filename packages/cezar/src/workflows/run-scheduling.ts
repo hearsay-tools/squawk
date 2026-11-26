@@ -4,20 +4,24 @@ import type { RunRecord } from '../runs/store.ts';
 import type { AccountHolds } from '../workspace/semaphore.ts';
 import type { StartRunInput } from './run/types.ts';
 import type { WorkflowDef } from './types.ts';
-import { resolveRunnerId } from '../core/runner-registry.ts';
+import { resolveRunnerId, runnerQuotaPool } from '../core/runner-registry.ts';
+import { executionModel } from './execution-account.ts';
+
+type HoldRun = Pick<RunRecord, 'runner' | 'agentProfile' | 'model' | 'steps' | 'workflowDef' | 'workflowCursor'>;
 
 /**
- * A deadline hold blocks all work on its account. An in-flight resume holds fresh work only;
- * other resumes must remain eligible.
+ * A deadline hold blocks all work in its pool. An in-flight resume holds fresh work only; other
+ * resumes must remain eligible.
  */
 export function accountHeldFor(
-  run: Pick<RunRecord, 'runner' | 'agentProfile' | 'status' | 'autoResumeAttempts' | 'autoResumeReason'>,
+  run: HoldRun & Pick<RunRecord, 'status' | 'autoResumeAttempts' | 'autoResumeReason'>,
   holds: AccountHolds,
   fallbackRunner: string,
 ): boolean {
-  const key = runAccountKey(run, fallbackRunner);
-  if (holds.deadline.has(key)) return true;
-  return holds.inFlight.has(key) && !resumeInFlight(run);
+  const account = runAccountKey(run, fallbackRunner);
+  const pool = runQuotaPool(run, fallbackRunner);
+  if (heldIn(holds.deadline, account, pool)) return true;
+  return heldIn(holds.inFlight, account, pool) && !resumeInFlight(run);
 }
 
 /**
@@ -29,6 +33,33 @@ export function runAccountKey(
   fallbackRunner: string,
 ): string {
   return `${run.runner ?? fallbackRunner}:${run.agentProfile ?? 'default'}`;
+}
+
+/** Separates the pool from the account in a hold key. An account key never holds it. */
+const POOL_SEPARATOR = '\u001f';
+
+/**
+ * The key a usage-limit hold closes (hearsay-tools/squawk#4343): the account and the quota pool its
+ * model draws on, or the account alone when its runner cannot name the pool.
+ */
+export function runHoldKey(run: HoldRun, fallbackRunner: string): string {
+  const account = runAccountKey(run, fallbackRunner);
+  const pool = runQuotaPool(run, fallbackRunner);
+  return pool === undefined ? account : `${account}${POOL_SEPARATOR}${pool}`;
+}
+
+function runQuotaPool(run: HoldRun, fallbackRunner: string): string | undefined {
+  return runnerQuotaPool(run.runner ?? fallbackRunner, executionModel(run));
+}
+
+/** An account-wide hold blocks every pool. A pool hold blocks its pool, and a run whose pool is
+ *  unknown, since that run may draw on it. */
+function heldIn(keys: ReadonlySet<string>, account: string, pool: string | undefined): boolean {
+  if (keys.has(account)) return true;
+  if (pool !== undefined) return keys.has(`${account}${POOL_SEPARATOR}${pool}`);
+  const prefix = `${account}${POOL_SEPARATOR}`;
+  for (const key of keys) if (key.startsWith(prefix)) return true;
+  return false;
 }
 
 /**
@@ -85,8 +116,8 @@ export function formatWakeInstant(at: Date): string {
 }
 
 /**
- * Derive this project’s future-deadline and in-flight account holds from records for the shared
- * semaphore. Past deadlines do not block the queue.
+ * Derive this project’s future-deadline and in-flight holds from records for the shared semaphore,
+ * each keyed by `runHoldKey`. Past deadlines do not block the queue.
  */
 export function deriveAccountHolds(
   records: RunRecord[],
@@ -101,7 +132,7 @@ export function deriveAccountHolds(
     if (run.removedRunner !== undefined) continue;
     // A holding run always carries the runner it actually ran on, so the fallback is unused
     // here — it is spelled out rather than `!` so a future record shape degrades, not throws.
-    const key = () => runAccountKey(withExecutionAccount(run), resolveRunnerId(run.runner));
+    const key = () => runHoldKey(withExecutionAccount(run), resolveRunnerId(run.runner));
     // A provider-error hold blocks no account (hearsay-tools/squawk#3337): its error may be one
     // model's, and a run that meets the same limit holds by itself.
     if (isUsageLimitHold(run) && run.autoResumeReason !== 'provider-error') {
