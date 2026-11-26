@@ -84,17 +84,16 @@ describe('RunManager agent-profile resolution', () => {
     const { env, profileId } = await resolveStepEnv(run.id, 'claude');
     expect(profileId).toBe('default');
     // The base run env only: the handoff contract (spec 007) plus the task-scoped
-    // temp directory (#785). No ACCOUNT variable, which is this test's subject.
+    // temp directory (#785). Launch parts (artifacts) add theirs at launch. No ACCOUNT
+    // variable, which is this test's subject.
     expect(Object.keys(env).sort()).toEqual([
-      'CEZ_ARTIFACTS_DIR',
       'CEZ_HANDOFF_FILE',
       'CEZ_TASK_ID',
-      'HSQ_ARTIFACTS_DIR', 'HSQ_HANDOFF_FILE', 'HSQ_TASK_ID',
+      'HSQ_HANDOFF_FILE', 'HSQ_TASK_ID',
       'TEMP',
       'TMP',
       'TMPDIR',
     ]);
-    expect(env.CEZ_ARTIFACTS_DIR).toBe(join(repoRoot, '.ai/cezar/runs', `${run.id}-artifacts`));
     expect(env.CLAUDE_CONFIG_DIR).toBeUndefined();
     expect(env.CODEX_HOME).toBeUndefined();
   });

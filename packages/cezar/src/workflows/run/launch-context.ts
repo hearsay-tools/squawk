@@ -2,15 +2,10 @@ import { leadingSlashSkillName } from './prompts.ts';
 import { productEnvEntries } from '../../core/product-env.ts';
 import { atStepOpen, atContinue } from './launch-read-resolver.ts';
 import type { DelegationProvisioner } from '../../delegation/provision.ts';
-import { provisionArtifactDirectory } from '../../artifacts/lifecycle.ts';
 import { handoffPath, refreshHandoffRecords } from '../../handoff.ts';
 import { agentTmpEnv } from '../../runs/agent-tmpdir.ts';
 import type { WorkerStepIdentity } from '../../delegation/execution-identity.ts';
-import { automationsEnabled } from '../../automations/enabled.ts';
-import { automationCliCommand, automationsPrompt } from '../../automations/prompts.ts';
-import { registryEntry } from '../../workspace/registry-entry.ts';
-import { agentWebhooksPrompt, webhookCliCommand } from '../../webhooks/prompt.ts';
-import { agentWebhooks } from '../../workspace/webhooks.ts';
+import { resolveLaunchParts, type LaunchCockpitAddress, type ResolvedLaunchParts } from '../../core/launch-registry.ts';
 import { buildSessionContext, formatSessionContextReport, type SessionContext } from '../../session-context.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { RunModuleContext } from './types.ts';
@@ -31,7 +26,7 @@ export interface LaunchContextHost {
   workerStep(runId: string, stepId: string | undefined): WorkerStepIdentity | undefined;
 }
 
-/** Env for the rolling handoff and artifacts.
+/** Env for the rolling handoff, the task and the cockpit. Launch parts add their own env.
  *
  *  `TMPDIR`/`TEMP`/`TMP` (#785) point at this run's own scratch directory
  *  instead of the machine-wide one every agent used to share. Created and
@@ -40,7 +35,6 @@ export interface LaunchContextHost {
  *  turning into empty command output inside a running agent. */
 export function agentEnv({ dataDir }: LaunchContext, cockpit: CockpitAddress, runId: string): Record<string, string> {
   return {
-    ...productEnvEntries('ARTIFACTS_DIR', provisionArtifactDirectory(dataDir, runId)),
     ...productEnvEntries('HANDOFF_FILE', handoffPath(dataDir, runId)),
     ...productEnvEntries('TASK_ID', runId),
     ...agentTmpEnv(dataDir, runId),
@@ -53,23 +47,11 @@ export function agentEnvForStep(...args: Parameters<typeof atStepOpen.agentEnvFo
   return reads.agentEnvForStep(...args);
 }
 
-/** Automations on AND a cockpit attached: the one predicate behind the automations prompt part. */
-export function automationsReachable(cockpit: CockpitAddress): boolean {
-  return !!cockpit && automationsEnabled();
-}
-
-/** The automations part of every session's system prompt, or nothing. */
-export function automationsPart(cockpit: CockpitAddress): string | undefined {
-  return automationsReachable(cockpit) ? automationsPrompt(automationCliCommand()) : undefined;
-}
-
-/** The "Project webhooks" part (#1576): the webhooks this project exposes to agents, read from
- *  the registry when a session starts. Needs a cockpit to send through; nothing exposed, or an
- *  unreadable registry, adds nothing. */
-export async function agentWebhooksPart({ repoRoot, home }: LaunchContext, cockpit: CockpitAddress): Promise<string | undefined> {
-  if (!cockpit) return undefined;
-  const entry = await registryEntry(cockpit.projectId, repoRoot, home).catch(() => undefined);
-  return agentWebhooksPrompt(webhookCliCommand(), agentWebhooks(entry));
+/** The registered launch parts for one launch: their env and system-prompt parts, read when a
+ *  session starts. `env` is the step's profile env, which each part can read. */
+export function launchParts({ repoRoot, dataDir, home }: LaunchContext, cockpit: CockpitAddress, runId: string, env: Readonly<Record<string, string>>): Promise<ResolvedLaunchParts> {
+  const address: LaunchCockpitAddress = cockpit ? { origin: cockpit.origin, projectId: cockpit.projectId } : undefined;
+  return resolveLaunchParts({ runId, dataDir, repoRoot, home, cockpit: address, env });
 }
 
 /**

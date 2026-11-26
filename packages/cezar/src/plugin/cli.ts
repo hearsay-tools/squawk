@@ -12,6 +12,7 @@ const CONTRIBUTION_LABELS: ReadonlyArray<[keyof PluginContributions, string]> = 
   ['cliCommands', 'commands'], ['runners', 'runners'], ['agentTools', 'agent tools'],
   ['waitKinds', 'wait kinds'], ['stepKinds', 'step kinds'],
   ['removalSlots', 'removal slots'], ['runLifecycleListeners', 'run lifecycle listeners'],
+  ['launchParts', 'launch parts'],
 ];
 
 function contributionLines(contributions: PluginContributions): string[] {

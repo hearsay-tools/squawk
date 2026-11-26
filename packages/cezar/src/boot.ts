@@ -49,7 +49,7 @@ let hostPluginsLoaded = false;
 /**
  * Register every built-in extension table, load the bundled runners and then the host plugins
  * through the plugin loader, run the optional hook, then seal
- * all eight registries in this one place. A second call returns the same boot and does not load
+ * all nine registries in this one place. A second call returns the same boot and does not load
  * plugins or run the hook again.
  */
 export function bootRuntime(options?: BootRuntimeOptions): Promise<void> {
@@ -67,6 +67,7 @@ async function sealRuntime({ pluginsDir, bundledRunnersDir, beforeSeal }: BootRu
   // A test may seal a custom command table before dispatch asks for a full boot.
   if (!cliCommandsSealed()) registerBuiltInCliCommands();
   const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await import('./built-in-run-slots.ts');
+  const { registerBuiltInLaunchParts, sealBuiltInLaunchParts } = await import('./built-in-launch-parts.ts');
   const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await import('./workflows/step-kind-registry.ts');
   const { registerBuiltInTools, sealBuiltInTools } = await import('./built-in-tools.ts');
   const { registerBuiltInWaitKinds, sealBuiltInWaitKinds } = await import('./built-in-wait-kinds.ts');
@@ -74,6 +75,7 @@ async function sealRuntime({ pluginsDir, bundledRunnersDir, beforeSeal }: BootRu
   const { sealRunners } = await import('./core/runner-registry.ts');
   const loader = await import('./plugin/loader.ts');
   registerBuiltInRunSlots();
+  registerBuiltInLaunchParts();
   registerBuiltInStepKinds();
   registerBuiltInTools();
   registerBuiltInWaitKinds();
@@ -88,6 +90,7 @@ async function sealRuntime({ pluginsDir, bundledRunnersDir, beforeSeal }: BootRu
   sealBuiltInCliCommands();
   sealRunners();
   sealBuiltInRunSlots();
+  sealBuiltInLaunchParts();
   sealBuiltInStepKinds();
   sealBuiltInTools();
   sealBuiltInWaitKinds();

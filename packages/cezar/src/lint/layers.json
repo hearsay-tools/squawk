@@ -47,6 +47,7 @@
       "plugin/model-settings.ts",
       "plugin/managed-cli.ts",
       "plugin/pi-rpc.ts",
+      "built-in-launch-parts.ts",
       "built-in-run-slots.ts",
       "boot.ts",
       "built-in-cli-commands.ts",

@@ -128,8 +128,8 @@ export class StepSession {
     state.liveSession.selectStep(step.id);
     transitionTurnBoundary(state, { kind: 'session-open', phase: 'reset-step', session: state.liveSession.session });
     this.host.beginUsageInvocation(runId, state, step.id);
-    const launch = await sessionEvents.launchPreamble(this.launchPreambleHost, runId, state);
-    const { delegation, webhooksPart, ciTools } = launch;
+    const launch = await sessionEvents.launchPreamble(this.launchPreambleHost, runId, state, stepProfile.env);
+    const { delegation, launchParts, ciTools } = launch;
     // Revalidate after provisioning, then let execute settle cancellation or
     // requeue a Finish-held step through its existing no-session paths.
     if (launch.stale) {
@@ -143,7 +143,7 @@ export class StepSession {
     const launchOpening = sessionEvents.launchOpening(this.context, this.sharedHost, runId, state, step.id, { body: opening.userPrompt, ciTools });
     const session = this.startStepSession(runId, state, runner, atStepOpen.sessionPayload(step, {
       sessionId, images, opening: launchOpening, skill, extraSystemPrompt,
-      toolGrant, profile: stepProfile, model, delegation, webhooksPart, ciTools,
+      toolGrant, profile: stepProfile, model, delegation, launchParts, ciTools,
     }), onEvent, turn, sink);
     if (typeof session === 'string') return session;
     return this.awaitStepSession(runId, state, session, atStepOpen.sessionWaitPayload(step.id, nextStep, { sink, turn, startTokens, delegation, ciTools }));
@@ -215,7 +215,7 @@ export class StepSession {
     turn: SessionTurn,
     sink: UiEventSink,
   ): AgentSession | string {
-    const { delegation, ciTools, profile } = launch;
+    const { delegation, ciTools, profile, launchParts } = launch;
     let session: AgentSession | undefined;
     try {
       session = startManagedSession(runner,
@@ -224,8 +224,8 @@ export class StepSession {
           scope: this.context.store.workerExecutions.spawnScope(runId),
           // Each step receives the extra prompt and handoff contract.
           systemPrompt: composeSystemPrompt(undefined, sessionEvents.launchSystemTail(this.context, this.sharedHost, {
-            extraSystemPrompt: launch.extraSystemPrompt, delegation, webhooksPart: launch.webhooksPart,
-            env: profile.env, ciTools, handoffInjected: launch.opening.handoffInjected, runner: state.liveSession.delegationSettings?.runner,
+            extraSystemPrompt: launch.extraSystemPrompt, delegation, launchParts,
+            ciTools, handoffInjected: launch.opening.handoffInjected, runner: state.liveSession.delegationSettings?.runner,
           })),
           userPrompt: launch.opening.userPrompt,
           ...(launch.skill ? { skill: launch.skill } : {}),
@@ -234,7 +234,7 @@ export class StepSession {
           toolGrant: launch.toolGrant,
           // The handoff file lives outside the worktree — grant access.
           additionalDirectories: agentDirectories(join(runDataDir(this.context.dataDir, runId), 'runs'), profile.env),
-          env: { ...profile.env, ...delegation?.env, ...ciTools?.env },
+          env: { ...profile.env, ...launchParts.env, ...delegation?.env, ...ciTools?.env },
           ...(ciTools ? { squawkTools: ciTools.descriptor } : {}),
           ...(delegation ? { restrictCrossSessionMessaging: delegation.restrictCrossSessionMessaging } : {}),
           model: launch.model.backendModel,

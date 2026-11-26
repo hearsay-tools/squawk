@@ -1,3 +1,4 @@
+import '../built-in-launch-parts.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { fakeRunnerFactory } from '../core/fake-runner-factory.testkit.ts';
 import { useRunners } from '../core/runners-under-test.testkit.ts';

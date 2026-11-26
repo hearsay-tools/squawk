@@ -9,5 +9,6 @@ export type { WaitKindRow, WaitKindRegistration, WaitLifecycle, WaitInputDescrip
 export type { StepKindDefinition, StepKindContext, StepKindOutcome } from '../workflows/step-kind-registry.ts';
 export type { CliCommandDefinition, RootCommandContext, SubcommandRunner } from '../core/cli-registry.ts';
 export type { RunSlots, DeletionGate, DeletionKind, ReclaimPreparation, ReclaimContext, RemovalCleanup } from '../runs/removal-slots.ts';
+export type { LaunchCockpitAddress, LaunchPartContext, LaunchPartContribution, LaunchPartDefinition } from '../core/launch-registry.ts';
 export type { RunLifecycleHandlers, RunLifecycleHandler, RunLifecycleEvents, RunLifecycleEventType } from '../runs/lifecycle.ts';
 export * from './runner-kit.ts';
