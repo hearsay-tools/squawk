@@ -1,0 +1,12 @@
+version: 1
+rules:
+  - id: vision
+    on: session_start
+    target: both
+    template: |
+      {{file:VISION.md}}
+  - id: conventions
+    on: session_start
+    target: both
+    template: |
+      {{file:CONVENTIONS.md}}
