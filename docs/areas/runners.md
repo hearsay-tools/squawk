@@ -553,8 +553,9 @@ Native subagents run turn-held (`nativeSubagents: 'turn-held'`, `childWork: 'nes
 hearsay-tools/squawk#4197). Since Antigravity CLI 1.5.15/1.5.16, `session/prompt` stays open while
 subagents run and child permission requests forward over ACP with `toolCallId: "<childId>:<callId>"`,
 governed by the same tool grant and Bash allowlist as the parent. `invoke_subagent` stays `running`
-until the child replies (`sender=<childId>` in the parent transcript), is stopped via
-`manage_subagents`, or the parent turn ends; forwarded child calls and non-prompting child steps
+until stopped via `manage_subagents` or the parent turn ends; child `send_message` deliveries
+(`sender=<childId>` in the parent transcript) update the running `Task` output without closing the
+task or child transcript tailer. Forwarded child calls and non-prompting child steps
 from `antigravity-cli/brain/<childId>/.system_generated/logs/transcript_full.jsonl` nest under the
 spawning `Task` call via `parentItemId` (`docs/runners/antigravity-wire.md`).
 
