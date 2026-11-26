@@ -206,6 +206,39 @@ describe('multiplexed live task feed', () => {
     } finally { controller.abort(); await reader.cancel(); }
     expect(listeners('run.event')).toBe(before);
   });
+  it('replays an open streaming item as a snapshot frame on a mid-stream reconnect', async () => {
+    const sink = new UiEventSink({
+      persist: event => { store.eventLog.appendEvent(runId, event); },
+      emitLive: event => { store.eventLog.emitEphemeral(runId, event); },
+    });
+    const item = { kind: 'message' as const, id: 'typing', role: 'assistant' as const, text: '' };
+    sink.handle({ type: 'item.started', item });
+    sink.handle({ type: 'item.delta', itemId: item.id, field: 'text', delta: 'Still ' });
+    sink.flushAll();
+    sink.handle({ type: 'item.delta', itemId: item.id, field: 'text', delta: 'writing' });
+    sink.flushAll();
+    const persisted = store.eventLog.readEvents(runId);
+    const afterSeq = persisted.at(-1)!.seq + 2;
+    const controller = new AbortController();
+    const response = await apiRequest(app, '/api/v1/workspace/run-events', {
+      method: 'POST', signal: controller.signal, headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ runs: [{ projectId: 'boot', runId, afterSeq }] }),
+    });
+    const reader = response.body!.getReader();
+    let wire = '';
+    try {
+      // `ready` goes out when every feed has started; the snapshot follows the disk replay.
+      while (!wire.includes('"type":"snapshot"')) {
+        const next = await reader.read();
+        if (next.done) throw new Error('stream ended before the snapshot');
+        wire += new TextDecoder().decode(next.value);
+      }
+    } finally { controller.abort(); await reader.cancel(); }
+    const frames = [...wire.matchAll(/event: live\ndata: (.*)\n/g)].map(match => JSON.parse(match[1]!) as { type: string });
+    expect(frames.filter(frame => frame.type !== 'ready' && frame.type !== 'ping')).toEqual([
+      { type: 'snapshot', projectId: 'boot', runId, name: 'ui-event', event: expect.objectContaining({ seq: afterSeq, type: 'item.updated', item: expect.objectContaining({ text: 'Still writing' }) }) },
+    ]);
+  });
   it('keeps the old per-run SSE route and large records compatible', async () => {
     const text = 'x'.repeat(1024 * 1024 + 10);
     store.eventLog.appendEvent(runId, { type: 'note', text });
