@@ -40,6 +40,7 @@ import { driveSeam, PINNED_SESSION_ID, promptFor, seedMockSession, type DriveSea
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
+import { assistantText } from './owned-input-delivery.testkit.ts';
 
 /** One entry of the merged event stream. A `mark` records a call the row made, or a callback. */
 export type ContractEntry = { readonly v1: AgentEvent } | { readonly v2: UiEvent } | { readonly mark: string };
@@ -271,6 +272,11 @@ async function deliveredMidTurn(backend: string, mock: MockControl): Promise<voi
 }
 
 const v1Of = (recorder: Recorder): AgentEvent[] => recorder.timeline.flatMap(entry => 'v1' in entry ? [entry.v1] : []);
+const v2Of = (recorder: Recorder): UiEvent[] => recorder.timeline.flatMap(entry => 'v2' in entry ? [entry.v2] : []);
+/** Model text reached the stream: v1 `text`, or v2 assistant text. A runner may hold v1 `text`
+ *  until its message block closes. */
+const sawText = (recorder: Recorder): boolean => v1Of(recorder).some(event => event.type === 'text') ||
+  v2Of(recorder).some(event => assistantText(event) !== '');
 const turnStarted = (recorder: Recorder) => recorder.timeline.some(isStart);
 const turnEnds = (recorder: Recorder) => v1Of(recorder).filter(event => event.type === 'turn-end').length;
 
@@ -546,7 +552,7 @@ async function observeTiming(backend: string, timing: 'early' | 'late'): Promise
     whileOpen: async (session, rec, mock) => {
       // Early: while the turn's tool runs, before its last model call. Late: after its final text.
       // Either window stays open until the mock has the message, so no timer decides which it is.
-      await until(rec, () => v1Of(rec).some(event => event.type === (timing === 'early' ? 'tool-call' : 'text')));
+      await until(rec, () => timing === 'early' ? v1Of(rec).some(event => event.type === 'tool-call') : sawText(rec));
       rec.sendHuman(session, `${FOLLOW_UP} mock:agent-echo`);
       await deliveredMidTurn(backend, mock);
       mock.openGate();

@@ -1,6 +1,7 @@
 import { expect } from 'vitest';
 import { runnerDefinition } from './runner-registry.ts';
 import { driveSeam, waitFor } from './harness-parity-core.testkit.ts';
+import type { UiEvent } from './ui-events.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -77,20 +78,29 @@ export function withTurnOpenAfterAck(runner: string, body: (release: () => void,
   return runnerDefinition(runner).mock.promptResponseEndsTurn ? withHeldAck(runner, body, match) : withHeldResponse(runner, body, match);
 }
 
+/** The assistant text one v2 event carries: a text delta, or a message snapshot. */
+export function assistantText(event: UiEvent): string {
+  if (event.type === 'item.delta') return event.field === 'text' ? event.delta : '';
+  if (event.type !== 'item.started' && event.type !== 'item.completed') return '';
+  return event.item.kind === 'message' && event.item.role === 'assistant' ? event.item.text : '';
+}
+
 /** Control for wires whose idle prompt response is the turn-completion frame. Antigravity
  * evidence: __fixtures__/prompt-*.ndjson. The turn's first agent work acknowledges the prompt;
  * the held response holds only the turn end. */
 export async function assertPromptResponseCompletion(runner: string): Promise<void> {
   expect(runnerDefinition(runner).mock.promptResponseEndsTurn).toBe(true);
   await withHeldAck(runner, async (release, held) => {
-    await driveSeam(runner, 'baseline', { whileOpen: async (session, { v1 }) => {
+    await driveSeam(runner, 'baseline', { whileOpen: async (session, { v1, v2 }) => {
       await waitFor(() => v1.some(event => event.type === 'turn-end'));
       const ends = v1.filter(event => event.type === 'turn-end').length;
       const response = session.sendAgentMessage([{ type: 'text', text: 'mock:agent-echo delay-owned-ack completion-control' }]);
       expect(response).toBeInstanceOf(Promise);
       if (!response) throw new Error('Completion control was not admitted');
       await response;
-      expect(v1.some(event => event.type === 'text' && event.text.includes('completion-control'))).toBe(true);
+      // A runner may hold v1 `text` until its message block closes; v2 streams it at once.
+      const streamed = v2.map(assistantText).join('');
+      expect(v1.some(event => event.type === 'text' && event.text.includes('completion-control')) || streamed.includes('completion-control')).toBe(true);
       await waitFor(held);
       expect(v1.filter(event => event.type === 'turn-end')).toHaveLength(ends);
       release();
