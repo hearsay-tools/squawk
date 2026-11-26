@@ -176,6 +176,37 @@ describe('Antigravity permission-wait steer deferral (hearsay-tools/squawk#4181)
     } finally { session.interrupt(); await session.result.catch(() => undefined); }
   });
 
+  it('drops a discarded human steer on permission-wait rejection without failing the session when gated permission arrives first', async () => {
+    const cwd = await workspace();
+    const events: AgentEvent[] = [];
+    const ui: UiEvent[] = [];
+    let sessionRef: ReturnType<AntigravityRunner['startSession']> | undefined;
+    const session = new AntigravityRunner({ bin }).startSession(
+      { cwd, toolGrant: { kind: 'explicit', tools: ['Bash'] }, userPrompt: 'mock:permission-race-early gated perm-first no-steer-wait', env: { HSQ_APPROVAL_GATE: '1' } },
+      event => events.push(event),
+      {
+        autoEndAfterFirstTurn: true,
+        onUiEvent: event => {
+          ui.push(event);
+          // Mirrors RunManager.handlePermissionRequested discarding queued human input on card arrival.
+          if (event.type === 'permission.requested') sessionRef?.discardQueuedMessages();
+        },
+      },
+    );
+    sessionRef = session;
+    try {
+      await waitFor(() => events.some(event => event.type === 'tool-call'));
+      expect(session.sendMessage([{ type: 'text', text: 'discarded racing human steer' }])).toBe(true);
+      await waitFor(() => ui.some(event => event.type === 'permission.requested'));
+      const request = ui.find((event): event is Extract<UiEvent, { type: 'permission.requested' }> => event.type === 'permission.requested')!;
+      expect(session.holdsHumanInput()).toBe(false);
+      expect(session.respondPermission?.(request.requestId, 'allow-once')).toBe(true);
+      await session.result;
+      expect(events.filter(event => event.type === 'error')).toEqual([]);
+      expect(events.filter(event => event.type === 'text').map(event => event.text).join('')).not.toContain('discarded racing human steer');
+    } finally { session.interrupt(); await session.result.catch(() => undefined); }
+  });
+
   it('still fails delivery on unrelated ACP RPC rejections for sendAgentMessage and sendMessage', async () => {
     await withRejectedInput('antigravity', async () => {
       const cwd = await workspace();

@@ -303,9 +303,15 @@ export class AntigravitySession implements AgentSession {
       this.flushDeferredSteers();
     };
     void this.submit(entry.content, onAck).then(onAck, error => {
-      if (!acknowledged && this.open && this.discardEpoch === entry.epoch && isPermissionWaitSteerError(error)) {
+      if (!acknowledged && isPermissionWaitSteerError(error)) {
         this.humanHolds.delete(entry.hold);
-        this.requeueDeferred(entry, fromDeferred, permSeqAtSend);
+        if (this.open && this.discardEpoch === entry.epoch) {
+          this.requeueDeferred(entry, fromDeferred, permSeqAtSend);
+          return;
+        }
+        if (fromDeferred) this.retryingDeferred = false;
+        entry.release();
+        this.flushDeferredSteers();
         return;
       }
       if (fromDeferred && !acknowledged) this.retryingDeferred = false;

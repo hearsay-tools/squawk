@@ -299,11 +299,17 @@ async function permissionRacePrompt(text, turn) {
       return true;
     }
     if (autoBeforeReject) {
-      // Incident order: permission arrives and auto-approves before the steer's RPC rejection lands.
+      // Incident order: permission arrives and settles before the steer's RPC rejection lands.
       void request('session/request_permission', { sessionId, toolCall: call, options }).then(answer => {
         write({ id: frame.id, error: { code: -32603, message: permissionWaitError() } });
         resolvePermission(answer);
       });
+      return true;
+    }
+    if (text.includes('perm-first')) {
+      // Permission frame reaches stdout before the racing steer's RPC rejection, while still open.
+      void request('session/request_permission', { sessionId, toolCall: call, options }).then(resolvePermission);
+      write({ id: frame.id, error: { code: -32603, message: permissionWaitError() } });
       return true;
     }
     // Early-rejection order: RPC rejection arrives before session/request_permission is read.
@@ -324,7 +330,7 @@ async function permissionRacePrompt(text, turn) {
     return;
   }
   update({ sessionUpdate: 'tool_call_update', toolCallId: call.toolCallId, status: 'completed', rawOutput: { output: 'ok' } });
-  await Promise.race([steerAccepted, turn.cancelledPromise]);
+  if (!text.includes('no-steer-wait')) await Promise.race([steerAccepted, turn.cancelledPromise]);
   if (turn.cancelled) return;
   if (text.includes('with-done')) content('agent_message_chunk', `Race completed.${await context.lifecycle(['cezar_done', {}])}`);
 }
