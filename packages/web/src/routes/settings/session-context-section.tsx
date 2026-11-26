@@ -108,7 +108,8 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
 
   const settled = useSettled(content)
   const preview = useSessionContextPreview(settled, role)
-  const current = preview.data !== undefined && !preview.isPlaceholderData && settled === content
+  // A cached good answer does not count once checking the same draft again has failed.
+  const current = preview.data !== undefined && !preview.isPlaceholderData && !preview.isError && settled === content
   const previewError = preview.isError && !preview.isFetching && settled === content ? preview.error.message : null
   const problems = useMemo(() => preview.data?.problems ?? [], [preview.data])
   const put = usePutSessionContext()

@@ -210,6 +210,24 @@ describe('SessionContextSection', () => {
     await waitFor(() => expect(saveButton().disabled).toBe(false))
   })
 
+  it('does not call a draft valid when checking it again fails', async () => {
+    const server: FakeServer = { file: fileOf(), puts: [], previews: [] }
+    serve(server)
+    renderSection()
+    await screen.findByLabelText('context.yaml rules')
+    type(VALID.replace('Hello', 'Mine'))
+    await waitFor(() => expect(saveButton().disabled).toBe(false))
+    server.previewStatus = 400
+    fireEvent.click(screen.getByRole('radio', { name: 'worker' }))
+    expect(await screen.findByText('Not checked')).toBeTruthy()
+    // Back to the role whose good answer is cached: the check runs again and fails.
+    fireEvent.click(screen.getByRole('radio', { name: 'parent' }))
+    await waitFor(() => expect(server.previews.filter((p) => p.role === 'parent').length).toBeGreaterThan(1))
+    expect(await screen.findByText('Not checked')).toBeTruthy()
+    expect(screen.queryByText('Valid')).toBeNull()
+    expect(saveButton().disabled).toBe(true)
+  })
+
   it('says what failed when the file does not load', async () => {
     serve({ file: fileOf(), getStatus: 500, puts: [], previews: [] })
     renderSection()

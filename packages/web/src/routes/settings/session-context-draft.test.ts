@@ -38,6 +38,16 @@ describe('session context draft edits', () => {
     expect(text.slice(...select)).toBe('new-rule')
   })
 
+  it.each([
+    { name: 'a trailing comma', before: 'version: 1\nrules: [{ id: a, on: session_start, template: x },]\n' },
+    { name: 'a comment before the closing bracket', before: 'version: 1\nrules: [\n  { id: a, on: session_start, template: x }, # last\n]\n' },
+    { name: 'a comment in an empty list', before: 'version: 1\nrules: [ # none yet\n]\n' },
+  ])('adds to a flow list with $name', ({ before }) => {
+    const { text, select } = addRule(before)
+    expect((parse(text) as { rules: { id: string }[] }).rules.map((r) => r.id).at(-1)).toBe('new-rule')
+    expect(text.slice(...select)).toBe('new-rule')
+  })
+
   it('adds after the last rule when another key follows the list, at the list indentation', () => {
     const before = 'rules:\n    - id: a\n      on: session_start\n      template: x\nversion: 1\n'
     const { text, select } = addRule(before)

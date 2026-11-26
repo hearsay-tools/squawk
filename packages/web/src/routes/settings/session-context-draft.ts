@@ -44,12 +44,12 @@ export function addRule(text: string): { text: string; select: [number, number] 
   const doc = parseDocument(text)
   const rules = doc.errors.length === 0 && isMap(doc.contents) ? doc.contents.get('rules', true) : undefined
   if (isSeq(rules) && rules.flow && rules.range) {
-    // The closing bracket ends the node's value.
-    const close = text.lastIndexOf(']', rules.range[1])
-    const before = text.slice(0, close).replace(/\s*$/, '')
-    const lead = `${before}${rules.items.length > 0 ? ', ' : ''}{ id: `
+    // Right after the last item, or right after `[`: a trailing comma or a comment stays after it.
+    const last = rules.items.at(-1) as { range?: [number, number, number] } | undefined
+    const at = last?.range ? last.range[1] : text.indexOf('[', rules.range[0]) + 1
+    const lead = `${text.slice(0, at)}${last ? ', ' : ''}{ id: `
     const item = `${lead}${id}, on: session_start, target: both, template: "${STARTER_TEXT}" }`
-    return { text: item + text.slice(close), select: [lead.length, lead.length + id.length] }
+    return { text: item + text.slice(at), select: [lead.length, lead.length + id.length] }
   }
   if (isSeq(rules) && rules.items.length > 0 && rules.range) {
     const first = (rules.items[0] as { range?: [number, number, number] }).range?.[0] ?? rules.range[0]
