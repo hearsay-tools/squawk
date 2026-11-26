@@ -303,19 +303,19 @@ function ProblemList({ problems, onLine }: { problems: SessionContextProblem[]; 
       </div>
       <ul className="mt-1.5 flex flex-col">
         {problems.map((problem, index) => (
-          <li key={index} className="flex flex-wrap items-center gap-x-1 text-[13px]">
+          <li key={index} className="text-[13px] leading-6">
             {problem.line !== null && (
               <button
                 type="button"
                 data-slot="session-context-line"
                 onClick={() => onLine(problem.line!)}
-                className="min-h-11 text-link-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring md:min-h-8"
+                className="inline-flex min-h-11 items-center align-middle text-link-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring md:min-h-8"
               >
                 Line {problem.line}
               </button>
             )}
-            {problem.line !== null && <span aria-hidden="true" className="text-soft-foreground">·</span>}
-            {problem.rule !== null && <span className="text-muted-foreground">rule {problem.rule}:</span>}
+            {problem.line !== null && <span aria-hidden="true" className="text-soft-foreground"> · </span>}
+            {problem.rule !== null && <span className="text-muted-foreground">rule {problem.rule}: </span>}
             <span data-slot="session-context-problem">{problem.message}</span>
           </li>
         ))}

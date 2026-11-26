@@ -348,7 +348,10 @@ export function previewSessionContext(options: { projectRoot: string; content: s
   };
   const texts = new Map<string, string>();
   const context = assemble(input, { ok: true, text: SAMPLE_HANDOFF }, parsed, (id, body) => texts.set(id, body.replace(/\n+$/, '')));
-  const reportFor = new Map(context.reports.map((report) => [report.id, report]));
+  // `assemble` reports the handoff first, then the file's own skips, then each rendered rule.
+  // Valid rule ids are unique and never `handoff`; a skipped entry can share any id.
+  const [handoffReport, ...rest] = context.reports;
+  const reportFor = new Map(rest.slice(parsed.reports.length).map((report) => [report.id, report]));
   const block = (report: SessionContextReport, target: SessionContextPreviewBlock['target']): SessionContextPreviewBlock => {
     const text = texts.get(report.id) ?? null;
     return {
@@ -357,15 +360,14 @@ export function previewSessionContext(options: { projectRoot: string; content: s
       truncated: text !== null && text.length > SESSION_CONTEXT_PREVIEW_TEXT_CHARS,
     };
   };
-  const blocks: SessionContextPreviewBlock[] = [block(reportFor.get(HANDOFF_CONTEXT_ID)!, 'built-in')];
-  const ruleIds = new Set(parsed.rules.map((rule) => rule.id));
+  const blocks: SessionContextPreviewBlock[] = [block(handoffReport!, 'built-in')];
   for (const rule of parsed.rules) {
     const report = reportFor.get(rule.id);
     blocks.push(report
       ? block(report, rule.target)
       : { id: rule.id, target: rule.target, status: 'not-for-role', bytes: null, reason: null, sources: [], text: null, truncated: false });
   }
-  for (const report of parsed.reports) if (!ruleIds.has(report.id)) blocks.push(block(report, null));
+  for (const report of parsed.reports) blocks.push({ ...block(report, null), text: null, truncated: false });
   return { problems: parsed.problems, blocks, usedBytes: Buffer.byteLength(context.prefix, 'utf8'), limitBytes: SESSION_CONTEXT_LIMIT_BYTES };
 }
 

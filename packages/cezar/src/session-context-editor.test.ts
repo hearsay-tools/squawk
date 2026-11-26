@@ -130,6 +130,17 @@ describe('previewSessionContext', () => {
     expect(preview.blocks.map((b) => [b.id, b.status])).toEqual([['handoff', 'applied'], ['context.yaml', 'skipped']]);
   });
 
+  it('keeps the built-in handoff applied when a draft rule takes its reserved id, and lists that rule as skipped', () => {
+    const content = RULES.replace('id: vision', 'id: handoff');
+    const preview = previewSessionContext({ projectRoot: root, content, role: 'parent' });
+    expect(preview.blocks[0]).toMatchObject({ id: 'handoff', target: 'built-in', status: 'applied' });
+    expect(preview.blocks.slice(1).map((b) => [b.id, b.target, b.status])).toEqual([
+      ['worker-brief', 'worker', 'not-for-role'],
+      ['missing', 'both', 'skipped'],
+      ['handoff', null, 'skipped'],
+    ]);
+  });
+
   it('cuts a long block text for the preview but counts its whole size', () => {
     writeFileSync(join(root, 'docs/vision.md'), 'x'.repeat(10_000));
     const preview = previewSessionContext({ projectRoot: root, content: RULES, role: 'parent' });
