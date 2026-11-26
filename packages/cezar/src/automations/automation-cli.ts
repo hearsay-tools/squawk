@@ -118,6 +118,8 @@ const COMMANDS = {
   cancel: { positionals: 1, options: {} },
 } as const;
 type Command = keyof typeof COMMANDS;
+/** The verbs `cez automation` accepts: `schema`, handled before parsing, and every parsed command. */
+export const AUTOMATION_COMMANDS: readonly string[] = ['schema', ...Object.keys(COMMANDS)];
 
 function usageError(error: string): never {
   throw new TaskCliError(EXIT.usage, { code: 'invalid_input', error });

@@ -334,7 +334,7 @@ export function silenceRefusals() {
 }
 
 /** A steering parent on `runner`'s native wire and a worker running on the fixture wire, parked,
- *  with each one's credential on a delegation service, as `cez worker send` reaches them. */
+ *  with each one's credential on a delegation service, as `cez message` reaches them. */
 export async function conversingParent(runner: string) {
   nativeWire(runner);
   fixtureWorkerWire();

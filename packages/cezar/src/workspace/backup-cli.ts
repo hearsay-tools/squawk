@@ -3,6 +3,7 @@ import type { Home } from '../home/home.ts';
 import { readFileSync } from 'node:fs';
 import { homeFileLocation } from '../home/file-location.ts';
 import { HomeStore } from '../home/store.ts';
+import { isBackupCommand, type BackupCommand } from '../home/backup-args.ts';
 import { isBackupFile, listBackups, parseBackupArgs, restoreLimit, restoreRequest, type BackupFile } from './backups.ts';
 import { storeSchema } from './agent-accounts.ts';
 import { workspaceConfigSchema } from './config.ts';
@@ -22,7 +23,7 @@ const BACKUP_HELP = HELP + commandText(`\n\nLegacy home changes:
 Import requires a successful backup. Deleted legacy files can only be ignored.`);
 
 /** Host CLI actions share the recovery writer; grant files remain blocked in HTTP. */
-function resolveLegacyCommand(command: string | undefined, file: string | undefined, validArgs: boolean, home: Home): boolean {
+function resolveLegacyCommand(command: BackupCommand, file: string | undefined, validArgs: boolean, home: Home): boolean {
   if (command !== 'import' && command !== 'ignore') return false;
   if (!file || !validArgs) throw new Error(BACKUP_HELP);
   resolveLegacyRecovery(home, file, undefined, command);
@@ -107,6 +108,7 @@ export async function runBackupCommand(argv: string[], _env: NodeJS.ProcessEnv, 
     const { values, positionals } = args;
     if (values.help) { console.log(BACKUP_HELP); return 0; }
     const [command, file] = positionals;
+    if (!isBackupCommand(command)) throw new Error(BACKUP_HELP);
     if (file !== undefined && !isBackupFile(file)) throw new Error('File must be a supported home-relative HomeStore file');
     if (resolveLegacyCommand(command, file, positionals.length === 2 && values.at === undefined, home)) return 0;
     if (command === 'list' && positionals.length <= 2 && values.at === undefined) {

@@ -57,9 +57,13 @@ interface Parsed {
   values: { url?: string; repo?: string; message?: string; 'message-file'?: string; title?: string; data?: string };
 }
 
+/** The verbs `cez webhook` accepts. */
+export const WEBHOOK_COMMANDS = ['list', 'send'] as const;
+const isWebhookCommand = (name: string | undefined): name is Parsed['command'] => (WEBHOOK_COMMANDS as readonly (string | undefined)[]).includes(name);
+
 function parse(argv: string[]): Parsed {
   const [name, ...rest] = argv;
-  if (name !== 'list' && name !== 'send') usageError(name === undefined ? 'missing command (list, send)' : `unknown command "${name}"`);
+  if (!isWebhookCommand(name)) usageError(name === undefined ? `missing command (${WEBHOOK_COMMANDS.join(', ')})` : `unknown command "${name}"`);
   let values: Parsed['values'];
   let positionals: string[];
   try {

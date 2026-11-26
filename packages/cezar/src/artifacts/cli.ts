@@ -14,12 +14,14 @@ snapshots are evicted. Requires CEZ_ARTIFACTS_DIR and CEZ_TASK_ID supplied
 by the task runner. Never publish credentials or unrelated private files.
 
 -h, --help   Show this help without task context.`);
+/** The verbs `cez artifact` accepts. */
+export const ARTIFACT_COMMANDS: readonly string[] = ['publish'];
 export async function runArtifactCommand(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
   if (argv.includes('--help') || argv.includes('-h')) { console.log(HELP); return 0; }
   try {
     const artifactsDir = productEnv('ARTIFACTS_DIR', env), taskId = productEnv('TASK_ID', env);
     if (!artifactsDir || !taskId) throw new Error(`Artifact task context is missing. Run this command inside an active Squawk task with CEZ_ARTIFACTS_DIR and CEZ_TASK_ID.`);
-    if (argv.length !== 2 || argv[0] !== 'publish') throw new Error(HELP);
+    if (argv.length !== 2 || !ARTIFACT_COMMANDS.includes(argv[0]!)) throw new Error(HELP);
     // `<dataDir>/runs/<task>-artifacts`: an unfinished migration finishes first; a project under a
     // migration fence takes no write.
     const dataDir = dirname(dirname(artifactsDir));

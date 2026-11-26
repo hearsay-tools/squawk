@@ -40,32 +40,32 @@ const USAGE = commandText(`usage:
   cez projects tag <id> [<tag>…]
                                set the grouping tags of a project (none clears them)`);
 
+type ProjectsOptions = { home: Home; defaultRoot: string; io?: ProjectsCommandIo };
+type Subcommand = (rest: string[], io: ProjectsCommandIo, opts: ProjectsOptions) => Promise<number> | number;
+
+const SUBCOMMANDS: Record<string, Subcommand> = {
+  list: (_rest, io, opts) => listCommand(io, opts.home),
+  add: (rest, io, opts) => addCommand(rest[0] ? resolve(rest[0]) : opts.defaultRoot, io, opts.home),
+  remove: (rest, io, opts) => removeCommand(rest[0], io, opts.home),
+  rm: (rest, io, opts) => removeCommand(rest[0], io, opts.home),
+  tag: (rest, io, opts) => tagCommand(rest[0], rest.slice(1), io, opts.home),
+};
+/** The verbs `cez projects` accepts. */
+export const PROJECTS_SUBCOMMANDS: readonly string[] = Object.keys(SUBCOMMANDS);
+
 /**
  * Run one `projects` subcommand. Returns the process exit code (0 ok, 1 for a
  * usage error, an unknown id, or a folder the registration guards refuse) so
  * `src/index.ts` can assign it to `process.exitCode` like every other command.
  */
-export async function runProjectsCommand(
-  args: string[],
-  opts: { home: Home; defaultRoot: string; io?: ProjectsCommandIo },
-): Promise<number> {
+export async function runProjectsCommand(args: string[], opts: ProjectsOptions): Promise<number> {
   const io = opts.io ?? defaultIo;
   const [sub = 'list', ...rest] = args;
-  switch (sub) {
-    case 'list':
-      return listCommand(io, opts.home);
-    case 'add':
-      return addCommand(rest[0] ? resolve(rest[0]) : opts.defaultRoot, io, opts.home);
-    case 'remove':
-    case 'rm':
-      return removeCommand(rest[0], io, opts.home);
-    case 'tag':
-      return tagCommand(rest[0], rest.slice(1), io, opts.home);
-    default:
-      io.error(`unknown projects subcommand: ${sub}\n`);
-      io.error(USAGE);
-      return 1;
-  }
+  const subcommand = Object.hasOwn(SUBCOMMANDS, sub) ? SUBCOMMANDS[sub]! : undefined;
+  if (subcommand) return subcommand(rest, io, opts);
+  io.error(`unknown projects subcommand: ${sub}\n`);
+  io.error(USAGE);
+  return 1;
 }
 
 /** `ok` shows the branch when git could name one; the other states say why. */

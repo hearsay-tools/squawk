@@ -116,12 +116,17 @@ async function portToEnable(port: number | undefined, env: NodeJS.ProcessEnv, io
   throw new Refusal(2, { ok: false, code: 'choose_cockpit', error, ports: remote });
 }
 
-function parse(argv: string[]): { command: 'enable' | 'status' | 'disable'; port: number | undefined } {
+/** The verbs `cez remote-settings` accepts. */
+export const REMOTE_SETTINGS_COMMANDS = ['enable', 'status', 'disable'] as const;
+type RemoteSettingsCommand = typeof REMOTE_SETTINGS_COMMANDS[number];
+const isRemoteSettingsCommand = (name: string | undefined): name is RemoteSettingsCommand => (REMOTE_SETTINGS_COMMANDS as readonly (string | undefined)[]).includes(name);
+
+function parse(argv: string[]): { command: RemoteSettingsCommand; port: number | undefined } {
   try {
     const { positionals, values } = parseArgs({ args: argv, options: { port: { type: 'string' } }, allowPositionals: true, strict: true });
     const [command, ...rest] = positionals;
-    if (rest.length > 0 || (command !== 'enable' && command !== 'status' && command !== 'disable')) {
-      throw new Error(command === undefined ? 'missing command (enable, status, disable)' : `unknown arguments "${argv.join(' ')}"`);
+    if (rest.length > 0 || !isRemoteSettingsCommand(command)) {
+      throw new Error(command === undefined ? `missing command (${REMOTE_SETTINGS_COMMANDS.join(', ')})` : `unknown arguments "${argv.join(' ')}"`);
     }
     if (command === 'status' && values.port !== undefined) throw new Error('status takes no --port');
     return { command, port: parsePort(values.port) };

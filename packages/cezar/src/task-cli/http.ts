@@ -13,7 +13,7 @@ export const REQUEST_TIMEOUT_MS = 45_000;
 /** Every failure carries its exit code and the JSON body the CLI prints. */
 export class TaskCliError extends Error {
   constructor(readonly exitCode: number, readonly body: Record<string, unknown>) {
-    super(typeof body.error === 'string' ? body.error : commandText('cez task failed'));
+    super(typeof body.error === 'string' ? body.error : commandText('cez task: the request failed'));
   }
 }
 
