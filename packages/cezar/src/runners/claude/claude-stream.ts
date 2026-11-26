@@ -114,8 +114,20 @@ function claudePartialStartsTurn(event: unknown): boolean {
 
 function claudePartialDidWork(event: unknown): boolean {
   if (!event || typeof event !== 'object') return false;
-  const e = event as { type?: unknown; content_block?: { type?: unknown; text?: unknown; thinking?: unknown }; delta?: { type?: unknown; text?: unknown; thinking?: unknown; partial_json?: unknown } };
+  const e = event as { type?: unknown; message?: { usage?: unknown }; usage?: unknown; content_block?: { type?: unknown; text?: unknown; thinking?: unknown }; delta?: { type?: unknown; text?: unknown; thinking?: unknown; partial_json?: unknown } };
+  const usage = e.type === 'message_start' ? e.message?.usage : e.type === 'message_delta' ? e.usage : undefined;
+  if (hasNonzeroClaudeTokenCount(usage)) return true;
   if (e.type === 'content_block_start' && e.content_block?.type === 'tool_use') return true;
   const data = e.type === 'content_block_delta' ? e.delta : e.type === 'content_block_start' ? e.content_block : undefined;
   return [data?.text, data?.thinking, e.type === 'content_block_delta' ? e.delta?.partial_json : undefined].some(value => typeof value === 'string' && value.length > 0);
+}
+
+/** Partial usage need not include input_tokens. Count only actual token counters,
+ * including cache/thinking details, rather than treating a missing field as work. */
+function hasNonzeroClaudeTokenCount(usage: unknown): boolean {
+  if (!usage || typeof usage !== 'object') return false;
+  return Object.entries(usage).some(([key, value]) => {
+    if (typeof value === 'number') return key.endsWith('_tokens') && Number.isFinite(value) && value !== 0;
+    return hasNonzeroClaudeTokenCount(value);
+  });
 }
