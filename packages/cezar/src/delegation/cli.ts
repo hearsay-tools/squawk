@@ -97,6 +97,8 @@ const WORKER_USAGE = { operations: [
   { name: 'cancel-wait', positionals: 1 },
 
 ] };
+/** The verbs `cez worker` accepts; skills and docs are checked against it. */
+export const WORKER_OPERATIONS: readonly string[] = [...new Set(WORKER_USAGE.operations.map(entry => entry.name))];
 const WORKER_HELP: Record<string, { args: string; description: string }> = {
   resume: { args: '<worker-id> "<instruction>" --id <UUID> [--model <model>] [--effort <level>]', description: 'Resume a settled or held owned worker with a request; --timeout-seconds accepts 1-86400. Optional --model and --effort override model/effort on the worker\'s existing runner.' },
   spawn: { args: '"<task>" --request-id <UUID> [--baseline <ref> | --workspace shared]', description: 'Create an owned worker: in its own worktree from a committed baseline, or in your worktree with --workspace shared. A worker may start one shared worker at a time, and no flag is needed: wait for it (worker wait), read its result (worker collect) and destroy it (worker destroy) before you start the next.' },
@@ -342,6 +344,8 @@ const MESSAGE_HELP: Record<string, string> = {
   wait: '--request <UUID> [--request <UUID>...] [--mode one|any|all] [--timeout-seconds <1-7200>] | --peer <task-id> [--peer <task-id>...] [--timeout-seconds <1-7200>]',
   'cancel-wait': '<wait-id>', tasks: '[--all] [--offset <n>]',
 };
+/** The verbs `cez message` accepts; skills and docs are checked against it. */
+export const MESSAGE_OPERATIONS: readonly string[] = Object.keys(MESSAGE_HELP);
 function messageHelp(operation?: string): string {
   const entries = operation === undefined ? Object.entries(MESSAGE_HELP) : [[operation, MESSAGE_HELP[operation]!]];
   return [`Squawk message — task conversations`, '', 'Usage:', ...entries.map(([name, args]) => commandText(`  cez message ${name} ${args}`)), '', 'Commands require an active delegation session and return JSON.'].join('\n');
@@ -358,7 +362,7 @@ export async function runMessageCommand(argv: string[], env: NodeJS.ProcessEnv):
   const flags = optionArguments(argv);
   if (flags.some(arg => arg === '--resume' || arg.startsWith('--resume='))) return usageFailure(commandText('Use cez worker resume <worker-id> "<instruction>" --id <UUID> to resume an owned worker.'));
   if (flags.some(arg => /^--(?:model|effort)(?:=|$)/.test(arg))) return usageFailure(commandText('Use cez worker resume <worker-id> "<instruction>" --id <UUID> [--model <model>] [--effort <level>] to override model or effort.'));
-  if (flags.some(arg => arg === '--kind' || arg.startsWith('--kind='))) return usageFailure(commandText('The cez message verb selects the kind; use request, progress, follow-up or reply.'));
+  if (flags.some(arg => arg === '--kind' || arg.startsWith('--kind='))) return usageFailure(commandText('In cez message, the verb selects the kind; use request, progress, follow-up or reply.'));
   if (flags.includes('--help') || flags.includes('-h')) {
     // Let parseArgs decide whether a flag is help or a string option's value.
     const internal = operation === 'request' ? 'send' : operation;

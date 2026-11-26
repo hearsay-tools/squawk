@@ -17,7 +17,7 @@ import { toolCall } from './waits-parity.testkit.ts';
 export const { describeWaitParity } = waitPartDescribers('completion', completionCells);
 
 /** A delegating parent parked on Squawk's completion wait (`ignoreRefusal`) on worker `w`, which
- *  sends it messages with its own credential, as `cez worker send` does. `w` is created after the
+ *  sends it messages with its own credential, as `cez message progress` does. `w` is created after the
  *  done its reply turn sends was accepted, then starts and plain-parks: an idle worker that only
  *  talks. Its park sends the parent one park notice (hearsay-tools/cezarion#1327), which wakes it
  *  once; the parent is parked on the completion wait again when this returns. */

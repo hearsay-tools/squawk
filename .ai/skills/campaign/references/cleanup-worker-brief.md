@@ -80,10 +80,11 @@ Before the PR, in this order:
    then worker destroy <id>, and count a failed round.
    A round is valid only when all three hold: worker collect <id> says
    settled true and partial false; the reviewer's full report has arrived as
-   a message (the collected summary is not the report); and changes says
-   unchanged. A reviewer that failed, was cancelled, or settled with no
-   report, and a round with changes changed or unavailable, is a failed
-   round: run worker destroy <id> and run the round again.
+   a message (the collected summary is not the report); and the collected
+   result's changes field is unchanged (docs/workers.md § Run a review round
+   from a worker). A reviewer that failed, was cancelled, or settled with no
+   report, and a round whose changes field is changed or unavailable, is a
+   failed round: run worker destroy <id> and run the round again.
    Run worker destroy <id> before every next spawn: you may have one
    outstanding worker.
    A finding scored 5 or more: fix it, commit, and run one round on the fix
@@ -114,12 +115,17 @@ your runner's own prompt; this brief adds none.
 PR, after the coordinator's release: git push, then gh pr create --base main
 (ready, not draft). Title in Conventional Commits, for example
 refactor(<area>): <what moved>. Write the body in
-.ai/qa/<N>/pr-body.md with: Closes hearsay-tools/squawk#<N>; Summary (at most
-3 sentences); Changed names (against the issue's list, and the reason for every
-extra); Seams kept (each with the test that needs it); Orders preserved (for any
-non-verbatim change); Verification (command and result lines); Left undone (or
-"Nothing"); Review round (the reviewed head, how the round ran, and each
-finding that does not block); Merge authority (copy the authority above).
+.ai/qa/<N>/pr-body.md from .github/pull_request_template.md: Closes
+hearsay-tools/squawk#<N>, then its seven sections with their exact headings,
+in its order. Summary: at most 3 sentences. Evidence: Changed names (against
+the issue's list, and the reason for every extra), Seams kept (each with the
+test that needs it), Orders preserved (for any non-verbatim change). Design
+decision: behavior-neutral cleanup under this brief, and the issue's plan.
+Experience: N/A — no user-facing UI. Verification: command and result lines,
+then the Review round (the reviewed head, how the round ran, and each finding
+that does not block). Left undone: the deferred work, or "Nothing". Merge
+Danger: Door and Blast Radius, then the Merge authority (copy the authority
+above).
 
 After the PR: send the coordinator a progress message (PR, head SHA, changed
 names, length pins, out-of-scope findings) and register one PR wait. Fix a red

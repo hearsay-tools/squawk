@@ -78,6 +78,9 @@ type ParsedDiscovery =
   | { help: true }
   | { help: false; values: ReturnType<typeof parseDiscoveryArgs>['values']; request: z.infer<typeof discoveryRequestSchema>; schema: z.ZodType };
 
+/** The verbs `cez discover` accepts: the request kinds its schema allows. */
+export const DISCOVER_KINDS: readonly string[] = discoveryRequestSchema.options.map(option => option.shape.kind.value);
+
 /** Argument parsing and request validation for `cez discover`. `--help` wins over validation. */
 function parseDiscoveryRequest(argv: string[]): ParsedDiscovery {
   let parsed: ReturnType<typeof parseDiscoveryArgs>;

@@ -11,6 +11,11 @@ export function restoreLimit(at: string | undefined): number {
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(at) ? Date.parse(at) : NaN;
 }
 
+/** The verbs `cez backup` accepts. */
+export const BACKUP_COMMANDS = ['list', 'restore', 'import', 'ignore'] as const;
+export type BackupCommand = typeof BACKUP_COMMANDS[number];
+export const isBackupCommand = (name: string | undefined): name is BackupCommand => (BACKUP_COMMANDS as readonly (string | undefined)[]).includes(name);
+
 /** The one parser for `backup` arguments: the command and its home entry read the same options. */
 export function parseBackupArgs(argv: readonly string[]) {
   return parseArgs({ args: [...argv], allowPositionals: true, options: {

@@ -33,7 +33,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
   const invocation = bundledWorkerInvocation();
   const messaging = bundledWorkerInvocation('message');
   const conversationGuidance = [
-    `Use ${messaging} for task conversations. Root tasks can message peer root tasks in the same project and their owned workers; a worker may address only its parent and a worker it started. Use ${messaging} tasks [--all] [--offset <n>] to discover peers (32 per page); workers cannot list peers. Peer review/terminal tasks need their human to continue them; messages never resume a peer.`,
+    `For task conversations, use ${messaging}. Root tasks can message peer root tasks in the same project and their owned workers; a worker may address only its parent and a worker it started. Use ${messaging} tasks [--all] [--offset <n>] to discover peers (32 per page); workers cannot list peers. Peer review/terminal tasks need their human to continue them; messages never resume a peer.`,
     `Use ${messaging} request <recipient-run-id> '<text>' --id <message-UUID> to request an explicit reply; use ${messaging} progress <recipient-run-id> '<text>' --id <message-UUID> for an update without an obligation.`,
     `Use ${messaging} follow-up <recipient-run-id> '<text>' --id <message-UUID> --request-id <request-UUID> to clarify your request, or ${messaging} reply <recipient-run-id> '<text>' --id <message-UUID> --request-id <request-UUID> to answer an incoming request.`,
     `A request's ID is its message ID. Reuse a message ID only for an exact retry, including timeout; changed payloads are rejected.`,

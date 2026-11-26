@@ -35,7 +35,9 @@ stop    End the job's whole process group: SIGTERM, then SIGKILL after 10 s for
 
 The command runs without a shell. For a pipeline, pass: -- sh -c '<pipeline>'.`);
 
-const ACTIONS = new Set(['start', 'status', 'stop']);
+/** The verbs `cez job` accepts. */
+export const JOB_ACTIONS = ['start', 'status', 'stop'] as const;
+const ACTIONS = new Set<string>(JOB_ACTIONS);
 
 /** `cez job`: one JSON object on stdout for a result and on stderr for an error; help is text. */
 export async function runJobCommand(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {

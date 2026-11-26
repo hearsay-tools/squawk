@@ -69,10 +69,11 @@ settled: run worker stop <id>, then worker destroy <id>, and count a failed
 round.
 A round is valid only when all three hold: worker collect <id> says settled
 true and partial false; the reviewer's full report has arrived as a message
-(the collected summary is not the report); and changes says unchanged. A
+(the collected summary is not the report); and the collected result's changes
+field is unchanged (docs/workers.md § Run a review round from a worker). A
 reviewer that failed, was cancelled, or settled with no report, and a round
-with changes changed or unavailable, is a failed round: run worker destroy
-<id> and run the round again. Run worker destroy <id> before every next spawn: you
+whose changes field is changed or unavailable, is a failed round: run worker
+destroy <id> and run the round again. Run worker destroy <id> before every next spawn: you
 may have one outstanding worker.
 A finding scored 5 or more: fix it, commit, and run one round on the fix only.
 Findings scored 4 or lower do not block; list them in the PR body
