@@ -24,6 +24,7 @@ export interface BundledRunnerFolder {
   readonly displayOrder: number;
 }
 
+// oxlint-disable-next-line cez/regex-module-syntax -- reads the one-line declaration the entry contract above fixes, fails closed, and production code has no parser
 const DISPLAY_ORDER = /^export const displayOrder = (\d+);$/gm;
 
 /** The `runners/` folder next to this module's folder, in the source checkout and in `dist/`. */
