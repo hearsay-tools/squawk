@@ -9,6 +9,9 @@ import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// A condition makes Squeal run each side fresh: a stored result never belongs to a break commit.
+export const FRESH_RUN = 'SQUAWK_REGRESSION_PROOF=1';
+
 export const RECIPES_DIR = fileURLToPath(new URL('./regression-proofs/', import.meta.url));
 
 const USAGE = `Usage:
@@ -23,7 +26,10 @@ the same file apply in order, each to the text the earlier ones left.
 --revert reverts one non-merge commit on top of HEAD. --patch applies a patch file that
 introduces the break. The break commit is HEAD plus the break; it is never checked out.
 \`squeal proof <tests> --base <break> --case source\` then runs red (the tests over the break)
-and green (HEAD) outside this worktree. Uncommitted changes are not part of the proof.
+and green (HEAD) outside this worktree. Every file the break changes, other than a named
+test, goes to Squeal as --source, so a file the tests read at runtime or spawn counts as
+product code. --env ${FRESH_RUN} makes Squeal run both sides fresh, never from its store.
+Uncommitted changes are not part of the proof.
 --check validates every recipe at HEAD without running tests.
 Exit codes: 0 every file proven, 1 a file not red or not green, 3 a result unknown,
 2 a usage error, a break that does not apply, or no squeal command.`;
@@ -181,7 +187,8 @@ export function summarize(report, label) {
       if (first) lines.push(`        ${first}`);
     }
     if (failures.length > 5) lines.push(`      … and ${failures.length - 5} more`);
-    if (file.reason) lines.push(`    reason: ${file.reason}`);
+    // Squeal gives a proven file the reason that the fresh-run condition did not matter.
+    if (file.reason && file.verdict !== 'proven') lines.push(`    reason: ${file.reason}`);
   }
   const proven = report.files.filter(file => file.verdict === 'proven').length;
   lines.push(`proven ${proven}/${report.files.length}`);
@@ -215,8 +222,16 @@ export function parseArgs(argv) {
   return options;
 }
 
-function runSquealProof(cwd, breakCommit, tests, timeout) {
-  const args = ['proof', ...tests, '--base', breakCommit, '--case', 'source', '--json'];
+/** Files the break changes that are not named tests: Squeal compares an unchanged test only
+ * when every changed file is named, and --source names it as product code on both sides. */
+export function breakSources(cwd, head, breakCommit, tests) {
+  const named = new Set(tests);
+  return gitRaw(cwd, ['diff', '--name-only', '-z', '--no-renames', head, breakCommit]).split('\0').filter(file => file && !named.has(file));
+}
+
+function runSquealProof(cwd, breakCommit, tests, sources, timeout) {
+  const args = ['proof', ...tests, '--base', breakCommit, '--case', 'source',
+    ...sources.flatMap(file => ['--source', file]), '--env', FRESH_RUN, '--json'];
   if (timeout) args.push('--timeout', timeout);
   const result = spawnSync('squeal', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'inherit'] });
   if (result.error?.code === 'ENOENT') throw new ProofError('no squeal command on PATH: red proofs run through `squeal proof`; install Squeal, then run this again');
@@ -258,7 +273,8 @@ export function main(argv, cwd = process.cwd(), out = console) {
   if (git(root, ['status', '--porcelain', '--untracked-files=no'])) out.error('Note: uncommitted changes are not part of the proof; it runs over committed HEAD.');
   const head = git(root, ['rev-parse', 'HEAD^{commit}']);
   const breakCommit = buildBreak(root, source, head);
-  const { report, status } = runSquealProof(root, breakCommit, tests, options.timeout);
+  const sources = breakSources(root, head, breakCommit, tests);
+  const { report, status } = runSquealProof(root, breakCommit, tests, sources, options.timeout);
   // Squeal reads HEAD itself: a commit between the two reads proves a different pair.
   if (report.head !== head || report.base !== breakCommit) throw new ProofError(`HEAD moved from ${head.slice(0, 12)} to ${String(report.head).slice(0, 12)} during the proof; run it again`);
   out.log(summarize(report, source.label));

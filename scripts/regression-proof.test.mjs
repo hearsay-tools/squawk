@@ -151,13 +151,34 @@ test('the CLI passes the break and the tests to squeal proof, prints the counts 
   const args = squeal.args();
   assert.deepEqual([args[0], args[1], args[2]], ['proof', 'src/guard.test.ts', '--base']);
   assert.equal(git('rev-parse', `${args[3]}^`), fix);
-  assert.deepEqual(args.slice(4), ['--case', 'source', '--json', '--timeout', '90']);
+  assert.deepEqual(args.slice(4), ['--case', 'source', '--source', 'src/guard.ts', '--env', 'SQUAWK_REGRESSION_PROOF=1', '--json', '--timeout', '90']);
   assert.match(result.stdout, /proven: src\/guard\.test\.ts\n {4}red: fail, 2 failing tests; green: pass\n {6}assertion: guard rejects\n/);
   assert.match(result.stdout, /proven 1\/1$/m);
   const notRed = fakeSqueal(t, proofReport('__BASE__', fix, [['src/guard.test.ts', 'not red']]), 1);
   const second = run(cwd, ['--revert', fix, '--test', 'src/guard.test.ts'], notRed.bin);
   assert.equal(second.status, 1);
   assert.match(second.stdout, /red: pass; green: pass\nproven 0\/1/);
+});
+
+// A break never changes the test, so Squeal compares nothing until every file the break
+// changes is named; a runtime-read or spawned file counts the same as an imported one.
+test('the CLI names every file the break changes, except a named test, as --source', (t) => {
+  const { cwd, git, put } = fixture(t);
+  put('scripts/reader.sh', 'echo ok\n');
+  git('add', '.');
+  git('commit', '-m', 'reader');
+  put('scripts/reader.sh', 'echo broken\n');
+  put('src/guard.ts', 'export function guard() {\n  return false;\n}\n');
+  put('src/guard.test.ts', 'test changed\n');
+  writeFileSync(join(cwd, 'break.patch'), execFileSync('git', ['diff'], { cwd, encoding: 'utf8' }));
+  git('checkout', '--', '.');
+  const squeal = fakeSqueal(t, proofReport('__BASE__', git('rev-parse', 'HEAD'), [['src/guard.test.ts', 'proven', ['x']]]));
+  const result = run(cwd, ['--patch', join(cwd, 'break.patch'), '--test', 'src/guard.test.ts'], squeal.bin);
+  assert.equal(result.status, 0, result.stderr);
+  const args = squeal.args();
+  const sources = args.flatMap((arg, index) => (args[index - 1] === '--source' ? [arg] : []));
+  assert.deepEqual(sources, ['scripts/reader.sh', 'src/guard.ts']);
+  assert.ok(args.includes('SQUAWK_REGRESSION_PROOF=1'));
 });
 
 test('the break is built over the pinned head, and a proof over another HEAD is refused', (t) => {
@@ -202,8 +223,9 @@ test('the CLI exits 2 without squeal, on a break that does not apply, and on bad
   ]) assert.throws(() => parseArgs(args), message);
 });
 
-test('summarize names files without a red side and failures past five', () => {
+test('summarize names files without a red side and failures past five, and gives a reason only when not proven', () => {
   const report = proofReport('a'.repeat(40), 'b'.repeat(40), [['x.test.ts', 'proven', ['1', '2', '3', '4', '5', '6', '7']]]);
+  report.files[0].reason = 'red without the conditions too: the conditions are not shown to matter';
   report.files.push({ path: 'y.test.ts', verdict: 'not comparable', reason: 'imports z.ts, absent at base', red: null, green: null });
   report.files.push({ path: 'z.e2e.ts', verdict: 'red for another reason', reason: 'a test threw an error that is not an assertion',
     red: { end: 'fail', failures: [{ test: 'shows the state', kind: 'error', text: '  Error: predicate never became truthy: ok\n    at wait' }] }, green: null });
@@ -212,6 +234,7 @@ test('summarize names files without a red side and failures past five', () => {
   assert.doesNotMatch(text, /at wait/);
   assert.match(text, /… and 2 more/);
   assert.match(text, /red: not read; green: not read\n {4}reason: imports z\.ts, absent at base/);
+  assert.doesNotMatch(text, /conditions are not shown to matter/);
   assert.match(text, /proven 1\/3$/);
 });
 
