@@ -177,10 +177,13 @@ holds for every runner, or carries a `PARITY_EXEMPTIONS` entry whose reason name
 limitation. A row that tests Squawk's shared logic above the seam runs on one runner,
 `SCENARIO_RUNNER`, instead (docs/adr/0063-one-scenario-runner.md).
 
-Shutdown rows S27/S28/S30 retain process-group cleanup for every runner. A runner declaring
-`facts.shutdownDescendants = observed-tree` must also reap the observed detached command;
-`process-group` retains the detached-survivor assertion. Abrupt-exit row S31 makes no
-snapshot assumption and retains its original checks.
+Shutdown rows S27/S28/S30 retain process-group cleanup for every runner. On contained hosts
+(Linux delegated cgroup v2, Windows Job Objects; hearsay-tools/squawk#1345), abnormal exits
+(Stop S27, forced `end()` escalation S28, outside `SIGKILL` S31, startup failures) also reap
+detached descendants while normal `end()` (S30) keeps detached daemons alive (except
+`observed-tree` runners such as Antigravity). On non-contained hosts, `process-group` retains
+the detached-survivor checks and `observed-tree` still reaps observed detached children on
+S27/S28/S30 without an S31 snapshot guarantee.
 
 Print every row with its exemptions:
 
@@ -341,16 +344,27 @@ changes these places and no other file, with one exception at the end of this se
 turn-path fact value also adds a shared unit test):
 
 - **Its folder**, `packages/cezar/src/runners/<id>/`: the plugin entry `index.ts`, the definition
-  and its data files, the adapter, the mapper, the catalogs, the test data files, the fixtures and
+  and its data files, the adapter, the mapper, the catalogs, any runner-owned product `.mjs`
+  assets (extensions or plugins the agent CLI loads), the test data files, the fixtures and
   every test of the runner, parity files included. No backend-specific type leaves it. The entry
   default-exports a setup that calls `api.registerRunner(<id>Runner)` and declares
   `export const displayOrder = <integer>;` on one line; boot loads every folder with an entry
   through the plugin loader in that order (`plugin/bundled-runners.ts`), so no roster file
-  changes.
-- **Its scripts** in `packages/cezar/scripts/`: the mock script, its data files (the skill
-  captures in `mock-skill-data/<id>.mjs` when it lists skills) and any helper the runner ships.
-  They stay there because the packaged CLI tests and the mocks start them by path; the
-  definition's `mock` part names the mock script.
+  changes. The folder must stay **self-contained** ([ADR 0071](docs/adr/0071-keep-runner-folders-self-contained.md)):
+  non-test files import only `node:*` built-ins, files inside the folder, and
+  `@hearsay-tools/squawk/plugin` (plus its subpaths, including `z` re-exported from the main
+  entry). Product `.mjs` assets resolve via `new URL('./…', import.meta.url)` inside the folder,
+  are copied into `dist/runners/<id>/` by `packages/cezar/scripts/copy-runner-assets.mjs` in
+  `postbuild` (checked by `check:pack`), and import Squawk's tool client from `HSQ_TOOL_CLIENT`
+  (`CEZ_TOOL_CLIENT` fallback) when running in an agent CLI process. Add an empty baseline file
+  `packages/cezar/src/lint/runner-folder-escape/<id>.baseline.json`; `cez/runner-folder-escape`
+  and `packages/cezar/test/e2e/runner-copy-out.test.ts` guard self-containment.
+- **Its mock scripts** in `packages/cezar/scripts/`: the mock script and its mock data files (such
+  as the skill captures in `mock-skill-data/<id>.mjs` when it lists skills). They stay in
+  `scripts/` because the mock helpers and parity tests share them; the definition's `mock` part
+  names the mock script, and runner dry-run code resolves it through `nativeMockPath(mock)` from
+  `@hearsay-tools/squawk/plugin/runtime` instead of building a path into `scripts/`. Product
+  scripts that the real agent CLI loads live inside the runner's own folder, not in `scripts/`.
 
 What a new runner's folder holds:
 
@@ -382,10 +396,13 @@ the runner's folder, plus `FACT_VALUE_TESTS` for a new turn-path fact value. `--
 real runner's folder and scripts under a new id: the typecheck passes and every printed test file
 passes. An outside runner
 is a host plugin in `<config>/plugins/<name>/`: a plain-JS `index.mjs` or `index.js` whose setup
-calls `api.registerRunner(...)` and which imports Squawk only from `@hearsay-tools/squawk/plugin`
-and its subpaths. It runs in-process with all of Squawk's permissions and logins, and the kit is
-unstable until Squawk installs plugins from npm or git
+calls `api.registerRunner(...)` and which imports only `node:*`, files inside its own folder, and
+`@hearsay-tools/squawk/plugin` (plus its subpaths, including `z` and `nativeMockPath`). Scripts
+loaded by an agent CLI live inside the plugin folder and import Squawk's tool client from
+`HSQ_TOOL_CLIENT` (`CEZ_TOOL_CLIENT` fallback). It runs in-process with all of Squawk's permissions
+and logins, and the kit is unstable until Squawk installs plugins from npm or git
 ([ADR 0070](docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md),
+[ADR 0071](docs/adr/0071-keep-runner-folders-self-contained.md),
 [Plugins](docs/plugins.md)); `plugin/__fixtures__/external-runner/` is the example. `runners/fixture/` is the smallest example: its
 test registers it, runs a task and runs the parity kit on it. The items below say what goes in
 the folder, and the rules that the guards do not force, or force only in part. The item numbers
@@ -416,7 +433,9 @@ are stable.
    entry in its `mock.parityExemptions`: the criterion, its kind and the wire reason, never "not
    implemented yet".
 8. **Harness parity** — the `mock` part (`mock.ts`) names the mock script, its `*_BIN` variable,
-   the prompt for each scenario it runs and its `askResumeCases`. Make the mock a wire encoder
+   the prompt for each scenario it runs and its `askResumeCases`. Resolve `mock.script` at
+   dry-run time through `nativeMockPath(mock)` (`@hearsay-tools/squawk/plugin/runtime`). Make the
+   mock a wire encoder
    over `packages/cezar/scripts/mock-scenario.mjs`; the lint rule `cez/mock-scenario-boundary` fails a
    built-in mock that does not import it. That module owns scenario selection and scripts; the
    mock emits the backend's native frames. The per-runner parity files

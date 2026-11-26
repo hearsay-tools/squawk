@@ -1,5 +1,5 @@
-import { Hono, type Context } from 'hono';
-import type { AgentProfileResponse, AgentProfilesResponse } from '@open-mercato/cezar-contract';
+import { Hono } from 'hono';
+import type { AgentAccountSelection, AgentProfileResponse, AgentProfilesResponse } from '@open-mercato/cezar-contract';
 import {
   agentProfileRouteParamsSchema,
   createAgentProfileSchema,
@@ -26,6 +26,7 @@ import {
   loadAgentAccounts,
   mergeWriteAgentAccounts,
   removeAgentAccount,
+  selectionEntryFor,
   type AgentAccount,
   type AgentAccountStore,
 } from '../workspace/agent-accounts.ts';
@@ -41,7 +42,7 @@ import { preservedDisabledProviders, type WorkspaceConfig } from '../workspace/c
 import { allocateAgentProfileId } from './agent-profile-id.ts';
 import { emitProviderRow } from './server-deps.ts';
 import {
-  hostedProfileRefusal,
+  remoteAccountAdminRefusal,
   writeErrorMessage,
   type ProjectApiEnv,
   type ProviderStatusBundle,
@@ -144,8 +145,8 @@ export function createProvidersRoutes(deps: ProvidersRouteDeps) {
       const provider = body.data.provider as ProviderId;
       if (body.data.profileId !== undefined
         && body.data.profileId !== DEFAULT_AGENT_ACCOUNT_ID
-        && !capabilities().localHandoff) {
-        return c.json(hostedProfileRefusal, 409);
+        && !capabilities().settingsAdmin) {
+        return c.json(remoteAccountAdminRefusal(), 409);
       }
       const resolved = await resolveWorkspaceProfile(provider, body.data.profileId);
       if ('error' in resolved) return c.json({ error: resolved.error }, 400);
@@ -192,6 +193,7 @@ export function createProvidersRoutes(deps: ProvidersRouteDeps) {
 }
 
 export interface AgentProfilesRouteDeps {
+  bootRoot: string;
   home: Home;
   capabilities: ServerCapabilitiesFn;
   providerAuth: ProviderAuthService;
@@ -204,6 +206,7 @@ export interface AgentProfilesRouteDeps {
 
 export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
   const {
+    bootRoot,
     home,
     capabilities,
     providerAuth,
@@ -214,12 +217,14 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
     projectRootFor,
   } = deps;
 
-  const agentProfileBody = async (profile: ResolvedAgentProfile): Promise<AgentProfileResponse['profile']> => ({
+  const agentProfileBody = async (
+    profile: ResolvedAgentProfile,
+    includePaths: boolean,
+  ): Promise<AgentProfileResponse['profile']> => ({
     id: profile.id,
     provider: profile.provider,
     label: profile.label,
-    configDir: profile.configDir,
-    path: profile.path,
+    ...(includePaths ? { configDir: profile.configDir, path: profile.path } : {}),
     ...(await profileDirState(profile.provider, profile.path)),
     isDefault: profile.isDefault,
     ...(() => {
@@ -229,6 +234,27 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
       return cached ? { status: cached } : {};
     })(),
   });
+
+  const projectSelectionsFor = async (
+    store: Pick<AgentAccountStore, 'selections'>,
+  ): Promise<Record<string, AgentAccountSelection>> => {
+    const out: Record<string, AgentAccountSelection> = {};
+    const projects = await workspaceProjects.listProjects().catch(() => []);
+    const bootId = await workspaceProjects.resolveBootProject(projects).catch(() => undefined);
+    const assign = (key: string, root: string) => {
+      const selection = selectionEntryFor(store, root);
+      if (selection && Object.keys(selection).length > 0) out[key] = selection;
+    };
+    for (const project of projects) assign(project.id, project.root);
+    if (bootId !== undefined) {
+      if (out[bootId] === undefined) {
+        const resolvedBootRoot = (await projectRootFor(bootId).catch(() => null)) ?? bootRoot;
+        assign(bootId, resolvedBootRoot);
+      }
+      if (out[bootId] !== undefined) out.default = out[bootId];
+    }
+    return out;
+  };
 
   const accountById = async (id: string): Promise<ResolvedAgentProfile | null> => {
     const [head, tail] = id.split(':');
@@ -242,12 +268,6 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
     } catch {
       return null;
     }
-  };
-
-  const localAccount = async (c: Context<ProjectApiEnv, '/workspace/agent-profiles/:id'>) => {
-    if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
-    const id = c.req.param('id');
-    return (await accountById(id)) ?? c.json({ error: `unknown account: ${id}` }, 404);
   };
 
   const checkProfileDir = (configDir: string): string | null => {
@@ -276,28 +296,29 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
 
   return new Hono<ProjectApiEnv>()
     .get('/workspace/agent-profiles', async (c) => {
-      const editable = capabilities().localHandoff;
+      const editable = capabilities().settingsAdmin;
       let store = defaultAgentAccountStore();
-      if (editable) {
-        try {
-          store = await loadAgentAccounts(home);
-        } catch {
-          // an unreadable home degrades to "no extra accounts", never a failed request
-        }
+      try {
+        store = await loadAgentAccounts(home);
+      } catch {
+        // an unreadable home degrades to "no extra accounts", never a failed request
       }
-      const profiles = editable
-        ? await Promise.all(listAgentProfiles(store, registeredRunners().map(({ id }) => id)).map(agentProfileBody))
-        : [];
+      const profiles = await Promise.all(
+        listAgentProfiles(store, registeredRunners().map(({ id }) => id)).map((profile) =>
+          agentProfileBody(profile, editable),
+        ),
+      );
       return c.json<AgentProfilesResponse>({
         editable,
         profiles,
         profileCapableProviders: profileCapableProviders(),
         selections: editable ? store.selections : {},
+        projectSelections: await projectSelectionsFor(store),
       });
     })
 
     .post('/workspace/agent-profiles', jsonZodValidator(() => createAgentProfileSchema, { runners: { ids: ['provider'] } }), async (c) => {
-      if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
+      if (!capabilities().settingsAdmin) return c.json(remoteAccountAdminRefusal(), 409);
       const { configDir, label } = c.req.valid('json'), provider = registeredRunnerId(c.req.valid('json').provider);
       if (!supportsProfiles(provider)) {
         return c.json({ error: `${provider} cannot carry more than one account` }, 400);
@@ -332,7 +353,7 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
       }
       if (!created) return c.json({ error: 'account could not be saved' }, 500);
       const account = resolveStoredProfile(created);
-      const created201 = await agentProfileBody(account);
+      const created201 = await agentProfileBody(account, true);
       void providerAuth
         .profileStatus(account.provider, { id: account.id, configDir: account.path })
         .catch(() => {});
@@ -344,7 +365,7 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
       paramZodValidator(agentProfileRouteParamsSchema),
       jsonZodValidator(() => updateAgentProfileSchema),
       async (c) => {
-        if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
+        if (!capabilities().settingsAdmin) return c.json(remoteAccountAdminRefusal(), 409);
         const id = c.req.param('id');
         const { label, configDir } = c.req.valid('json');
         if (configDir !== undefined) {
@@ -380,7 +401,7 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
         if (!updated) return c.json({ error: `unknown account: ${id}` }, 404);
         const repointed = resolveStoredProfile(updated);
         providerAuth.forgetProfileStatus(repointed.provider, repointed.id);
-        const body = await agentProfileBody(repointed);
+        const body = await agentProfileBody(repointed, true);
         void providerAuth
           .profileStatus(repointed.provider, { id: repointed.id, configDir: repointed.path })
           .catch(() => {});
@@ -393,8 +414,9 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
       paramZodValidator(agentProfileRouteParamsSchema),
       queryZodValidator(strictRefreshQuerySchema, { message: 'refresh must be 1 when provided' }),
       async (c) => {
-        const account = await localAccount(c);
-        if (account instanceof Response) return account;
+        const id = c.req.param('id');
+        const account = await accountById(id);
+        if (!account) return c.json({ error: `unknown account: ${id}` }, 404);
         const refresh = c.req.valid('query').refresh === '1';
         if (refresh) invalidateHostModels(account.provider);
         if (account.isDefault) {
@@ -416,7 +438,6 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
       '/workspace/agent-profiles/selection',
       jsonZodValidator(() => selectAgentProfileSchema, { runners: { ids: ['provider'] } }),
       async (c) => {
-        if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
         const { projectId, profileId } = c.req.valid('json'), provider = registeredRunnerId(c.req.valid('json').provider);
         const resolvedId = await workspaceProjects.canonicalProjectId(projectId);
         const root = await projectRootFor(resolvedId);
@@ -435,9 +456,13 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
             else current.selections[root] = selection;
           }, home);
         } catch (err) {
-          return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+          console.error('[hsq] failed to save agent account selection:', err);
+          return c.json({ error: 'Could not save account selection.' }, 500);
         }
-        return c.json({ selections: store.selections });
+        return c.json({
+          selections: capabilities().settingsAdmin ? store.selections : {},
+          projectSelections: await projectSelectionsFor(store),
+        });
       },
     )
 
@@ -445,7 +470,7 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
       '/workspace/agent-profiles/:id',
       paramZodValidator(agentProfileRouteParamsSchema),
       async (c) => {
-        if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
+        if (!capabilities().settingsAdmin) return c.json(remoteAccountAdminRefusal(), 409);
         const id = c.req.param('id');
         let removed = false;
         let removedProvider: ProviderId | undefined;
@@ -455,7 +480,7 @@ export function createAgentProfilesRoutes(deps: AgentProfilesRouteDeps) {
             removed = removedProvider !== undefined;
           }, home);
         } catch (err) {
-          return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+          return c.json({ error: writeErrorMessage(err) }, 500);
         }
         if (!removed) return c.json({ error: `unknown account: ${id}` }, 404);
         providerAuth.forgetProfileStatus(removedProvider, id);

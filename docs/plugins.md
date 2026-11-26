@@ -6,7 +6,9 @@ host: `<config>/plugins/` (see the [platform roots](migration.md#home-directorie
 `HSQ_HOME` set, `$HSQ_HOME/config/plugins/`). Nothing needs to be configured: a folder that is
 not there loads nothing.
 
-[ADR 0070](adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md) records the design.
+[ADR 0070](adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md) records the loader and
+runner kit design; [ADR 0071](adr/0071-keep-runner-folders-self-contained.md) records the
+self-contained runner folder rules.
 
 ## Trust: a plugin runs as Squawk
 
@@ -61,6 +63,33 @@ A plugin imports Squawk code only from `@hearsay-tools/squawk/plugin` and these 
 copy, so a plugin needs no installed copy of Squawk. Any other `@hearsay-tools/squawk` import
 fails. `packages/cezar/src/plugin/__fixtures__/external-runner/` is a complete runner plugin in
 plain JavaScript.
+
+### Outside runners
+
+A runner plugin folder is self-contained and needs no `npm install` or `node_modules` folder:
+
+- **Allowed imports.** Runner code may import only `node:*` built-ins, files inside its own
+  plugin folder, and `@hearsay-tools/squawk/plugin` (plus its subpaths). `@hearsay-tools/squawk/plugin`
+  re-exports `z` from `zod` so runners validate schemas without installing `zod`.
+- **Runner-owned scripts.** Any script that the agent CLI itself loads (such as an extension or
+  plugin) lives inside the runner's own folder and resolves through
+  `new URL('./…', import.meta.url)`. For bundled runners, `packages/cezar/scripts/copy-runner-assets.mjs`
+  copies every non-test `.mjs` asset from `src/runners/<id>/` to `dist/runners/<id>/` during
+  `postbuild`, and `check:pack` verifies they ship in the tarball.
+- **Tool client in agent processes (`HSQ_TOOL_CLIENT`).** Squawk's in-process import hook does
+  not run inside a spawned agent CLI process. When a session asks for Squawk tools,
+  `CiToolController.provision()` sets `HSQ_TOOL_CLIENT` (with `CEZ_TOOL_CLIENT` fallback) in the
+  session environment to the `file:` URL of the running Squawk copy's tool client
+  (`dist/ci-wait/client.js`, or `src/ci-wait/client.ts` under source). Out-of-process extensions
+  import the client from that URL instead of a relative path into Squawk.
+- **Dry-run mocks (`nativeMockPath`).** `@hearsay-tools/squawk/plugin/runtime` exports
+  `nativeMockPath(mock)`. It resolves `RunnerMock.script` against the running Squawk
+  installation's `scripts/` folder and throws an error naming the script when the installation does
+  not ship it.
+- **Bundled parity.** All six bundled runners (`claude`, `codex`, `opencode`, `pi`, `omp` and
+  `antigravity`) follow these rules and load unchanged when their built `dist/runners/<id>/`
+  folders are copied into `<config>/plugins/` with no `node_modules` ancestor
+  (`packages/cezar/test/e2e/runner-copy-out.test.ts`).
 
 ## Load order and failures
 

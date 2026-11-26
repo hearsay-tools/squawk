@@ -28,6 +28,7 @@ const ACCOUNTS: AgentProfilesResponse = {
   editable: true,
   profileCapableProviders: ['claude', 'codex'],
   selections: {},
+  projectSelections: {},
   profiles: [
     {
       id: 'default',

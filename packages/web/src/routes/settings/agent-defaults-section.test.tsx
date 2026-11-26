@@ -52,6 +52,7 @@ const WITH_WORK_ACCOUNT: AgentProfilesResponse = {
   editable: true,
   profileCapableProviders: ['claude', 'codex'],
   selections: {},
+  projectSelections: {},
   profiles: [
     {
       id: 'default',
@@ -76,6 +77,28 @@ const WITH_WORK_ACCOUNT: AgentProfilesResponse = {
       status: { provider: 'claude', status: 'connected', profileId: 'klaudiusz' },
     },
   ],
+}
+
+function applySelection(
+  selections: Record<string, Record<string, string>>,
+  projectSelections: Record<string, Record<string, string>>,
+  body: { provider: string; profileId: string | null },
+  editable: boolean,
+) {
+  const current = { ...(selections[PROJECT.root] ?? projectSelections[PROJECT.id] ?? projectSelections.default) }
+  if (body.profileId === null) delete current[body.provider]
+  else current[body.provider] = body.profileId
+  // Absence, not an empty object — the server drops a root whose last key was cleared.
+  if (Object.keys(current).length === 0) {
+    delete selections[PROJECT.root]
+    delete projectSelections[PROJECT.id]
+    delete projectSelections.default
+  } else {
+    if (editable) selections[PROJECT.root] = current
+    projectSelections[PROJECT.id] = current
+    projectSelections.default = current
+  }
+  return { selections, projectSelections }
 }
 
 let requests: Array<{ method: string; url: string; body?: unknown }> = []
@@ -120,6 +143,9 @@ function serve({
   // The selection store, keyed by repo root exactly as `~/.cezar/agent-accounts.json` is.
   const selections: Record<string, Record<string, string>> = {
     ...(agentProfiles?.selections as Record<string, Record<string, string>>),
+  }
+  const projectSelections: Record<string, Record<string, string>> = {
+    ...(agentProfiles?.projectSelections as Record<string, Record<string, string>>),
   }
   const state: ConfigResponse = {
   archiveOnMerge: null,
@@ -188,17 +214,10 @@ function serve({
         // Served from the mutable copy, so a PUT is visible to the refetch the mutation triggers —
         // which is how the real store behaves, and the only way to assert what the pane shows AFTER
         // a pick rather than just what it sent.
-        return json({ ...agentProfiles, selections })
+        return json({ ...agentProfiles, selections, projectSelections })
       }
       if (url === '/api/v1/workspace/agent-profiles/selection' && method === 'PUT') {
-        const { provider, profileId } = body as { provider: string; profileId: string | null }
-        const current = { ...selections[PROJECT.root] }
-        if (profileId === null) delete current[provider]
-        else current[provider] = profileId
-        // Absence, not an empty object — the server drops a root whose last key was cleared.
-        if (Object.keys(current).length === 0) delete selections[PROJECT.root]
-        else selections[PROJECT.root] = current
-        return json({ selections })
+        return json(applySelection(selections, projectSelections, body as { provider: string; profileId: string | null }, agentProfiles?.editable !== false))
       }
       if (url === '/api/v1/projects' && method === 'GET') {
         return json({ projects: [PROJECT], bootProject: 'boot', projectsDir: '~/cezar/projects' })
@@ -650,6 +669,7 @@ describe('the agent defaults form', () => {
           editable: true,
           profileCapableProviders: ['claude', 'codex'],
           selections: {},
+          projectSelections: {},
           profiles: WITH_WORK_ACCOUNT.profiles.filter((profile) => profile.isDefault),
         },
       })
@@ -754,6 +774,32 @@ describe('the agent defaults form', () => {
 
       await waitFor(() =>
         expect(document.querySelector('[data-slot="agents-account-missing"][data-runner="claude"]')).not.toBeNull())
+    })
+
+    it('uses projectSelections and omits host paths in hosted read-only mode', async () => {
+      serve({
+        agentProfiles: {
+          editable: false,
+          profileCapableProviders: ['claude', 'codex'],
+          selections: {},
+          projectSelections: { boot: { claude: 'klaudiusz' }, default: { claude: 'klaudiusz' } },
+          profiles: WITH_WORK_ACCOUNT.profiles.map(({ configDir: _c, path: _p, ...rest }) => rest),
+        },
+      })
+      renderAt('/settings/agent-defaults')
+
+      await waitFor(() => expect(rowFor('claude', 'klaudiusz')?.getAttribute('aria-checked')).toBe('true'))
+      expect(rowFor('claude', 'klaudiusz')?.querySelector('[data-slot="agents-account-dir"]')?.textContent).toBe('')
+      expect(rowFor('claude', '')?.querySelector('[data-slot="agents-account-dir"]')?.textContent).toBe('')
+
+      fireEvent.click(rowFor('claude', '')!)
+      await waitFor(() => expect(selections()).toHaveLength(1))
+      expect(selections()[0]?.body).toEqual({
+        projectId: 'default',
+        provider: 'claude',
+        profileId: null,
+      })
+      await waitFor(() => expect(rowFor('claude', '')?.getAttribute('aria-checked')).toBe('true'))
     })
   })
 })

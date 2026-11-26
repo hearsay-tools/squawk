@@ -44,14 +44,9 @@ test('CI reads the last TEST_E2E_STATUS when the log contains more than one', ()
   assert.equal(skippedThenPassed.status, 0, skippedThenPassed.stderr);
 });
 
-test('CI accepts TEST_E2E_STATUS=not-selected only on a pull_request_target run', () => {
-  const log = '[e2e:affected] PR CI runs no browser spec: the selector chose every spec.\nTEST_E2E_STATUS=not-selected\n';
-  for (const event of ['merge_group', 'push', 'workflow_dispatch', 'schedule', '']) {
-    const strict = evaluate(log, event);
-    assert.notEqual(strict.status, 0, event);
-    assert.match(strict.stderr, /not-selected/);
+test('CI rejects any non-passed TEST_E2E_STATUS even on pull_request_target', () => {
+  for (const status of ['skipped', 'failed', 'not-selected']) {
+    const result = evaluate(`TEST_E2E_STATUS=${status}\n`, 'pull_request_target');
+    assert.notEqual(result.status, 0, status);
   }
-  assert.equal(evaluate(log, 'pull_request_target').status, 0);
-  assert.notEqual(evaluate('TEST_E2E_STATUS=skipped\n', 'pull_request_target').status, 0);
-  assert.notEqual(evaluate('TEST_E2E_STATUS=failed\n', 'pull_request_target').status, 0);
 });

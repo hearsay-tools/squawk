@@ -1,7 +1,8 @@
-# Windows worker scope (ADR 0032). Usage: [-Assembly <dll>] <mode> ...; modes: keep <job>,
-# run <job> <argv file>, terminate <job> <ms>, query <job>, probe (prints `ok <dll>`). Only .NET
-# calls, no cmdlets: `run` inherits the agent's environment (its own TEMP, a PowerShell 7
-# PSModulePath), so it loads the DLL the controller's probe compiled, by the path it is given; only
+# Windows worker scope (ADR 0032) and session containment (hearsay-tools/squawk#1345).
+# Usage: [-Assembly <dll>] <mode> ...; modes: keep <job>, keep-session <job>, run <job[,job]> <argv file>,
+# breakaway <argv file>, terminate <job> <ms>, query <job>, probe (prints `ok <dll>`). Only .NET
+# calls, no cmdlets: `run` and `breakaway` inherit the agent's environment (its own TEMP, a PowerShell 7
+# PSModulePath), so they load the DLL the controller's probe compiled, by the path given; only
 # the probe, with a clean environment, compiles.
 $ErrorActionPreference = 'Stop'
 $assembly = $null
@@ -21,11 +22,17 @@ if (-not [IO.File]::Exists($assembly)) {
 [void][Reflection.Assembly]::LoadFrom($assembly)
 switch ($args[0]) {
   'keep' { [SquawkWorkerJob]::Keep($args[1]) }
+  'keep-session' { [SquawkWorkerJob]::KeepSession($args[1]) }
   'run' {
     # The argv travels in a private file, NUL-separated, so its length is the command's own.
     $argv = [IO.File]::ReadAllText($args[2], [Text.Encoding]::UTF8).Split([char]0)
     [IO.File]::Delete($args[2])
     [Environment]::Exit([SquawkWorkerJob]::Run($args[1], $argv, 30000))
+  }
+  'breakaway' {
+    $argv = [IO.File]::ReadAllText($args[1], [Text.Encoding]::UTF8).Split([char]0)
+    [IO.File]::Delete($args[1])
+    [Console]::Out.WriteLine([SquawkWorkerJob]::Breakaway($argv))
   }
   'terminate' { [SquawkWorkerJob]::Terminate($args[1], [int]$args[2]) }
   'query' { [SquawkWorkerJob]::Query($args[1]) }
