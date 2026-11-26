@@ -20,10 +20,11 @@ import { driveSeam, exemptionFor, promptFor, HARNESS_ADAPTERS, SHUTDOWN_CRITERIA
 import { PARITY_EXEMPTIONS } from './parity-exemptions.testkit.ts';
 import { HARNESS_PARITY_GROUPS, harnessParityCellsFile, harnessParityFile, type HarnessParityPart } from './harness-parity-parts.testkit.ts';
 import { describeHarnessGroups, vitestRegistration, type HarnessGroup, type HarnessParityScope, type HarnessPartScope, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
+import { collectGroupRows, parityRowScenarios } from './harness-parity-inventory.testkit.ts';
 import { CONTROL_CRITERIA, HARNESS_PARITY_ROWS_FILE } from './harness-parity-rows.testkit.ts';
 import { RUN_CRITERIA } from './harness-parity-run-tier.testkit.ts';
 import { SEAM_CRITERIA } from './harness-parity-seam-tier.testkit.ts';
-import { parityRowId, PARITY_ROSTER, SCENARIO_RUNNER } from './parity-classes.testkit.ts';
+import { PARITY_ROSTER, SCENARIO_RUNNER } from './parity-classes.testkit.ts';
 import { fixtureRunner } from '../runners/fixture/definition.testkit.ts';
 import { SEAM_CONTRACT_ROWS } from './seam-contract.testkit.ts';
 import { TOOL_GRANT_CASES } from './tool-grant-parity-cells.testkit.ts';
@@ -93,19 +94,6 @@ const HARNESS_PARITY_KITS = ['harness-parity-cells.testkit.ts', 'harness-parity-
   'harness-parity-seam-tier.testkit.ts', 'harness-parity-run-tier.testkit.ts', 'harness-parity-pending-request-seam.cells.testkit.ts',
   ...(Object.keys(HARNESS_PARITY_GROUPS) as HarnessParityPart[]).map(harnessParityCellsFile),
   ...readdirSync(new URL('.', import.meta.url)).filter(file => HARNESS_PARITY_ROWS_FILE.test(file))];
-
-/** Every matrix row with the scenario it drives, as the matrix guard reads them. */
-export function parityRowScenarios(): ReadonlyArray<{ readonly id: string; readonly scenario: ScenarioName }> {
-  return [
-    ...PERMISSION_CRITERIA, ...MODEL_REFUSAL_CRITERIA, ...SHUTDOWN_CRITERIA,
-    ...MONITORING_TURN_CRITERIA, ...MONITORING_ACK_CRITERIA, ...MONITORING_ORDER_CRITERIA,
-    ...WAIT_CRITERIA, ...WORKFLOW_ASK_CRITERIA, ...STEP_COMPLETION_CRITERIA, ...FOLLOWUP_CRITERIA,
-    ...ANSWER_DELIVERY_CRITERIA, ...SKILL_RESUME_CRITERIA, ...SKILL_PROVISION_CRITERIA,
-    ...WORKTREE_SETUP_CRITERIA, ...AUTONOMOUS_CRITERIA, ...WORKER_PROGRESS_WAIT_CRITERIA,
-    ...FINAL_MESSAGE_CRITERIA, ...NO_PROGRESS_CRITERIA, ...WORKFLOW_TIMEOUT_CRITERIA,
-    ...SEAM_CRITERIA, ...SEAM_CONTRACT_ROWS, ...INPUT_CRITERIA, FOLLOW_ON_CRITERION, ...CONTROL_CRITERIA, ...RUN_CRITERIA,
-  ];
-}
 
 function opencodeDurableInput(r: HarnessRegistrar): void {
   const { it, describe, scope } = r;
@@ -449,25 +437,10 @@ export function describeHarnessParity(scope: HarnessParityScope, registration: H
   describeHarnessGroups(scope, registration, HARNESS_PARITY_ORDER, TOOL_GRANT_CASES.length);
 }
 
-/** The row ids each group registers on any runner, from its cell titles (hearsay-tools/cezarion#2991). */
-export function harnessGroupRows(): Map<string, Set<string>> {
-  const rows = new Map<string, Set<string>>();
-  for (const runner of PARITY_ROSTER) {
-    const definition = runner === fixtureRunner.id ? fixtureRunner : runnerDefinition(runner);
-    describeHarnessParity({ runner: definition, part: 'session' }, {
-      describe: ((_name: string, ...args: unknown[]) => { (args.at(-1) as () => void)(); }) as typeof describe,
-      it: (() => undefined) as unknown as typeof it,
-      beforeAll: (() => undefined) as typeof beforeAll,
-      afterAll: (() => undefined) as typeof afterAll,
-      toolGrants: () => undefined,
-      allGroups: true,
-      probe: (group, title) => {
-        const row = parityRowId(title);
-        if (row) rows.set(group, (rows.get(group) ?? new Set()).add(row));
-      },
-    });
-  }
-  return rows;
+/** The row ids each group registers on any runner, from the real registrations; `harness-parity.test.ts`
+ *  holds the engine-free `harnessGroupRows()` of `harness-parity-inventory.testkit.ts` equal to it. */
+export function registeredGroupRows(): Map<string, Set<string>> {
+  return collectGroupRows(HARNESS_PARITY_ORDER);
 }
 
 /** Collect the real row registrations without starting their hooks or test bodies. */

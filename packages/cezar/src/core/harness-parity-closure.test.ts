@@ -38,9 +38,10 @@ describe('the harness parity kits', () => {
     expect(engineFilesIn(kit)).toEqual([]);
   });
 
-  // A part whose bodies drive the engine registers its cells from an engine-free rows module, so a
-  // guard that reads which rows register reruns on no engine edit (hearsay-tools/squawk#3962).
-  it.each(readdirSync(join(src, 'core')).filter(file => HARNESS_PARITY_ROWS_FILE.test(file)).map(file => `core/${file}`))('keeps the workflow engine out of the name-only part registration %s', (kit) => {
+  // A part whose bodies drive the engine registers its cells from an engine-free rows module, and the
+  // inventory collects every part's rows through them, so a guard that reads which rows register
+  // reruns on no engine edit (hearsay-tools/squawk#3962).
+  it.each([...readdirSync(join(src, 'core')).filter(file => HARNESS_PARITY_ROWS_FILE.test(file)).map(file => `core/${file}`), 'core/harness-parity-inventory.testkit.ts'])('keeps the workflow engine out of the name-only registration %s', (kit) => {
     expect(engineFilesIn(kit)).toEqual([]);
   });
 

@@ -5,7 +5,7 @@ import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { HARNESS_PARITY_GROUPS, harnessGroupRows, parityRowScenarios } from './harness-parity-cells.testkit.ts';
+import { HARNESS_PARITY_GROUPS, harnessGroupRows, parityRowScenarios } from './harness-parity-inventory.testkit.ts';
 import { CI_FAILURE_GROUPS, ciFailureRowId } from '../workflows/ci-wait-failure-rows.testkit.ts';
 import { collectResumeDiagnosticsTitles } from '../workflows/resume-diagnostics-rows.testkit.ts';
 import {
