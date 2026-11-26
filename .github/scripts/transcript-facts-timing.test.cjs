@@ -115,3 +115,37 @@ test('malformed schedstat data selects CPU-only mode through the real reader', a
   }
   assert.equal(readQueueWaitMs({ read: () => '1 2500000 3', platform: 'linux' }), 2.5);
 });
+
+test('reads per-thread major faults and voluntary switches, or nothing', async () => {
+  const { readThreadStats, timingDelta } = await timing;
+  const stat = '42 (node (main) x) S 1 2 3 4 5 6 7 8 17 11 12 13';
+  const status = 'Name:\tnode\nvoluntary_ctxt_switches:\t31\nnonvoluntary_ctxt_switches:\t2\n';
+  const read = path => path.endsWith('/stat') ? stat : status;
+  assert.deepEqual(readThreadStats({ read, platform: 'linux' }), { majorFaults: 17, voluntarySwitches: 31 });
+  assert.equal(readThreadStats({ read, platform: 'darwin' }), null);
+  assert.equal(readThreadStats({ read: () => { throw new Error('EACCES'); }, platform: 'linux' }), null);
+  assert.equal(readThreadStats({ read: path => path.endsWith('/stat') ? stat : 'Name:\tnode\n', platform: 'linux' }), null);
+  const base = { cpuMs: 0, loopIdleMs: 0, queueBeforeMs: 0, queueAfterMs: 0 };
+  const delta = timingDelta({ ...base, at: 0, thread: { majorFaults: 3, voluntarySwitches: 10 } },
+    { ...base, at: 5, thread: { majorFaults: 5, voluntarySwitches: 14 } });
+  assert.equal(delta.majorFaults, 2);
+  assert.equal(delta.voluntarySwitches, 4);
+  assert.equal('majorFaults' in timingDelta({ ...base, at: 0, thread: null }, { ...base, at: 5, thread: null }), false);
+});
+
+test('records hooked calls, restores them even on throw, and totals them per phase', async () => {
+  const { hookCalls, callsWithin } = await timing;
+  const target = { work(value) { return value * 2; }, fail() { throw new Error('boom'); } };
+  const { work, fail } = target;
+  const calls = [];
+  const unhook = hookCalls([[target, 'work'], [target, 'fail']], calls);
+  assert.equal(target.work(21), 42);
+  assert.throws(() => target.fail(), /boom/);
+  unhook();
+  assert.equal(target.work, work);
+  assert.equal(target.fail, fail);
+  assert.deepEqual(calls.map(call => call.phase), ['work', 'fail']);
+  const totals = callsWithin([{ phase: 'a', at: 1, elapsedMs: 2, mainThreadCpuMs: 1 },
+    { phase: 'a', at: 3, elapsedMs: 5, mainThreadCpuMs: 4 }, { phase: 'b', at: 9, elapsedMs: 1, mainThreadCpuMs: 1 }], 0, 9);
+  assert.deepEqual(totals, { a: { count: 2, elapsedMs: 7, mainThreadCpuMs: 5, maxElapsedMs: 5 } });
+});

@@ -8,7 +8,8 @@ import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { timingSnapshot, timingDelta, blockingBudget, prepareOpenTiming } from './transcript-facts-timing.mjs';
+import { PerformanceObserver } from 'node:perf_hooks';
+import { timingSnapshot, timingDelta, blockingBudget, prepareOpenTiming, hookCalls, callsWithin } from './transcript-facts-timing.mjs';
 import { seedColdHistories, verifyFacts } from './transcript-facts-fixture.mjs';
 
 const root = mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'cez-facts-health-'));
@@ -23,6 +24,8 @@ let dataDir;
 let store;
 let bootStore;
 let server;
+let unhookCalls;
+let gcObserver;
 const watchdog = setTimeout(() => { console.error('health measurement exceeded 30s'); process.exitCode = 1; server?.closeAllConnections(); server?.close(); store?.close(); bootStore?.close(); }, 30_000);
 try {
   const { RunStore } = await import(new URL('runs/store.js', runtime.url));
@@ -76,6 +79,18 @@ try {
   assert.equal((await prime.json()).version, 'task4-measurement');
   const primingLatencyMs = performance.now() - primingStart;
   assert.equal(readdirSync(join(dataDir, 'runs')).filter(name => name.endsWith('.facts.json')).length, 0);
+  // Diagnostics only: name the main-thread calls and GC pauses inside each sample.
+  const { TranscriptFactsIndex } = await import(new URL('runs/transcript-facts.js', runtime.url));
+  const { TranscriptFactsQueue } = await import(new URL('runs/transcript-facts-queue.js', runtime.url));
+  const { RunQueriesTopic } = await import(new URL('runs/run-queries.js', runtime.url));
+  const calls = [];
+  unhookCalls = hookCalls([[RunQueriesTopic.prototype, 'listConversationRootIds'], [RunQueriesTopic.prototype, 'listFamilyRunIds'],
+    [RunQueriesTopic.prototype, 'listRunIds'], [TranscriptFactsIndex.prototype, 'warm'], [TranscriptFactsIndex.prototype, 'peek'],
+    [TranscriptFactsIndex.prototype, 'accept'], [TranscriptFactsIndex.prototype, 'persist'],
+    [TranscriptFactsQueue.prototype, 'start'], [TranscriptFactsQueue.prototype, 'createWorker']], calls);
+  const gcPauses = [];
+  gcObserver = new PerformanceObserver(list => { for (const entry of list.getEntries()) gcPauses.push(entry); });
+  gcObserver.observe({ entryTypes: ['gc'] });
   const start = performance.now();
   let end;
   let warming;
@@ -107,6 +122,16 @@ try {
     await delay(pauseMs);
   }
   await warming;
+  unhookCalls();
+  for (const entry of gcObserver.takeRecords()) gcPauses.push(entry);
+  gcObserver.disconnect();
+  for (const sample of samples) {
+    const from = start + sample.fromMs;
+    const to = from + sample.elapsedMs;
+    const gc = gcPauses.filter(entry => entry.startTime >= from && entry.startTime < to);
+    Object.assign(sample, { calls: callsWithin(calls, from, to),
+      gc: { count: gc.length, durationMs: gc.reduce((sum, entry) => sum + entry.duration, 0) } });
+  }
   assert.ok(samples.length > 0, 'health requests must overlap cold warming');
   assert.ok(samples.every(sample => sample.fromMs < end - start && sample.endMs > 0));
   // Keep first-open and repeated-open costs separate. Reopening must not rescan clean history.
@@ -129,6 +154,8 @@ try {
   assert.ok(result.maxBlockingMs < 50, `max health blocking ${result.maxBlockingMs.toFixed(3)}ms must be <50ms`);
 } finally {
   clearTimeout(watchdog);
+  unhookCalls?.();
+  gcObserver?.disconnect();
   let cleanupTimer;
   try {
     if (server) await Promise.race([server.shutdownForRestart(), new Promise((_, reject) => {

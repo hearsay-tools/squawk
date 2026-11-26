@@ -11,19 +11,34 @@ export function readQueueWaitMs({ read = readFileSync, platform = process.platfo
   catch { return null; /* Optional diagnostic on restricted procfs mounts. */ }
 }
 
+/** Linux per-thread major page faults and voluntary context switches: optional diagnostics
+ * that tell a disk page-in from a lock or I/O wait. Null where procfs cannot answer. */
+export function readThreadStats({ read = readFileSync, platform = process.platform } = {}) {
+  if (platform !== 'linux') return null;
+  try {
+    const stat = read('/proc/thread-self/stat', 'utf8');
+    // Field 12 (majflt); the command name in field 2 may contain spaces, so count after ')'.
+    const majorFaults = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[9]);
+    const switches = /^voluntary_ctxt_switches:\s*(\d+)$/m.exec(read('/proc/thread-self/status', 'utf8'));
+    return Number.isFinite(majorFaults) && switches ? { majorFaults, voluntarySwitches: Number(switches[1]) } : null;
+  }
+  catch { return null; /* Optional diagnostic on restricted procfs mounts. */ }
+}
+
 /** libuv idle time: the loop waited in its poll phase for I/O, a timer or another thread. */
 export function readLoopIdleMs() {
   return performance.eventLoopUtilization().idle;
 }
 
 export function timingSnapshot({ now = () => performance.now(), readQueue = readQueueWaitMs,
-  readCpu = () => process.threadCpuUsage(), readLoopIdle = readLoopIdleMs } = {}) {
+  readCpu = () => process.threadCpuUsage(), readLoopIdle = readLoopIdleMs, readThread = readThreadStats } = {}) {
+  const thread = readThread();
   const cpu = readCpu();
   const loopIdleMs = readLoopIdle();
   const queueBeforeMs = readQueue();
   const at = now();
   const queueAfterMs = readQueue();
-  return { at, cpuMs: (cpu.user + cpu.system) / 1000, loopIdleMs, queueBeforeMs, queueAfterMs };
+  return { at, cpuMs: (cpu.user + cpu.system) / 1000, loopIdleMs, queueBeforeMs, queueAfterMs, thread };
 }
 
 export function timingDelta(start, end) {
@@ -39,7 +54,9 @@ export function timingDelta(start, end) {
   // Residual: off-CPU time outside the poll phase (synchronous disk I/O, locks, Atomics.wait)
   // plus measurement overhead. See blockingBudget for why the larger wait is subtracted once.
   return { elapsedMs, mainThreadCpuMs, loopIdleMs, queueWaitMs,
-    blockedMs: queueWaitMs === null ? null : Math.max(0, elapsedMs - mainThreadCpuMs - Math.max(loopIdleMs, queueWaitMs)) };
+    blockedMs: queueWaitMs === null ? null : Math.max(0, elapsedMs - mainThreadCpuMs - Math.max(loopIdleMs, queueWaitMs)),
+    ...(start.thread && end.thread ? { majorFaults: end.thread.majorFaults - start.thread.majorFaults,
+      voluntarySwitches: end.thread.voluntarySwitches - start.thread.voluntarySwitches } : {}) };
 }
 
 /** Main-thread blocking is loop-active time without run-queue wait. Loop idle time is excluded:
@@ -54,6 +71,39 @@ export function blockingBudget(sample) {
   const blockingMs = sample.queueWaitMs === null ? sample.mainThreadCpuMs
     : Math.max(sample.mainThreadCpuMs, sample.elapsedMs - Math.max(sample.loopIdleMs, sample.queueWaitMs));
   return { mode, blockingMs: Math.max(0, blockingMs) };
+}
+
+/** Light per-call timing (clock and thread CPU only), so many hooked calls add little loop time.
+ * Each call records its start; nested hooked calls are recorded too, under their own phase. */
+export function hookCalls(hooks, calls) {
+  const restore = hooks.map(([target, name]) => {
+    const original = target[name];
+    target[name] = function (...args) {
+      const at = performance.now();
+      const cpu = process.threadCpuUsage();
+      try { return original.apply(this, args); }
+      finally {
+        const used = process.threadCpuUsage(cpu);
+        calls.push({ phase: name, at, elapsedMs: performance.now() - at, mainThreadCpuMs: (used.user + used.system) / 1000 });
+      }
+    };
+    return () => { target[name] = original; };
+  });
+  return () => { for (const undo of restore) undo(); };
+}
+
+/** Per-phase totals of the calls that started in [from, to). */
+export function callsWithin(calls, from, to) {
+  const phases = {};
+  for (const call of calls) {
+    if (call.at < from || call.at >= to) continue;
+    const total = phases[call.phase] ??= { count: 0, elapsedMs: 0, mainThreadCpuMs: 0, maxElapsedMs: 0 };
+    total.count++;
+    total.elapsedMs += call.elapsedMs;
+    total.mainThreadCpuMs += call.mainThreadCpuMs;
+    total.maxElapsedMs = Math.max(total.maxElapsedMs, call.elapsedMs);
+  }
+  return phases;
 }
 
 /** Instrument only the synchronous open call. Imports and hook setup are outside its budget.
