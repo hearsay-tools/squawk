@@ -44,7 +44,7 @@ adapter; the adapter never imports `definition.ts`, because the definition impor
 | `loadSkillCatalog()` | `<id>-skill-catalog.ts` | The native skill list adapter |
 | `configFiles` | `config-files.ts` | The native files that Settings → Agent config shows, and the runner's `agentConfig` pane. A file's readers are the registered runners that list it, so a shared file (`PROJECT_AGENTS_FILE`, `core/project-agents-file.ts`) names no runner |
 | `extraTools` | `extra-tools.ts` | Tools added to the default list when a step sets no `allowedTools` |
-| `mock` | `mock.ts` | The mock script in `packages/cezar/scripts/`, its `*_BIN` variable, the scenario prompts, `askResumeCases`, `parityExemptions` (the parity cells this runner's wire cannot carry; A9 exactly where `facts.nativeAsk` is not `answerable`, and R77/UI2 exactly where `facts.hookEvents` is `none`), `scenarioEnv` (the env a scenario sets for this mock), `sessionStore`, `selfSettledApprovalEcho` and `missingSession` |
+| `mock` | `mock.ts` | The mock script file name in `packages/cezar/scripts/` (resolved at dry-run time through `nativeMockPath(mock)` from `@hearsay-tools/squawk/plugin/runtime`), its `*_BIN` variable, the scenario prompts, `askResumeCases`, `parityExemptions` (the parity cells this runner's wire cannot carry; A9 exactly where `facts.nativeAsk` is not `answerable`, and R77/UI2 exactly where `facts.hookEvents` is `none`), `scenarioEnv` (the env a scenario sets for this mock), `sessionStore`, `selfSettledApprovalEcho` and `missingSession` |
 | `display` | `display.ts` | The display name, the model list name, the model id scope, the picker label and line, the icon key, the install hint, the login command and the account folder example |
 | `loadAdapter()` | `<id>-runner.ts` (or the adapter's own name) | The `AgentRunner` class |
 
@@ -103,6 +103,40 @@ The definition has no tool-injection part. OpenCode's tool server setup is OpenC
   only from the kit. It loads after the bundled runners, runs with all of Squawk's permissions,
   and is skipped, not fatal, when it fails. The kit is unstable until Squawk installs plugins from
   npm or git. [Plugins](../plugins.md) is the user guide.
+
+### Self-contained runner folders
+
+Every bundled runner folder (`runners/<id>/`) is self-contained so its built `dist/runners/<id>/`
+folder loads and runs unchanged when copied into `<config>/plugins/` with no `node_modules`
+ancestor ([ADR 0071](../adr/0071-keep-runner-folders-self-contained.md)):
+
+- **Static guard (`cez/runner-folder-escape`).** Every non-test JS/TS file under `runners/<id>/`
+  (`fixture/` and `__fixtures__/` aside) may import only `node:*` built-ins, files inside its own
+  runner folder, and `@hearsay-tools/squawk/plugin*` (including `z` re-exported from the main
+  entry). It may not escape its folder through `new URL(…, import.meta.url)`, `join`/`resolve`
+  with `'..'` segments, or relative imports/exports/`require`. Each bundled runner keeps a
+  shrink-only baseline file `lint/runner-folder-escape/<id>.baseline.json` (all empty).
+- **Copy-out guard (`test/e2e/runner-copy-out.test.ts`).** Installs the packed tarball, copies
+  every built `dist/runners/<id>/` folder into `<config>/plugins/` under a temp root with no
+  `node_modules` ancestor, boots with an empty `bundledRunnersDir` via
+  `test/e2e/support/hsq-without-bundled.mjs`, and runs a `HSQ_DRY_RUN=1` task on every runner.
+- **Runner-owned `.mjs` assets.** Product scripts that an agent CLI loads (`runners/pi/extensions/*.mjs`,
+  `runners/omp/omp-ci-wait.mjs`, `runners/opencode/opencode-task-scope.mjs`) live inside their
+  runner folder and resolve through `new URL('./…', import.meta.url)`. Because `tsc` copies no
+  `.mjs` files, `postbuild` runs `scripts/copy-runner-assets.mjs` to copy every non-test `.mjs`
+  under `src/runners/<id>/` to the same path under `dist/runners/<id>/` (mirrored by
+  `.ai/scripts/build-e2e.sh` and checked by `check:pack`).
+- **Tool client (`HSQ_TOOL_CLIENT`).** `CiToolController.provision()` (`ci-wait/controller.ts`)
+  adds `HSQ_TOOL_CLIENT` (with `CEZ_TOOL_CLIENT` fallback) to the session environment, pointing to
+  the `file:` URL of the running copy's tool client (`src/ci-wait/client.ts` under source,
+  `dist/ci-wait/client.js` when built). Out-of-process extensions (`pi-ci-wait.mjs`,
+  `omp-ci-wait.mjs`) import the client from that URL instead of a relative path (`omp-ci-wait.mjs`
+  keeps its source-checkout fallback to `dist/ci-wait/client.js`, derived from `HSQ_TOOL_CLIENT`).
+- **Dry-run mocks (`nativeMockPath`).** Mock CLIs stay in `packages/cezar/scripts/`. Runner
+  dry-run code and `core/skill-probe.ts` resolve `RunnerMock.script` through
+  `nativeMockPath(mock)` from `@hearsay-tools/squawk/plugin/runtime`, which resolves the file name
+  against the running installation's `scripts/` folder and throws an error naming the script when
+  absent.
 
 ### Managed CLI installation
 
@@ -194,8 +228,10 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   scenario runner shows one value of each. Every other declared value names the
   unit tests that drive shared code with it, in `FACT_VALUE_TESTS`. A fix whose
   behavior depends on such a value adds or extends one of those unit tests.
-- **A new runner** adds what `AGENT_PROTOCOL.md` §10 lists: its folder, its scripts in
-  `packages/cezar/scripts/`, and its plugin entry `index.ts` in the folder. [Runner definitions](#runner-definitions)
+- **A new runner** adds what `AGENT_PROTOCOL.md` §10 lists: its self-contained folder (including
+  any product `.mjs` extensions and its plugin entry `index.ts`), its empty
+  `lint/runner-folder-escape/<id>.baseline.json`, and its mock scripts in `packages/cezar/scripts/`.
+  [Runner definitions](#runner-definitions)
   names the file of each part. `display.icon` is a key of the cockpit's icon set (`OPEN_IN_ICONS`
   in `components/open-in-menu.tsx`, keyed by icon key, not by runner id); the generic runner icon
   is `bot`. A runner's `login.installHint` (the server's message) and `display.installHint` (the
