@@ -37,7 +37,7 @@ const MARK = {
 const NOTES = {
   absent: 'No failed-file list from this run attempt is available.',
   malformed: 'The failed-file list was malformed.',
-  empty: 'The first run failed before any test file finished.',
+  empty: 'The first run\'s failed-file list is empty: its failure named no test file. Read the job log.',
   tree: 'The merge group\'s tree was too large to check the names against.',
   dropped: (count) => `${count} ${count === 1 ? 'name' : 'names'} dropped: not a test file in the merge group's tree.`,
   omitted: (count) => `${count} more names left out.`,
