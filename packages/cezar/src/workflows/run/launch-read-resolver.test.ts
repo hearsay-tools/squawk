@@ -211,7 +211,7 @@ it('copies the selected account before hold participant callbacks run', () => {
 // hearsay-tools/squawk#4343: with the models lock on, a step runs the runner's default model, so the
 // queued run's own model names no pool and any pool hold on its account blocks it.
 it('a pool hold blocks a queued run in another pool only while the models lock is on', () => {
-  const run = makeRunRecord({ status: RUN_STATUS.queued, model: 'g-fast' });
+  const run = makeRunRecord({ status: RUN_STATUS.queued, model: 'g-fast', workflowDef: { name: 'quick-task', source: 'file', steps: [{ id: 'task' }] } });
   const holds = () => ({ deadline: new Set(['pooled-runner:default\u001fother']), inFlight: new Set<string>() });
   expect(atTaskHead.heldAccount(run, 'pooled-runner', holds, { repoRoot: root, home: testHome() })).toBe(false);
   mkdirSync(join(root, '.ai/cezar'), { recursive: true });

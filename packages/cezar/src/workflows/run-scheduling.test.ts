@@ -47,8 +47,10 @@ describe('quota pool holds', () => {
   const identity = (model: string | undefined) => (model ? `antigravity/${model}` : undefined);
   const held = (model: string | undefined, runner = 'antigravity') =>
     deriveAccountHolds([makeRunRecord({ status: RUN_STATUS.waiting, runner, model, modelIdentity: runner === 'antigravity' ? identity(model) : model, autoResumeAt: later })], same, NOW);
+  // Every run saves its workflow when it is accepted (`run-start.ts`); this one has one agent step.
   const queued = (model: string | undefined, runner = 'antigravity') =>
-    makeRunRecord({ status: RUN_STATUS.queued, runner, model, modelIdentity: runner === 'antigravity' ? identity(model) : model });
+    makeRunRecord({ status: RUN_STATUS.queued, runner, model, modelIdentity: runner === 'antigravity' ? identity(model) : model,
+      workflowDef: { name: 'quick-task', source: 'file', steps: [{ id: 'task' }] } });
   const chain = (...models: string[]): WorkflowDef => ({ name: 'chain', source: 'file', steps: models.map((model, index) => ({ id: `s${index}`, model })) });
 
   it('a third-party hold leaves Gemini work free and blocks other third-party work', () => {
@@ -125,6 +127,12 @@ describe('quota pool holds', () => {
     const run = { ...queued('gemini-4-neon'), workflowDef: chain('gemini-4-neon', 'gemini-3.1-pro') };
     expect(accountHeldFor(run, held('claude-opus-5-5'), 'antigravity')).toBe(false);
     expect(accountHeldFor(run, held('gemini-4-neon'), 'antigravity')).toBe(true);
+  });
+
+  // A record saved without its workflow revives a catalog workflow at launch, whose steps may name
+  // any model.
+  it('a queued run saved without its workflow has an unknown pool', () => {
+    expect(accountHeldFor({ ...queued('gemini-4-neon'), workflowDef: undefined }, held('claude-opus-5-5'), 'antigravity')).toBe(true);
   });
 
   // A step with an empty `command` is an agent step (`stepKind`), so its model counts.

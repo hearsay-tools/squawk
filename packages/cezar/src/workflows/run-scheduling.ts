@@ -56,8 +56,9 @@ export function runHoldKey(run: Pick<RunRecord, 'runner' | 'agentProfile' | 'mod
  * The pool every turn a queued run can take draws on (hearsay-tools/squawk#4343): each agent step
  * runs its authored model, else the run-level pin, which an accepted Continue also sets. A worker's
  * bound workflow holds each step's resolved model, and a step without one runs the runner's default
- * (`boundSpawnWorkflow`; a resume override rewrites it). Steps on two pools, or a step on the
- * runner's default model, read as unknown, which every pool hold on the account blocks.
+ * (`boundSpawnWorkflow`; a resume override rewrites it). Steps on two pools, a step on the
+ * runner's default model, or a record without its workflow read as unknown, which every pool hold
+ * on the account blocks.
  */
 function queuedQuotaPool(run: HoldRun, fallbackRunner: string): string | undefined {
   const runner = run.runner ?? fallbackRunner;
@@ -66,7 +67,10 @@ function queuedQuotaPool(run: HoldRun, fallbackRunner: string): string | undefin
 }
 
 function turnModels(run: HoldRun): (string | undefined)[] {
-  const agentSteps = run.workflowDef?.steps.filter(step => stepKind(step) === 'agent') ?? [];
+  // A record saved without its workflow revives a catalog workflow at launch, whose steps may name
+  // any model.
+  if (!run.workflowDef) return [undefined];
+  const agentSteps = run.workflowDef.steps.filter(step => stepKind(step) === 'agent');
   if (!agentSteps.length) return [run.model];
   return run.delegation?.role === 'worker' ? agentSteps.map(step => step.model) : agentSteps.map(step => step.model ?? run.model);
 }
