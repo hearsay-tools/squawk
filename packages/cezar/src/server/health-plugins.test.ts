@@ -18,7 +18,7 @@ import { apiRequest } from './loopback-request.testkit.ts';
 sealTestRunners(claudeRunner);
 
 const SETUP_TEXT = 'setup failed or a registration was refused; run `hsq plugins` on the host for the error';
-const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: 0, runLifecycleListeners: 0 };
+const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: 0, runLifecycleListeners: 0, launchParts: [] };
 const report = vi.hoisted(() => ({ current: undefined as PluginLoadReport | undefined }));
 vi.mock('../plugin/loader.ts', async original => {
   const actual = await original<typeof import('../plugin/loader.ts')>();

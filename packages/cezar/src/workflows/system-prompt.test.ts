@@ -1,3 +1,4 @@
+import '../built-in-launch-parts.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { TurnBookkeeper } from './run/turn-bookkeeping.ts';

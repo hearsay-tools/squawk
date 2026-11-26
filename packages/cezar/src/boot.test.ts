@@ -13,8 +13,10 @@ const srcRoot = fileURLToPath(new URL('.', import.meta.url));
 /** Registry definition modules may call seal. Production boot may not, except boot.ts. */
 const SEAL_ALLOWLIST = new Set([
   'boot.ts',
+  'built-in-launch-parts.ts',
   'built-in-run-slots.ts',
   'core/cli-registry.ts',
+  'core/launch-registry.ts',
   'core/runner-registry.ts',
   'runs/lifecycle-registry.ts',
   'runs/removal-slots.ts',
@@ -33,7 +35,7 @@ function productionSources(dir = ''): string[] {
   });
 }
 
-it('seals all eight registries and runs beforeSeal only on the first full boot', async () => {
+it('seals all nine registries and runs beforeSeal only on the first full boot', async () => {
   vi.resetModules();
   const boot = await import('./boot.ts');
   const order: string[] = [];
@@ -45,11 +47,12 @@ it('seals all eight registries and runs beforeSeal only on the first full boot',
   const tools = await import('./ci-wait/tool-registry.ts');
   const waits = await import('./workflows/run/wait-kind-registry.ts');
   const lifecycle = await import('./runs/lifecycle-registry.ts');
+  const launch = await import('./core/launch-registry.ts');
   const sealed = () => ({
     cli: cli.cliCommandsSealed(), runners: runners.runnersSealed(), slots: slots.runSlotsSealed(),
     workers: workers.workerExecutionsSealed(), steps: steps.stepKindsSealed(),
     tools: tools.agentToolsSealed(), waits: waits.waitKindsSealed(),
-    lifecycle: lifecycle.runLifecycleListenersSealed(),
+    lifecycle: lifecycle.runLifecycleListenersSealed(), launch: launch.launchPartsSealed(),
   });
   expect(Object.values(sealed()).some(Boolean)).toBe(false);
   await boot.bootRuntime({ beforeSeal: () => {
@@ -59,8 +62,9 @@ it('seals all eight registries and runs beforeSeal only on the first full boot',
   } });
   expect(order).toEqual(['hook']);
   expect(sealed()).toEqual({
-    cli: true, runners: true, slots: true, workers: true, steps: true, tools: true, waits: true, lifecycle: true,
+    cli: true, runners: true, slots: true, workers: true, steps: true, tools: true, waits: true, lifecycle: true, launch: true,
   });
+  expect(launch.registeredLaunchParts().map(part => part.id)).toEqual(['automations', 'webhooks', 'artifacts', 'jobs']);
   await boot.bootRuntime({ beforeSeal: () => { order.push('again'); } });
   expect(order).toEqual(['hook']);
 });
@@ -79,11 +83,12 @@ it('seals only the CLI command table on a cold boot', async () => {
   const tools = await import('./ci-wait/tool-registry.ts');
   const waits = await import('./workflows/run/wait-kind-registry.ts');
   const lifecycle = await import('./runs/lifecycle-registry.ts');
+  const launch = await import('./core/launch-registry.ts');
   expect([
     runners.runnersSealed(), slots.runSlotsSealed(), workers.workerExecutionsSealed(),
     steps.stepKindsSealed(), tools.agentToolsSealed(), waits.waitKindsSealed(),
-    lifecycle.runLifecycleListenersSealed(),
-  ]).toEqual([false, false, false, false, false, false, false]);
+    lifecycle.runLifecycleListenersSealed(), launch.launchPartsSealed(),
+  ]).toEqual([false, false, false, false, false, false, false, false]);
   boot.bootColdCli();
   expect(runners.runnersSealed()).toBe(false);
 });
@@ -194,6 +199,31 @@ it('does not load host plugins twice when a failed hook is retried', async () =>
     expect(report.loaded.map(plugin => plugin.name)).toEqual([...BUILT_IN_RUNNER_IDS, 'extra']);
     expect(report.failed).toEqual([]);
     expect((await import('./core/cli-registry.ts')).cliCommand('extra')?.name).toBe('extra');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it('runs a host plugin launch part without an order after the built-in launch parts', async () => {
+  vi.resetModules();
+  const dir = mkdtempSync(join(tmpdir(), 'hsq-boot-launch-'));
+  mkdirSync(join(dir, 'greeting'));
+  writeFileSync(join(dir, 'greeting', 'index.mjs'), `export default function setup(api) {
+  api.registerLaunchPart({ id: 'greeting', contribute: ({ env }) => ({ env: { GREETING: 'hi' }, prompt: 'artifacts env seen: ' + (env.HSQ_ARTIFACTS_DIR !== undefined) }) });
+}
+`);
+  try {
+    const boot = await import('./boot.ts');
+    await boot.bootRuntime({ pluginsDir: dir });
+    const launch = await import('./core/launch-registry.ts');
+    expect(launch.registeredLaunchParts().map(part => part.id)).toEqual(['automations', 'webhooks', 'artifacts', 'jobs', 'greeting']);
+    const report = (await import('./plugin/loader.ts')).pluginLoadReport();
+    expect(report.loaded.find(plugin => plugin.name === 'greeting')?.contributions.launchParts).toEqual(['greeting']);
+    const { Home } = await import('./home/home.ts');
+    const resolved = await launch.resolveLaunchParts({ runId: 'boot-run', dataDir: dir, repoRoot: dir,
+      home: Home.sandbox(join(dir, 'home')), cockpit: undefined, env: {} });
+    expect(resolved.env.GREETING).toBe('hi');
+    expect(resolved.prompts.at(-1)).toBe('artifacts env seen: true');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

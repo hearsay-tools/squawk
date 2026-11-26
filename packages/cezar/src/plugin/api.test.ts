@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z as zod } from 'zod';
 import type { SquawkPlugin, SquawkPluginApi } from './api.ts';
-import type { AgentToolDefinition, CliCommandDefinition, RunnerDefinition, StepKindDefinition, WaitKindRow } from './index.ts';
+import type { AgentToolDefinition, CliCommandDefinition, LaunchPartDefinition, RunnerDefinition, StepKindDefinition, WaitKindRow } from './index.ts';
 
 /** Fresh process-wide registries and the api that writes them. */
 async function fresh() {
@@ -14,10 +14,11 @@ async function fresh() {
   const cli = await import('../core/cli-registry.ts');
   const slots = await import('../runs/removal-slots.ts');
   const lifecycle = await import('../runs/lifecycle-registry.ts');
+  const launch = await import('../core/launch-registry.ts');
   /** Seal every registry and read what it holds. */
   const committed = () => {
     runners.sealRunners(); tools.sealAgentTools(); waits.sealWaitKinds(); steps.sealStepKinds();
-    cli.sealCliCommands(); slots.sealRunSlots(); lifecycle.sealRunLifecycleListeners();
+    cli.sealCliCommands(); slots.sealRunSlots(); lifecycle.sealRunLifecycleListeners(); launch.sealLaunchParts();
     return {
       runners: runners.knownRunnerIds(),
       tools: tools.agentToolNames(),
@@ -26,9 +27,10 @@ async function fresh() {
       cli: cli.registeredCliCommands().map(command => command.name),
       gates: slots.deletionRefusal('run', 'history', '/data'),
       lifecycle: lifecycle.registeredRunLifecycleListeners().length,
+      launch: launch.registeredLaunchParts().map(part => part.id),
     };
   };
-  return { ...api, runners, tools, waits, steps, cli, slots, lifecycle, committed };
+  return { ...api, runners, tools, waits, steps, cli, slots, lifecycle, launch, committed };
 }
 
 const runner = (id: string) => ({ id }) as unknown as RunnerDefinition;
@@ -37,6 +39,7 @@ const wait = (kind: string, requestKinds = [kind]) => ({ kind, requestKinds, isP
 const step = (kind: string): StepKindDefinition => ({ kind, requiresRunner: false, execute: async () => ({ kind: 'next' }) });
 const command = (name: string) => ({ name }) as unknown as CliCommandDefinition;
 const gate = { name: 'plugin-gate', refuse: () => 'held by the plugin' };
+const launchPart = (id: string, order?: unknown) => ({ id, order, contribute: () => undefined }) as unknown as LaunchPartDefinition;
 
 /** One entry in every registry, then `last` runs inside setup. */
 function everywhere(last: (api: SquawkPluginApi) => void | Promise<void> = () => {}): SquawkPlugin {
@@ -48,11 +51,12 @@ function everywhere(last: (api: SquawkPluginApi) => void | Promise<void> = () =>
     api.registerCliCommand(command('fixture-cmd'));
     api.registerRemovalSlots({ gates: [gate] });
     api.onRunLifecycle({ 'store.closed': () => {} });
+    api.registerLaunchPart(launchPart('fixture-part'));
     await last(api);
   };
 }
 
-const empty = { runners: [], tools: [], waits: [], steps: [], cli: [], gates: undefined, lifecycle: 0 };
+const empty = { runners: [], tools: [], waits: [], steps: [], cli: [], gates: undefined, lifecycle: 0, launch: [] };
 
 describe('runPluginSetup', () => {
   it('commits every staged entry once setup ends cleanly', async () => {
@@ -62,11 +66,12 @@ describe('runPluginSetup', () => {
       env.runners.checkRunnerRegistration(runner('fixture'));
       env.steps.checkStepKindRegistration(step('fixture-step'));
       env.cli.checkCliCommandRegistration(command('fixture-cmd'));
+      env.launch.checkLaunchPartRegistration(launchPart('fixture-part'));
     };
     await env.runPluginSetup(everywhere(liveDuringSetup));
     expect(env.committed()).toEqual({
       runners: ['fixture'], tools: ['fixture_tool'], waits: ['fixture-wait'], steps: ['fixture-step'],
-      cli: ['fixture-cmd'], gates: 'held by the plugin', lifecycle: 1,
+      cli: ['fixture-cmd'], gates: 'held by the plugin', lifecycle: 1, launch: ['fixture-part'],
     });
   });
 
@@ -87,6 +92,10 @@ describe('runPluginSetup', () => {
     ['a step kind over 64 characters', api => api.registerStepKind(step('s'.repeat(65))), /Invalid workflow step kind/],
     ['a plugin wait kind with a built-in name', api => api.registerWaitKind(wait('timer')), /reserved or invalid kind 'timer'/],
     ['an empty tool name', api => api.registerAgentTool(tool('')), /invalid key/],
+    ['a duplicate launch part id in the plugin', api => api.registerLaunchPart(launchPart('fixture-part')), /registers 'fixture-part' twice/],
+    ['an empty launch part id', api => api.registerLaunchPart(launchPart('')), /Launch parts: invalid id/],
+    ['a launch part with a non-finite order', api => api.registerLaunchPart(launchPart('bad-order', Infinity)), /finite number order/],
+    ['a launch part without contribute', api => api.registerLaunchPart({ id: 'no-contribute' } as unknown as LaunchPartDefinition), /contribute function/],
     ['removal slots that are not arrays', api => api.registerRemovalSlots({ gates: 'x' as never }), /must be an array/],
   ];
   it.each(rollbacks)('commits nothing in any registry after %s', async (_name, last, error) => {
@@ -102,6 +111,18 @@ describe('runPluginSetup', () => {
     await expect(env.runPluginSetup(everywhere())).rejects.toThrow(/conflicting registration for 'fixture-step'/);
     expect(env.committed()).toEqual({ ...empty, steps: ['fixture-step'] });
     expect(env.steps.stepKindDefinition('fixture-step')).toBe(live);
+  });
+
+  it('commits nothing when a live launch part holds the id, and reports committed parts', async () => {
+    const env = await fresh();
+    const live = launchPart('fixture-part');
+    env.launch.registerLaunchPart(live);
+    await expect(env.runPluginSetup(everywhere())).rejects.toThrow(/Launch parts: conflicting registration for 'fixture-part'/);
+    expect(env.committed()).toEqual({ ...empty, launch: ['fixture-part'] });
+    const other = await fresh();
+    const contributions = await other.runPluginSetup(api => { api.registerLaunchPart(launchPart('b')); api.registerLaunchPart(launchPart('a', 5)); });
+    expect(contributions.launchParts).toEqual(['b', 'a']);
+    expect(other.committed().launch).toEqual(['a', 'b']);
   });
 
   it('commits nothing when a live wait kind owns a staged request kind', async () => {

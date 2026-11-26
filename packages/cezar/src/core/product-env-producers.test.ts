@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Home } from '../home/home.ts';
 import { agentEnv } from '../workflows/run/launch-context.ts';
+import { artifactsLaunchPart } from '../built-in-launch-parts.ts';
 import { worktreeSetupEnv } from '../worktree-setup.ts';
 import { withPreviewCdp } from '../preview/agent-address.ts';
 import { buildChildEnv } from './agent-env.ts';
@@ -24,10 +25,12 @@ import { squawkLaunchdPlist } from '../server-install/platforms/macosx-ngrok.ts'
 const roots: string[] = [];
 afterEach(() => { vi.unstubAllEnvs(); for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
 
-it('launch context and continuation env generate matching names', () => {
+it('launch context and continuation env generate matching names', async () => {
   const root = mkdtempSync(join(tmpdir(), 'env-launch-')); roots.push(root);
   const context = {dataDir: root, repoRoot: root, home: Home.sandbox(join(root, 'home'))} as Parameters<typeof agentEnv>[0];
-  const generated = agentEnv(context, {origin: 'http://127.0.0.1:4321', projectId: 'project'}, 'run-id');
+  const cockpit = {origin: 'http://127.0.0.1:4321', projectId: 'project'};
+  const artifacts = await artifactsLaunchPart.contribute({...context, runId: 'run-id', cockpit, env: {}});
+  const generated = {...agentEnv(context, cockpit, 'run-id'), ...artifacts?.env};
   for (const suffix of ['ARTIFACTS_DIR', 'HANDOFF_FILE', 'TASK_ID', 'COCKPIT_URL', 'PROJECT_ID']) {
     expect(generated[`CEZ_${suffix}`]).toBeDefined();
     expect(generated[`HSQ_${suffix}`]).toBe(generated[`CEZ_${suffix}`]);

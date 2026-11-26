@@ -27,6 +27,7 @@ import { createRunner } from '../../packages/cezar/src/core/runner-registry.ts';
 import { installWindowsIdentityStore } from '../../packages/cezar/src/delegation/windows-identity-store.ts';
 import { installPluginResolveHook } from '../../packages/cezar/src/plugin/resolve-hook.ts';
 import { registerBuiltInRunSlots, sealBuiltInRunSlots } from '../../packages/cezar/src/built-in-run-slots.ts';
+import { registerBuiltInLaunchParts, sealBuiltInLaunchParts } from '../../packages/cezar/src/built-in-launch-parts.ts';
 
 // Workspace receipts and markers use the host's identity store (ADR 0032).
 installWindowsIdentityStore();
@@ -37,6 +38,8 @@ await loadBundledRunners();
 sealRunners();
 registerBuiltInRunSlots();
 sealBuiltInRunSlots();
+registerBuiltInLaunchParts();
+sealBuiltInLaunchParts();
 registerBuiltInWaitKinds();
 sealBuiltInWaitKinds();
 registerBuiltInTools();

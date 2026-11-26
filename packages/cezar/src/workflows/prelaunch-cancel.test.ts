@@ -215,11 +215,11 @@ describe('Stop during CI-tool prelaunch setup (#493)', { timeout: 30_000 }, () =
     const ciTools = { descriptor: unused<NonNullable<Awaited<ReturnType<LaunchPreambleHost['provisionCiSession']>>>['descriptor']>('CI descriptor'), env: {}, revoke: previous.liveSession.revokeCiTools! };
     const host: LaunchPreambleHost = {
       provisionSession: () => delegation,
-      agentWebhooksPart: async () => undefined,
+      launchParts: async () => ({ env: {}, prompts: [] }),
       provisionCiSession: async () => { toolsEntered(); await toolsGate; return ciTools; },
       launchStale: (...args) => launchStale(context, helper, ...args),
     };
-    const completion = launchPreamble(host, record.id, previous);
+    const completion = launchPreamble(host, record.id, previous, {});
     await entered;
     active.set(record.id, replacement);
     const before = structuredClone(p.store.getRun(record.id));
