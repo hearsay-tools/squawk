@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { LIVE_BYTE_LIMIT, LIVE_EVENT_LIMIT } from '@open-mercato/cezar-contract/live-limits';
 import type { LiveRunBatch, LiveRunDemand, RunEvent } from '@open-mercato/cezar-contract';
 import { decodeLiveCursor } from '../runs/event-history.ts';
@@ -20,6 +21,7 @@ interface RunEventBatchScan {
   offset: number;
   afterSeq: number;
   lowSnapshotCount: number;
+  snapshotSeq: number;
   events: LiveRunBatch['events'];
   bytes: number;
   hasMore: boolean;
@@ -46,6 +48,7 @@ function acceptSnapshotsBefore(scan: RunEventBatchScan, seq: number, byteLimit: 
   while (scan.snapshotIndex < scan.snapshots.length && scan.snapshots[scan.snapshotIndex]!.seq < seq) {
     const snapshot = scan.snapshots[scan.snapshotIndex]!;
     if (!acceptRunEvent(scan, snapshot, Buffer.byteLength(JSON.stringify(snapshot)) + 1, byteLimit)) return false;
+    scan.snapshotSeq = Math.max(scan.snapshotSeq, snapshot.seq);
     scan.snapshotIndex++;
   }
   return true;
@@ -73,6 +76,29 @@ function consumePersistedLine(
   return 'continue';
 }
 
+/** Charge each low snapshot once; the cursor records progress independently of disk replay. */
+function collectLowSnapshots(scan: RunEventBatchScan, byteLimit: number): RunEvent[] {
+  const lowSeqSnapshots: RunEvent[] = [];
+  for (const event of scan.snapshots) {
+    if (event.seq > scan.afterSeq || event.seq <= scan.snapshotSeq) continue;
+    const bytes = Buffer.byteLength(JSON.stringify(event)) + 1;
+    if (bytes > byteLimit) throw new LiveFeedReset('snapshot exceeds live batch limit — reload history');
+    if (scan.bytes + bytes > byteLimit || lowSeqSnapshots.length >= LIVE_EVENT_LIMIT) {
+      scan.hasMore = true;
+      break;
+    }
+    lowSeqSnapshots.push(event);
+    scan.bytes += bytes;
+    scan.snapshotSeq = event.seq;
+  }
+  scan.lowSnapshotCount = lowSeqSnapshots.length;
+  scan.snapshots = scan.snapshots.filter(event => event.seq > scan.afterSeq);
+  return lowSeqSnapshots;
+}
+
+// Independent progress lets low-sequence snapshots span pages without moving afterSeq.
+const snapshotProgressSchema = z.object({ snapshotSeq: z.number().int().nonnegative().safe().default(0) });
+
 /** The returned cursor covers exactly the accepted prefix, including complete ignored lines.
  * Capture sorted live snapshots and their sequence boundary together BEFORE disk IO.
  * Later writes wait for the next capture: otherwise a newer persisted event could
@@ -86,6 +112,7 @@ async function scanRunEventBatch(dataDir: string, demand: LiveRunDemand, signal:
     afterSeq: Math.max(demand.afterSeq, start.boundarySeq),
     events: [],
     lowSnapshotCount: 0,
+    snapshotSeq: demand.cursor ? snapshotProgressSchema.parse(JSON.parse(Buffer.from(demand.cursor, 'base64url').toString())).snapshotSeq : 0,
     bytes: 0,
     hasMore: false,
     laterWrites: false,
@@ -93,17 +120,10 @@ async function scanRunEventBatch(dataDir: string, demand: LiveRunDemand, signal:
     snapshotIndex: 0,
     ...(snapshot ? { snapshot } : {}),
   };
-  const lowSeqSnapshots = scan.snapshots.filter(event => event.seq <= scan.afterSeq);
-  scan.lowSnapshotCount = lowSeqSnapshots.length;
-  for (const event of lowSeqSnapshots) {
-    scan.bytes += Buffer.byteLength(JSON.stringify(event)) + 1;
-  }
-  if (lowSeqSnapshots.length > LIVE_EVENT_LIMIT || scan.bytes > byteLimit) {
-    throw new LiveFeedReset('snapshots exceed live batch limit — reload history');
-  }
-  scan.snapshots = scan.snapshots.filter(event => event.seq > scan.afterSeq);
+  const lowSeqSnapshots = collectLowSnapshots(scan, byteLimit);
   let pending: Buffer = Buffer.alloc(0);
   outer: for await (const chunk of streamHistoryAfter(dataDir, demand.runId, scan.offset, signal)) {
+    if (scan.hasMore) break;
     pending = pending.length ? Buffer.concat([pending, chunk]) : chunk;
     let boundary: number;
     while ((boundary = pending.indexOf(10)) !== -1) {
@@ -116,14 +136,11 @@ async function scanRunEventBatch(dataDir: string, demand: LiveRunDemand, signal:
   }
   signal.throwIfAborted();
   if (!scan.hasMore) acceptSnapshotsBefore(scan, Infinity, byteLimit);
-  if (scan.hasMore && !scan.events.length && lowSeqSnapshots.length) {
-    throw new LiveFeedReset('snapshots leave no room for replay — reload history');
-  }
   // No newline means a writer is still appending: do not acknowledge that partial record.
   return { sizeLimited: scan.hasMore, batch: {
     ...(lowSeqSnapshots.length ? { snapshots: lowSeqSnapshots } : {}),
     type: 'batch', projectId: demand.projectId, runId: demand.runId, events: scan.events, afterSeq: scan.afterSeq, hasMore: scan.hasMore || scan.laterWrites,
-    cursor: Buffer.from(JSON.stringify({ v: 1, kind: 'live', offset: scan.offset, boundarySeq: scan.afterSeq })).toString('base64url'),
+    cursor: Buffer.from(JSON.stringify({ v: 1, kind: 'live', offset: scan.offset, boundarySeq: scan.afterSeq, snapshotSeq: scan.snapshotSeq })).toString('base64url'),
   } };
 }
 
@@ -210,7 +227,8 @@ export async function subscribeRunFeed(
     await replayLowSnapshots(liveSnapshot, maxSeq, handlers.snapshot, stopped, controller.signal);
     let cursor = demand.cursor;
     do {
-      const { batch, sizeLimited } = await scanRunEventBatch(context.store.claims.sourceDataDir(demand.runId), { ...demand, ...(cursor ? { cursor } : {}), afterSeq: maxSeq }, controller.signal, byteLimit, { ...liveSnapshot, events: liveSnapshot.events.filter(event => event.seq > maxSeq) });
+      liveSnapshot.events = liveSnapshot.events.filter(event => event.seq > maxSeq);
+      const { batch, sizeLimited } = await scanRunEventBatch(context.store.claims.sourceDataDir(demand.runId), { ...demand, ...(cursor ? { cursor } : {}), afterSeq: maxSeq }, controller.signal, byteLimit, liveSnapshot);
       for (const event of batch.events) {
         controller.signal.throwIfAborted();
         if (event.seq <= maxSeq) continue;

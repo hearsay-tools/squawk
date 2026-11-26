@@ -60,7 +60,7 @@ describe('bounded persisted feed', () => {
     let afterSeq = 0;
     const seen: RunEvent[] = [];
     for (let i = 0; i < 3; i++) {
-      const page = await readRunEventBatch(dataDir, { ...demand(), cursor, afterSeq }, signal(), 150, { ...snapshots, events: snapshots.events.filter(event => event.seq > afterSeq) });
+      const page = await readRunEventBatch(dataDir, { ...demand(), cursor, afterSeq }, signal(), 150, snapshots);
       seen.push(...page.events);
       cursor = page.cursor; afterSeq = page.afterSeq;
       expect(page.events).toHaveLength(1);
@@ -229,4 +229,25 @@ describe('active item replay', () => {
       expect(snapshots.map(event => event.seq)).toEqual(afterSeq === 0 ? [] : [2]);
     } finally { controller.abort(); await task; }
   });
+});
+
+it.each([0, 5])('paginates unfiltered large finite snapshots at afterSeq %i', async initialAfterSeq => {
+  for (const id of ['a', 'b']) {
+    store.eventLog.appendEvent(runId, { type: 'item.started', item: { kind: 'message', id, text: '' } });
+    store.eventLog.emitEphemeral(runId, { type: 'item.delta', itemId: id, field: 'text', delta: id.repeat(600 * 1024) });
+  }
+  store.eventLog.appendEvent(runId, { type: 'note', text: 'after both items' });
+  let afterSeq = initialAfterSeq;
+  let cursor: string | undefined;
+  const seen: RunEvent[] = [];
+  for (let page = 0; page < 4; page++) {
+    const batch = await readFiniteRunFeed({ store, dataDir }, { ...demand(), afterSeq, cursor }, signal());
+    seen.push(...(batch.snapshots ?? []), ...batch.events);
+    cursor = batch.cursor;
+    afterSeq = batch.afterSeq;
+    if (!batch.hasMore) break;
+    expect(page).toBeLessThan(3);
+  }
+  expect(seen.filter(event => event.type === 'item.updated').map(event => event.seq)).toEqual([2, 4]);
+  expect(afterSeq).toBe(5);
 });
