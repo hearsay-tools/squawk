@@ -30,6 +30,7 @@
     "cez/native-mock-source": "error",
     "cez/parity-runner-subset": "error",
     "cez/raw-query-setter": "error",
+    "cez/regex-module-syntax": "error",
     "cez/run-fact-reader": "error",
     "cez/run-history-reader": "error",
     "cez/runner-fact-combination": "error",

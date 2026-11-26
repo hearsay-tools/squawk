@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ruleCases } from './ast-rule.testkit.ts';
 import { childKilledRead } from './child-killed-read.ts';
+import { regexModuleSyntax } from './regex-module-syntax.ts';
 import { runStoreTestkitImport } from './run-store-testkit-import.ts';
 
 /** Each AST rule's cases, carried over from its former YAML rule-tests file (hearsay-tools/squawk#3774). */
@@ -53,6 +54,43 @@ ruleCases(runStoreTestkitImport, {
     "const kit = await import('../runs/run-store-open.testkit.js')",
     "export * from './run-store.testkit'",
     "export default './run-store.testkit.ts'",
+  ],
+});
+
+ruleCases(regexModuleSyntax, {
+  file: 'packages/cezar/src/lint/import-scan.testkit.ts',
+  valid: [
+    'const prose = /264 test files import the changed files/',
+    'const prose = /from CI run 3: 2 changed functions/',
+    'const prose = /^(\\S+) (?:is exempt from )?(I\\d+)/',
+    "const flag = /--import (?:\\.\\/)scripts\\/env\\.mjs/",
+    "const css = /@import\\s+(['\"])([^'\"]+)\\1/",
+    'const script = /require-e2e-passed\\.cjs/',
+    'const time = /import-time activation/',
+    "const made = new RegExp(prefix + 'import\\\\s+')",
+    "const imports = runtimeImports(source, file)",
+    'const merge = /^Merge pull request #(\\d+) from [^/\\s]+\\/(\\S+)/',
+    'const word = /superbfrom\\s/',
+  ],
+  invalid: [
+    'const named = /^import\\s+\\{/',
+    "const side = /^import ['\"]/",
+    'const star = /^import \\* as\\b/',
+    'const typed = /^\\s*import\\s+type\\b/',
+    'const either = /^(?:import|export) type\\b/',
+    'const word = /\\b(?:import|export)\\b/',
+    "const source = /from ['\"]\\.\\/([^'\"]+)['\"]/",
+    "const spaced = /from\\s+['\"]@open-mercato/",
+    "const loaded = /require\\('([^']+)'\\)/",
+    'const dynamic = /import\\(\\s*/',
+    'const meta = /process\\.argv\\[1\\][^\\n]*import\\.meta/',
+    'const declared = /^export const displayOrder = (\\d+);$/',
+    'const fn = /^\\s*(?:export\\s+)?(?:async\\s+)?function\\s+seal/',
+    "const built = new RegExp('from\\\\s+[\\'\"]')",
+    'const called = RegExp(`^import\\\\s+${name}`)',
+    'const raw = new RegExp(String.raw`^export\\s+\\*`)',
+    'const either = /(?:\\bfrom|^import)[ \\t]+/',
+    "const quoted = /\\bfrom\\s*$/",
   ],
 });
 
