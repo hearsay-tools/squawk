@@ -63,9 +63,9 @@ function SettingsMainHeader({ scope, title, mobileTitle, description }: { scope:
     <header data-slot="settings-main-header" className="settings-route-header flex shrink-0 flex-col gap-2">
       <h1 className="text-[20px] font-semibold tracking-tight text-foreground max-md:text-[24px]">
         <span className="md:hidden">{mobileTitle}</span>
-        <span className="max-md:hidden">{title}</span>
+        <span className="max-md:hidden">{title} <span className="font-normal text-soft-foreground">· {where}</span></span>
       </h1>
-      {description ? <p className="max-md:hidden text-[13px] text-muted-foreground">{description} <span className="text-soft-foreground">· {where}</span></p> : <p className="max-md:hidden text-[13px] text-soft-foreground">{where}</p>}
+      {description ? <p className="max-md:hidden text-[13px] text-muted-foreground">{description}</p> : null}
       {scope === 'global' ? (
         <span data-slot="settings-scope-chip" className="sr-only">
           Global settings
