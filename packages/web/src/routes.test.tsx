@@ -251,7 +251,8 @@ describe('scoped route map (/p/:projectId)', () => {
     renderAt('/activity')
     expect(screen.getByTestId('location').getAttribute('data-pathname')).toBe('/activity')
     expect((await screen.findByRole('link', { name: 'All projects' })).getAttribute('aria-current')).toBe('page')
-    expect(screen.getByRole('link', { name: 'This project' }).getAttribute('href')).toBe(`/p/${BOOT}/activity`)
+    // The project segment reads as the project's name here, so find it by where it leads.
+    await waitFor(() => expect(document.querySelector(`[data-slot="activity-scope"] a[href="/p/${BOOT}/activity"]`)).not.toBeNull())
   })
   // Not a ROUTE_CASES row: the flat `/activity` is the global view, never a legacy redirect.
   it(`/p/${BOOT}/activity → activity`, () => {
