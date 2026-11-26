@@ -27,6 +27,19 @@ Red is the test at `HEAD` over the code at `--base`. Green is the test and the c
 `HEAD`. The verdict must be `proven`, with a red failure that shows the reported defect.
 `red for another reason` (an import or setup error) and `not comparable` are not proof.
 
+When the test is unchanged since `--base`, Squeal compares nothing until every other file
+changed since `--base` is named. Imported files, files the test reads at runtime (through
+`readFileSync` or `git ls-files`) and scripts it spawns count the same. Without the names,
+the verdict is `not comparable`, with the reason `changed files not named: <paths>`. Name
+each path that reason lists. Use `--source <path>` for product code, which red takes from
+`--base`. Use `--with <path>` for test code, such as a fixture or a test helper, which both
+sides take from `HEAD`.
+
+A new test that imports an export the fix adds cannot run over the code from before the
+fix: the import fails, and the verdict is `red for another reason`. Prove such a test with
+a [named break on `HEAD`](#a-named-break-on-head) that undoes the fix's behavior and
+keeps the export.
+
 A browser spec usually fails by a wait that times out, not by an assertion, so its red side
 reads `red for another reason` even when the break caused it. Such a side counts as red
 only when its failure text names the broken behavior, for example
@@ -56,7 +69,15 @@ node scripts/regression-proof.mjs --patch <file> --test <test file>...
 
 The script builds the break as a commit object over `HEAD` (a temporary index, never
 checked out), runs `squeal proof <tests> --base <break> --case source`, and prints each
-file's verdict, its failing tests and `proven X/Y`. Its exit code is Squeal's: 0 when
+file's verdict, its failing tests and `proven X/Y`. It names every file the break changes,
+other than a named test. Product files go as `--source`, so a break in a file the tests
+read at runtime or spawn is proven the same way as a break in an imported file. Files that
+Squeal counts as test code (under a `test`, `fixtures` or similar folder, or named
+`*.test.*` or `*.spec.*`) go as `--with` and stay at `HEAD`. It also passes
+`--env SQUAWK_REGRESSION_PROOF=1`, because a stored result never belongs to a break
+commit. Squeal runs a side under a condition fresh and never stores it. Squeal also
+runs the red side once without the condition, as a control. A file can take three runs,
+so give `--timeout` room for them. Its exit code is Squeal's: 0 when
 every file is proven. `--revert` reverts one non-merge commit on top of `HEAD` and stops
 when the revert conflicts. `--patch` applies a patch that introduces the break.
 

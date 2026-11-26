@@ -151,13 +151,63 @@ test('the CLI passes the break and the tests to squeal proof, prints the counts 
   const args = squeal.args();
   assert.deepEqual([args[0], args[1], args[2]], ['proof', 'src/guard.test.ts', '--base']);
   assert.equal(git('rev-parse', `${args[3]}^`), fix);
-  assert.deepEqual(args.slice(4), ['--case', 'source', '--json', '--timeout', '90']);
+  assert.deepEqual(args.slice(4), ['--case', 'source', '--source', 'src/guard.ts', '--env', 'SQUAWK_REGRESSION_PROOF=1', '--json', '--timeout', '90']);
   assert.match(result.stdout, /proven: src\/guard\.test\.ts\n {4}red: fail, 2 failing tests; green: pass\n {6}assertion: guard rejects\n/);
   assert.match(result.stdout, /proven 1\/1$/m);
   const notRed = fakeSqueal(t, proofReport('__BASE__', fix, [['src/guard.test.ts', 'not red']]), 1);
   const second = run(cwd, ['--revert', fix, '--test', 'src/guard.test.ts'], notRed.bin);
   assert.equal(second.status, 1);
   assert.match(second.stdout, /red: pass; green: pass\nproven 0\/1/);
+});
+
+// A break never changes the test, so Squeal compares nothing until every file the break
+// changes is named; a runtime-read or spawned file counts the same as an imported one.
+// Squeal takes a --with file from HEAD on both sides, so a changed fixture or helper stays test code.
+test('the CLI names product files the break changes as --source, test-side files as --with, and no named test', (t) => {
+  const { cwd, git, put } = fixture(t);
+  put('scripts/reader.sh', 'echo ok\n');
+  put('src/fixtures/data.json', '{}\n');
+  put('src/helper.spec.ts', 'helper\n');
+  git('add', '.');
+  git('commit', '-m', 'reader');
+  put('scripts/reader.sh', 'echo broken\n');
+  put('src/guard.ts', 'export function guard() {\n  return false;\n}\n');
+  put('src/guard.test.ts', 'test changed\n');
+  put('src/fixtures/data.json', '[]\n');
+  put('src/helper.spec.ts', 'helper changed\n');
+  writeFileSync(join(cwd, 'break.patch'), execFileSync('git', ['diff'], { cwd, encoding: 'utf8' }));
+  git('checkout', '--', '.');
+  const squeal = fakeSqueal(t, proofReport('__BASE__', git('rev-parse', 'HEAD'), [['src/guard.test.ts', 'proven', ['x']]]));
+  const result = run(cwd, ['--patch', join(cwd, 'break.patch'), '--test', './src/guard.test.ts'], squeal.bin);
+  assert.equal(result.status, 0, result.stderr);
+  const args = squeal.args();
+  const named = (flag) => args.flatMap((arg, index) => (args[index - 1] === flag ? [arg] : []));
+  assert.equal(args[1], 'src/guard.test.ts');
+  assert.deepEqual(named('--source'), ['scripts/reader.sh', 'src/guard.ts']);
+  assert.deepEqual(named('--with'), ['src/fixtures/data.json', 'src/helper.spec.ts']);
+  assert.ok(args.includes('SQUAWK_REGRESSION_PROOF=1'));
+  // A --test path is repo-relative from any directory, as Squeal reads it from the root.
+  assert.equal(run(join(cwd, 'src'), ['--patch', join(cwd, 'break.patch'), '--test', 'src/guard.test.ts'], squeal.bin).status, 0);
+  assert.equal(squeal.args()[1], 'src/guard.test.ts');
+});
+
+test('a break that deletes or renames a file names the old and the new path as --source', (t) => {
+  const { cwd, git, put } = fixture(t);
+  put('scripts/old-name.sh', 'echo old\n');
+  put('scripts/gone.sh', 'echo gone\n');
+  git('add', '.');
+  git('commit', '-m', 'scripts');
+  git('mv', 'scripts/old-name.sh', 'scripts/new-name.sh');
+  git('rm', '-q', 'scripts/gone.sh');
+  writeFileSync(join(cwd, 'break.patch'), execFileSync('git', ['diff', '--cached', '-M'], { cwd, encoding: 'utf8' }));
+  git('reset', '-q', '--hard');
+  const squeal = fakeSqueal(t, proofReport('__BASE__', git('rev-parse', 'HEAD'), [['src/guard.test.ts', 'proven', ['x']]]));
+  const result = run(cwd, ['--patch', join(cwd, 'break.patch'), '--test', 'src/guard.test.ts'], squeal.bin);
+  assert.equal(result.status, 0, result.stderr);
+  const args = squeal.args();
+  const sources = args.flatMap((arg, index) => (args[index - 1] === '--source' ? [arg] : []));
+  assert.deepEqual(sources, ['scripts/gone.sh', 'scripts/new-name.sh', 'scripts/old-name.sh']);
+  assert.equal(args.includes('--with'), false);
 });
 
 test('the break is built over the pinned head, and a proof over another HEAD is refused', (t) => {
@@ -202,8 +252,9 @@ test('the CLI exits 2 without squeal, on a break that does not apply, and on bad
   ]) assert.throws(() => parseArgs(args), message);
 });
 
-test('summarize names files without a red side and failures past five', () => {
+test('summarize names files without a red side and failures past five, and drops only Squeal\'s control reason', () => {
   const report = proofReport('a'.repeat(40), 'b'.repeat(40), [['x.test.ts', 'proven', ['1', '2', '3', '4', '5', '6', '7']]]);
+  report.files[0].reason = 'red without the conditions too: the conditions are not shown to matter';
   report.files.push({ path: 'y.test.ts', verdict: 'not comparable', reason: 'imports z.ts, absent at base', red: null, green: null });
   report.files.push({ path: 'z.e2e.ts', verdict: 'red for another reason', reason: 'a test threw an error that is not an assertion',
     red: { end: 'fail', failures: [{ test: 'shows the state', kind: 'error', text: '  Error: predicate never became truthy: ok\n    at wait' }] }, green: null });
@@ -212,6 +263,11 @@ test('summarize names files without a red side and failures past five', () => {
   assert.doesNotMatch(text, /at wait/);
   assert.match(text, /… and 2 more/);
   assert.match(text, /red: not read; green: not read\n {4}reason: imports z\.ts, absent at base/);
+  assert.doesNotMatch(text, /conditions are not shown to matter/);
+  report.files[0].reason = 'labelled on an error the test body threw; red without the conditions too: the conditions are not shown to matter';
+  const thrown = summarize(report, 'demo');
+  assert.match(thrown, /reason: labelled on an error the test body threw\n/);
+  assert.doesNotMatch(thrown, /conditions are not shown to matter/);
   assert.match(text, /proven 1\/3$/);
 });
 
