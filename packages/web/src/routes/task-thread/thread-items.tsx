@@ -1,6 +1,6 @@
 import { AnchorIcon, BrainIcon, FileTextIcon, FolderInputIcon, GlobeIcon, LoaderCircleIcon, MessageSquareIcon, SquarePenIcon, SquareTerminalIcon } from 'lucide-react'
 import { BotIcon, ChevronRightIcon, CopyIcon, ListTodoIcon, PaperclipIcon, SearchIcon, Trash2Icon, WrenchIcon } from '@/components/design-icons'
-import { useEffect, useId, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react'
+import { memo, useEffect, useId, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react'
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ZoomableImage } from '@/components/zoomable-image'
@@ -94,6 +94,8 @@ export function ConversationMessage({ role, children, className, ts, headerActio
   )
 }
 
+const EMPTY_IMAGES: readonly string[] = []
+
 /** Right-aligned muted bubble — a v1 `user-message` line or the run's initial task. Renders any
  *  attached images inline and non-image attachments as download chips (#950); falls back to a
  *  count only when the URLs aren't available (older runs).
@@ -109,10 +111,10 @@ export function ConversationMessage({ role, children, className, ts, headerActio
  *  on the next `run` frame — the stack has become history. The initial prompt gets `onEdit` but
  *  never `onRemove`: a run with no prompt is not a run. The inline editor deliberately edits the
  *  RAW markdown source (`text`), not the rendered output. */
-export function UserBubble({
+export const UserBubble = memo(function UserBubble({
   text,
   imageCount = 0,
-  images = [],
+  images = EMPTY_IMAGES,
   ts,
   onEdit,
   onRemove,
@@ -286,7 +288,7 @@ export function UserBubble({
       ) : null}
     </ConversationMessage>
   )
-}
+})
 
 const REPLY_ACTION_CLASS =
   'inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-sm px-2 text-xs font-medium text-soft-foreground hover:bg-background hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none'
@@ -339,7 +341,7 @@ async function writeReplyClipboard(kind: 'html' | 'markdown', source: string, ro
  * An assistant message item, as markdown. `breaks` keeps the agent's single newlines visible
  * (#730): replies are chat prose, and CommonMark's newline-as-space flattened them into one line.
  */
-export function AssistantMessage({ text, ts, messageKey }: { text: string; ts?: string | undefined; messageKey?: string | undefined }) {
+export const AssistantMessage = memo(function AssistantMessage({ text, ts, messageKey }: { text: string; ts?: string | undefined; messageKey?: string | undefined }) {
   const markdownRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState<'html' | 'markdown' | null>(null)
   const [copyError, setCopyError] = useState<string | null>(null)
@@ -396,7 +398,7 @@ export function AssistantMessage({ text, ts, messageKey }: { text: string; ts?: 
       <ReportCards text={text} messageKey={messageKey} />
     </ConversationMessage>
   )
-}
+})
 
 
 /** Persisted recovery guidance for an authoritative runtime authentication rejection. It renders
@@ -435,7 +437,7 @@ export function ProviderAuthRequiredCard({
  * Reasoning: a collapsed dim "Thinking — {first line}…" row, expandable to the full text.
  * Streams live — the reducer grows `text` in place, so the summary line grows with it.
  */
-export function ReasoningItem({ text }: { text: string }) {
+export const ReasoningItem = memo(function ReasoningItem({ text }: { text: string }) {
   const previewId = useId()
   // A mapper regression that mints an empty reasoning item should degrade
   // quietly rather than render a bare, un-expandable "Thinking —" row (#528).
@@ -471,7 +473,7 @@ export function ReasoningItem({ text }: { text: string }) {
       </CollapsibleContent>
     </Collapsible>
   )
-}
+})
 
 /**
  * Live "the agent is working" affordance for an active session. A running run

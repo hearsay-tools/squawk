@@ -1,8 +1,23 @@
+import { createElement, type ComponentProps } from 'react'
+import { MemoryRouter } from 'react-router'
+import { TaskFileScope } from './task-file-scope'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Markdown } from './markdown'
 import { TaskFileContext } from './file-links'
+
+const streamdownProps = vi.hoisted(() => vi.fn())
+vi.mock('streamdown', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('streamdown')>()
+  return {
+    ...actual,
+    Streamdown: (props: ComponentProps<typeof actual.Streamdown>) => {
+      streamdownProps(props)
+      return createElement(actual.Streamdown, props)
+    },
+  }
+})
 
 afterEach(cleanup)
 
@@ -14,6 +29,52 @@ afterEach(cleanup)
  * crashing the message.
  */
 describe('Markdown', () => {
+  it('keeps streaming props and completed DOM blocks stable as text appends', () => {
+    streamdownProps.mockClear()
+    const prefix = 'Completed paragraph.\n\n```text\nCompleted code\n```\n\n'
+    const view = (text: string) => (
+      <MemoryRouter><TaskFileScope runId="streaming-task"><Markdown>{prefix + text}</Markdown></TaskFileScope></MemoryRouter>
+    )
+    const { container, rerender } = render(view('Partial'))
+    const firstProps = streamdownProps.mock.calls.at(-1)![0]
+    const paragraph = screen.getByText('Completed paragraph.')
+    const code = container.querySelector('[data-streamdown="code-block"]')
+    expect(code).not.toBeNull()
+    rerender(view('Partial response appended.'))
+    const nextProps = streamdownProps.mock.calls.at(-1)![0]
+    for (const key of ['rehypePlugins', 'plugins', 'shikiTheme', 'controls']) {
+      expect(firstProps[key]).toBeDefined()
+      expect(nextProps[key]).toBe(firstProps[key])
+    }
+    expect(screen.getByText('Completed paragraph.')).toBe(paragraph)
+    expect(container.querySelector('[data-streamdown="code-block"]')).toBe(code)
+    expect(firstProps.mode).toBeUndefined()
+    expect(nextProps.mode).toBeUndefined()
+    expect(nextProps.isAnimating).toBeUndefined()
+  })
+
+  it('updates file links when task scope changes without a text change', () => {
+    const view = (runId: string) => <TaskFileScope runId={runId}><Markdown>{'[file](/tmp/a.md)'}</Markdown></TaskFileScope>
+    const { rerender } = render(view('task-a'))
+    expect(screen.getByRole('link', { name: 'file' }).getAttribute('href')).toBe('/tasks/task-a/files?path=%2Ftmp%2Fa.md')
+    rerender(view('task-b'))
+    expect(screen.getByRole('link', { name: 'file' }).getAttribute('href')).toBe('/tasks/task-b/files?path=%2Ftmp%2Fa.md')
+  })
+
+  it('updates hard breaks without a text change', () => {
+    const { container, rerender } = render(<Markdown>{'one\ntwo'}</Markdown>)
+    expect(container.querySelector('br')).toBeNull()
+    rerender(<Markdown breaks>{'one\ntwo'}</Markdown>)
+    expect(container.querySelector('br')).not.toBeNull()
+  })
+
+  it('updates a document image resolver without a text change', () => {
+    const { container, rerender } = render(<Markdown document imageSrc={() => '/raw/one.png'}>{'![shot](shot.png)'}</Markdown>)
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(new URL('/raw/one.png', window.location.href).href)
+    rerender(<Markdown document imageSrc={() => '/raw/two.png'}>{'![shot](shot.png)'}</Markdown>)
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(new URL('/raw/two.png', window.location.href).href)
+  })
+
   it('opens absolute and file URL links in this task Files view', () => {
     render(<TaskFileContext.Provider value={{ runId: 'task-one', projectId: 'other' }}>
       <Markdown>{'[ADR](/tmp/decision.md) and [spaced](file:///tmp/a%20b.md)'}</Markdown>
