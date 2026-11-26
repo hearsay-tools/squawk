@@ -60,7 +60,8 @@ export const queryKeys = {
   get sessionContext() {
     return [queryScope(), 'session-context'] as const
   },
-  sessionContextPreview: (content: string, role: string) => [queryScope(), 'session-context', 'preview', role, content] as const,
+  sessionContextPreview: (content: string, role: string, sharedKey = '') =>
+    [queryScope(), 'session-context', 'preview', role, content, sharedKey] as const,
   /** The worktree management panel (`GET /api/worktrees`, #483). */
   get worktrees() {
     return [queryScope(), 'worktrees'] as const

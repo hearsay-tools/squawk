@@ -105,7 +105,7 @@ type Pane = 'edit' | 'preview'
 type Scope = 'local' | 'shared'
 
 /** The local draft, its combined server preview, and the save that never loses the draft. */
-function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise<unknown>) {
+function useSessionContextDraft(file: SessionContextFile, shared: SessionContextSharedFile, refetch: () => Promise<unknown>) {
   const [draft, setDraftText] = useState<string | null>(null)
   // The version the draft started from. A background reload may bring a newer file; a normal save
   // still names this one, so it gets a conflict instead of overwriting the other edit.
@@ -130,7 +130,8 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
   useUnsentDraft(dirty)
 
   const settled = useSettled(content)
-  const preview = useSessionContextPreview(settled, role)
+  const sharedKey = `${shared.path}|${shared.exists ? '1' : '0'}|${shared.unreadableReason ?? ''}|${shared.content}`
+  const preview = useSessionContextPreview(settled, role, sharedKey)
   // A cached good answer does not count once checking the same draft again has failed.
   const current = preview.data !== undefined && !preview.isPlaceholderData && !preview.isError && settled === content
   const previewError = preview.isError && !preview.isFetching && settled === content ? preview.error.message : null
@@ -200,7 +201,7 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
 
 function SessionContextWorkspace({ state, refetch }: { state: SessionContextState; refetch: () => Promise<unknown> }) {
   const { local, shared } = state
-  const editor = useSessionContextDraft(local, refetch)
+  const editor = useSessionContextDraft(local, shared, refetch)
   const { content, problems, current } = editor
   const writable = local.writable
   const marked = useMemo(() => new Set(problems.flatMap((p) => (p.line === null ? [] : [p.line]))), [problems])

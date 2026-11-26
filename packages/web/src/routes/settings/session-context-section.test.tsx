@@ -74,10 +74,11 @@ function serve(server: FakeServer) {
           { id: 'handoff', source: 'built-in', target: 'built-in', status: 'applied', overridesShared: false, bytes: 120, reason: null, sources: ['<handoff.path>'], text: '# Handoff', truncated: false },
         ]
         if (server.state.shared.exists) {
+          const sharedText = server.state.shared.content.includes('Updated shared') ? 'Updated shared vision' : 'Shared vision'
           blocks.push(
             overridesVision
               ? { id: 'vision', source: 'local', target: 'both', status: 'applied', overridesShared: true, bytes: 96, reason: 'overrides context.yaml', sources: [], text: 'Local vision', truncated: false }
-              : { id: 'vision', source: 'shared', target: 'both', status: 'applied', overridesShared: false, bytes: 80, reason: null, sources: [], text: 'Shared vision', truncated: false },
+              : { id: 'vision', source: 'shared', target: 'both', status: 'applied', overridesShared: false, bytes: 80, reason: null, sources: [], text: sharedText, truncated: false },
           )
         }
         if ((body.content as string).includes('id: brief')) {
@@ -206,6 +207,17 @@ describe('SessionContextSection', () => {
     await act(() => client.invalidateQueries({ queryKey: queryKeys.sessionContext }))
     expect(editor().value).toBe(mine)
     expect(hasUnsentInput()).toBe(true)
+  })
+
+  it('refreshes the combined preview when shared context.yaml changes on reload with local draft unchanged', async () => {
+    const server: FakeServer = { state: stateOf(), puts: [], previews: [] }
+    serve(server)
+    const client = createQueryClient()
+    renderSection(client)
+    expect(await screen.findByText('Shared vision')).toBeTruthy()
+    server.state = stateOf({ shared: { content: 'version: 1\nrules:\n  - id: vision\n    on: session_start\n    template: Updated shared\n' } })
+    await act(() => client.invalidateQueries({ queryKey: queryKeys.sessionContext }))
+    expect(await screen.findByText('Updated shared vision')).toBeTruthy()
   })
 
   it('switches between Local and Shared tabs with arrow keys while keeping unsaved local drafts and combined preview', async () => {
