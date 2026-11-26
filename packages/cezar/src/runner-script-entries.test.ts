@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
+import { moduleLoads } from './core/module-loads.testkit.ts';
 import { repoRoot } from './lint/source-rule.ts';
 
 // Each Node entry outside index.ts that reads runner data loads the bundled runners at its
@@ -20,8 +21,10 @@ const ENTRIES = [
 
 it.each(ENTRIES)('%s loads the bundled runners through the plugin loader, then seals them, at startup', (entry) => {
   const source = readFileSync(join(repoRoot, entry), 'utf8');
-  expect(source).toMatch(/\{ loadBundledRunners \} =[^\n]*(?:import|load)\([^\n]*plugin\/loader\.[jt]s/);
-  expect(source).toMatch(/\{ sealRunners \} =[^\n]*(?:import|load)\([^\n]*core\/runner-registry\.[jt]s/);
+  const loads = moduleLoads(source).filter(load => load.form !== 'static');
+  const loaded = (name: string, module: RegExp) => loads.some(load => load.names.join() === name && module.test(load.specifier));
+  expect(loaded('loadBundledRunners', /(?:^|\/)plugin\/loader\.[jt]s$/), 'destructures loadBundledRunners from a load of plugin/loader').toBe(true);
+  expect(loaded('sealRunners', /(?:^|\/)core\/runner-registry\.[jt]s$/), 'destructures sealRunners from a load of core/runner-registry').toBe(true);
   const load = source.search(/^\s*await loadBundledRunners\(\);?$/m);
   const seal = source.search(/^\s*sealRunners\(\);?$/m);
   expect(load).toBeGreaterThan(-1);

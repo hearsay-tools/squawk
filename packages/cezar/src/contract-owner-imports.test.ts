@@ -79,6 +79,7 @@ function fileIndirectImports(path: string, text: string, owners: Owners, inContr
  * A specifier written with an escape, such as `'./deleg\u0061tion.ts'`, does not match the text, so a file with a backslash in a `from` string is parsed too.
  */
 const mayTakeFrom = (text: string, specifiers: string[]) =>
+  // oxlint-disable-next-line cez/regex-module-syntax -- plain-text pre-filter; fileIndirectImports parses every file it lets through
   specifiers.some((specifier) => text.includes(specifier)) || /\bfrom\s*(['"])[^'"\n]*\\/.test(text);
 
 /** Each `<file>: <name> from <module>, owned by <owner>` the Squawk and contract sources take the long way. */

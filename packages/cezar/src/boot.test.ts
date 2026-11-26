@@ -2,6 +2,8 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse } from '@babel/parser';
+import { traverse } from '@babel/types';
 import { afterEach, expect, it, vi } from 'vitest';
 import { BUILT_IN_RUNNER_IDS } from './core/built-in-runner-ids.testkit.ts';
 import { bundledRunnersDir } from './plugin/bundled-runners.ts';
@@ -199,10 +201,18 @@ it('does not load host plugins twice when a failed hook is retried', async () =>
 
 it('seals registries from boot.ts and the registry definitions only', () => {
   const sealCall = /\bseal[A-Z][A-Za-z]*\(/;
-  const sealFunction = /^\s*(?:export\s+)?(?:async\s+)?function\s+seal[A-Z]/m;
+  // A function declaration named seal<Name>, read from the syntax tree.
+  const sealFunction = (source: string) => {
+    let found = false;
+    traverse(parse(source, { sourceType: 'module', plugins: ['typescript'] }), node => {
+      if ((node.type === 'FunctionDeclaration' || node.type === 'TSDeclareFunction') && /^seal[A-Z]/.test(node.id?.name ?? '')) found = true;
+    });
+    return found;
+  };
   const offenders = productionSources().filter(file => !SEAL_ALLOWLIST.has(file)).filter(file => {
     const source = readFileSync(join(srcRoot, file), 'utf8');
-    return sealFunction.test(source) || sealCall.test(source);
+    // Plain-text pre-filter: a file without "seal" can declare no seal function.
+    return sealCall.test(source) || (source.includes('seal') && sealFunction(source));
   });
   expect(offenders).toEqual([]);
 });

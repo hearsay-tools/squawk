@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
+import { moduleLoads } from './core/module-loads.testkit.ts';
 import { repoRoot } from './lint/source-rule.ts';
 
 // Each Node entry outside index.ts that opens a run store and can delete, reclaim or archive a
@@ -22,7 +23,10 @@ const ENTRIES: ReadonlyArray<{ entry: string; call: RegExp }> = [
 
 it.each(ENTRIES)('$entry seals the built-in removal slots at its startup', ({ entry, call }) => {
   const source = readFileSync(join(repoRoot, entry), 'utf8');
-  expect(source).toMatch(/registerBuiltInRunSlots, sealBuiltInRunSlots \} = await (?:import\(new URL\(|load\()'built-in-run-slots\.js'|^const \{ registerBuiltInRunSlots, sealBuiltInRunSlots \} = await load\('built-in-run-slots\.js'\)$|^import \{ registerBuiltInRunSlots, sealBuiltInRunSlots \} from '(?:\.\.\/)+(?:packages\/cezar\/)?src\/built-in-run-slots\.ts';$/m);
+  const slots = moduleLoads(source).filter(load => load.names.join() === 'registerBuiltInRunSlots,sealBuiltInRunSlots');
+  expect(slots.some(({ form, specifier }) => form === 'static'
+    ? /^(?:\.\.\/)+(?:packages\/cezar\/)?src\/built-in-run-slots\.ts$/.test(specifier)
+    : (form === 'import-url' || form === 'load') && specifier === 'built-in-run-slots.js'), 'binds both slot functions from built-in-run-slots').toBe(true);
   expect(source).toMatch(call);
   expect(source).toMatch(/^(\s*)registerBuiltInRunSlots\(\);?\n\1sealBuiltInRunSlots\(\);?$/m);
 });
