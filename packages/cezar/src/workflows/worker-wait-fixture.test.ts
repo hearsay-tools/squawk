@@ -34,15 +34,17 @@ describe('service-ready worker-wait fixture (hearsay-tools/cezarion#1752)', () =
    *  releases it with a runner whose session cannot start, so the step fails before any session. */
   function gateRunnerLoad() {
     const real = runnersUnderTest();
-    const reached = Promise.withResolvers<void>(); const gate = Promise.withResolvers<Error | undefined>();
+    let reachedLoad!: () => void; let open!: (failure: Error | undefined) => void;
+    const reached = new Promise<void>(resolve => { reachedLoad = resolve; });
+    const gate = new Promise<Error | undefined>(resolve => { open = resolve; });
     useRunners(async backend => {
-      reached.resolve();
-      const failure = await gate.promise; const runner = await real(backend);
+      reachedLoad();
+      const failure = await gate; const runner = await real(backend);
       if (failure) vi.spyOn(runner, 'startSession').mockImplementation(() => { throw failure; });
       return runner;
     });
-    onTestFinished(() => { vi.useRealTimers(); gate.resolve(new Error('runner load gate closed')); useRunners(real); });
-    return { reached: reached.promise, release: () => gate.resolve(undefined), fail: (error: Error) => gate.resolve(error) };
+    onTestFinished(() => { vi.useRealTimers(); open(new Error('runner load gate closed')); useRunners(real); });
+    return { reached, release: () => open(undefined), fail: (error: Error) => open(error) };
   }
   /** The run the fixture started, while `parent()` still waits on it. */
   const startingRun = () => store.queries.listRunIds()[0]!;
