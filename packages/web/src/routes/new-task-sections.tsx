@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckIcon, ChevronDownIcon, CpuIcon, GaugeIcon, SlidersHorizontalIcon, TerminalIcon } from '@/components/design-icons'
-import type { RefObject } from 'react'
+import { useState, type RefObject } from 'react'
+import { useIsDesktop } from '@/lib/use-desktop'
 
 import { Link } from '@/lib/project-router'
 
@@ -174,8 +175,10 @@ export function ExecutionSettings({
 }) {
   const { displayRunner } = engine
   const registered = useRunners().data
+  const desktop = useIsDesktop()
+  const [expanded, setExpanded] = useState<boolean | undefined>()
   return (
-    <details data-slot="execution-options" open className="group rounded-xl border border-border bg-card xl:self-start">
+    <details data-slot="execution-options" open={expanded ?? desktop} onToggle={(event) => setExpanded(event.currentTarget.open)} className="group rounded-xl border border-border bg-card xl:self-start">
       <summary className="flex min-h-[44px] cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-xs text-muted-foreground pointer-hover:bg-muted/50 active:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground [&::-webkit-details-marker]:hidden">
         <SlidersHorizontalIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />
         <span className="font-medium text-foreground">Execution settings</span>
@@ -206,7 +209,7 @@ export function ExecutionSettings({
             <NotifyWebhookToggle on={webhook.on} targets={webhook.targets} onChange={webhook.onChange} />
           ) : null}
         </div>
-        <CompletionControls embedded archiveWhenDone={draft.archiveWhenDone} autoMergePr={draft.autoMergePr} onChange={update} disabled={completionDisabled} />
+        <CompletionControls embedded archiveWhenDone={draft.archiveWhenDone} autoMergePr={draft.autoMergePr} onChange={update} disabled={completionDisabled} disabledReason="Unavailable while starting the task or preparing its plan." />
         <TaskAccessControls embedded allowWorkers={draft.allowWorkers} allowMessaging={draft.allowMessaging} onChange={update} disabled={completionDisabled} />
       </div>
     </details>
@@ -426,7 +429,7 @@ function ModeSegment({
         )}
       >
         {!planFirst ? <CheckIcon aria-hidden="true" className="size-3.5" /> : null}
-        Start
+        Run now
       </button>
       <button
         type="button"

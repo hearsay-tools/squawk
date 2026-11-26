@@ -18,11 +18,11 @@
 /* #478/#460: desktop starts at 768px, but a resized 420px sidebar can leave the dock
  * only 348px. Query the dock itself so the pill tracks share its actual width. */
 [data-route='task-thread'] [data-slot='thread-dock'] { container: thread-dock / inline-size; }
-[data-route='task-thread'] [data-slot='thread-jump'] { position: fixed; inset-inline-end: 24px; inset-block-end: calc(24px + env(safe-area-inset-bottom, 0px)); }
+[data-route='task-thread'] [data-slot='thread-jump'] { position: fixed; inset-inline: 16px; inset-block-end: calc(24px + env(safe-area-inset-bottom, 0px)); max-inline-size: var(--measure); margin-inline: auto; padding-block: 8px; }
 @media (min-width: 768px) {
   [data-slot='main']:has([data-route='task-thread']) { scroll-padding-block: calc(var(--thread-header-height, 0px) + 8px) calc(var(--thread-footer-height, 0px) + 8px); }
   [data-route='task-thread'] [data-slot='thread-dock'] { position: sticky; inset-block-end: 0; }
-  [data-route='task-thread'] [data-slot='thread-jump'] { position: absolute; inset-block-end: 100%; margin-block-end: 8px; }
+  [data-route='task-thread'] [data-slot='thread-jump'] { position: absolute; inset-inline: 0; inset-block-end: 100%; margin-block-end: 8px; padding-inline: 64px; }
   /* Expanded details yield space to the composer on short desktop viewports. */
   [data-route='task-thread'] [data-slot='thread-footer-content'] { --thread-footer-limit: min(60dvh, calc(var(--thread-viewport-height, 100dvh) - var(--thread-header-height, 0px) - var(--spacing) * 5.5)); max-block-size: var(--thread-footer-limit); }
   [data-route='task-thread'] [data-slot='thread-footer-content'] > :not([data-slot='run-activity-dock']) { flex-shrink: 0; }
@@ -103,3 +103,10 @@
 /* A docked live preview (#781) halves the transcript column; the 64px reading gutters would eat it. */
 [data-slot='task-split'][data-pane='open'] [data-route='task-thread'] [data-slot='session-conversation'],
 [data-slot='task-split'][data-pane='open'] [data-route='task-thread'] [data-slot='thread-dock'] > div { padding-inline: 18px; }
+
+[data-route='task-thread'] [data-slot='ask-card'] { scroll-margin-block: 24px; }
+
+@media (max-width: 767px) {
+  /* Pending answers keep the jump control in flow, clear of the ask options. */
+  [data-route='task-thread'] [data-slot='thread-jump'][data-pending-ask] { position: relative; inset-inline: auto; inset-block-end: auto; inline-size: 100%; padding-inline: 16px; }
+}

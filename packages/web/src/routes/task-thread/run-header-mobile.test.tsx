@@ -285,9 +285,8 @@ describe('RunHeader phone layout under the top bar (#621)', () => {
     renderScreen('/tasks/r1', finished, 'changes')
     const header = document.querySelector('[data-slot="run-header"]') as HTMLElement
     expect(header.querySelector('[data-slot="run-title-row"]')).toBeNull()
-    const actions = header.querySelector('[data-slot="run-mobile-actions"]') as HTMLElement
-    const tabs = header.querySelector('[data-slot="run-tabs"]') as HTMLElement
-    expect(actions.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(header.querySelector('[data-slot="run-mobile-actions"]')).toBeNull()
+    expect(header.querySelector('[data-slot="run-tabs"]')).not.toBeNull()
   })
 
   it('renders no actions row when nothing applies', () => {
@@ -296,11 +295,13 @@ describe('RunHeader phone layout under the top bar (#621)', () => {
     expect(header.querySelector('[data-slot="run-mobile-actions"]')).toBeNull()
   })
 
-  it('carries Archive on the git tabs in the actions row under the top bar, 44px tall', () => {
+  it('puts Archive in the overflow menu on git tabs without a standalone actions row', async () => {
     renderScreen('/tasks/r1', finished, 'changes')
     const header = document.querySelector('[data-slot="run-header"]') as HTMLElement
-    const archive = within(header).getByRole('button', { name: /archive/i })
-    expect(archive.closest('[data-slot="run-mobile-actions"]')).not.toBeNull()
+    expect(within(header).queryByRole('button', { name: /archive/i })).toBeNull()
+    expect(header.querySelector('[data-slot="run-mobile-actions"]')).toBeNull()
+    fireEvent.pointerDown(within(topBar()).getByRole('button', { name: 'Run actions' }))
+    expect(await screen.findByRole('menuitem', { name: 'Archive task' })).toBeTruthy()
     expect(within(topBar()).queryByRole('button', { name: /archive/i })).toBeNull()
   })
 })

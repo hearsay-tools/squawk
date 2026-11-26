@@ -461,3 +461,12 @@ describe('the accept celebration', () => {
     expect(document.querySelector('[data-slot="accept-celebration"]')).toBeNull()
   })
 })
+
+it('keeps review actions in the banner before the diff', async () => {
+  stubFetch()
+  renderWithProviders(<ReviewPanel run={run('review')} />)
+  const banner = document.querySelector('[data-slot="review-banner"]')!
+  expect(banner.querySelector('[data-slot="review-accept"]')).not.toBeNull()
+  expect(banner.querySelector('[data-slot="review-send-back"]')).not.toBeNull()
+  expect(banner.querySelector('[data-slot="review-draft-pr"]')).not.toBeNull()
+})

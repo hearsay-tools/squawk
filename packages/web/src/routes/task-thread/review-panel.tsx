@@ -35,19 +35,21 @@ export function ReviewPanel({ run }: { run: ApiRun }) {
     <section data-slot="review-panel" aria-label="Review the changes" className="flex flex-col gap-3">
       <div
         data-slot="review-banner"
-        className="flex items-center gap-2.5 rounded-md border border-accent-strong/30 bg-accent-strong/10 px-3.5 py-2.5"
+        className="flex flex-col gap-3 rounded-md border border-accent-strong/30 bg-accent-strong/10 px-3.5 py-2.5"
       >
-        <EyeIcon className="size-4 shrink-0 text-accent-icon" aria-hidden="true" />
-        <p className="min-w-0 text-[13px]">
-          <span className="font-semibold">Review the changes before anything lands.</span>{' '}
-          <span className="text-muted-foreground">
-            Read the diff, send notes back, draft a PR — or accept. Nothing merges on its own.
-          </span>
-        </p>
+        <div className="flex min-w-0 items-start gap-2.5">
+          <EyeIcon className="size-4 shrink-0 text-accent-icon" aria-hidden="true" />
+          <p className="min-w-0 break-words text-[13px] leading-relaxed">
+            <span className="font-semibold">Review the changes before anything lands.</span>{' '}
+            <span className="block text-muted-foreground">
+              Read the diff, send notes back, draft a PR — or accept. Nothing merges on its own.
+            </span>
+          </p>
+        </div>
+        <ReviewActions run={run} />
       </div>
 
       <RunDiff runId={run.id} />
-      <ReviewActions run={run} />
     </section>
   )
 }
@@ -110,34 +112,6 @@ function ReviewActions({ run }: { run: ApiRun }) {
 
   return (
     <div data-slot="review-actions" className="flex flex-col gap-2">
-      <Textarea
-        ref={notesRef}
-        data-slot="review-notes"
-        aria-label="Notes for the agent"
-        placeholder="Notes for the agent — what should change?"
-        rows={2}
-        value={notes}
-        onChange={(event) => setNotes(event.target.value)}
-        onKeyDown={(event) => {
-          // The spec's cross-surface chord: ⌘↵ / Ctrl+↵ submit review notes. Unlike the
-          // composer, plain Enter stays a newline — notes are multi-line prose, and this box
-          // has no legacy Enter-sends muscle memory to keep.
-          const submits = isSubmitShortcut({
-            key: event.key,
-            shiftKey: event.shiftKey,
-            metaKey: event.metaKey,
-            ctrlKey: event.ctrlKey,
-            altKey: event.altKey,
-            repeat: event.repeat,
-            isComposing: event.nativeEvent.isComposing,
-          })
-          if (submits && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault()
-            submitNotes()
-          }
-        }}
-        className="min-h-[52px] text-[13px]"
-      />
       {!continuation.canContinue ? (
         <p
           id="review-provider-guidance"
@@ -154,7 +128,10 @@ function ReviewActions({ run }: { run: ApiRun }) {
           ) : null}
         </p>
       ) : null}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 [&_button]:min-h-11 [&_a]:min-h-11">
+        <Button asChild variant="outline" size="sm">
+          <Link to={`/tasks/${run.id}/changes`}><EyeIcon aria-hidden="true" />Review changes</Link>
+        </Button>
         <Button
           data-slot="review-send-back"
           variant="outline"
@@ -201,7 +178,7 @@ function ReviewActions({ run }: { run: ApiRun }) {
           data-slot="review-accept"
           variant="primary"
           size="sm"
-          className="ml-auto"
+          className="[margin-inline-start:auto]"
           title={finishTitle('review')}
           disabled={finish.isPending}
           onClick={() => finish.mutate()}
@@ -210,6 +187,34 @@ function ReviewActions({ run }: { run: ApiRun }) {
           Accept
         </Button> : null}
       </div>
+      <Textarea
+        ref={notesRef}
+        data-slot="review-notes"
+        aria-label="Notes for the agent"
+        placeholder="Notes for the agent — what should change?"
+        rows={2}
+        value={notes}
+        onChange={(event) => setNotes(event.target.value)}
+        onKeyDown={(event) => {
+          // The spec's cross-surface chord: ⌘↵ / Ctrl+↵ submit review notes. Unlike the
+          // composer, plain Enter stays a newline — notes are multi-line prose, and this box
+          // has no legacy Enter-sends muscle memory to keep.
+          const submits = isSubmitShortcut({
+            key: event.key,
+            shiftKey: event.shiftKey,
+            metaKey: event.metaKey,
+            ctrlKey: event.ctrlKey,
+            altKey: event.altKey,
+            repeat: event.repeat,
+            isComposing: event.nativeEvent.isComposing,
+          })
+          if (submits && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault()
+            submitNotes()
+          }
+        }}
+        className="min-h-[52px] text-base md:text-[13px]"
+      />
       {manual !== null ? <ManualMergeLine command={manual} /> : null}
     </div>
   )

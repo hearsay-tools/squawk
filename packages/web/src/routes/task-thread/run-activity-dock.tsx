@@ -83,6 +83,7 @@ interface RunActivityDockProps {
   currentThread: ThreadState
   /** `currentThread` holds the run's whole current state (`RunHistoryState.currentComplete`).
    *  Absent: it does. */
+  pendingAsk?: boolean | undefined
   currentComplete?: boolean | undefined
   onOpenWorker?: ((id: string) => void) | undefined
   /** The transcript's reader scroll signals (`useThreadScroll().subscribeReaderScroll`). */
@@ -110,6 +111,7 @@ function SessionActivityCard({
   thread,
   currentThread,
   currentComplete = true,
+  pendingAsk = false,
   onOpenWorker,
   readerScroll,
   prNumbers,
@@ -123,7 +125,7 @@ function SessionActivityCard({
   const desktop = useIsDesktop()
   const identity = useAgentIdentity(run)
   // `chosen` is the reader's choice; `open` is what shows, after a temporary fold for reading.
-  const [chosen, setChosen] = useState(() => openByRun.get(run.id) ?? false)
+  const [chosen, setChosen] = useState(() => pendingAsk ? false : openByRun.get(run.id) ?? false)
   const scrollFold = useReaderScrollFold(readerScroll, chosen)
   const open = scrollFold.open
   // Nested rows start closed on every viewport — the expanded card is a list of section heads,

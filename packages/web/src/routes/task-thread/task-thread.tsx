@@ -636,7 +636,7 @@ function ThreadFooterDock({
     >
       {/* Desktop places Jump above the sticky footer; phones keep it in the viewport. */}
       {scroll.pillVisible ? (
-        <div data-slot="thread-jump" className="pointer-events-none z-30 flex justify-center">
+        <div data-slot="thread-jump" data-pending-ask={needsAnswer || undefined} className="pointer-events-none z-30 flex justify-center">
           <JumpToLatestPill
             pendingQuestions={pendingQuestions}
             onJump={onJump}
@@ -644,10 +644,11 @@ function ThreadFooterDock({
         </div>
       ) : null}
       <div data-slot="thread-footer-content" className="mx-auto flex w-full max-w-[var(--measure)] flex-col gap-1.5 px-[14px] md:gap-2.5 md:px-16">
-        {/* Keyed by run id, like the docks it replaced: the route survives a task change, so
+        {/* Keyed by run and pending-answer state so each ask starts folded. The route survives
+            a task change: the route survives a task change, so
             an unkeyed dock would carry the previous run's collapse state — its own and every
             nested section's — into the next one. */}
-        <RunActivityDock key={run.id} run={run} thread={thread} currentThread={currentThread} currentComplete={currentComplete} onOpenWorker={onOpenWorker} readerScroll={scroll.subscribeReaderScroll} />
+        <RunActivityDock key={`${run.id}:${needsAnswer}`} pendingAsk={needsAnswer} run={run} thread={thread} currentThread={currentThread} currentComplete={currentComplete} onOpenWorker={onOpenWorker} readerScroll={scroll.subscribeReaderScroll} />
 
         {/* A usage-limit hold is a `waiting` run with a resume booked — the dock says when,
             before the composer offers a Continue nobody needs to press. */}

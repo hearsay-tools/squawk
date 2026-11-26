@@ -1183,3 +1183,16 @@ describe('the composer runner pill carries the account', () => {
     expect(postedBody()).not.toHaveProperty('agentProfile')
   })
 })
+
+it('starts Execution settings collapsed on mobile and allows manual expansion', async () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }))
+  serve()
+  renderNewTask()
+  await pillReady()
+  const summary = screen.getByText('Execution settings')
+  const disclosure = summary.closest('details')!
+  expect(disclosure.open).toBe(false)
+  fireEvent.click(summary)
+  expect(disclosure.open).toBe(true)
+  expect(screen.getByRole('radio', { name: 'Run now' })).toBeTruthy()
+})

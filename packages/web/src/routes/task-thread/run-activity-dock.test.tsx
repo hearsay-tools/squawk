@@ -106,9 +106,10 @@ function renderDock(
   relationships: 'ok' | 'error' = 'ok',
   overrides: Record<string, () => Response> = {},
   // Activity starts folded (hearsay-tools/cezarion#1601); most cases read the open card.
-  { open = true, readerScroll, sticky = false, currentComplete }: {
+  { open = true, readerScroll, sticky = false, currentComplete, pendingAsk }: {
     open?: boolean
     currentComplete?: boolean
+    pendingAsk?: boolean
     readerScroll?: ((listener: ReaderScrollListener) => () => void) | undefined
     sticky?: boolean
   } = {},
@@ -138,7 +139,7 @@ function renderDock(
       <ProjectScopeProvider projectId="sample">
         <MemoryRouter initialEntries={[`/p/sample/tasks/${record.id}`]}>
           <div data-slot="thread-dock" style={sticky ? { position: 'sticky' } : undefined}>
-            <RunActivityDock run={current} currentThread={reduceThread(events)} currentComplete={currentComplete} readerScroll={readerScroll} />
+            <RunActivityDock pendingAsk={pendingAsk} run={current} currentThread={reduceThread(events)} currentComplete={currentComplete} readerScroll={readerScroll} />
           </div>
         </MemoryRouter>
       </ProjectScopeProvider>
@@ -962,4 +963,16 @@ describe('Session activity — folded by default, folded while reading up (#1601
     view.unmount()
     expect(feed.size()).toBe(0)
   })
+})
+
+it('starts folded for a pending ask despite a saved open choice, then allows manual expansion', () => {
+  const record = run()
+  const first = renderDock(record)
+  expect(screen.getByRole('button', { name: /^Session activity/ }).getAttribute('aria-expanded')).toBe('true')
+  first.unmount()
+  renderDock(record, EVENTS, workers, 'ok', {}, { open: false, pendingAsk: true })
+  const toggle = screen.getByRole('button', { name: /^Session activity/ })
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(toggle)
+  expect(toggle.getAttribute('aria-expanded')).toBe('true')
 })

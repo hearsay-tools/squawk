@@ -52,7 +52,7 @@ import { queuePositions, runTitle } from '@/lib/task-groups'
 import { taskItemTabs, type TaskItemTab } from '@/lib/tasks-table'
 import { cn } from '@/lib/utils'
 
-import { ArchiveButton } from './archive-action'
+import { ArchiveButton, ArchiveConfirmDialog, archiveActionLabel, useArchiveRun } from './archive-action'
 import { CompletionStatus } from './completion-status'
 import { runStatusLine, statusLineText } from './run-status'
 import { OpenInMenuForRun, copyToClipboard, useResumeInTerminal, useRunReferenceRequests } from './run-workspace'
@@ -203,16 +203,14 @@ function AutoArchiveNote({ run }: { run: ApiRun }) {
 /** Pushed phone screen: the controls the dropped title row used to carry, in a row of their
  *  own (hearsay-tools/cezarion#621) — rendered only when one of them applies, so an empty row never sits between
  *  the top bar and the tabs. */
-function MobileActionsRow({ shown, run, archiveButton, previewToggle }: {
+function MobileActionsRow({ shown, run, previewToggle }: {
   shown: boolean
   run: ApiRun
-  archiveButton: ReactNode
   previewToggle: ReactNode
 }) {
   const handoffVisible = useHandoffActionVisible(run)
-  return shown && (archiveButton || previewToggle || handoffVisible) ? (
+  return shown && (previewToggle || handoffVisible) ? (
     <div data-slot="run-mobile-actions" className="flex flex-wrap items-center gap-2 pt-2">
-      {archiveButton}
       {previewToggle}
       <HandoffAction run={run} />
     </div>
@@ -373,7 +371,7 @@ export function RunHeader({
       className={cn(
         // Pushed phone screen: the facet tabs sit directly under the shell's top bar (#621), so
         // the header has no top padding of its own there.
-        'relative z-20 bg-background px-[18px] md:px-9 md:pt-7',
+        'relative z-20 bg-background px-4 md:px-9 md:pt-7',
         phoneBar ? 'pt-0' : 'pt-[18px]',
         tab === 'session' && 'md:sticky md:top-0',
       )}
@@ -402,7 +400,7 @@ export function RunHeader({
               {statusLineText(statusLine)}
             </Pill>
             <span className="ml-auto flex shrink-0 items-center gap-1 md:gap-2.5">
-              {archiveButton}
+              {isDesktop ? archiveButton : null}
               {previewToggle}
               <HandoffAction run={run} />
               {actionsKebab}
@@ -413,7 +411,6 @@ export function RunHeader({
         <MobileActionsRow
           shown={barSlot !== null}
           run={run}
-          archiveButton={archiveButton}
           previewToggle={previewToggle}
         />
 
@@ -588,9 +585,14 @@ function ActionsKebab({
 }) {
   const flags = runActionFlags(run)
   const command = resumeHint(run)
+  const desktop = useIsDesktopViewport()
+  const archive = useArchiveRun(run.id)
+  const [archiveConfirm, setArchiveConfirm] = useState(false)
   const completionPatch = usePatchRun(run.id)
   const completionHelpId = useId()
   return (
+    <>
+    <ArchiveConfirmDialog run={run} open={archiveConfirm} onOpenChange={setArchiveConfirm} onConfirm={() => { archive.mutate(true); setArchiveConfirm(false) }} />
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-sm" className="size-11" aria-label="Run actions">
@@ -599,6 +601,7 @@ function ActionsKebab({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" data-slot="run-actions-menu" className="w-[270px] max-w-[calc(100vw-2rem)] p-3">
         <DropdownMenuLabel className="px-2 py-3 text-[12px] font-normal text-muted-foreground">TASK ACTIONS</DropdownMenuLabel>
+        {!desktop && flags.archive && !run.archiveBlocker ? <DropdownMenuItem disabled={archive.isPending} onSelect={() => run.archived ? archive.mutate(false) : setArchiveConfirm(true)}>{archiveActionLabel(run)}</DropdownMenuItem> : null}
         <DropdownMenuItem onSelect={onToggleNotes}>
           <FileTextIcon aria-hidden="true" /> Notes / handoff
         </DropdownMenuItem>
@@ -649,6 +652,7 @@ function ActionsKebab({
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
+    </>
   )
 }
 

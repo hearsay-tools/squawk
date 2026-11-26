@@ -872,7 +872,7 @@ export function JumpToLatestPill({ onJump, pendingQuestions = 0 }: { onJump: () 
       data-pending-questions={pendingQuestions > 0 ? pendingQuestions : undefined}
       // Never forward the click event: the jump's optional argument is a focus target.
       onClick={() => onJump()}
-      className="pointer-events-auto inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-full border border-border bg-background px-3.5 text-xs font-medium text-muted-foreground shadow-modal hover:text-foreground"
+      className="pointer-events-auto inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-full border border-border bg-background px-3.5 text-xs font-medium text-muted-foreground shadow-sm hover:text-foreground"
     >
       <ArrowDownIcon aria-hidden className="size-3.5" />
       {jumpLabel(pendingQuestions)}
