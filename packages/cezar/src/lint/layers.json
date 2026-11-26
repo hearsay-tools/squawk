@@ -29,6 +29,7 @@
       "project-fence.ts",
       "project-paths.ts",
       "session-context.ts",
+      "session-context-file.ts",
       "task-branch-head.ts",
       "ui-state.ts",
       "worktree-manifest.ts",

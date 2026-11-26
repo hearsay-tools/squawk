@@ -67,6 +67,34 @@ rules:
 | `target` | `parent`, `worker` or `both` (the default). `parent` is every task that is not an owned worker. |
 | `template` | Required. Text with `{{…}}` substitutions. |
 
+### Edit the rules in the cockpit
+
+**Project Settings → Session context** shows the built-in handoff block, then the project's
+`context.yaml` in a YAML editor. It reads and writes the same file a launch reads: `.ai/squawk/`
+in a project that starts there or has moved, `.ai/cezar/` in a project that has not.
+
+- **Add rule** adds a starter rule. The chips insert a variable at the cursor. Squawk never
+  rewrites the YAML, so your comments and formatting stay.
+- The server checks the draft as you type. It lists each problem with its line: YAML that does
+  not parse, another `version`, a rule field that is not valid, the reserved `handoff` id and
+  every rule that shares an id. Save stays off until no problem is left, and the draft stays.
+- The preview renders the draft for a parent or a worker. It reads `{{file:…}}` paths from the
+  project checkout and shows sample values such as `<run.id>` for task variables, after a sample
+  handoff. Each block shows its status, its size and why it was skipped. The meter shows the bytes
+  used against the 65,536-byte limit.
+- A save is refused when the file changed on disk after you opened it. You can show the disk
+  version, or overwrite it. Your draft stays either way.
+- A file that is not valid UTF-8, too large, or not a regular file is read only, and so is a copy
+  in the fallback project directory.
+- Squawk does not commit the file. The rules apply from the next session launch.
+- A remote cockpit can save the file without `remote-settings enable`. The file runs no host
+  command, and its file includes cannot leave the worktree
+  ([ADR 0055](adr/0055-grant-remote-settings-administration-from-the-host.md) gates only settings
+  that persist host commands).
+
+The routes are `GET /api/v1/p/:projectId/session-context`, `PUT …/session-context` (with the
+version the editor read) and `POST …/session-context/preview`.
+
 ### Substitutions
 
 | Token | Value |
