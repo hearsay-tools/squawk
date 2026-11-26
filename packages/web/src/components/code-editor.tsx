@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 
 import { canonicalLang, highlight, highlightSync, type SynToken } from '@/lib/highlighter'
 import { cn } from '@/lib/utils'
@@ -44,19 +44,23 @@ function useCodeTokens(text: string, lang: string): SynToken[][] {
 
 export interface CodeEditorProps {
   value: string
-  onChange?: (next: string) => void
+  onChange?: ((next: string) => void) | undefined
   /** Highlighter fence language (the catalog's `format`: json | jsonc | toml | yaml | markdown). */
   language: string
-  readOnly?: boolean
+  readOnly?: boolean | undefined
   className?: string | undefined
   'aria-label'?: string
+  /** 1-based lines to mark as having a problem. */
+  markedLines?: ReadonlySet<number> | undefined
+  /** The text field, for callers that move the caret or insert text. */
+  inputRef?: RefObject<HTMLTextAreaElement | null> | undefined
 }
 
 /** Shared layout so the textarea and the highlighted underlay align to the pixel. */
 const SURFACE =
-  'code-editor-surface m-0 min-h-full w-full whitespace-pre font-mono text-xs leading-[1.7] px-3 py-2 [tab-size:2]'
+  'code-editor-surface m-0 min-h-full w-full whitespace-pre font-mono text-xs pointer-coarse:text-base leading-[1.7] px-3 py-2 [tab-size:2]'
 
-export function CodeEditor({ value, onChange, language, readOnly, className, ...aria }: CodeEditorProps) {
+export function CodeEditor({ value, onChange, language, readOnly, className, markedLines, inputRef, ...aria }: CodeEditorProps) {
   const tokens = useCodeTokens(value, language)
   const preRef = useRef<HTMLPreElement>(null)
   const taRef = useRef<HTMLTextAreaElement>(null)
@@ -82,7 +86,11 @@ export function CodeEditor({ value, onChange, language, readOnly, className, ...
         className={cn(SURFACE, 'pointer-events-none absolute inset-0 overflow-auto text-soft-foreground')}
       >
         {tokens.map((line, i) => (
-          <span key={i} className="block">
+          <span
+            key={i}
+            data-marked={markedLines?.has(i + 1) ? '' : undefined}
+            className={cn('block', markedLines?.has(i + 1) && '-mx-3 bg-destructive/15 px-3 shadow-[inset_2px_0_0_var(--danger)]')}
+          >
             {line.length === 0 ? (
               '\n'
             ) : (
@@ -99,7 +107,10 @@ export function CodeEditor({ value, onChange, language, readOnly, className, ...
         ))}
       </pre>
       <textarea
-        ref={taRef}
+        ref={(element) => {
+          taRef.current = element
+          if (inputRef) inputRef.current = element
+        }}
         data-slot="code-editor-input"
         value={value}
         readOnly={readOnly}

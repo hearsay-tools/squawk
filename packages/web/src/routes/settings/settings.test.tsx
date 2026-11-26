@@ -128,7 +128,7 @@ afterEach(() => {
   document.documentElement.classList.remove('light')
 })
 
-const PROJECT_SECTIONS = ['sidebar', 'agent-defaults', 'agent-config', 'worktrees', 'prompt-templates']
+const PROJECT_SECTIONS = ['sidebar', 'agent-defaults', 'agent-config', 'session-context', 'worktrees', 'prompt-templates']
 const GLOBAL_SECTIONS = [
   'appearance',
   'notifications',

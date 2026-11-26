@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { utf8Bytes } from './utf8.ts';
 
 /** CI observations never authorize merging, accepting review, or completing a task. */
 export const CI_WAIT_LIMITATION = 'Passing reported checks does not prove that every expected workflow has appeared or that the PR is merge-ready. This observation is not merge approval.';
@@ -41,14 +42,6 @@ export const ciWaitErrorCodeSchema = z.enum(['invalid_request', 'unsupported_hos
 export const ciWaitErrorSchema = z.object({ code: ciWaitErrorCodeSchema, message: z.string().max(4096) }).strict();
 export type CiWaitError = z.infer<typeof ciWaitErrorSchema>;
 export type CiWaitErrorCode = z.infer<typeof ciWaitErrorCodeSchema>;
-function utf8Bytes(value: string): number {
-  let bytes = 0;
-  for (const char of value) {
-    const point = char.codePointAt(0)!;
-    bytes += point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
-  }
-  return bytes;
-}
 /** Current merge progress, not attribution to a particular command or permission to retry it. */
 export const mergeBlockSchema = z.object({
   reason: z.enum(['conflict', 'no_pending_merge']),

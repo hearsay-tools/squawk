@@ -1,5 +1,5 @@
 import { BellIcon, BotIcon, FoldersIcon, GaugeIcon, KeyRoundIcon, PaletteIcon } from '@/components/design-icons'
-import { FileCogIcon, FileTextIcon, FolderGit2Icon } from 'lucide-react'
+import { FileCogIcon, FileStackIcon, FileTextIcon, FolderGit2Icon } from 'lucide-react'
 import { lazy, type ComponentType, type SVGProps } from 'react'
 
 const GlobalAgentsSection = lazy(() => import('./accounts-section').then((m) => ({ default: m.GlobalAgentsSection })))
@@ -10,6 +10,7 @@ const NotificationsSection = lazy(() => import('./notifications-section').then((
 const ProjectsSection = lazy(() => import('./projects-section').then((m) => ({ default: m.ProjectsSection })))
 const PromptTemplatesSection = lazy(() => import('./prompt-templates-section').then((m) => ({ default: m.PromptTemplatesSection })))
 const ResourcesSection = lazy(() => import('./resources-section').then((m) => ({ default: m.ResourcesSection })))
+const SessionContextSection = lazy(() => import('./session-context-section').then((m) => ({ default: m.SessionContextSection })))
 const SidebarSection = lazy(() => import('./sidebar-section').then((m) => ({ default: m.SidebarSection })))
 const WorktreesSection = lazy(() => import('./worktrees-section').then((m) => ({ default: m.WorktreesSection })))
 
@@ -34,6 +35,7 @@ export type SettingsSectionId =
   | 'agents'
   | 'agent-defaults'
   | 'agent-config'
+  | 'session-context'
   | 'resources'
   | 'worktrees'
   | 'projects'
@@ -79,6 +81,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description: 'Edit the coding agents’ own config files, per scope.',
     icon: FileCogIcon,
     component: AgentConfigSection,
+    scope: 'project',
+  },
+  {
+    id: 'session-context',
+    title: 'Session context',
+    description: 'Text Squawk puts at the start of every agent session it launches.',
+    icon: FileStackIcon,
+    component: SessionContextSection,
     scope: 'project',
   },
   {
