@@ -8,9 +8,10 @@ import { testHome } from '../home/test-home.testkit.ts';
 import type { RunStore } from '../runs/store.ts';
 import { IDLE_TIMEOUT_MS, type RunManager } from '../workflows/run.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-import { exemptionFor, HARNESS_ADAPTERS, type ScenarioName } from './harness-parity-core.testkit.ts';
-import type { Cells, HarnessRegistrar } from './harness-parity-registrar.testkit.ts';
+import type { ScenarioName } from './harness-parity-core.testkit.ts';
+import type { Cells } from './harness-parity-registrar.testkit.ts';
 import { RUN_ROWS } from './harness-parity-rows.testkit.ts';
+import type { RunRowCell } from './harness-parity-run-tier.rows.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import { driveRun, driveUnavailableProvider, type RunObservation } from './workflow-parity-core.testkit.ts';
 
@@ -87,10 +88,8 @@ function assertProviderHold(obs: RunObservation, label: string): void {
 
 const RUN_CELLS: Cells<typeof RUN_ROWS, RunCriterion> = {
   R17: {
-    // hearsay-tools/squawk#3337: an unavailable provider holds the run and retries it. Codex keeps
-    // its turn open and emits retryable errors (#550) until its no-progress bound ends the turn;
-    // the other wires answer 503 at once.
-    timeoutMs: 75_000,
+    // hearsay-tools/squawk#3337: an unavailable provider holds the run and retries it. Its drive
+    // bound is on the row in `harness-parity-rows.testkit.ts`.
     ...providerHold(),
     assert: obs => {
       assertProviderHold(obs, 'provider server error');
@@ -177,28 +176,11 @@ const RUN_CELLS: Cells<typeof RUN_ROWS, RunCriterion> = {
 };
 export const RUN_CRITERIA: readonly RunCriterion[] = RUN_ROWS.map(row => ({ ...row, ...RUN_CELLS[row.id] }));
 
-export function runRows({ runners, it }: HarnessRegistrar, criteria: readonly RunCriterion[]): void {
-  for (const backend of runners) {
-    for (const criterion of criteria) {
-      const exempt = exemptionFor(criterion.id, backend);
-      if (exempt?.kind === 'scenario-unconstructible') {
-        it(`${backend} is exempt from ${criterion.id} — ${exempt.reason}`, () => {
-          expect(HARNESS_ADAPTERS[backend]!.scenarios[criterion.scenario]!).toBeUndefined();
-        });
-        continue;
-      }
-      it(
-        exempt
-          ? `${backend} is exempt from ${criterion.id} — ${exempt.reason}`
-          : `${backend} ${criterion.name}`,
-        async () => {
-          const drive = criterion.id === 'R17' ? driveUnavailableProvider : driveRun;
-          const obs = await drive(backend, criterion.scenario, criterion.settled, criterion.timeoutMs);
-          if (exempt) expect(() => criterion.assert(obs)).toThrow();
-          else criterion.assert(obs);
-        },
-        (criterion.timeoutMs ?? 55_000) + 5_000,
-      );
-    }
-  }
-}
+/** The run tier's body for one row: drive the run, then assert the row, or that it fails where the runner is exempt. */
+export const runRowCell: RunRowCell = (backend, id, exempt) => async () => {
+  const criterion = RUN_CRITERIA.find(entry => entry.id === id)!;
+  const drive = criterion.id === 'R17' ? driveUnavailableProvider : driveRun;
+  const obs = await drive(backend, criterion.scenario, criterion.settled, criterion.timeoutMs);
+  if (exempt) expect(() => criterion.assert(obs)).toThrow();
+  else criterion.assert(obs);
+};

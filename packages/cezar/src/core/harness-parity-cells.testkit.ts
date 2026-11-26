@@ -2,7 +2,7 @@ import '../ci-wait/tools.testkit.ts';
 import '../built-in-run-slots.testkit.ts';
 import { UI_CRITERIA } from './ui-parity-rows.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
-import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentInput } from '@open-mercato/cezar-contract';
@@ -20,7 +20,7 @@ import { driveSeam, exemptionFor, promptFor, HARNESS_ADAPTERS, SHUTDOWN_CRITERIA
 import { PARITY_EXEMPTIONS } from './parity-exemptions.testkit.ts';
 import { HARNESS_PARITY_GROUPS, harnessParityCellsFile, harnessParityFile, type HarnessParityPart } from './harness-parity-parts.testkit.ts';
 import { describeHarnessGroups, vitestRegistration, type HarnessGroup, type HarnessParityScope, type HarnessPartScope, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
-import { CONTROL_CRITERIA } from './harness-parity-rows.testkit.ts';
+import { CONTROL_CRITERIA, HARNESS_PARITY_ROWS_FILE } from './harness-parity-rows.testkit.ts';
 import { RUN_CRITERIA } from './harness-parity-run-tier.testkit.ts';
 import { SEAM_CRITERIA } from './harness-parity-seam-tier.testkit.ts';
 import { parityRowId, PARITY_ROSTER, SCENARIO_RUNNER } from './parity-classes.testkit.ts';
@@ -73,6 +73,10 @@ import { describeHarnessParity as describeStartupParity, STARTUP_GROUPS } from '
  * Each part's cells live in `harness-parity-<part>.cells.testkit.ts`; the seam and run tier
  * tables they share live in `harness-parity-seam-tier.testkit.ts` and
  * `harness-parity-run-tier.testkit.ts`, and `harness-parity-registrar.testkit.ts` registers them.
+ * A part whose bodies load the workflow engine keeps its registration (titles, loops, branches and
+ * timeouts) in an engine-free `harness-parity-<part>.rows.testkit.ts`, and its cells module hands
+ * that module the bodies by row id, so a guard that reads only which rows register loads no engine
+ * (hearsay-tools/squawk#3962).
  * Each `harness-<runner>-<part>-parity.test.ts` imports only its part's module, so an edit behind
  * one part reruns only that part's files (hearsay-tools/cezarion#1288, hearsay-tools/cezarion#3242).
  * This module joins every part: `harness-parity.test.ts` runs the matrix guard and the
@@ -87,7 +91,8 @@ export { HARNESS_PARITY_GROUPS, harnessParityFile, type HarnessParityPart };
 /** Every module that defines harness parity cells, for the prose and skipped-cell guards. */
 const HARNESS_PARITY_KITS = ['harness-parity-cells.testkit.ts', 'harness-parity-registrar.testkit.ts', 'harness-parity-parts.testkit.ts',
   'harness-parity-seam-tier.testkit.ts', 'harness-parity-run-tier.testkit.ts', 'harness-parity-pending-request-seam.cells.testkit.ts',
-  ...(Object.keys(HARNESS_PARITY_GROUPS) as HarnessParityPart[]).map(harnessParityCellsFile)];
+  ...(Object.keys(HARNESS_PARITY_GROUPS) as HarnessParityPart[]).map(harnessParityCellsFile),
+  ...readdirSync(new URL('.', import.meta.url)).filter(file => HARNESS_PARITY_ROWS_FILE.test(file))];
 
 /** Every matrix row with the scenario it drives, as the matrix guard reads them. */
 export function parityRowScenarios(): ReadonlyArray<{ readonly id: string; readonly scenario: ScenarioName }> {
