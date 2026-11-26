@@ -82,7 +82,7 @@ try {
   const samples = [];
   const pauseMs = 5;
   // Each sample after the first also covers the pause before its request, so blocking
-  // between requests is measured too; blockingBudget subtracts the planned pause.
+  // between requests is measured too; the pause is loop idle time, which blockingBudget excludes.
   let pauseStart;
   for (;;) {
     const measurementStart = pauseStart ?? timingSnapshot();
@@ -101,7 +101,7 @@ try {
     // Include EVERY request begun while cold warm-up was active, even one ending after it.
     const measurement = timingDelta(measurementStart, timingSnapshot());
     samples.push({ fromMs: measurementStart.at - start, startMs: requestStart - start, endMs: requestEnd - start,
-      latencyMs: requestEnd - requestStart, plannedMs, ...measurement, ...blockingBudget(measurement, plannedMs) });
+      latencyMs: requestEnd - requestStart, plannedMs, ...measurement, ...blockingBudget(measurement) });
     if (end !== undefined) break;
     pauseStart = timingSnapshot();
     await delay(pauseMs);
@@ -121,9 +121,11 @@ try {
     ...verifyFacts(dataDir, fixtures, store), durationMs: end - start,
     maxBlockingMs: Math.max(...samples.map(sample => sample.blockingMs)),
     maxMainThreadCpuMs: Math.max(...samples.map(sample => sample.mainThreadCpuMs)),
+    maxLoopIdleMs: Math.max(...samples.map(sample => sample.loopIdleMs)),
     sampleCount: samples.length, maxLatencyMs: Math.max(...samples.map(sample => sample.latencyMs)), samples };
   console.log(JSON.stringify(result));
-  // Exclude run-queue delay, but retain synchronous blocking and request latency.
+  // Exclude run-queue delay and loop idle time: a response that waits on the thread pool, a worker
+  // or the kernel is latency (kept in maxLatencyMs), not main-thread blocking. Synchronous work counts.
   assert.ok(result.maxBlockingMs < 50, `max health blocking ${result.maxBlockingMs.toFixed(3)}ms must be <50ms`);
 } finally {
   clearTimeout(watchdog);

@@ -2,7 +2,7 @@
  * node --expose-gc --import tsx packages/cezar/scripts/measure-transcript-facts-lag.mjs
  * Built runtime: pass an absolute dist directory. Baseline source: pass its src directory and ts.
  * A separate process removes test-runner loop work, NOT unrelated host CPU scheduling.
- * Gate loop CPU and blocking time; exclude host run-queue delay.
+ * Gate loop CPU and blocking time; exclude loop idle time and host run-queue delay.
  */
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -30,7 +30,7 @@ try {
   timer = setInterval(() => {
     const current = timingSnapshot();
     const sample = timingDelta(previous, current);
-    ticks.push({ at: current.at, lagMs: Math.max(0, sample.elapsedMs - periodMs), ...sample, ...blockingBudget(sample, periodMs) });
+    ticks.push({ at: current.at, lagMs: Math.max(0, sample.elapsedMs - periodMs), ...sample, ...blockingBudget(sample) });
     previous = current;
   }, periodMs);
   // Establish a real interval before starting; retain the first tick after completion too.
@@ -69,7 +69,7 @@ try {
   assert.ok(result.trailingTicks > 0, 'must retain a trailing tick after warming');
   assert.ok(overlapping.length > 0, 'must sample during cold warm-up');
   assert.ok(result.durationMs > 0);
-  // Exclude planned timer sleep and run-queue delay, but retain synchronous blocking.
+  // Exclude loop idle time (the planned timer sleep) and run-queue delay, but retain synchronous blocking.
   assert.ok(result.maxBlockingMs < 20, `max interval blocking ${result.maxBlockingMs.toFixed(3)}ms must be <20ms`);
 } finally {
   clearInterval(timer);

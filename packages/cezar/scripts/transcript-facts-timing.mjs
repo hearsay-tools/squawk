@@ -11,34 +11,47 @@ export function readQueueWaitMs({ read = readFileSync, platform = process.platfo
   catch { return null; /* Optional diagnostic on restricted procfs mounts. */ }
 }
 
+/** libuv idle time: the loop waited in its poll phase for I/O, a timer or another thread. */
+export function readLoopIdleMs() {
+  return performance.eventLoopUtilization().idle;
+}
+
 export function timingSnapshot({ now = () => performance.now(), readQueue = readQueueWaitMs,
-  readCpu = () => process.threadCpuUsage() } = {}) {
+  readCpu = () => process.threadCpuUsage(), readLoopIdle = readLoopIdleMs } = {}) {
   const cpu = readCpu();
+  const loopIdleMs = readLoopIdle();
   const queueBeforeMs = readQueue();
   const at = now();
   const queueAfterMs = readQueue();
-  return { at, cpuMs: (cpu.user + cpu.system) / 1000, queueBeforeMs, queueAfterMs };
+  return { at, cpuMs: (cpu.user + cpu.system) / 1000, loopIdleMs, queueBeforeMs, queueAfterMs };
 }
 
 export function timingDelta(start, end) {
   const elapsedMs = end.at - start.at;
   const mainThreadCpuMs = end.cpuMs - start.cpuMs;
+  // Snapshots run JavaScript, never inside the poll phase, so the idle delta lies in the interval.
+  const loopIdleMs = Math.max(0, Math.min(elapsedMs, end.loopIdleMs - start.loopIdleMs));
   // Previous AFTER -> next BEFORE is contained in the wall-clock interval.
   // Subtract only this inner queue-wait delta. A pause between a scheduler
   // read and the clock must never credit wait from outside the interval.
   const queueWaitMs = start.queueAfterMs === null || end.queueBeforeMs === null ? null
     : Math.max(0, Math.min(elapsedMs, end.queueBeforeMs - start.queueAfterMs));
-  // Residual includes timer/IO sleep and measurement overhead, not just IO.
-  return { elapsedMs, mainThreadCpuMs, queueWaitMs,
-    blockedMs: queueWaitMs === null ? null : Math.max(0, elapsedMs - mainThreadCpuMs - queueWaitMs) };
+  // Residual: off-CPU time outside the poll phase (synchronous disk I/O, locks, Atomics.wait)
+  // plus measurement overhead.
+  return { elapsedMs, mainThreadCpuMs, loopIdleMs, queueWaitMs,
+    blockedMs: queueWaitMs === null ? null : Math.max(0, elapsedMs - mainThreadCpuMs - loopIdleMs - queueWaitMs) };
 }
 
-/** Timer samples exclude their planned sleep; requests have no planned sleep. */
-export function blockingBudget(sample, periodMs = 0) {
+/** Main-thread blocking is loop-active time without run-queue wait. Loop idle time is excluded:
+ * a planned timer sleep, and a request waiting on the thread pool, a worker or the kernel, are
+ * latency but do not block the loop. CPU, synchronous disk I/O and Atomics.wait still count.
+ * A run-queue wait after a poll wake-up falls in idle time as well, so the result can
+ * under-count by that wait; it never drops below main-thread CPU. */
+export function blockingBudget(sample) {
   const mode = sample.queueWaitMs === null ? 'cpu-only' : 'scheduler-adjusted';
   const blockingMs = sample.queueWaitMs === null ? sample.mainThreadCpuMs
-    : Math.max(0, sample.elapsedMs - periodMs - sample.queueWaitMs);
-  return { mode, blockingMs: Math.max(0, periodMs > 0 ? Math.max(sample.mainThreadCpuMs, blockingMs) : blockingMs) };
+    : Math.max(sample.mainThreadCpuMs, sample.elapsedMs - sample.loopIdleMs - sample.queueWaitMs);
+  return { mode, blockingMs: Math.max(0, blockingMs) };
 }
 
 /** Instrument only the synchronous open call. Imports and hook setup are outside its budget.
