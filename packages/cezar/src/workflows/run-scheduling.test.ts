@@ -87,6 +87,19 @@ describe('quota pool holds', () => {
     expect(accountHeldFor(run, held('claude-opus-5-5'), 'antigravity')).toBe(false);
   });
 
+  it('a queued workflow tail takes the pool of the step its start cursor names, not the finished step', () => {
+    const workflowDef: WorkflowDef = { name: 'chain', source: 'file', steps: [{ id: 'a', model: 'claude-opus-5-5' }, { id: 'b', model: 'gemini-4-neon' }] };
+    const tail = (first: string, second: string) => makeRunRecord({
+      status: RUN_STATUS.queued, runner: 'antigravity', workflowCursor: { stepId: 'b', mode: 'start' },
+      workflowDef: { ...workflowDef, steps: [{ id: 'a', model: first }, { id: 'b', model: second }] },
+      steps: [makeStepState({ id: 'a', status: STEP_STATUS.done, sessionId: 'sess-a' }), makeStepState({ id: 'b', status: STEP_STATUS.pending })],
+    });
+    expect(accountHeldFor(tail('claude-opus-5-5', 'gemini-4-neon'), held('claude-opus-5-5'), 'antigravity')).toBe(false);
+    expect(accountHeldFor(tail('claude-opus-5-5', 'gemini-4-neon'), held('gemini-4-neon'), 'antigravity')).toBe(true);
+    expect(accountHeldFor(tail('gemini-4-neon', 'claude-opus-5-5'), held('gemini-4-neon'), 'antigravity')).toBe(false);
+    expect(accountHeldFor(tail('gemini-4-neon', 'claude-opus-5-5'), held('claude-opus-5-5'), 'antigravity')).toBe(true);
+  });
+
   it('an in-flight third-party resume holds fresh third-party work, not Gemini work or other resumes', () => {
     const holds = deriveAccountHolds([makeRunRecord({ status: RUN_STATUS.running, runner: 'antigravity', model: 'claude-opus-5-5', autoResumeAttempts: 1 })], same, NOW);
     expect(accountHeldFor(queued('claude-sonnet-5-5'), holds, 'antigravity')).toBe(true);

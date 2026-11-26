@@ -27,8 +27,9 @@ type ModelRun = Pick<RunRecord, 'model' | 'steps' | 'workflowDef' | 'workflowCur
 
 /**
  * The named model of the run's current turn, for quota-pool holds (hearsay-tools/squawk#4343): the
- * authored model of the workflow step that owns the latest session, else of the step a queued run
- * starts at, else the run-level pin. Undefined means the runner's own default ("auto").
+ * authored model of the step a `start` cursor names (a queued workflow tail runs it), else of the
+ * step that owns the latest session, else of the first pending step, else the run-level pin.
+ * Undefined means the runner's own default ("auto").
  */
 export function executionModel(run: ModelRun): string | undefined {
   return currentStepDefinition(run)?.model ?? run.model;
@@ -37,9 +38,12 @@ export function executionModel(run: ModelRun): string | undefined {
 function currentStepDefinition(run: ModelRun) {
   const steps = run.workflowDef?.steps;
   if (!steps) return undefined;
-  const session = latestSessionStep(run.steps);
-  const stepId = session ? session.continuesStepId ?? session.id
-    : run.workflowCursor?.mode === 'start' ? run.workflowCursor.stepId
-      : run.steps.find(step => step.status === 'pending')?.id;
+  const stepId = run.workflowCursor?.mode === 'start' ? run.workflowCursor.stepId : sessionOrPendingStepId(run.steps);
   return stepId === undefined ? undefined : steps.find(step => step.id === stepId);
+}
+
+function sessionOrPendingStepId(steps: ModelRun['steps']): string | undefined {
+  const session = latestSessionStep(steps);
+  if (session) return session.continuesStepId ?? session.id;
+  return steps.find(step => step.status === 'pending')?.id;
 }
