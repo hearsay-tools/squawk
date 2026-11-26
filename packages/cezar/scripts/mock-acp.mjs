@@ -57,21 +57,57 @@ const context = {
   ciPrompt: text => ciPrompt('acp', sessionParams, text),
   async crash(text) { const { crashWithStderr } = await import('./mock-runner-crash.mjs'); if (crashWithStderr(text, '{"jsonrpc":"2.0","method":"session/update')) await new Promise(() => {}); },
 };
+function childTranscriptEncoder(childId, step) {
+  const planned = new Map();
+  return {
+    open() {},
+    text: ({ parts }) => appendTranscriptRows(childId, [{ step_index: ++step.n, type: 'PLANNER_RESPONSE', status: 'DONE', content: parts.join('') }]),
+    reasoning: ({ text }) => appendTranscriptRows(childId, [{ step_index: ++step.n, type: 'PLANNER_RESPONSE', status: 'DONE', thinking: text }]),
+    toolStart: ({ call }) => {
+      const planStep = ++step.n;
+      const resultStep = ++step.n;
+      planned.set(call.id, resultStep);
+      appendTranscriptRows(childId, [{ step_index: planStep, type: 'PLANNER_RESPONSE', status: 'DONE', tool_calls: [{ name: call.name === 'read' ? 'read_file' : call.name, args: call.input }] }]);
+    },
+    toolEnd: ({ call }) => {
+      const resultStep = planned.get(call.id) ?? ++step.n;
+      appendTranscriptRows(childId, [{ step_index: resultStep, type: 'GENERIC', status: call.isError ? 'ERROR' : 'DONE', content: `Created At: 2026-11-26T23:30:33+01:00\nCompleted At: 2026-11-26T23:30:34+01:00\n${call.output ?? ''}` }]);
+    },
+    progress() {},
+    end() {},
+    readSteers: () => [],
+    closeInput() {},
+    child: (_step, playChild) => playChild(childTranscriptEncoder(childId, step)),
+    reply() {},
+  };
+}
 function encoder(turn) {
   const send = value => { if (active === turn && !turn.cancelled) update(value); };
   const text = (sessionUpdate, value) => send({ sessionUpdate, content: { type: 'text', text: value } });
+  let childId;
+  const childStep = { n: 0 };
   return {
     open() {},
     text: ({ parts }) => text('agent_message_chunk', parts.join('')),
     reasoning: step => text('agent_thought_chunk', step.text),
-    toolStart: ({ call }) => send({ sessionUpdate: 'tool_call', toolCallId: call.id, title: call.name, kind: 'other', status: 'in_progress', rawInput: call.input }),
-    toolEnd: ({ call }) => send({ sessionUpdate: 'tool_call_update', toolCallId: call.id, status: call.isError ? 'failed' : 'completed', rawOutput: call.output }),
+    toolStart: ({ call }) => {
+      if (call.name === 'task') { childId = '9dd5e689-4ed3-4ffe-c184-fd285bcce2a8'; spawnMockSubagent(childId, call.id, 'Park Reviewer'); return; }
+      send({ sessionUpdate: 'tool_call', toolCallId: call.id, title: call.name, kind: 'other', status: 'in_progress', rawInput: call.input });
+    },
+    toolEnd: ({ call }) => {
+      if (call.name === 'task') return;
+      send({ sessionUpdate: 'tool_call_update', toolCallId: call.id, status: call.isError ? 'failed' : 'completed', rawOutput: call.output });
+    },
     progress: () => send({ sessionUpdate: 'usage_update', used: 7, size: 1048576 }),
-    end: ({ error } = {}) => { if (error) text('agent_message_chunk', `\n⚠ agent executor error: ${PI_FAILURES[error] ?? error}\n`); },
+    end: ({ error } = {}) => {
+      if (error) text('agent_message_chunk', `\n⚠ agent executor error: ${PI_FAILURES[error] ?? error}\n`);
+      echoSteers(turn);
+      turn.finishPrompt?.();
+    },
     // The CLI reads a steer in the running turn, early or late.
     readSteers: () => { echoSteers(turn); return []; },
     closeInput: () => closeSync(0),
-    child: (_step, playChild) => playChild(encoder(turn)),
+    child: (_step, playChild) => playChild(childId ? childTranscriptEncoder(childId, childStep) : encoder(turn)),
     reply: ({ prompt }) => text('agent_message_chunk', `Investigating: ${prompt}`),
   };
 }
@@ -103,14 +139,19 @@ function finishAnswer(frame, text) {
   acknowledge(frame, { stopReason: 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }, text);
 }
 async function playTurn(frame, text, turn) {
+  turn.finishPrompt = () => {
+    if (turn.replied) return;
+    turn.replied = true;
+    if (!turn.cancelled) update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
+    acknowledge(turn.carrier ?? frame, { stopReason: turn.cancelled ? 'cancelled' : 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }, turn.carrierText ?? text);
+  };
   // An unread crash stops before the first yield can accept a concurrent steer.
   if (failureControl?.failure === 'unread' && failureControl.failureFor(text) === 'unread') process.exit(1);
   await delivery?.holdResponse(text);
   const failure = await failureControl?.failureFor(text);
   if (failure) { content('agent_message_chunk', `\n⚠ agent executor error: ${PI_FAILURES[failure]}\n`); steers.length = 0; }
   else { await runPrompt(answerNudge(text), turn); echoSteers(turn); }
-  if (!turn.cancelled) update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
-  acknowledge(turn.carrier ?? frame, { stopReason: turn.cancelled ? 'cancelled' : 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }, turn.carrierText ?? text);
+  turn.finishPrompt();
 }
 /** A steer ends the running prompt at once; the steer's own response ends the turn. */
 function steer(frame, text) {
@@ -139,6 +180,7 @@ async function subagentNested(frame) {
   ]);
   const readArgs = { Path: '/work/project/sample.txt' };
   const cmdArgs = { CommandLine: 'echo sub-ok', WaitMsBeforeAsync: 5000, toolSummary: 'Echo sub-ok command' };
+  const mcpArgs = { query: 'shared' };
   const childCall = { toolCallId: `${childId}:call_child_cmd`, name: 'run_command', args: cmdArgs, kind: 'execute', title: 'echo sub-ok', rawInput: cmdArgs };
   update({ sessionUpdate: 'tool_call', ...childCall, status: 'pending' });
   const perm = await request('session/request_permission', { sessionId, toolCall: { sessionUpdate: 'tool_call', ...childCall, status: 'pending' }, options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }, { optionId: 'deny', name: 'Deny', kind: 'reject_once' }] });
@@ -149,14 +191,23 @@ async function subagentNested(frame) {
   } else {
     update({ sessionUpdate: 'tool_call_update', ...childCall, status: 'failed', rawOutput: { output: '' } });
   }
+  const childMcp = { toolCallId: `${childId}:call_child_mcp`, name: 'mcp_demo_lookup', args: mcpArgs, kind: 'other', title: 'Run mcp_demo_lookup', rawInput: mcpArgs };
+  update({ sessionUpdate: 'tool_call', ...childMcp, status: 'in_progress' });
+  update({ sessionUpdate: 'tool_call_update', ...childMcp, status: 'completed' });
+  const parentMcp = { toolCallId: 'call_parent_mcp', name: 'mcp_demo_lookup', args: mcpArgs, kind: 'other', title: 'Run mcp_demo_lookup', rawInput: mcpArgs };
+  update({ sessionUpdate: 'tool_call', ...parentMcp, status: 'in_progress' });
+  update({ sessionUpdate: 'tool_call_update', ...parentMcp, status: 'completed' });
   appendTranscriptRows(childId, [
-    { step_index: 1, type: 'PLANNER_RESPONSE', status: 'DONE', thinking: 'Checking sample.txt and running echo.', tool_calls: [{ name: 'read_file', args: readArgs }, { name: 'run_command', args: cmdArgs }] },
+    { step_index: 1, type: 'PLANNER_RESPONSE', status: 'DONE', thinking: 'Checking sample.txt and running echo.', tool_calls: [{ name: 'read_file', args: readArgs }, { name: 'run_command', args: cmdArgs }, { name: 'mcp_demo_lookup', args: mcpArgs }] },
     { step_index: 2, type: 'GENERIC', status: 'DONE', content: 'Created At: 2026-11-26T23:30:33+01:00\nCompleted At: 2026-11-26T23:30:34+01:00\n1: hello from sample file' },
     { step_index: 3, type: 'GENERIC', status: allowed ? 'DONE' : 'ERROR', content: allowed ? 'Command exited with code 0.\nsub-ok\n' : 'Permission denied' },
-    { step_index: 4, type: 'PLANNER_RESPONSE', status: 'DONE', content: allowed ? 'Reported results to the parent agent.' : 'Command was denied.' },
+    { step_index: 4, type: 'GENERIC', status: 'DONE', content: 'Created At: 2026-11-26T23:30:35+01:00\nCompleted At: 2026-11-26T23:30:36+01:00\nchild-mcp-result' },
+    { step_index: 5, type: 'PLANNER_RESPONSE', status: 'DONE', content: allowed ? 'Reported results to the parent agent.' : 'Command was denied.' },
   ]);
   appendTranscriptRows(frame.params.sessionId, [
-    { step_index: 4, source: 'SYSTEM', type: 'SYSTEM_MESSAGE', status: 'DONE', content: `<SYSTEM_MESSAGE>\n[Message] timestamp=2026-11-26T22:30:38Z sender=${childId} priority=MESSAGE_PRIORITY_HIGH content=${allowed ? 'sub-ok' : 'denied'}\n</SYSTEM_MESSAGE>` },
+    { step_index: 3, type: 'PLANNER_RESPONSE', status: 'DONE', tool_calls: [{ name: 'mcp_demo_lookup', args: mcpArgs }] },
+    { step_index: 4, type: 'GENERIC', status: 'DONE', content: 'Created At: 2026-11-26T23:30:37+01:00\nCompleted At: 2026-11-26T23:30:37+01:00\nparent-mcp-result' },
+    { step_index: 5, source: 'SYSTEM', type: 'SYSTEM_MESSAGE', status: 'DONE', content: `<SYSTEM_MESSAGE>\n[Message] timestamp=2026-11-26T22:30:38Z sender=${childId} priority=MESSAGE_PRIORITY_HIGH content=${allowed ? 'sub-ok' : 'denied'}\n</SYSTEM_MESSAGE>` },
   ]);
   content('agent_message_chunk', allowed ? 'Subagent reported: sub-ok' : 'Subagent command denied');
   update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
@@ -243,10 +294,15 @@ async function runtimeProbe(text, turn) {
   }
   return false;
 }
+async function nativePrompt(text, turn) {
+  if (await runtimeProbe(text, turn)) return true;
+  if (text.includes('mock:hook-after-park')) { await hookAfterPark(text, turn); return true; }
+  if (/\bmock:subagent(?![\w-])/.test(text)) { await subagentParity(); return true; }
+  if (text.includes('mock:permission-late')) { await latePermission(turn, text.includes('mock:permission-late-error')); return true; }
+  return false;
+}
 async function runPrompt(text, turn) {
-  if (await runtimeProbe(text, turn)) return;
-  if (text.includes('mock:hook-after-park')) return hookAfterPark(text, turn);
-  if (text.includes('mock:permission-late')) return latePermission(turn, text.includes('mock:permission-late-error'));
+  if (await nativePrompt(text, turn)) return;
   // The CLI's quota refusal, verbatim from a live CLI 1.5.14 turn (hearsay-tools/squawk#4098).
   if (text.includes('mock:quota')) { content('agent_message_chunk', '\n⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 3h54m9s.\n'); return; }
   if (text.includes('mock:late-error')) {
@@ -325,6 +381,26 @@ async function answerAsk(text) {
   const ask = pendingAsk; pendingAsk = undefined;
   update({ sessionUpdate: 'tool_call_update', toolCallId: ask.id, status: 'completed', rawOutput: { output: text } });
   content('agent_message_chunk', `Answer received: ${text}${ask.done || context.session.resumeAfterAsk ? await context.lifecycle(['cezar_done', {}]) : ''}`);
+}
+function spawnMockSubagent(childId, toolCallId, role) {
+  const invokeArgs = { TypeName: 'research', Role: role, Prompt: 'Review the change' };
+  const invoke = { toolCallId, name: 'invoke_subagent', args: invokeArgs, kind: 'other', title: 'Run invoke_subagent', rawInput: invokeArgs };
+  update({ sessionUpdate: 'tool_call', ...invoke, status: 'in_progress' });
+  update({ sessionUpdate: 'tool_call_update', ...invoke, status: 'completed' });
+  appendTranscriptRows(sessionId, [
+    { step_index: 1, type: 'PLANNER_RESPONSE', status: 'DONE', tool_calls: [{ name: 'invoke_subagent', args: invokeArgs }] },
+    { step_index: 2, type: 'GENERIC', status: 'DONE', content: `Created At: 2026-11-26T23:30:25+01:00\nCompleted At: 2026-11-26T23:30:28+01:00\nCreated the following subagent:\n{\n  "conversationId": "${childId}"\n}` },
+  ]);
+}
+/** S9 & R12: turn-held native subagent whose child message stays nested in child transcript. */
+async function subagentParity() {
+  const childId = '8cc4d578-3dc2-4eed-b073-ec174abbd1f7';
+  spawnMockSubagent(childId, 'call_sub_parity', 'Parity Reviewer');
+  const wait = await context.lifecycle(['cezar_wait', { kind: 'timer', seconds: 600, note: 'Re-check the sub-agent.' }]);
+  appendTranscriptRows(childId, [
+    { step_index: 1, type: 'PLANNER_RESPONSE', status: 'DONE', content: 'Child review finished.' },
+  ]);
+  content('agent_message_chunk', `Parent summary after child.${wait}`);
 }
 /** R77: a mid-turn hook in transcript_full.jsonl, a cezar_wait park, then a late hook after the park. */
 async function hookAfterPark(text, turn) {

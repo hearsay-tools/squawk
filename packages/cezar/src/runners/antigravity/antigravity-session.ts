@@ -76,9 +76,10 @@ export class AntigravitySession implements AgentSession {
     {
       onSpawn: (parentItemId, childId) => {
         this.subagents.bindChild(parentItemId, childId);
+        this.acp.reparentTools(id => parseChildToolCallId(id)?.childId === childId.toLowerCase(), parentItemId);
         this.childTranscripts.openChild(childId, parentItemId, antigravityTranscriptPath(this.runtime.geminiDir, childId));
       },
-      onMessage: (childId, body) => { void this.settleSubagentMessage(childId, body); },
+      onMessage: (childId, body) => { this.observeSubagentMessage(childId, body); },
     },
   );
   constructor(bin: string | undefined, private readonly spec: AgentRunSpec, private readonly onEvent: ((event: AgentEvent) => void) | undefined,
@@ -105,18 +106,21 @@ export class AntigravitySession implements AgentSession {
   get pid(): number | undefined { return this.child.pid; }
   get open(): boolean { return this.accepting; }
   get closingQuietly(): boolean { return this.quiet && !this.requestedClose; }
-  private async settleSubagentMessage(childId: string, body: string): Promise<void> {
-    await this.childTranscripts.flushChild(childId);
-    const settled = this.subagents.settleChild(childId, body);
-    if (settled) this.acp.completeHeldTool(settled.id, settled.status, settled.output);
+  private observeSubagentMessage(childId: string, body: string): void {
+    const parentId = this.subagents.recordChildMessage(childId, body);
+    if (parentId && body) this.acp.updateHeldTool(parentId, body);
+    void this.childTranscripts.poll();
   }
   private observeWireUpdate(update: Record<string, unknown>): boolean {
-    this.toolOutputs.observe(update);
     const id = typeof update.toolCallId === 'string' ? update.toolCallId : '';
     const child = parseChildToolCallId(id);
-    if (child && typeof update.name === 'string') {
-      this.childTranscripts.recordWireTool(child.childId, id, update.name, update.args ?? update.rawInput);
+    if (child) {
+      if (typeof update.name === 'string') {
+        this.childTranscripts.recordWireTool(child.childId, id, update.name, update.args ?? update.rawInput);
+      }
+      return true;
     }
+    this.toolOutputs.observe(update);
     return true;
   }
   private emit(event: AgentEvent): void {
@@ -185,7 +189,15 @@ export class AntigravitySession implements AgentSession {
   private trackItem(event: UiEvent): void {
     if (event.type === 'item.started' && event.item.kind === 'tool' && event.item.name === 'ask_question') this.openAsk(event.item.id, event.item.input);
     if (event.type !== 'item.completed') return;
-    if (event.item.kind === 'tool') this.toolOutputs.completed(event.item);
+    if (event.item.kind === 'tool') {
+      const child = parseChildToolCallId(event.item.id);
+      if (child) this.childTranscripts.completedWireTool(child.childId, event.item);
+      else this.toolOutputs.completed(event.item);
+      if (event.item.status === 'declined') {
+        const killedChild = this.subagents.childForParent(event.item.id);
+        if (killedChild) void this.childTranscripts.closeChild(killedChild);
+      }
+    }
     if (event.item.id === this.pendingAsk?.toolCallId) this.pendingAsk = undefined;
   }
   /** A failed turn is held until the session reports the failure. One the agent started on its

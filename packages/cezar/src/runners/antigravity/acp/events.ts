@@ -69,14 +69,34 @@ export class AcpEvents {
     this.sink.event?.({ type: 'turn-end' });
   }
 
+  /** Updates a held tool item's output while keeping it running. */
+  updateHeldTool(id: string, output: string): void {
+    const tool = this.tools.get(id);
+    if (!tool || tool.status === 'completed' || tool.status === 'failed' || tool.status === 'declined') return;
+    const item: UiToolItem = { ...tool, output };
+    this.tools.set(id, item);
+    this.sink.uiEvent?.({ type: 'item.updated', item });
+  }
+
   /** Completes a tool item that `holdToolCompletion` kept open past its wire response. */
   completeHeldTool(id: string, status: 'completed' | 'failed' | 'declined', output?: string): void {
     const tool = this.tools.get(id);
     if (!tool || tool.status === 'completed' || tool.status === 'failed' || tool.status === 'declined') return;
-    const item: UiToolItem = { ...tool, status, ...(output ? { output } : {}) };
+    const resolvedOutput = output ?? tool.output;
+    const item: UiToolItem = { ...tool, status, ...(resolvedOutput ? { output: resolvedOutput } : {}) };
     this.tools.set(id, item);
     this.sink.event?.({ type: 'tool-result', toolCallId: id, result: item.output ?? '', isError: status === 'failed' });
     this.sink.uiEvent?.({ type: 'item.completed', item });
+  }
+
+  /** Assigns or repairs `parentItemId` on matching tool items once their parent is known. */
+  reparentTools(match: (id: string) => boolean, parentItemId: string): void {
+    for (const [id, tool] of this.tools) {
+      if (!match(id) || tool.parentItemId === parentItemId) continue;
+      const item: UiToolItem = { ...tool, parentItemId };
+      this.tools.set(id, item);
+      this.sink.uiEvent?.({ type: 'item.updated', item, late: true });
+    }
   }
 
   /** True when the update was the agent's own work inside a turn. */
@@ -190,7 +210,7 @@ export class AcpEvents {
     // background command, a timer or a question completes in a later turn.
     if (this.hooks.agentWorkEnds && reason !== 'cancelled' && reason !== 'error') return;
     for (const [id, tool] of this.tools) {
-      if (tool.status === 'completed' || tool.status === 'failed') continue;
+      if (tool.status === 'completed' || tool.status === 'failed' || tool.status === 'declined') continue;
       const item: UiToolItem = { ...tool, status: 'failed', output: tool.output || (reason === 'cancelled' ? 'Cancelled' : 'Turn ended before the tool completed') };
       this.tools.set(id, item);
       this.sink.event?.({ type: 'tool-result', toolCallId: id, result: item.output!, isError: true });

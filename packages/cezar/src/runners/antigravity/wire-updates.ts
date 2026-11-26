@@ -34,7 +34,7 @@ export function antigravityWireHooks(subagents: AntigravitySubagentTracker): Acp
       const id = typeof update.toolCallId === 'string' ? update.toolCallId : '';
       const child = parseChildToolCallId(id);
       if (child) {
-        const parentItemId = previous?.parentItemId ?? subagents.parentForChild(child.childId);
+        const parentItemId = subagents.parentForChild(child.childId) ?? previous?.parentItemId;
         if (parentItemId) normalized.parentItemId = parentItemId;
       }
       return normalized;

@@ -5,6 +5,7 @@ import {
   NOT_RESULT_ROW_TYPES,
   TRANSCRIPT_MAX_FLUSH_CHUNKS,
   TRANSCRIPT_READ_BYTES,
+  TranscriptPoller,
   boundTranscriptOutput,
   transcriptCallKey,
   transcriptHookItem,
@@ -25,9 +26,18 @@ interface ChildState {
   closed: boolean;
 }
 
+interface WireToolEntry {
+  readonly toolCallId: string;
+  readonly childId: string;
+  item?: UiToolItem;
+  transcriptOutput?: string;
+  amended?: boolean;
+}
+
 /**
  * Pure mapper for a single child subagent's `transcript_full.jsonl` rows into nested `UiEvent`s
- * carrying `parentItemId`. Deduplicates tool calls that were already forwarded live over ACP.
+ * carrying `parentItemId`. Deduplicates tool calls already forwarded live over ACP while passing
+ * their transcript result text to `consumeWireTool` so empty wire completions (MCP/read) recover it.
  */
 export function mapChildTranscriptRow(
   value: unknown,
@@ -35,7 +45,7 @@ export function mapChildTranscriptRow(
   parentItemId: string,
   planned: Map<number, { name: string; args: unknown }>,
   seenSteps: Set<number>,
-  consumeWireTool: (name: string, args: unknown) => boolean,
+  consumeWireTool: (name: string, args: unknown, output: string) => boolean,
 ): UiEvent[] {
   const parsed = transcriptRowSchema.safeParse(value);
   if (!parsed.success) return [];
@@ -51,8 +61,8 @@ export function mapChildTranscriptRow(
   const call = planned.get(row.step_index);
   if (!call) return [];
   planned.delete(row.step_index);
-  if (consumeWireTool(call.name, call.args)) return [];
   const output = transcriptResultText(row);
+  if (consumeWireTool(call.name, call.args, output)) return [];
   const item: UiToolItem = {
     kind: 'tool',
     id: `${childId}:step_${row.step_index}`,
@@ -85,104 +95,117 @@ function mapPlannerRow(row: TranscriptRow, childId: string, parentItemId: string
 /**
  * Tails spawned Antigravity child transcripts (`brain/<childId>/.system_generated/logs/transcript_full.jsonl`)
  * to surface non-prompting child steps (`read_file`, `send_message`, child thinking and replies)
- * under `parentItemId`, while skipping tool calls already forwarded on the ACP wire.
+ * under `parentItemId`, deduplicate ACP-forwarded child tool calls, and recover outputs for
+ * forwarded child calls whose ACP completion carried none (MCP/read).
  */
 export class AntigravityChildTranscripts {
   private readonly children = new Map<string, ChildState>();
-  private readonly wireTools = new Map<string, Map<string, number>>();
-  private readonly seenWireCallIds = new Set<string>();
-  private timer: NodeJS.Timeout | undefined;
-  private reading: Promise<void> | undefined;
-  private closed = false;
+  private readonly wireTools = new Map<string, Map<string, WireToolEntry[]>>();
+  private readonly wireById = new Map<string, WireToolEntry>();
+  private readonly poller: TranscriptPoller;
 
-  constructor(private readonly emit: (event: UiEvent) => void, private readonly readBytes = TRANSCRIPT_READ_BYTES) {}
+  constructor(private readonly emit: (event: UiEvent) => void, private readonly readBytes = TRANSCRIPT_READ_BYTES) {
+    this.poller = new TranscriptPoller(
+      () => this.readAll(),
+      () => [...this.children.values()].some(child => !child.closed),
+      POLL_MS,
+    );
+  }
 
-  /** Records a child tool call already seen on ACP so its transcript row is not emitted twice. */
+  /** Records a child tool call already seen on ACP so its transcript row is deduplicated and matched. */
   recordWireTool(childId: string, toolCallId: string, name: string, args: unknown): void {
-    if (this.seenWireCallIds.has(toolCallId)) return;
-    this.seenWireCallIds.add(toolCallId);
+    if (this.wireById.has(toolCallId)) return;
     const id = childId.toLowerCase();
-    const counts = this.wireTools.get(id) ?? new Map<string, number>();
+    const entry: WireToolEntry = { toolCallId, childId: id };
+    this.wireById.set(toolCallId, entry);
+    const byKey = this.wireTools.get(id) ?? new Map<string, WireToolEntry[]>();
     const key = transcriptCallKey(name, args);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-    this.wireTools.set(id, counts);
+    byKey.set(key, [...byKey.get(key) ?? [], entry]);
+    this.wireTools.set(id, byKey);
+  }
+
+  /** Notes a completed ACP-forwarded child tool; if it carried no output, amends from child transcript. */
+  completedWireTool(childId: string, item: UiToolItem): void {
+    const entry = this.wireById.get(item.id);
+    if (!entry) return;
+    entry.item = item;
+    if (item.output || entry.amended) return;
+    const child = this.children.get(childId.toLowerCase());
+    if (entry.transcriptOutput) {
+      this.amendWireOutput(entry, child?.parentItemId ?? item.parentItemId, entry.transcriptOutput);
+    } else if (child && !child.closed) {
+      this.poller.schedule(0);
+    }
   }
 
   /** Starts tailing a newly spawned child conversation from byte 0. */
   openChild(childId: string, parentItemId: string, path: string): void {
     const id = childId.toLowerCase();
-    if (this.closed || this.children.has(id) || this.children.size >= MAX_CHILD_TRANSCRIPTS) return;
+    if (this.poller.closed || this.children.has(id) || this.children.size >= MAX_CHILD_TRANSCRIPTS) return;
     this.children.set(id, { childId: id, parentItemId, tailer: new BoundedJsonlTailer(path, false, this.readBytes), planned: new Map(), seenSteps: new Set(), closed: false });
-    this.schedule(0);
+    this.poller.schedule(0);
   }
 
-  poll(): Promise<void> {
-    this.reading ??= this.readAll().catch(() => {}).finally(() => { this.reading = undefined; });
-    return this.reading;
-  }
+  poll(): Promise<void> { return this.poller.poll(); }
 
-  /** Drains unread rows for one child (up to bounded chunks) and stops polling it. */
-  async flushChild(childId: string): Promise<void> {
+  /** Drains unread rows for a killed child and stops polling it. */
+  async closeChild(childId: string): Promise<void> {
     const child = this.children.get(childId.toLowerCase());
     if (!child || child.closed) return;
-    while (this.reading) await this.reading;
-    for (let chunk = 0; chunk < TRANSCRIPT_MAX_FLUSH_CHUNKS && !this.closed && !child.closed; chunk++) {
-      await this.readChild(child);
-      if (!child.tailer.hasMore) break;
-    }
+    await this.poller.waitIdle();
+    await this.drainChild(child);
     child.closed = true;
   }
 
   async flushAll(): Promise<void> {
-    clearTimeout(this.timer);
-    this.timer = undefined;
-    while (this.reading) await this.reading;
+    await this.poller.waitIdle();
     for (const child of this.children.values()) {
-      if (child.closed) continue;
-      for (let chunk = 0; chunk < TRANSCRIPT_MAX_FLUSH_CHUNKS && !this.closed; chunk++) {
-        await this.readChild(child);
-        if (!child.tailer.hasMore) break;
-      }
+      if (!child.closed) await this.drainChild(child);
     }
   }
 
   close(): void {
-    this.closed = true;
-    clearTimeout(this.timer);
-    this.timer = undefined;
+    this.poller.close();
     for (const child of this.children.values()) child.closed = true;
   }
 
-  private schedule(delay: number): void {
-    if (this.closed || this.timer) return;
-    this.timer = setTimeout(() => { this.timer = undefined; void this.poll().then(() => this.next()); }, delay);
-    this.timer.unref?.();
-  }
-
-  private next(): void {
-    if (!this.closed && [...this.children.values()].some(child => !child.closed)) this.schedule(POLL_MS);
+  private async drainChild(child: ChildState): Promise<void> {
+    for (let chunk = 0; chunk < TRANSCRIPT_MAX_FLUSH_CHUNKS && !this.poller.closed && !child.closed; chunk++) {
+      await this.readChild(child);
+      if (!child.tailer.hasMore) break;
+    }
   }
 
   private async readAll(): Promise<void> {
     for (const child of this.children.values()) {
-      if (!this.closed && !child.closed) await this.readChild(child);
+      if (!this.poller.closed && !child.closed) await this.readChild(child);
     }
   }
 
   private async readChild(child: ChildState): Promise<void> {
-    const consume = (name: string, args: unknown) => {
-      const counts = this.wireTools.get(child.childId);
+    const consume = (name: string, args: unknown, output: string): boolean => {
+      const byKey = this.wireTools.get(child.childId);
       const key = transcriptCallKey(name, args);
-      const n = counts?.get(key) ?? 0;
-      if (n <= 0) return false;
-      if (n === 1) counts!.delete(key); else counts!.set(key, n - 1);
+      const queue = byKey?.get(key);
+      const entry = queue?.shift();
+      if (!entry) return false;
+      if (!queue!.length) byKey!.delete(key);
+      if (output) this.amendWireOutput(entry, child.parentItemId, output);
       return true;
     };
     await child.tailer.readNext(row => {
-      if (this.closed) return;
+      if (this.poller.closed) return;
       for (const event of mapChildTranscriptRow(row, child.childId, child.parentItemId, child.planned, child.seenSteps, consume)) {
         this.emit(event);
       }
     });
+  }
+
+  private amendWireOutput(entry: WireToolEntry, parentItemId: string | undefined, output: string): void {
+    entry.transcriptOutput = output;
+    if (!entry.item || entry.item.output || entry.amended || this.poller.closed) return;
+    entry.amended = true;
+    const item: UiToolItem = { ...entry.item, ...(parentItemId ? { parentItemId } : {}), output };
+    this.emit({ type: 'item.updated', item, late: true });
   }
 }

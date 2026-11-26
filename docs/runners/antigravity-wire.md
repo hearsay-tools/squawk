@@ -289,11 +289,14 @@ hearsay-tools/squawk#4060 maps the CLI frames as follows. The fixtures' expected
 8. `_meta.antigravity.disabledTools` and `eagerMcpServers` are no longer sent: the CLI ignores
    the first, does not know the second, and `run_workflow` writes no skill into the workspace.
 9. Native subagents are enabled (since CLI 1.5.16, hearsay-tools/squawk#4197). `invoke_subagent`
-   stays `running` as `Task: <Role>` (`subagent_type: <TypeName>`) until its child replies
-   (`sender=<childId>` in the parent transcript), is stopped via `manage_subagents`, or the parent
-   turn completes. Forwarded child calls (`<childId>:<callId>`) and non-prompting child steps from
-   `brain/<childId>/.system_generated/logs/transcript_full.jsonl` (deduplicated against ACP wire
-   calls) emit with `parentItemId` set to the spawning `invoke_subagent` call.
+   stays `running` as `Task: <Role>` (`subagent_type: <TypeName>`) until it is stopped via
+   `manage_subagents` or the parent turn completes; child `send_message` deliveries
+   (`sender=<childId>` in the parent transcript) update its output without prematurely closing the
+   task or child transcript tailer. Forwarded child calls (`<childId>:<callId>`) correlate by
+   explicit `conversationId` binding (reparenting early parallel calls with `late: true`) and
+   recover missing MCP/read outputs from `brain/<childId>/.system_generated/logs/transcript_full.jsonl`;
+   non-prompting child steps from that transcript emit under `parentItemId` without duplicating ACP
+   wire calls.
 10. A read, MCP or failed subagent tool whose completed update carries no result gets its output from
     the session's transcript row, as an `item.updated` of the completed card marked `late: true`.
     Nudge accounting ignores it: it is a display update, not the agent's reply. Injected native

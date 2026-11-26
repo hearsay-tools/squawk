@@ -41,6 +41,7 @@ export class AntigravitySubagentTracker {
   private unboundOrder: string[] = [];
   private childToParent = new Map<string, string>();
   private parentToChild = new Map<string, string>();
+  private latestReply = new Map<string, string>();
 
   fork(): AntigravitySubagentTracker {
     const next = new AntigravitySubagentTracker();
@@ -48,12 +49,15 @@ export class AntigravitySubagentTracker {
     next.unboundOrder = [...this.unboundOrder];
     next.childToParent = new Map(this.childToParent);
     next.parentToChild = new Map(this.parentToChild);
+    next.latestReply = new Map(this.latestReply);
     return next;
   }
 
   /** Explicitly links a spawned child conversation UUID to its parent `invoke_subagent` call ID. */
   bindChild(parentItemId: string, childId: string): void {
     const key = childId.toLowerCase();
+    const previousParent = this.childToParent.get(key);
+    if (previousParent && previousParent !== parentItemId) this.parentToChild.delete(previousParent);
     this.childToParent.set(key, parentItemId);
     this.parentToChild.set(parentItemId, key);
     this.unboundOrder = this.unboundOrder.filter(id => id !== parentItemId);
@@ -63,11 +67,16 @@ export class AntigravitySubagentTracker {
     const key = childId.toLowerCase();
     const existing = this.childToParent.get(key);
     if (existing) return existing;
-    const nextParent = this.unboundOrder.shift();
-    if (!nextParent) return undefined;
+    // Only auto-bind when a single unbound parent exists; parallel spawns wait for bindChild.
+    if (this.unboundOrder.length !== 1) return undefined;
+    const nextParent = this.unboundOrder.shift()!;
     this.childToParent.set(key, nextParent);
     this.parentToChild.set(nextParent, key);
     return nextParent;
+  }
+
+  childForParent(parentItemId: string): string | undefined {
+    return this.parentToChild.get(parentItemId);
   }
 
   /** True when the tool is a root `invoke_subagent` whose spawn completed and child now runs in this turn. */
@@ -104,11 +113,12 @@ export class AntigravitySubagentTracker {
     return settled;
   }
 
-  /** Marks one child's parent `invoke_subagent` call finished when the child replies to the parent. */
-  settleChild(childId: string, output?: string): SettledSubagent | undefined {
+  /** Records a child's `send_message` text without closing the subagent (it may keep working). */
+  recordChildMessage(childId: string, output: string): string | undefined {
     const parentId = this.childToParent.get(childId.toLowerCase());
-    if (!parentId || !this.removeActive(parentId)) return undefined;
-    return { id: parentId, status: 'completed', ...(output ? { output } : {}) };
+    if (!parentId || !this.activeCalls.has(parentId)) return undefined;
+    if (output) this.latestReply.set(parentId, output);
+    return parentId;
   }
 
   /** Settles every still-running `invoke_subagent` call when the parent turn finishes. */
@@ -127,6 +137,7 @@ export class AntigravitySubagentTracker {
   private removeActive(parentItemId: string): boolean {
     const existed = this.activeCalls.delete(parentItemId);
     this.unboundOrder = this.unboundOrder.filter(id => id !== parentItemId);
+    this.latestReply.delete(parentItemId);
     return existed;
   }
 
@@ -134,6 +145,10 @@ export class AntigravitySubagentTracker {
     const ids = [...this.activeCalls];
     this.activeCalls.clear();
     this.unboundOrder = [];
-    return ids.map(id => ({ id, status, ...(output ? { output } : {}) }));
+    return ids.map(id => {
+      const text = output ?? this.latestReply.get(id);
+      this.latestReply.delete(id);
+      return { id, status, ...(text ? { output: text } : {}) };
+    });
   }
 }

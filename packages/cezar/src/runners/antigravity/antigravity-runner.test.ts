@@ -123,6 +123,10 @@ it('runs native subagents with forwarded permissions and nests ACP and transcrip
   expect(childItems).toContainEqual(expect.objectContaining({ kind: 'reasoning', text: 'Checking sample.txt and running echo.' }));
   expect(childItems).toContainEqual(expect.objectContaining({ kind: 'tool', name: 'Read', output: '1: hello from sample file' }));
   expect(childItems).toContainEqual(expect.objectContaining({ kind: 'message', text: 'Reported results to the parent agent.' }));
+  // Identical forwarded child and parent MCP calls recover outputs from their own transcripts without colliding.
+  expect(ui).toContainEqual({ type: 'item.updated', late: true, item: expect.objectContaining({ id: '7bb3c467-2cb1-4fdc-a962-db063faac0e6:call_child_mcp', parentItemId: 'call_sub_spawn', output: 'child-mcp-result' }) });
+  expect(ui).toContainEqual({ type: 'item.updated', late: true, item: expect.objectContaining({ id: 'call_parent_mcp', output: 'parent-mcp-result' }) });
+  expect(ui.find((event): event is Extract<UiEvent, { type: 'item.updated' }> => event.type === 'item.updated' && event.item.id === 'call_parent_mcp')?.item.parentItemId).toBeUndefined();
 });
 
 it('enforces the step tool grant on forwarded subagent permission requests', async () => {
