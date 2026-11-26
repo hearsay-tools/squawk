@@ -108,6 +108,41 @@ test('the Vitest rerun records into a new parts directory, and only its parts up
   assert.ok(index(vitest, 'rerun') < vitest.steps.indexOf(upload));
 });
 
+test('the browser rerun records into a new parts directory, and only its parts upload', () => {
+  const browser = ci().jobs['cockpit-browser'];
+  const first = step(browser, 'e2e');
+  const rerun = step(browser, 'e2e-rerun');
+  assert.equal(first.env.PARTS_DIR, 'squeal-parts-browser');
+  assert.equal(rerun.env.PARTS_DIR, 'squeal-parts-browser-rerun');
+  assert.deepEqual({ ...rerun.env, PARTS_DIR: first.env.PARTS_DIR }, first.env, 'the same environment apart from the parts directory');
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-queue-rerun-browser-'));
+  try {
+    const bin = path.join(temp, 'bin');
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, 'squeal'), '#!/bin/sh\necho "squeal $*"\nwhile [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, 'npm'), '#!/bin/sh\necho "npm $*"\necho "TEST_E2E_STATUS=passed"\n', { mode: 0o755 });
+    fs.mkdirSync(path.join(temp, '.ai', 'scripts'), { recursive: true });
+    fs.writeFileSync(path.join(temp, '.ai', 'scripts', 'test-env-up.sh'), 'echo "test-env-up"\n');
+    fs.mkdirSync(path.join(temp, '.github', 'scripts'), { recursive: true });
+    fs.writeFileSync(path.join(temp, '.github', 'scripts', 'require-e2e-passed.cjs'), 'process.exit(0);\n');
+    const script = rerun.run.replaceAll('${{ matrix.shard }}', '2');
+    const result = spawnSync('bash', ['-e', '-c', script], {
+      cwd: temp, encoding: 'utf8',
+      env: { PATH: `${bin}:/usr/bin:/bin:${path.dirname(process.execPath)}`, RUNNER_TEMP: '/runner/temp', PARTS_DIR: rerun.env.PARTS_DIR },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), 'test-env-up\nsqueal ci record --out /runner/temp/squeal-parts-browser-rerun -- npm run test:e2e -- --allow-skip --shard=2/8\nnpm run test:e2e -- --allow-skip --shard=2/8\nTEST_E2E_STATUS=passed');
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+  const upload = step(browser, 'Upload Squeal parts');
+  const uploaded = (outcome) => upload.with.path.replace(/\$\{\{.*?\}\}/g, (raw) => expression(raw, context('merge_group', 'failure', outcome)));
+  assert.equal(uploaded('skipped'), '/runner/temp/squeal-parts-browser/');
+  assert.equal(uploaded('success'), '/runner/temp/squeal-parts-browser-rerun/');
+  assert.equal(uploaded('failure'), '/runner/temp/squeal-parts-browser-rerun/');
+  assert.ok(index(browser, 'e2e-rerun') < browser.steps.indexOf(upload));
+});
+
 test('a merge group gives each shard room for two runs inside the queue\'s check timeout', () => {
   const admission = fs.readFileSync(path.join(__dirname, 'merge-queue-admission.cjs'), 'utf8');
   const queueTimeout = Number(admission.match(/check_response_timeout_minutes !== (\d+)/)[1]);
