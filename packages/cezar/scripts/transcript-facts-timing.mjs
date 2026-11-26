@@ -37,20 +37,22 @@ export function timingDelta(start, end) {
   const queueWaitMs = start.queueAfterMs === null || end.queueBeforeMs === null ? null
     : Math.max(0, Math.min(elapsedMs, end.queueBeforeMs - start.queueAfterMs));
   // Residual: off-CPU time outside the poll phase (synchronous disk I/O, locks, Atomics.wait)
-  // plus measurement overhead.
+  // plus measurement overhead. See blockingBudget for why the larger wait is subtracted once.
   return { elapsedMs, mainThreadCpuMs, loopIdleMs, queueWaitMs,
-    blockedMs: queueWaitMs === null ? null : Math.max(0, elapsedMs - mainThreadCpuMs - loopIdleMs - queueWaitMs) };
+    blockedMs: queueWaitMs === null ? null : Math.max(0, elapsedMs - mainThreadCpuMs - Math.max(loopIdleMs, queueWaitMs)) };
 }
 
 /** Main-thread blocking is loop-active time without run-queue wait. Loop idle time is excluded:
  * a planned timer sleep, and a request waiting on the thread pool, a worker or the kernel, are
  * latency but do not block the loop. CPU, synchronous disk I/O and Atomics.wait still count.
- * A run-queue wait after a poll wake-up falls in idle time as well, so the result can
- * under-count by that wait; it never drops below main-thread CPU. */
+ * libuv counts a run-queue wait after a poll wake-up as idle time too, and the two cannot be
+ * told apart, so only the larger of idle and run-queue wait is subtracted. Subtracting both
+ * could hide a synchronous stall; this choice can only over-count, never above elapsed minus
+ * run-queue wait. It never drops below main-thread CPU. */
 export function blockingBudget(sample) {
   const mode = sample.queueWaitMs === null ? 'cpu-only' : 'scheduler-adjusted';
   const blockingMs = sample.queueWaitMs === null ? sample.mainThreadCpuMs
-    : Math.max(sample.mainThreadCpuMs, sample.elapsedMs - sample.loopIdleMs - sample.queueWaitMs);
+    : Math.max(sample.mainThreadCpuMs, sample.elapsedMs - Math.max(sample.loopIdleMs, sample.queueWaitMs));
   return { mode, blockingMs: Math.max(0, blockingMs) };
 }
 

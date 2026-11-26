@@ -7,7 +7,7 @@ test('separates CPU, loop idle, run-queue wait and residual blocked time', async
   const { timingDelta } = await timing;
   assert.deepEqual(timingDelta({ at: 0, cpuMs: 10, loopIdleMs: 7, queueAfterMs: 5 },
     { at: 100, cpuMs: 12, loopIdleMs: 47, queueBeforeMs: 35 }),
-  { elapsedMs: 100, mainThreadCpuMs: 2, loopIdleMs: 40, queueWaitMs: 30, blockedMs: 28 });
+  { elapsedMs: 100, mainThreadCpuMs: 2, loopIdleMs: 40, queueWaitMs: 30, blockedMs: 58 });
 });
 
 test('does not invent scheduler evidence when procfs is absent', async () => {
@@ -36,7 +36,7 @@ test('takes a finite current-thread CPU snapshot and optional scheduler snapshot
 
 test('excludes run-queue delay and loop idle time but keeps synchronous blocking and CPU', async () => {
   const { blockingBudget } = await timing;
-  assert.deepEqual(blockingBudget({ elapsedMs: 120, mainThreadCpuMs: 2, loopIdleMs: 20, queueWaitMs: 98 }),
+  assert.deepEqual(blockingBudget({ elapsedMs: 120, mainThreadCpuMs: 2, loopIdleMs: 118, queueWaitMs: 0 }),
     { mode: 'scheduler-adjusted', blockingMs: 2 });
   // Off-CPU time outside the poll phase is synchronous disk I/O or a lock: it blocks.
   assert.equal(blockingBudget({ elapsedMs: 120, mainThreadCpuMs: 2, loopIdleMs: 20, queueWaitMs: 0 }).blockingMs, 100);
@@ -44,8 +44,10 @@ test('excludes run-queue delay and loop idle time but keeps synchronous blocking
   assert.equal(blockingBudget({ elapsedMs: 120, mainThreadCpuMs: 2, loopIdleMs: 0, queueWaitMs: 100 }).blockingMs, 20);
   assert.equal(blockingBudget({ elapsedMs: 120, mainThreadCpuMs: 2, loopIdleMs: 0, queueWaitMs: 0 }).blockingMs, 120);
   assert.equal(blockingBudget({ elapsedMs: 1, mainThreadCpuMs: 0, loopIdleMs: 0, queueWaitMs: 2 }).blockingMs, 0);
-  // Run-queue wait after a poll wake-up is in both idle and queue time; CPU stays the floor.
-  assert.equal(blockingBudget({ elapsedMs: 120, mainThreadCpuMs: 15, loopIdleMs: 100, queueWaitMs: 60 }).blockingMs, 15);
+  // Run-queue wait after a poll wake-up is in both idle and queue time: subtract it once.
+  // 80 ms synchronous stall, 5 ms poll sleep, then 100 ms queued after the wake-up.
+  assert.equal(blockingBudget({ elapsedMs: 185, mainThreadCpuMs: 2, loopIdleMs: 105, queueWaitMs: 100 }).blockingMs, 80);
+  assert.equal(blockingBudget({ elapsedMs: 120, mainThreadCpuMs: 15, loopIdleMs: 110, queueWaitMs: 60 }).blockingMs, 15);
   assert.deepEqual(blockingBudget({ elapsedMs: 120, mainThreadCpuMs: 2, loopIdleMs: 0, queueWaitMs: null }),
     { mode: 'cpu-only', blockingMs: 2 });
 });
