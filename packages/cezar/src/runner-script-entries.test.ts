@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import { moduleLoads } from './core/module-loads.testkit.ts';
+import { moduleLoads } from './core/module-imports.testkit.ts';
 import { repoRoot } from './lint/source-rule.ts';
 
 // Each Node entry outside index.ts that reads runner data loads the bundled runners at its

@@ -46,11 +46,6 @@ afterEach(async () => {
 })
 
 const serveStarts = (source: string) => [...source.matchAll(/\b(spawnFixtureServer|spawn)\(\s*(?:process\.execPath,\s*)?\[([^\]]*'serve'[^\]]*)\]/g)]
-// hearsay-tools/cezarion#1084: each spec declares its own start count, so a PR that adds a
-// fixture-server spec edits only that spec, never a shared total (see e2e/fixture-server.md).
-// Any indentation or spacing is a candidate, so a near-miss is reported instead of ignored; the
-// line before the one declaration must end an import and no import may follow it, which also
-// rules out a copy inside a string or a block comment.
 // True when line `index` (0-based) is a line comment and the last import ends on the line before it,
 // read from the syntax tree, so a copy inside a string or a block comment does not count.
 const followsLastImport = (source: string, index: number) => {
@@ -60,6 +55,10 @@ const followsLastImport = (source: string, index: number) => {
   const comment = tree.comments?.some(node => node.type === 'CommentLine' && node.loc?.start.line === index + 1)
   return Boolean(comment) && imports.length > 0 && Math.max(...imports.map(node => node.loc?.end.line ?? 0)) === index
 }
+// hearsay-tools/cezarion#1084: each spec declares its own start count, so a PR that adds a
+// fixture-server spec edits only that spec, never a shared total (see e2e/fixture-server.md).
+// Any indentation or spacing is a candidate, so a near-miss is reported instead of ignored; the
+// one declaration must follow the last import directly (followsLastImport).
 const startDeclarationProblems = (file: string, source: string): string[] => {
   const starts = serveStarts(source).length
   const lines = source.split('\n')

@@ -94,7 +94,7 @@ appropriate boundary or checker explicitly.
 **Syntax scans read a syntax tree.** A guard, scanner, testkit or script that classifies
 JS/TS syntax (imports, exports, calls, declarations) reads a syntax tree: `runtimeImports` or
 `moduleImports` in `packages/cezar/src/core/module-imports.testkit.ts` for the modules a file
-loads, an oxlint AST visitor (`ast-rule.ts`, or `scanSource` in `ast-tree.ts` outside an oxlint
+loads (`moduleLoads` there for the names a load binds), an oxlint AST visitor (`ast-rule.ts`, or `scanSource` in `ast-tree.ts` outside an oxlint
 run), or `@babel/parser`. Regular expressions are for plain text only. A regex import scanner
 misses template literals, `import()`, `import x = require()` and comments, and review finds one
 form per round (hearsay-tools/squawk#4296). `cez/regex-module-syntax` refuses a regex that
