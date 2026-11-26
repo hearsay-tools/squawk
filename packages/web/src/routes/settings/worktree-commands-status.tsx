@@ -21,7 +21,7 @@ export function WorktreeCommandsStatus({
   return (
     <>
       {savedCommandCount === 0 && issue === null ? (
-        <p data-slot={`${slot}-empty`} className="text-sm text-foreground">
+        <p data-slot={`${slot}-empty`} className="text-xs text-muted-foreground">
           {copy.empty}
         </p>
       ) : null}

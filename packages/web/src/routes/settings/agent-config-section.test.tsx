@@ -149,6 +149,18 @@ describe('AgentConfigSection', () => {
     expect(screen.queryByText('.claude/settings.json')).toBeNull()
   })
 
+  it('shows the full filename on its own line, with status on a subline below it', async () => {
+    serve({ editable: true, userMcp: null, files: [
+      fileOf({ id: 'claude.settings', label: '.claude/settings.local.json', exists: false }),
+    ] })
+    renderSection()
+    const name = await screen.findByText('.claude/settings.local.json')
+    expect(name.getAttribute('data-slot')).toBe('agent-config-file-name')
+    expect(name.className).not.toContain('truncate')
+    const button = name.closest('[data-slot="agent-config-file"]')!
+    expect(button.querySelector('[data-slot="agent-config-file-meta"]')?.textContent).toContain('Not created')
+  })
+
   it('renders the agent selector with a not-installed badge from health', async () => {
     serve({
       editable: true,

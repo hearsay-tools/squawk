@@ -171,7 +171,7 @@ function ResourcesForm({ config }: { config: WorkspaceConfigResponse }) {
           disabled={save.isPending}
           onCheckedChange={saveAutoResume}
         />
-        <p className="text-[11px] text-soft-foreground">
+        <p className="text-xs text-muted-foreground">
           Applies to Claude Code, Codex and OpenCode — whenever the provider says when the limit lifts. Saves automatically.
         </p>
       </SettingsField>
@@ -225,8 +225,8 @@ function MaxParallelField({
           ),
         )}
       </SettingsSelect>
-      <p data-slot="resources-autosave" className="text-[11px] text-soft-foreground">Saves automatically.</p>
-      <p className="text-[11px] text-soft-foreground">
+      <p data-slot="resources-autosave" className="text-xs text-muted-foreground">Saves automatically.</p>
+      <p className="text-xs text-muted-foreground">
         Need a different limit for one project?{' '}
         <Link
           to="/settings/global/projects"
@@ -270,8 +270,8 @@ function MaxMonitoringField({
           <option key={n} value={n}>{n}</option>
         ))}
       </SettingsSelect>
-      <p data-slot="resources-autosave" className="text-[11px] text-soft-foreground">Saves automatically.</p>
-      <p className="text-[11px] text-soft-foreground">
+      <p data-slot="resources-autosave" className="text-xs text-muted-foreground">Saves automatically.</p>
+      <p className="text-xs text-muted-foreground">
         Capacity: {maxParallel} active + {maxMonitoringSessions ?? 2} monitoring. Set 0 to make monitoring share active slots.
       </p>
     </SettingsField>
@@ -328,7 +328,7 @@ function WakeField({
               onChange={(event) => setWakeInterval(event.target.value)}
               className="block rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
             />
-            <span className="text-xs text-soft-foreground">minutes</span>
+            <span className="text-xs text-muted-foreground">minutes</span>
           </>
         ) : null}
         <Button type="button" variant="primary" size="sm" data-action="resources-save-monitoring-wake" disabled={wakeSaved || showInvalid || saveIsPending} onClick={saveWake}>Save</Button>
@@ -336,7 +336,7 @@ function WakeField({
       {showInvalid ? (
         <p data-slot="resources-monitoring-wake-invalid" className="text-[11px] text-danger">Enter a whole number from 1 to 60 minutes.</p>
       ) : (
-        <p className="text-[11px] text-soft-foreground">Applied consistently to Claude, Codex and OpenCode.</p>
+        <p className="text-xs text-muted-foreground">Applied consistently to Claude Code, Codex and OpenCode.</p>
       )}
     </SettingsField>
   )
@@ -378,7 +378,7 @@ function MemoryField({
           onChange={(event) => setMemory(event.target.value)}
           className="block rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
         />
-        <span className="text-xs text-soft-foreground">MiB</span>
+        <span className="text-xs text-muted-foreground">MiB</span>
         <Button
           type="button"
           variant="primary"
@@ -395,7 +395,7 @@ function MemoryField({
           Enter a whole number of at least {MEMORY_MIN_MB} MiB, or leave empty for no limit.
         </p>
       ) : (
-        <p className="text-[11px] text-soft-foreground">Applies to newly started tasks.</p>
+        <p className="text-xs text-muted-foreground">Applies to newly started tasks.</p>
       )}
     </SettingsField>
   )
@@ -436,7 +436,7 @@ function ComposerDefaultsField({
             <option value="on">On</option>
             <option value="off">Off</option>
           </SettingsSelect>
-          <span className="text-[11px] text-soft-foreground">
+          <span className="text-xs text-muted-foreground">
             Inherited: {composerDefaults.inheritedAutonomous === 'source-dependent'
               ? 'Source-dependent — skills on, workflows off'
               : composerDefaults.inheritedAutonomous ? 'On' : 'Off'}
@@ -455,12 +455,12 @@ function ComposerDefaultsField({
             <option value="on">On</option>
             <option value="off">Off</option>
           </SettingsSelect>
-          <span className="text-[11px] text-soft-foreground">
+          <span className="text-xs text-muted-foreground">
             Inherited: {composerDefaults.inheritedWorktree ? 'On' : 'Off'}
           </span>
         </label>
       </div>
-      <p className="text-[11px] text-soft-foreground">
+      <p className="text-xs text-muted-foreground">
         Interactive skills may recommend both off. Multi-step and parallel runs remain isolated. Saves automatically.
       </p>
     </SettingsField>

@@ -557,6 +557,12 @@ describe('the global Agents section', () => {
     expect(document.querySelector('[data-slot="accounts-hosted"]')).toBeNull()
     expect(document.querySelector('[data-action="accounts-add"]')).not.toBeNull()
     expect(rowFor('work')?.querySelector('[data-slot="account-path"]')?.textContent).toBe('~/.claude-work')
+    // Add account shares the last row's action line with Check again; status sits above the path.
+    const actions = rowFor('work')?.querySelector('[data-slot="account-actions"]')
+    expect(actions?.querySelector('[data-action="account-recheck"]')).not.toBeNull()
+    expect(actions?.querySelector('[data-action="accounts-add"]')).not.toBeNull()
+    const readout = rowFor('work')?.querySelector('.settings-account-readout')
+    expect(readout?.firstElementChild?.querySelector('[data-slot="account-status"]')).not.toBeNull()
     expect(rowFor('work')?.querySelector('[data-action="account-rename"]')).not.toBeNull()
     expect(rowFor('work')?.querySelector('[data-action="account-remove"]')).not.toBeNull()
     expect(within(rowFor('work') as HTMLElement).getByRole('button', { name: 'Connect' })).toBeTruthy()

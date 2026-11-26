@@ -81,7 +81,7 @@ function Segmented<V extends string>({
             data-value={option.value}
             onClick={() => onChange(option.value)}
             className={cn(
-              'flex min-h-11 items-center gap-2 rounded-md border border-transparent px-3 py-1.5 text-[13px] font-medium transition-colors',
+              'flex min-h-11 items-center gap-2 whitespace-nowrap rounded-md border border-transparent px-3 py-1.5 text-[13px] font-medium transition-colors',
               checked
                 ? 'border border-border bg-card text-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground',

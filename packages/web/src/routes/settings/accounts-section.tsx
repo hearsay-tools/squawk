@@ -3,7 +3,7 @@ import { canonicalRunnerName } from './agent-descriptors'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { IdCardIcon } from 'lucide-react'
 import { CpuIcon } from '@/components/design-icons'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 
 import { ApiError, putWorkspaceConfig } from '@/api/client'
@@ -288,6 +288,9 @@ function AgentCard({
   const managed = entry.managedInstall === true && settingsAdmin
   const discoveredCount = accounts.filter((account) => account.isDefault).length
   const titleId = `${agentCardId(provider)}-title`
+  const addButton = editable && canCarryAccounts
+    ? <Button type="button" variant="outline" size="sm" data-action="accounts-add" data-provider={provider} onClick={onAdd}>Add account</Button>
+    : null
 
   return (
     <section
@@ -311,18 +314,25 @@ function AgentCard({
 
       {accounts.length > 0 ? (
         <ul>
-          {accounts.map((account) => (
-            <AccountRow key={account.id} account={account} runners={runners} editable={editable} onRemove={() => onRemove(account)} />
+          {accounts.map((account, index) => (
+            <AccountRow
+              key={account.id}
+              account={account}
+              runners={runners}
+              editable={editable}
+              onRemove={() => onRemove(account)}
+              // Add account joins the last row's action row, so Check again and Add account sit
+              // side by side instead of stacking as two one-button rows.
+              trailing={index === accounts.length - 1 ? addButton : null}
+            />
           ))}
         </ul>
       ) : null}
       {editable ? (
         canCarryAccounts ? (
-          <div className="settings-account-add-row">
-            <Button type="button" variant="outline" size="sm" data-action="accounts-add" data-provider={provider} onClick={onAdd}>Add account</Button>
-          </div>
+          accounts.length === 0 ? <div className="settings-account-add-row">{addButton}</div> : null
         ) : (
-          <p data-slot="accounts-single-only" className="text-[11px] text-soft-foreground">
+          <p data-slot="accounts-single-only" className="text-[12px] text-muted-foreground">
             {canonicalRunnerName(entry.id, entry.displayName)} can only hold one account here: it keeps its credentials
             outside its config folder, so a second folder would change settings without changing the
             login — which would say “work account” while billing the other one.
@@ -506,8 +516,10 @@ function AccountFolderAdvisory({ account, runners, status, editable }: {
   return null
 }
 
-function AccountRow({ account, runners, editable, onRemove }: {
+function AccountRow({ account, runners, editable, onRemove, trailing }: {
   account: AgentProfile; runners: RunnersResponse; editable: boolean; onRemove: () => void
+  /** A card-level action (Add account) that shares this row's action line. */
+  trailing?: ReactNode
 }) {
   const routeId = agentAccountRouteId(account)
   const recheck = useRecheckAgentAccount()
@@ -534,29 +546,30 @@ function AccountRow({ account, runners, editable, onRemove }: {
               </Badge>
             ) : null}
           </div>
-          <div className="settings-account-readout settings-readout">
-          {account.configDir ? (
-            <p
-              data-slot="account-path"
-              className="mt-0.5 truncate font-mono text-[11px] text-soft-foreground"
-              title={account.path}
-            >
-              {shortPath(account.configDir)}
-            </p>
-          ) : null}
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            {/* "Checking…" is a real, distinct state from any probe RESULT: the answer is not in
-                yet. Showing `unknown` here would claim a verification that never ran. */}
-            <StatusDot tone={presentation?.tone ?? 'neutral'} pulse={presentation === undefined} />
-            <span data-slot="account-status">{presentation?.label ?? 'Checking…'}</span>
-            <AccountFolderAdvisory account={account} runners={runners} status={status} editable={editable} />
-          </div>
-          {status?.hint ? <p className="text-xs text-muted-foreground">{status.hint}</p> : null}
+          {/* Status on its own line, the folder on the next: a long path never squeezes the status. */}
+          <div className="settings-account-readout">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {/* "Checking…" is a real, distinct state from any probe RESULT: the answer is not in
+                  yet. Showing `unknown` here would claim a verification that never ran. */}
+              <StatusDot tone={presentation?.tone ?? 'neutral'} pulse={presentation === undefined} />
+              <span data-slot="account-status" className="text-foreground">{presentation?.label ?? 'Checking…'}</span>
+              <AccountFolderAdvisory account={account} runners={runners} status={status} editable={editable} />
+            </div>
+            {account.configDir ? (
+              <p
+                data-slot="account-path"
+                className="font-mono text-[12px] text-muted-foreground"
+                title={account.path}
+              >
+                {shortPath(account.configDir)}
+              </p>
+            ) : null}
+            {status?.hint ? <p className="text-xs text-muted-foreground">{status.hint}</p> : null}
           </div>
         </div>
 
         {/* Public account actions stay separate from the opt-in identity details below. */}
-        <div className="settings-account-actions">
+        <div data-slot="account-actions" className="settings-account-actions flex flex-row flex-wrap items-center gap-2">
           <AccountSignIn account={account} runners={runners} status={status} editable={editable} />
           <Button
             type="button"
@@ -574,6 +587,7 @@ function AccountRow({ account, runners, editable, onRemove }: {
             Check again
           </Button>
           {editable ? <AccountManagement account={account} onRemove={onRemove} /> : null}
+          {trailing}
         </div>
       </div>
     </li>

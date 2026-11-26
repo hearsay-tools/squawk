@@ -196,7 +196,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                       data-skill={name}
                       title={`Stop applying “${template.label}” automatically with ${name}`}
                       onClick={() => toggleTemplateSkill(template.id, name)}
-                      className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-px font-mono text-[11px] font-medium text-foreground transition-colors hover:bg-danger/10 hover:text-danger"
+                      className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-xs font-medium text-foreground transition-colors hover:bg-danger/10 hover:text-danger"
                     >
                       {name}
                       <XIcon aria-hidden="true" className="size-3" />
@@ -353,12 +353,12 @@ function TemplateSkillsPicker({
           aria-label={`Apply ${label || 'this template'} automatically with a skill`}
           title="Pick the skills this template applies itself to"
           className={cn(
-            'inline-flex h-[26px] min-w-[7.5rem] items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
+            'inline-flex h-[26px] min-w-[9rem] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
             selected.length > 0 && 'border-foreground/60 font-semibold text-foreground',
           )}
         >
           <SparklesIcon aria-hidden="true" className="size-3 shrink-0 text-accent-icon" />
-          apply with…
+          Apply with…
           <ChevronDownIcon aria-hidden="true" className="size-2.5 shrink-0 text-soft-foreground" />
         </button>
       </PopoverTrigger>

@@ -152,7 +152,7 @@ function AgentConfigView({
         </p>
       )}
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(17rem,24rem)_minmax(0,1fr)]">
         <nav data-slot="agent-config-nav" className="flex min-w-0 flex-col gap-5">
           <AgentPane agent={agent} listing={listing} selectedId={selectedId} onSelect={setSelectedId} />
         </nav>
@@ -211,18 +211,25 @@ function AgentPane({
                     data-slot="agent-config-file"
                     data-selected={file.id === selectedId}
                     onClick={() => onSelect(file.id)}
+                    title={file.label}
                     className={cn(
-                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors',
+                      'flex w-full flex-col items-start gap-1 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors',
                       file.id === selectedId ? 'bg-accent-strong/15 text-foreground' : 'hover:bg-muted/60',
                     )}
                   >
-                    <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground">{file.label}</span>
-                    {file.seeded && (
-                      <Badge variant="outline" className="shrink-0 text-[12px]">
-                        Default template
-                      </Badge>
-                    )}
-                    {!file.exists && <span className="shrink-0 text-[11px] text-muted-foreground">Not created</span>}
+                    {/* The full filename on its own line — it wraps, never truncates — and the
+                        status badges on a compact subline below it. */}
+                    <span data-slot="agent-config-file-name" className="min-w-0 max-w-full break-all font-mono text-[12px]">{file.label}</span>
+                    {file.seeded || !file.exists ? (
+                      <span data-slot="agent-config-file-meta" className="flex flex-wrap items-center gap-1.5">
+                        {file.seeded && (
+                          <Badge variant="outline" className="text-[11px]">
+                            Default template
+                          </Badge>
+                        )}
+                        {!file.exists && <span className="text-[11px] text-muted-foreground">Not created</span>}
+                      </span>
+                    ) : null}
                   </button>
                 </li>
               ))}

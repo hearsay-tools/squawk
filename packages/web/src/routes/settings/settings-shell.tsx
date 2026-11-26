@@ -65,6 +65,11 @@ function SettingsMainHeader({ scope, title, mobileTitle, description }: { scope:
         <span className="md:hidden">{mobileTitle}</span>
         <span className="max-md:hidden">{title} <span className="font-normal text-soft-foreground">· {where}</span></span>
       </h1>
+      {/* Small screens: the section picker below names the section, so the title names the area
+          and this line keeps the scope cue the desktop title carries after its "·". */}
+      <span data-slot="settings-mobile-scope" className="text-[13px] text-muted-foreground md:hidden">
+        {scope === 'global' ? 'Applies to every project' : where}
+      </span>
       {description ? <p className="max-md:hidden text-[13px] text-muted-foreground">{description}</p> : null}
       {scope === 'global' ? (
         <span data-slot="settings-scope-chip" className="sr-only">
@@ -118,7 +123,7 @@ export function SettingsSectionRoute({
         scope={scope}
         title={section.title}
         description={section.description}
-        mobileTitle={section.title}
+        mobileTitle={scope === 'global' ? 'Global settings' : 'Project settings'}
       />
       <div className="settings-route-body flex min-w-0 flex-1 flex-col md:flex-row">
         <SectionPills scope={scope} activeId={section.id} />
@@ -137,7 +142,7 @@ export function SettingsSectionRoute({
 export function SettingsIndexRoute() {
   return (
     <div data-route="settings" className="settings-route flex min-h-full w-full flex-col">
-      <SettingsMainHeader scope="project" title="General" mobileTitle="General" />
+      <SettingsMainHeader scope="project" title="General" mobileTitle="Project settings" />
       <div className="settings-route-body flex min-w-0 flex-1 flex-col md:flex-row">
         <SectionPills scope="project" activeId={null} />
         {/* No second h1 for small screens: the app shell's mobile top bar already titles the
