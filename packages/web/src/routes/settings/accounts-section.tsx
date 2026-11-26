@@ -389,9 +389,9 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
           </select>
         </label>
         {runners.runners.filter((entry) => entry.id === modelChoice).map((entry) => (
-          <label key={entry.id} className="settings-account-model flex items-center gap-3">
+          <label key={entry.id} className="settings-account-model flex flex-wrap items-center gap-3">
             <CpuIcon className="size-4 text-accent-icon shrink-0" />
-            <span className="w-24 shrink-0 text-xs text-muted-foreground">{entry.displayName}</span>
+            <span className="w-28 shrink-0 text-xs text-muted-foreground">{entry.displayName}</span>
             <select
               aria-label={`Default model for ${entry.pickerLabel}`}
               data-slot="accounts-default-model"
@@ -409,7 +409,7 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
                   },
                 })
               }
-              className="block w-full max-w-xs rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+              className="block w-64 max-w-full rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
             >
               {modelsForRunner(entry.id, runners, catalogs[entry.id]?.data, [models[entry.id]]).map((model) => (
                 <option key={model.id} value={model.id}>
@@ -481,7 +481,11 @@ function AccountFolderAdvisory({ account, runners, status, editable }: {
   if (!account.exists) {
     return (
       <span data-slot="account-missing">
-        {editable ? '— folder not created yet; Connect will make it' : '— not initialized on host yet'}
+        {editable
+          ? status.status === 'connected'
+            ? '— folder not created yet; use Check again to refresh'
+            : '— folder not created yet; Connect will make it'
+          : '— not initialized on host yet'}
       </span>
     )
   }

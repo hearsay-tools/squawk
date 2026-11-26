@@ -6,7 +6,6 @@
   background: var(--card);
   padding: 24px;
 }
-.settings-panel-title { margin-block: 0 24px; margin-inline: 0; font-size: 20px; font-weight: 400; }
 .settings-panel > [data-slot] {
   width: 100%; max-width: none; margin: 0; padding: 0;
 }
@@ -26,7 +25,7 @@
 .settings-panel [data-slot="projects-checkout-root"] { width: 100%; max-width: none; }
 .settings-panel button:not([role=switch]):not([data-slot=project-tag-suggestion]) { min-height: 40px; }
 .settings-panel [data-slot="resources-composer-defaults"] { grid-template-columns: 1fr; gap: 24px; }
-.settings-panel [data-slot="prompt-template-row"],
+.settings-panel [data-slot="prompt-template-row"] { padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: color-mix(in oklch, var(--card-2) 40%, transparent); gap: 12px; margin-block-end: 12px; }
 .settings-panel [data-slot="prompt-template-new"] { padding-block: 20px; padding-inline: 0; border: 0; border-radius: 0; gap: 12px; border-block-end: 1px solid var(--border); }
 .settings-panel [data-slot="agent-config-agents"] { padding: 0; background: transparent; gap: 8px; }
 .settings-panel [data-slot="agent-config-agent"] { border: 1px solid var(--border); }
@@ -41,22 +40,21 @@
 .settings-panel :is([data-slot="project-row"], [data-slot="worktree-row"]) > :is(th, td) { display: block; max-width: none; width: 100%; min-width: 0; text-align: start; padding-block: 0; padding-inline: 12px; }
 .settings-panel :is([data-slot="project-row"], [data-slot="worktree-row"]) .truncate { white-space: normal; overflow-wrap: anywhere; }
 .settings-panel :is([data-slot="project-row"], [data-slot="worktree-row"]) td:last-child { border-block-start: 1px solid var(--border); padding-block-start: 12px; }
-.settings-panel .settings-resource-controls input { flex: 1; width: 100%; }
 .settings-panel .settings-field:has([data-slot="resources-auto-resume"]),
 .settings-panel .settings-field:has([data-slot="resources-monitoring-wake-mode"]) { position: relative; }
 .settings-panel .settings-field:has([data-slot="resources-auto-resume"]) > div:first-child,
 .settings-panel .settings-field:has([data-slot="resources-monitoring-wake-mode"]) > div:first-child { padding-inline-end: 60px; }
 .settings-panel [data-slot="resources-auto-resume"],
 .settings-panel [data-slot="resources-monitoring-wake-mode"] { position: absolute; inset-inline-end: 0; inset-block-start: 24px; }
-.settings-panel [data-slot="agent-config-group"] ul { flex-direction: row; flex-wrap: wrap; gap: 8px; }
-.settings-panel [data-slot="agent-config-file"] { border: 1px solid var(--border); padding-block: 10px; padding-inline: 12px; }
+.settings-panel [data-slot="agent-config-group"] ul { flex-direction: column; gap: 6px; }
+.settings-panel [data-slot="agent-config-file"] { width: 100%; border: 1px solid var(--border); padding-block: 10px; padding-inline: 12px; color: var(--foreground); }
 .settings-panel [data-slot="agent-config-file"][data-selected=true] { border-color: var(--accent-strong); color: var(--accent-text); }
 
 /* S01–S13: the Settings shell owns this rhythm, independent of the task reading width. */
 .settings-route { padding: 0; gap: 0; }
 /* Desktop: the header is the board's full-bleed "Main header" (16/28 padding, rule below); the body keeps the board's 28px. */
-.settings-route-header { padding-block: 16px; padding-inline: 28px; border-block-end: 1px solid var(--border); }
-.settings-route-body { gap: 24px; padding: 28px; }
+.settings-route-header { padding-block: 20px 16px; padding-inline: 36px; gap: 4px; }
+.settings-route-body { gap: 24px; padding-block: 8px 28px; padding-inline: 36px; max-width: 56rem; width: 100%; }
 .settings-section-picker { position: relative; width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
 .settings-section-picker summary { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding-block: 12px; padding-inline: 14px; list-style: none; cursor: pointer; font-size: 14px; }
 .settings-section-picker summary::-webkit-details-marker { display: none; }
@@ -94,21 +92,20 @@
 .settings-panel .settings-option-row p { margin-block-start: 8px; line-height: 1.6; }
 .settings-panel .settings-option-row label { flex-shrink: 0; }
 .settings-panel .settings-option-row label > span { display: none; }
-.settings-panel .settings-option-row :is(select, output) { width: auto; min-width: 12rem; max-width: 16rem; }
 .settings-panel .settings-form-actions { display: flex; flex-wrap: wrap; gap: 12px; border-block-start: 1px solid var(--border); padding-block-start: 20px; }
 @media (max-width: 767px) {
-  .settings-route { padding-block: 28px 32px; padding-inline: 18px; gap: 24px; }
-  .settings-route-header { padding: 0; border-block-end: 0; }
+  .settings-route { padding-block: 28px 32px; padding-inline: 16px; gap: 24px; }
+  .settings-route-header { padding: 0; }
   .settings-route-header h1 { line-height: 36px; letter-spacing: 0; }
   .settings-route-header > p { display: none; }
-  .settings-route-body { gap: 20px; padding: 0; }
+  .settings-route-body { gap: 20px; padding: 0; max-width: none; }
   .settings-panel { padding: 16px; }
-  .settings-panel-title { font-size: 20px; line-height: 30px; margin-block-end: 24px; }
   .settings-panel button:not([role=switch]):not([data-slot=project-tag-suggestion]):not([data-slot=prompt-template-skill-chip]) { min-height: 44px; }
   .settings-panel [data-slot=agent-config-agents] { flex-wrap: wrap; }
   .settings-panel [data-slot=agent-config-group] li { max-width: 100%; }
-  .settings-panel [data-slot=appearance-section] [role=radiogroup] { display: grid; width: 100%; }
-  .settings-panel [data-slot=appearance-section] [role=radio] { justify-content: flex-start; }
+  .settings-panel [data-slot=appearance-section] [role=radiogroup] { display: grid; width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .settings-panel [data-slot=appearance-width] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .settings-panel [data-slot=appearance-section] [role=radio] { justify-content: center; padding-inline: 8px; }
   .settings-panel .settings-resource-controls { align-items: stretch; }
   .settings-panel [data-slot=agents-system-prompt] { min-height: 192px; }
 }
@@ -224,12 +221,12 @@
 .settings-panel [data-slot=accounts-defaults] > div:first-child > p { margin-block-start: 8px; font-size: 12px; }
 .settings-account-models { padding: 14px; background: var(--background); border: 1px solid var(--border); border-radius: 8px; }
 .settings-panel .settings-account-model { position: relative; padding-block: 10px; padding-inline: 12px; background: var(--background); border: 1px solid var(--border); border-radius: 8px; }
-.settings-panel .settings-account-model select { border: 0; padding: 0; min-height: 24px; font-size: 13px; background: transparent; box-shadow: none; }
+.settings-panel .settings-account-model select { border: 0; padding: 0 36px 0 0; min-height: 24px; font-size: 13px; background: transparent; box-shadow: none; }
 @media (max-width: 767px) {
   .settings-config-agent-choice { margin-inline-start: 0; }
   .settings-config-file-row { gap: 8px; }
   .settings-config-file-row button { padding-inline: 12px; }
-  .settings-account-actions { align-items: flex-start; flex-direction: column; }
+  .settings-account-actions { align-items: center; flex-direction: row; }
   .settings-panel [data-slot=accounts-defaults] .settings-account-model { flex-direction: row; align-items: center; flex-wrap: wrap; }
   .settings-panel .settings-account-model select { flex: 1; min-width: 100px; }
 }
@@ -247,7 +244,17 @@
 .settings-account-management > span { order: 2; flex-basis: 100%; font-size: 12px; }
 .settings-account-management [data-slot=account-rename-input] { min-width: 0; max-width: 100%; }
 .settings-panel [data-slot=accounts-defaults] .settings-model-agent-choice { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 12px; color: var(--muted-foreground); }
-.settings-panel .settings-model-agent-choice select { width: auto; min-height: 28px; border: 0; background: transparent; font-size: 12px; }
+.settings-panel .settings-model-agent-choice select { width: 16rem; max-width: 100%; }
 .settings-config-scopes [data-slot=agent-config-group] > ul > li { width: 100%; min-width: 0; }
 .settings-config-scopes [data-slot=agent-config-file] { min-width: 0; max-width: 100%; }
 .settings-panel [data-slot=settings-config-editor] > [data-slot=code-editor] { background: var(--background); }
+
+/* Uniform styled selects: native arrow replaced by a right-hand chevron; one width for stacked rows. */
+.settings-panel select { appearance: none; padding-inline: 12px 36px; border: 1px solid var(--border); border-radius: 8px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+.settings-panel .settings-option-row { align-items: center; }
+.settings-panel .settings-option-row :is(select, output) { width: 16rem; min-width: 0; max-width: 100%; }
+.settings-panel .settings-field > select { width: 16rem; max-width: 100%; }
+.settings-panel .settings-field > select[data-slot="resources-max-parallel"], .settings-panel .settings-field > select[data-slot="resources-max-monitoring"] { width: 9rem; }
+.settings-panel .settings-resource-controls input[data-slot="resources-memory-limit"], .settings-panel .settings-resource-controls input[data-slot="resources-monitoring-wake-interval"] { flex: none; width: 9rem; }
+.settings-panel [data-slot="resources-composer-defaults"] select { width: 16rem; max-width: 100%; }
+.settings-panel .settings-account-add-row, .settings-panel [data-slot=accounts-actions] { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

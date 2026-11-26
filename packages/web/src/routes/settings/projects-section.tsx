@@ -226,7 +226,7 @@ function WorkspaceRootField({
         />
         <Button
           type="button"
-          variant="outline"
+          variant="primary"
           size="sm"
           data-action={`projects-save-${slot}-root`}
           disabled={unchanged || trimmed === '' || save.isPending}

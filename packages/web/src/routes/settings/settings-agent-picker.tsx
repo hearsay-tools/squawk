@@ -12,7 +12,7 @@ export function SettingsAgentPicker(props: ComponentProps<typeof DefaultAgentPic
     <details ref={disclosure} className="settings-agent-picker">
       <summary>
         <TerminalIcon aria-hidden="true" className="size-4 text-accent-text" />
-        <span className="min-w-0 flex-1">{(selected?.label ?? props.runner).replace(/^codex/, 'Codex').replace(/^claude/, 'Claude Code')}</span>
+        <span className="min-w-0 flex-1">{selected?.label ?? props.rows.find((row) => row.runner.id === props.runner)?.runner.displayName ?? props.runner}</span>
         <ChevronDownIcon aria-hidden="true" className="size-4 text-muted-foreground" />
       </summary>
       <DefaultAgentPicker {...props} onPick={(...args) => {

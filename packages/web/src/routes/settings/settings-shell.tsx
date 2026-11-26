@@ -55,16 +55,17 @@ function navComponents(scope: SettingsScope) {
  * One h1 carries both so the page keeps a single heading; `display:none` drops the other
  * from the accessible name.
  */
-function SettingsMainHeader({ scope, title, mobileTitle }: { scope: SettingsScope; title: string; mobileTitle: string }) {
+function SettingsMainHeader({ scope, title, mobileTitle, description }: { scope: SettingsScope; title: string; mobileTitle: string; description?: string }) {
   // The same name the sidebar header shows; an unregistered boot project falls back to its root.
   const projectName = useActiveProjectIdentity().name
   const where = scope === 'global' ? 'every project' : (projectName ?? 'this project')
   return (
     <header data-slot="settings-main-header" className="settings-route-header flex shrink-0 flex-col gap-2">
-      <h1 className="text-[15px] font-semibold tracking-normal max-md:text-[24px] max-md:font-normal">
+      <h1 className="text-[20px] font-semibold tracking-tight text-foreground max-md:text-[24px]">
         <span className="md:hidden">{mobileTitle}</span>
-        <span className="max-md:hidden">{title} · {where}</span>
+        <span className="max-md:hidden">{title}</span>
       </h1>
+      {description ? <p className="max-md:hidden text-[13px] text-muted-foreground">{description} <span className="text-soft-foreground">· {where}</span></p> : <p className="max-md:hidden text-[13px] text-soft-foreground">{where}</p>}
       {scope === 'global' ? (
         <span data-slot="settings-scope-chip" className="sr-only">
           Global settings
@@ -111,17 +112,18 @@ export function SettingsSectionRoute({
   return (
     <div
       data-route={scope === 'global' ? `settings-global-${section.id}` : `settings-${section.id}`}
-      className="settings-route mx-auto flex min-h-full w-full flex-col"
+      className="settings-route flex min-h-full w-full flex-col"
     >
       <SettingsMainHeader
         scope={scope}
         title={section.title}
+        description={section.description}
         mobileTitle={scope === 'global' ? 'Global settings' : 'Project settings'}
       />
       <div className="settings-route-body flex min-w-0 flex-1 flex-col md:flex-row">
         <SectionPills scope={scope} activeId={section.id} />
         <section className="settings-panel min-w-0 self-start md:flex-1" aria-label={section.title}>
-          <h2 className="settings-panel-title">{section.title}</h2>
+          <h2 className="settings-panel-title sr-only">{section.title}</h2>
           <Body />
         </section>
       </div>
@@ -134,7 +136,7 @@ export function SettingsSectionRoute({
  *  sidebar). The global area has none — see the header comment. */
 export function SettingsIndexRoute() {
   return (
-    <div data-route="settings" className="settings-route mx-auto flex min-h-full w-full flex-col">
+    <div data-route="settings" className="settings-route flex min-h-full w-full flex-col">
       <SettingsMainHeader scope="project" title="General" mobileTitle="Project settings" />
       <div className="settings-route-body flex min-w-0 flex-1 flex-col md:flex-row">
         <SectionPills scope="project" activeId={null} />

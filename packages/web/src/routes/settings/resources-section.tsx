@@ -323,12 +323,12 @@ function WakeField({
               value={wakeInterval}
               disabled={saveIsPending}
               onChange={(event) => setWakeInterval(event.target.value)}
-              className="block w-24 rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+              className="block rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
             />
             <span className="text-xs text-soft-foreground">minutes</span>
           </>
         ) : null}
-        <Button type="button" variant="outline" size="sm" data-action="resources-save-monitoring-wake" disabled={wakeSaved || showInvalid || saveIsPending} onClick={saveWake}>Save</Button>
+        <Button type="button" variant="primary" size="sm" data-action="resources-save-monitoring-wake" disabled={wakeSaved || showInvalid || saveIsPending} onClick={saveWake}>Save</Button>
       </div>
       {showInvalid ? (
         <p data-slot="resources-monitoring-wake-invalid" className="text-[11px] text-danger">Enter a whole number from 1 to 60 minutes.</p>
@@ -373,12 +373,12 @@ function MemoryField({
           disabled={saveIsPending}
           placeholder="no limit"
           onChange={(event) => setMemory(event.target.value)}
-          className="block w-32 rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+          className="block rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
         />
         <span className="text-xs text-soft-foreground">MiB</span>
         <Button
           type="button"
-          variant="outline"
+          variant="primary"
           size="sm"
           data-action="resources-save-memory"
           disabled={memorySaved || memoryInvalid || saveIsPending}
@@ -420,7 +420,7 @@ function ComposerDefaultsField({
       hint="Apply to new tasks unless overridden."
     >
       <div className="grid gap-4 sm:grid-cols-2" data-slot="resources-composer-defaults">
-        <label className="grid gap-1.5 text-sm">
+        <label className="grid gap-1.5 text-sm sm:grid-cols-1">
           <span className="font-medium">Autonomous by default</span>
           <select
             aria-label="Autonomous by default"
@@ -439,7 +439,7 @@ function ComposerDefaultsField({
               : composerDefaults.inheritedAutonomous ? 'On' : 'Off'}
           </span>
         </label>
-        <label className="grid gap-1.5 text-sm">
+        <label className="grid gap-1.5 text-sm sm:grid-cols-1">
           <span className="font-medium">Use a worktree by default</span>
           <select
             aria-label="Use a worktree by default"
