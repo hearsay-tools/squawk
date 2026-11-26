@@ -171,8 +171,8 @@ export function buildBreak(cwd, source, head = git(cwd, ['rev-parse', 'HEAD^{com
   return git(cwd, ['commit-tree', tree, '-p', head, '-m', `regression-proof break: ${source.label}`]);
 }
 
-// Squeal appends this to a proven file's reason when the FRESH_RUN condition made no difference,
-// which is always true for that condition.
+// Squeal's NOT_SHOWN_TO_MATTER text. Squeal appends it to a proven file's reason when a
+// condition made no difference, which is always true for FRESH_RUN.
 const CONTROL_REASON = 'red without the conditions too: the conditions are not shown to matter';
 
 function withoutControlReason(reason) {
