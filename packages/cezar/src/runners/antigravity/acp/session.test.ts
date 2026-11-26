@@ -144,6 +144,59 @@ describe('shared ACP session over the native mock wire', () => {
     expect(ui).toContainEqual(expect.objectContaining({ type: 'ask.requested', questions: [{ header: 'Choice', question: 'Continue?' }] }));
     expect(events).toContainEqual({ type: 'text', text: '{"outcome":{"outcome":"selected","optionId":"allow-once"}}' });
   });
+
+  it('tracks pending permission state, fires onPermissionResolved after writing the response, and keeps prompt ownership when a steer rejects', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'squawk-acp-perm-')); dirs.push(dir);
+    const wire = join(dir, 'wire.ndjson');
+    let resolvedCount = 0;
+    let sawPending = false;
+    let pendingAtCallback: boolean | undefined;
+    let steerError: unknown;
+    let promptOpenAfterReject: boolean | undefined;
+    const { session, ui } = start({
+      onPermissionResolved: () => {
+        resolvedCount++;
+        pendingAtCallback = session.hasPendingPermission;
+      },
+      uiEvent: event => {
+        if (event.type !== 'permission.requested') return;
+        sawPending = session.hasPendingPermission;
+        void session.steer([{ type: 'text', text: 'rejected while waiting' }]).catch(error => {
+          steerError = error;
+          promptOpenAfterReject = session.promptOpen;
+          expect(session.respondPermission(event.requestId, 'allow-once')).toBe(true);
+        });
+      },
+    }, { CEZ_MOCK_STDIN_FILE: wire });
+    await session.initialize();
+    await session.open({ cwd: dir });
+    expect(session.hasPendingPermission).toBe(false);
+    expect(session.permissionResolutionCount).toBe(0);
+    await expect(session.prompt([{ type: 'text', text: 'mock:acp-permission' }])).resolves.toMatchObject({ stopReason: 'end_turn' });
+    expect(sawPending).toBe(true);
+    expect(steerError).toBeInstanceOf(Error);
+    expect((steerError as Error).message).toContain('waiting for a permission or question answer');
+    expect(promptOpenAfterReject).toBe(true);
+    expect(resolvedCount).toBe(1);
+    expect(pendingAtCallback).toBe(false);
+    expect(session.hasPendingPermission).toBe(false);
+    expect(session.permissionResolutionCount).toBe(1);
+    expect(ui.filter(event => event.type === 'turn.completed')).toEqual([expect.objectContaining({ stopReason: 'end_turn' })]);
+  });
+
+  it('fires onPermissionResolved and increments permissionResolutionCount for policy-approved permissions', async () => {
+    let resolvedCount = 0;
+    const { session } = start({
+      hooks: { permissionPolicy: () => ({ outcome: 'selected', optionId: 'allow-once' }) },
+      onPermissionResolved: () => { resolvedCount++; },
+    });
+    await session.initialize();
+    await session.open({ cwd: tmpdir() });
+    await expect(session.prompt([{ type: 'text', text: 'mock:acp-permission' }])).resolves.toMatchObject({ stopReason: 'end_turn' });
+    expect(resolvedCount).toBe(1);
+    expect(session.permissionResolutionCount).toBe(1);
+    expect(session.hasPendingPermission).toBe(false);
+  });
 });
 
 

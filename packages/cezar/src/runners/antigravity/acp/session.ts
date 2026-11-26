@@ -14,6 +14,8 @@ export interface AcpSessionOptions extends AcpEventSink {
   clientInfo: { name: string; version: string };
   hooks?: AcpHooks;
   onActivity?: () => void;
+  /** Runs after a `session/request_permission` response has been written to the transport. */
+  onPermissionResolved?: () => void;
 }
 export interface AcpOpenOptions {
   cwd: string;
@@ -35,6 +37,7 @@ export class AcpSession {
   private earlyUpdates: Array<z.infer<typeof updateSchema>> = [];
   private permissions = new Map<string, PendingPermission>();
   private permissionSerial = 0;
+  private permissionResolutions = 0;
   private readonly permissionPrefix = randomUUID();
   private closed = false;
   private promptOwner: symbol | undefined;
@@ -52,6 +55,11 @@ export class AcpSession {
     this.transport = new AcpTransport(streams, {
       notification: (method, params) => this.notification(method, params),
       request: (method, params) => this.request(method, params),
+      answered: method => {
+        if (method !== 'session/request_permission' || this.closed) return;
+        this.permissionResolutions++;
+        this.options.onPermissionResolved?.();
+      },
       notice: message => this.events.notice(message),
       ...(options.onActivity ? { activity: options.onActivity } : {}),
     });
@@ -129,6 +137,12 @@ export class AcpSession {
 
   /** An agent-started turn is open: the agent works on its own, with no prompt carrying it. */
   get agentWorking(): boolean { return this.events.agentTurn; }
+
+  /** At least one native permission or ask request is waiting for an answer. */
+  get hasPendingPermission(): boolean { return this.permissions.size > 0; }
+
+  /** Count of native permission requests whose response has been written to the wire. */
+  get permissionResolutionCount(): number { return this.permissionResolutions; }
 
   private async requestPrompt(content: readonly Record<string, unknown>[], onAcknowledged?: () => void): Promise<z.infer<typeof promptResultSchema>> {
     const sessionId = this.requireSession();
