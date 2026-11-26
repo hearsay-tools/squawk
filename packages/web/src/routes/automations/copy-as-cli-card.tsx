@@ -40,8 +40,8 @@ export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
   }
 
   return (
-    <section aria-labelledby="copy-as-cli-heading" data-slot="copy-as-cli" className="rounded-xl border bg-card px-4 py-3.5">
-      <div className="mbe-2 flex min-h-8 items-center gap-2">
+    <section aria-labelledby="copy-as-cli-heading" data-slot="copy-as-cli" className="min-w-0 max-w-full overflow-hidden rounded-xl border bg-card px-4 py-3.5">
+      <div className="mbe-2 flex min-h-8 min-w-0 items-center gap-2">
         <h2 id="copy-as-cli-heading" className="text-[13px] font-medium text-muted-foreground">Copy as CLI</h2>
         <Button type="button" variant="outline" size="sm" className="ms-auto max-md:h-11 no-hover:h-11" onClick={() => void copy()}>
           {state === 'copied' ? <CheckIcon aria-hidden="true" /> : <CopyIcon aria-hidden="true" />}

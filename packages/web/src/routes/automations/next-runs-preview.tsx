@@ -13,7 +13,7 @@ export function NextRunsPreview({ schedule, timeZone, now = Date.now() }: { sche
   // `+ 1`: the range is half-open at the start, and "next" is strictly after `now`.
   const runs = occurrencesBetween(schedule, now + 1, now + PREVIEW_WINDOW_MS, timeZone, PREVIEW_COUNT)
   return (
-    <section aria-labelledby="next-runs-heading" data-slot="next-runs" className="rounded-xl border bg-card p-5">
+    <section aria-labelledby="next-runs-heading" data-slot="next-runs" className="min-w-0 rounded-xl border bg-card p-5">
       <h2 id="next-runs-heading" className="mb-2 text-base font-semibold">Next 5 runs</h2>
       {runs.length === 0 ? (
         <p className="text-sm text-muted-foreground">No runs in the next 40 days.</p>
@@ -39,7 +39,7 @@ function OnceRun({ schedule, now }: { schedule: NormalizedSchedule; now: number 
   // The time the task really starts at, which a DST change can move away from the typed one.
   const wall = onceResolved(schedule)
   return (
-    <section aria-labelledby="next-runs-heading" data-slot="next-runs" className="rounded-xl border bg-card p-5">
+    <section aria-labelledby="next-runs-heading" data-slot="next-runs" className="min-w-0 rounded-xl border bg-card p-5">
       <h2 id="next-runs-heading" className="mb-3 text-base font-semibold">Runs once</h2>
       {instant === null || !wall ? (
         <p className="text-sm text-muted-foreground">Pick a date, a time and a time zone.</p>
