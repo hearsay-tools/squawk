@@ -12,8 +12,8 @@ import { child, children, nameOf, stringOf, type AstRule, type EsNode } from './
  * pattern in which `import`, `export`, `require` or `from` stands as a whole word next to a regex
  * token or code punctuation: `\s`, `\b`, a group, a brace, `*`, a quote, a character class,
  * `\.meta`, or after one space a quote, a brace, `*`, `(` or a declaration keyword. A keyword that
- * is one alternative of a group, as in `(?:import|export)`, or that follows a line start (`^`, `^\s*`)
- * is syntax too.
+ * is one alternative of a group, as in `(?:import|export)`, is syntax too. So is a keyword at a line
+ * start (`^`, `\n`, `(?:^|\n)`, then optional white space), unless one space and a word follow it.
  *
  * It leaves out prose (the keyword, one space and a word, as in "files import the changed files"),
  * a keyword after `-` or `@` (`--import`, CSS `@import`) or before `-` (`require-e2e`), and a
@@ -35,6 +35,10 @@ const CLASS = String.raw`\[\^?(?:[^\]]*['"\x60]|[ \\]\\?[st ])`;
 const SYNTAX_NEXT = new RegExp(String.raw`^(?:\\[sb({*.]|[({*'"\x60]|${CLASS})`);
 /** What makes the keyword code after one literal space. */
 const SYNTAX_AFTER_SPACE = new RegExp(String.raw`^ (?:\\[({*]|[{*'"\x60(]|\[\^?[^\]]*['"\x60]|(?:type|const|let|var|default|function|async|class|declare|interface)\b)`);
+/** A line start, `^`, `\n` or a group such as `(?:^|\n)`, then optional white space tokens. */
+const LINE_START = /(?:(?:^|[^\\])\^|\\n|(?:\^|\\n)\))(?:\\s[*+?]?|\[ \\t\][*+?]?| [*+?]?)*$/;
+/** One space and a word: the keyword reads as prose, as in `^from the start`. */
+const PROSE_NEXT = /^ [A-Za-z]/;
 /** Zero-width tokens and anchors that may stand between a group's start and its alternative. */
 const LEADING_TOKENS = /(?:\\[bs][*+?]?|\^)*$/;
 
@@ -52,8 +56,8 @@ function keywordIsSyntax(source: string, at: number, length: number): boolean {
   if (before === '-' || before === '@' || next.startsWith('-')) return false;
   // One alternative of a group, such as `(?:import|load)` or `(?:\bfrom|^import)`.
   if (/^[|)]/.test(next) && /[|(:]$/.test(source.slice(0, at).replace(LEADING_TOKENS, ''))) return true;
-  // A keyword at a line start, such as `^import ` or `^\s*export$`, is a statement keyword.
-  if (/^ ?\$?$/.test(next) && /^\^(?:\\s[*+]?)?$|[^\\]\^(?:\\s[*+]?)?$/.test(source.slice(0, at))) return true;
+  // A keyword at a line start is a statement keyword unless one space and a prose word follow it.
+  if (LINE_START.test(source.slice(0, at)) && !PROSE_NEXT.test(next)) return true;
   return SYNTAX_NEXT.test(next) || SYNTAX_AFTER_SPACE.test(next);
 }
 

@@ -96,6 +96,12 @@ ruleCases(regexModuleSyntax, {
     'const line = /^import /',
     'const line = /^export /m',
     'const line = /^\\s*import$/',
+    'const line = /^import \\w+ from/',
+    'const line = /^import \\S+/',
+    'const line = /^export \\w+/m',
+    'const line = /^\\s*import .+ from .+$/',
+    'const line = /(?:^|\\n)import /',
+    'const line = /\\nexport \\{/',
   ],
 });
 
