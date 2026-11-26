@@ -72,7 +72,7 @@ export function GlobalTasksLoadError({ groupBy, filterDetailsOpen, message, onRe
   onRetry: () => void
 }) {
   return (
-    <div data-route="global-tasks" data-presentation={groupBy === 'none' ? 'summary' : 'cards'} data-filter-details={filterDetailsOpen} className="flex min-h-full flex-col gap-[22px] px-[18px] pt-6 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-9">
+    <div data-route="global-tasks" data-presentation={groupBy === 'none' ? 'summary' : 'cards'} data-filter-details={filterDetailsOpen} className="flex min-h-full flex-col gap-[22px] px-4 pt-6 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:py-7">
       <CenteredState
         icon={<LayersIcon />}
         tone="danger"
