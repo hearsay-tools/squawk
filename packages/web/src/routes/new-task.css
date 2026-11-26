@@ -14,10 +14,6 @@
 .new-task-submission kbd { display: none; }
 .new-task-submission [data-slot='mode-seg'] { display: flex; width: 100%; height: 48px; }
 .new-task-submission [data-slot='mode-seg'] button { flex: 1; height: 42px; }
-.new-task-submission [data-slot='mode-seg'] [aria-checked='true'] {
-  background: var(--task-brand-selected); color: var(--accent-text);
-  border: 1px solid var(--composer-border); box-shadow: none;
-}
 .new-task-agent-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .new-task-agent-options > * { min-width: 0; }
 .new-task-agent-options [data-slot='model-pill'] { grid-column: 1 / -1; grid-row: 1; min-height: 60px; }
@@ -83,7 +79,6 @@
   [data-route='new'] .new-task-agent-options [data-slot='model-pill'] { grid-column: 1 / -1; grid-row: 2; }
   [data-route='new'] .new-task-agent-options [data-slot='effort-pill'] { grid-column: 2; grid-row: 1; }
   [data-route='new'] .new-task-agent-options:not(:has([data-slot='runner-pill'])) [data-slot='effort-pill'] { grid-column: 1 / -1; }
-  [data-route='new'] .new-task-agent-options :is([data-slot='runner-pill'], [data-slot='effort-pill']) > svg:first-child { display: none; }
 }
 [data-route='new'] .new-task-agent-options [data-slot$='pill'] { border-color: var(--border); border-radius: 9px; min-height: 44px; }
 [data-route='new'] .new-task-agent-options [data-slot='model-pill'] { height: 44px; min-height: 44px; padding-block: 0; padding-inline: 12px; }
@@ -151,13 +146,14 @@
 
 /* One radius for every chip in the composer toolbar row. */
 .new-task-editor [data-slot='composer-footer-start'] :is(button, [data-slot$='pill']) { border-radius: 9px; }
-/* Start task uses the 13px call-to-action label. While it cannot start, it keeps a faint gold
- * tint, so it reads as the primary action next to the teal Run now instead of a dead grey slab. */
+/* Start task uses the 13px call-to-action label. While it cannot start, it keeps a gold tint and
+ * a gold hairline, so it still reads as the primary action in both themes, never a grey slab. */
 [data-route='new'] [data-slot='composer-submit-row'] > button { font-size: 13px; }
 [data-route='new'] [data-slot='composer-submit-row'] > button:disabled {
-  border-color: color-mix(in oklch, var(--action) 35%, var(--border));
-  background: color-mix(in oklch, var(--action) 14%, var(--card));
-  color: var(--muted-foreground);
+  border: 1px solid color-mix(in oklch, var(--action) 55%, transparent);
+  background: color-mix(in oklch, var(--action) 16%, var(--card));
+  color: color-mix(in oklch, var(--action) 45%, var(--foreground));
+  opacity: 1;
 }
 @media (max-width: 767px) {
   /* Phones: a slightly tighter stack keeps Execution settings above the bottom tab bar. */

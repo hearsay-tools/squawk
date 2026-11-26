@@ -53,7 +53,7 @@ export function GlobalActivityRoute() {
   const { motion, paused, reduced } = useActivityMotion(activity.data, 'workspace')
 
   return (
-    <div data-route="activity-global" data-activity-paused={paused ? 'true' : undefined} className="flex min-h-full w-full flex-col gap-4 px-4 pb-6 md:px-9">
+    <div data-route="activity-global" data-activity-paused={paused ? 'true' : undefined} className="flex min-h-full w-full flex-col gap-3.5 px-4 pb-6 md:px-9">
       <ActivityHeader name="All projects" now={activity.data ? now : undefined} updatedAt={activity.data?.generatedAt} stale={activity.isError}>
         <ScopeSwitch scope="all" projectId={back.id} projectName={back.name} />
       </ActivityHeader>
@@ -69,7 +69,7 @@ export function GlobalActivityRoute() {
       {snapshot && groups.panels.length === 0 && groups.idle.length === 0 ? (
         <p data-slot="activity-empty" className="py-6 text-[13px] text-muted-foreground">No projects to show.</p>
       ) : null}
-      <div data-slot="activity-panels" className="flex flex-col gap-3.5">
+      <div data-slot="activity-panels" className="flex flex-col gap-3">
         {groups.panels.map((project) => <ProjectPanel key={project.projectId} project={project} now={now} motion={motion} paused={paused || reduced} />)}
       </div>
       <IdleLine projects={groups.idle} belowPanels={groups.panels.length > 0} />

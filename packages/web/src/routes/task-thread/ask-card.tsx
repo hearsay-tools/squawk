@@ -347,7 +347,7 @@ function AskQuestionBlock({
       {options ? (
         <>
           {/* Choices sit in two columns from the small breakpoint; Other is the grid's last cell. */}
-          <div data-slot="ask-options" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div data-slot="ask-options" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 sm:gap-2">
             {options.map((option) => {
               const isSelected = selected.includes(option.label)
               return (
@@ -358,7 +358,7 @@ function AskQuestionBlock({
                   aria-pressed={isSelected}
                   onClick={() => pick(option.label)}
                   className={cn(
-                    'flex min-h-11 w-full flex-col justify-center gap-0.5 rounded-md border px-2.5 py-1 text-left transition-colors',
+                    'flex min-h-11 w-full flex-col justify-center gap-0.5 rounded-md border px-2.5 py-1.5 text-left transition-colors',
                     'hover:border-accent-strong/50 hover:bg-accent-strong/[0.06] [html:not(.light)_&]:hover:bg-card disabled:pointer-events-none disabled:opacity-50',
                     isSelected ? 'border-accent-strong/60 bg-accent-strong/[0.06] [html:not(.light)_&]:bg-card' : 'border-border bg-card',
                   )}
@@ -397,7 +397,7 @@ function AskQuestionBlock({
                 disabled={disabled}
                 onClick={onOtherToggle}
                 className={cn(
-                  'h-auto min-h-11 w-full justify-start px-2.5 py-1 text-left',
+                  'h-auto min-h-11 w-full justify-start px-2.5 py-1.5 text-left',
                   isOther && 'border-accent-strong/60 bg-accent-strong/[0.06] [html:not(.light)_&]:bg-card',
                 )}
               >

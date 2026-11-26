@@ -42,9 +42,8 @@ import { useContinueAction } from './follow-up-engine'
 import { findSubagent, subagentEntries } from './subagent-dock'
 import { SubagentSheet } from './subagent-sheet'
 import { AcceptCelebration, ReviewPanel } from './review-panel'
-import { archiveInComposer, hasLiveSession, offersComposerFinish, queuePosition, runActionFlags } from './run-actions'
+import { hasLiveSession, offersComposerFinish, queuePosition, runActionFlags } from './run-actions'
 import { useWorkersLive } from './run-relationships'
-import { ArchiveButton } from './archive-action'
 import { useFinishRun } from './use-finish-run'
 import { useStopAction } from './stop-action'
 import { RunHeader } from './run-header'
@@ -508,7 +507,7 @@ function ThreadTranscript({
   /* Row spacing lives on each thread row (pb-2.5, both render modes measure alike);
       this gap only separates the sections — rows, empty state, footer, review panel. */
   return (
-    <div data-slot="session-conversation" className="mx-auto flex w-full max-w-[var(--measure)] flex-1 flex-col gap-2.5 px-[18px] py-3 md:gap-3.5 md:px-16 md:py-5 [padding-block-end:24px]">
+    <div data-slot="session-conversation" className="mx-auto flex w-full max-w-[var(--measure)] flex-1 flex-col gap-2.5 px-[18px] py-3 [padding-block-end:12px] md:gap-3.5 md:px-16 md:py-5 md:[padding-block-end:24px]">
       {history ? (
         <HistoryBoundary
           hasOlder={history.hasOlder}
@@ -738,9 +737,6 @@ function ThreadComposer({
           : undefined
       }
       finishing={finishAction.isPending}
-      // Stop's own slot, once Stop is not offered. A failed run holding wait results offers
-      // both, so the header carries its Archive and the composer is handed one control.
-      secondaryAction={archiveInComposer(run, workersLive) ? <ArchiveButton run={run} compactOnMobile /> : undefined}
       stopOnEmpty={composerStopsOnEmpty(run, attention, needsAnswer)}
       stopping={stopAction.stopping}
       retainDraftUntilSuccess

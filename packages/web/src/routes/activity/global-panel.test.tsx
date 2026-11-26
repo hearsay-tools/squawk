@@ -37,7 +37,7 @@ describe('ProjectPanel', () => {
     expect(pills).toHaveLength(40)
     for (const [i, pill] of pills.entries()) {
       expect(pill.querySelectorAll('[data-slot="activity-pill-line"]')).toHaveLength(1)
-      expect(pill.querySelector('[data-slot="activity-pill-line"]')?.textContent).toBe(`Doing · Read file-${i}.ts`)
+      expect(pill.querySelector('[data-slot="activity-pill-line"]')?.textContent).toBe(`Running · Read file-${i}.ts`)
       expect(pill.querySelector('[data-slot="activity-detail"]')).toBeNull()
       expect(within(pill).getByRole('link', { name: `Task ${i}` }).getAttribute('href')).toBe(`/p/busy/tasks/t${i}`)
     }

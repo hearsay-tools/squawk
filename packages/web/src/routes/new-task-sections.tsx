@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckIcon, ChevronDownIcon, CpuIcon, GaugeIcon, SlidersHorizontalIcon, TerminalIcon } from '@/components/design-icons'
+import { ChevronDownIcon, CpuIcon, GaugeIcon, SlidersHorizontalIcon, TerminalIcon } from '@/components/design-icons'
 import { useState, type RefObject } from 'react'
 import { useIsDesktop } from '@/lib/use-desktop'
 
@@ -421,10 +421,14 @@ function BaseBranchPill({ repo }: { repo: RepoResponse }) {
   )
 }
 
-/** The `Start | Plan first` segment (#383): a real toggle with an UNMISTAKABLE selected state.
- *  "Start" selected keeps the quiet card fill; "Plan first" selected takes the mockup's
- *  contrast fill + focus ring (`.seg .plan-active`) — plan mode must never be ambient. The
- *  active plan segment doubles as the busy indicator while `POST /api/plan` is in flight. */
+/** The `Run now | Plan first` segment (#383): a real toggle with one neutral selected fill, the
+ *  same surface, border and active treatment as the diff view's Unified | Split toggle, so the
+ *  gold Start task button stays the only loud control. The active plan segment doubles as the
+ *  busy indicator while `POST /api/plan` is in flight. */
+const modeSegmentClass = 'h-6 rounded-md px-3 text-xs font-medium transition-colors outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50'
+const modeSegmentActive = 'bg-muted text-foreground'
+const modeSegmentIdle = 'text-muted-foreground pointer-hover:text-foreground'
+
 function ModeSegment({
   planFirst,
   planning,
@@ -439,21 +443,15 @@ function ModeSegment({
       data-slot="mode-seg"
       role="radiogroup"
       aria-label="Run mode"
-      className="inline-flex items-center gap-0.5 rounded-lg bg-muted p-[3px]"
+      className="inline-flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5"
     >
       <button
         type="button"
         role="radio"
         aria-checked={!planFirst}
         onClick={() => onModeChange(false)}
-        className={cn(
-          'h-6 rounded-md px-2 text-xs transition-colors',
-          !planFirst
-            ? 'bg-card font-semibold text-foreground shadow-xs'
-            : 'font-medium text-muted-foreground hover:text-foreground',
-        )}
+        className={cn(modeSegmentClass, !planFirst ? modeSegmentActive : modeSegmentIdle)}
       >
-        {!planFirst ? <CheckIcon aria-hidden="true" className="size-3.5" /> : null}
         Run now
       </button>
       <button
@@ -463,13 +461,7 @@ function ModeSegment({
         aria-busy={planning || undefined}
         data-slot="mode-plan"
         onClick={() => onModeChange(true)}
-        className={cn(
-          'h-6 rounded-md px-2 text-xs transition-colors',
-          planFirst
-            ? 'bg-contrast font-semibold text-contrast-foreground ring-2 ring-ring/55'
-            : 'font-medium text-muted-foreground hover:text-foreground',
-          planning && 'animate-pulse',
-        )}
+        className={cn(modeSegmentClass, planFirst ? modeSegmentActive : modeSegmentIdle, planning && 'animate-pulse')}
       >
         {planning ? 'Planning…' : 'Plan first'}
       </button>

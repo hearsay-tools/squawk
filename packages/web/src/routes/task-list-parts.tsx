@@ -13,10 +13,10 @@ import { cn } from '@/lib/utils'
  */
 export function TaskPageHeader({ title, subtitle, action }: { title: string; subtitle: ReactNode; action: ReactNode }) {
   return (
-    <div data-slot="page-header" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 pt-5 md:pt-7">
+    <div data-slot="page-header" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 pt-3 md:pt-7">
       <h1 className="col-start-1 row-start-1 min-w-0 truncate text-[24px] leading-[1.2] font-semibold tracking-tight text-foreground md:text-[28px]">{title}</h1>
       <div className="col-start-2 row-start-1 flex justify-end md:row-span-2 md:self-start">{action}</div>
-      <p className="col-span-2 row-start-2 text-[13px] text-muted-foreground md:col-span-1">{subtitle}</p>
+      <p className="col-span-2 row-start-2 text-[13px] text-muted-foreground max-md:hidden md:col-span-1">{subtitle}</p>
     </div>
   )
 }

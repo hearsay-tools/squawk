@@ -1,4 +1,4 @@
-import { BotIcon, MessageSquareIcon } from 'lucide-react'
+import { ArrowUpRightIcon, BotIcon, MessageSquareIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link as RouterLink } from 'react-router'
 
@@ -95,9 +95,12 @@ export function SummaryChips({ summary, tasksTo, bumps = {} }: { summary: Activi
       <Chip icon={<BotIcon aria-hidden="true" className="size-3.5" />} count={summary.activeWorkers} label="active workers" bump={bump('activeWorkers')} />
       <Chip icon={<MessageSquareIcon aria-hidden="true" className="size-3.5 text-message-peer-accent" />} count={summary.openRequests} label="open requests" bump={bump('openRequests')} />
       <li data-slot="activity-chip" data-chip="in review">
-        <Link to={tasksTo} className="inline-flex items-center gap-[7px] rounded-full border border-border bg-card px-[11px] py-[5px] text-[12px] text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11">
+        {/* The one chip that leads somewhere: review work has no card here, so it opens the task
+            list. The arrow and the hover border say it is a link, not a count. */}
+        <Link to={tasksTo} className="inline-flex items-center gap-[7px] rounded-full border border-border bg-card px-[11px] py-[5px] text-[12px] text-muted-foreground transition-colors hover:border-accent-text/40 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11">
           <StatusDot tone="info" aria-hidden="true" />
           <Count value={summary.inReview} bump={bump('inReview')} /> in review
+          <ArrowUpRightIcon aria-hidden="true" className="size-3 text-soft-foreground" />
         </Link>
       </li>
     </ul>

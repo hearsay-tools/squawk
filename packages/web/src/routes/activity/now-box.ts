@@ -63,7 +63,7 @@ function namesLine(lead: string, runIds: readonly string[], ctx: NowContext): st
 
 function doing(run: ActivityRun, ctx: NowContext): NowBox {
   const tool = run.tool
-  const base = { verb: 'Doing', tone: toneOf(run), icon: 'tool' as const }
+  const base = { verb: 'Running', tone: toneOf(run), icon: 'tool' as const }
   const ended = tool?.endedAt !== undefined && since(tool.endedAt, ctx.now) > THINKING_AFTER_MS
   if (tool === undefined) return { ...base, main: 'Thinking', ...(run.startedAt ? { since: run.startedAt } : {}) }
   const detail = `Last tool ${span(since(tool.endedAt ?? tool.startedAt, ctx.now))} ago`

@@ -45,11 +45,6 @@
     .session-engine-controls :is([data-slot='runner-pill'], [data-slot='session-runner-value'], [data-slot='follow-up-effort-pill']) { gap: 6px; padding-inline: 8px; }
     .session-engine-controls :is([data-slot='runner-pill'], [data-slot='follow-up-effort-pill']) > svg:last-child { display: none; }
   }
-  @container thread-dock (max-width: 400px) {
-    /* The full Archive label would sit over Dictation in a 348px dock. */
-    .session-composer [data-slot='archive-action'] { width: 44px; min-width: 44px; padding-inline: 0; }
-    .session-composer [data-slot='archive-action'] > span { display: none; }
-  }
 }
 @media (max-width: 767px) {
   [data-slot='run-title-row'] > .group { max-width: calc(100% - 52px); }
@@ -119,3 +114,17 @@
   /* Pending answers keep the jump control in flow, clear of the ask options. */
   [data-route='task-thread'] [data-slot='thread-jump'][data-pending-ask] { position: relative; inset-inline: auto; inset-block-end: auto; inline-size: 100%; padding-inline: 16px; }
 }
+
+/* A soft edge under the sticky Session header: once the conversation scrolls, the turn above the
+ * fold fades out under the tab bar instead of being sliced by its divider. The scroll timeline
+ * keeps it invisible at the top; without scroll timelines it is always on, and still harmless. */
+[data-route='task-thread'] [data-slot='run-header'][data-sticky]::after {
+  content: ''; position: absolute; inset-inline: 0; inset-block-start: 100%; block-size: 20px;
+  background: linear-gradient(to bottom, var(--background), transparent); pointer-events: none;
+}
+@supports (animation-timeline: scroll()) {
+  [data-route='task-thread'] [data-slot='run-header'][data-sticky]::after {
+    animation: thread-top-fade linear both; animation-timeline: scroll(nearest block); animation-range: 0 32px;
+  }
+}
+@keyframes thread-top-fade { from { opacity: 0; } to { opacity: 1; } }

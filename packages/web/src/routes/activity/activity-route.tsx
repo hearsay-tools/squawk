@@ -41,7 +41,7 @@ export function ProjectActivityRoute() {
     )
   }
   return (
-    <div data-route="activity" data-activity-paused={paused ? 'true' : undefined} className="flex min-h-full w-full flex-col gap-4 px-4 pb-6 md:px-9">
+    <div data-route="activity" data-activity-paused={paused ? 'true' : undefined} className="flex min-h-full w-full flex-col gap-3.5 px-4 pb-6 md:px-9">
       <ActivityHeader name={project.name} now={now} updatedAt={activity.data?.generatedAt} stale={activity.isError}>
         <ScopeSwitch scope="project" projectId={projectId ?? project.projectId} projectName={project.name} />
       </ActivityHeader>

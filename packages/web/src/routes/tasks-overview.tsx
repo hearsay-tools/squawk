@@ -422,7 +422,7 @@ function BulkActions({ view, unread, finished, archivePending, headerRef, onMark
       {unread > 0 ? (
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           size="sm"
           data-slot="mark-all-read"
           className="hidden md:inline-flex"
@@ -437,7 +437,7 @@ function BulkActions({ view, unread, finished, archivePending, headerRef, onMark
       {view === 'active' && finished > 0 ? (
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           size="sm"
           data-slot="archive-finished"
           className="inline-flex"
@@ -768,8 +768,8 @@ function GroupedTasks({
         </TooltipProvider>
       </div> : null}
       {/* Phones mount cards only, regardless of saved desktop columns. */}
-      {!desktop ? <div data-slot="task-cards" className="flex flex-col rounded-lg border border-border bg-card px-4 py-3">
-        <TaskListItems itemSize={104} items={rows} itemKey={({ run }) => run.id}>{({ run, queuePosition }) => (
+      {!desktop ? <div data-slot="task-cards" className="flex flex-col rounded-lg border border-border bg-card px-3 py-2.5">
+        <TaskListItems itemSize={90} items={rows} itemKey={({ run }) => run.id}>{({ run, queuePosition }) => (
           <TaskCard key={run.id} resourcesOpen={expandedRuns.has(run.id)} onToggleResources={toggleExpandedRun} run={run} queuePosition={queuePosition} now={now} showTokens={showTokens} showCost={showCost} onTogglePin={onTogglePin} automationName={automationName} />
         )}</TaskListItems>
       </div> : null}
@@ -1307,7 +1307,7 @@ const TaskCard = React.memo(function TaskCard({
         if ((event.target as Element).closest('a, button')) return
         navigate(to)
       }}
-      className="cursor-pointer border-b border-border py-3"
+      className="flex cursor-pointer flex-col gap-1.5 border-b border-border py-2.5"
     >
       {/* Three tight rows on a phone: the title, then status · workflow · origin, then runner,
           reference, diff and age. The branch stays behind the resources toggle. */}
@@ -1342,7 +1342,7 @@ const TaskCard = React.memo(function TaskCard({
           />
         ) : null}
       </div>
-      <div data-slot="mobile-task-status-row" className="mt-1.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+      <div data-slot="mobile-task-status-row" className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
         <button data-slot="mobile-resources-toggle" data-task-control="resources" type="button" aria-controls={`mobile-resources-${run.id}`} aria-describedby={`mobile-status-${run.id}`} aria-label={resourcesOpen ? 'Hide resources' : 'Show resources'} title={resourcesOpen ? 'Hide resources' : 'Show resources'} aria-expanded={resourcesOpen} onClick={() => onToggleResources(run.id)} className="shrink-0"><Pill id={`mobile-status-${run.id}`} dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="shrink-0" title={scheduled?.title}>
           {attention.label}
           {scheduled ? <span className="tabular-nums">{scheduled.label}</span> : null}
@@ -1351,14 +1351,14 @@ const TaskCard = React.memo(function TaskCard({
         <span aria-hidden="true">·</span>
         <span className="min-w-0 truncate"><RunOriginLine run={run} automationName={automationName} /></span>
       </div>
-      <div data-slot="mobile-task-meta" className="mt-1.5 flex min-w-0 items-center gap-3 text-xs text-muted-foreground">
+      <div data-slot="mobile-task-meta" className="flex min-w-0 items-center gap-3 text-xs text-muted-foreground">
         <span data-slot="mobile-task-runner" className="min-w-0 flex-1 truncate">{run.runner ? canonicalRunnerName(run.runner) : null}</span>
         {reference ? <TaskReferenceChip run={run} reference={reference} /> : null}
         {queuePosition !== null ? <span data-slot="queue-note">#{queuePosition} in queue</span> : run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}
         <span className="tabular-nums" title={fullTime(run.startedAt ?? run.createdAt)}>{shortAge(run.startedAt ?? run.createdAt, now)}</span>
       </div>
       {resourcesOpen ? <>
-        <div className="mt-3"><TaskPreview runId={run.id} status={attention.label} error={run.error} open={<Button asChild variant="outline" className="min-h-11"><Link data-task-control="open" to={to}>Open task<span className="sr-only">: {runTitle(run)}</span></Link></Button>} /></div>
+        <div className="mt-1.5"><TaskPreview runId={run.id} status={attention.label} error={run.error} open={<Button asChild variant="outline" className="min-h-11"><Link data-task-control="open" to={to}>Open task<span className="sr-only">: {runTitle(run)}</span></Link></Button>} /></div>
         <MobileResources run={run} showTokens={showTokens} showCost={showCost} />
       </> : null}
     </div>
@@ -1369,7 +1369,7 @@ const TaskCard = React.memo(function TaskCard({
 function MobileResources({ run, showTokens, showCost }: { run: RunSummary; showTokens: boolean; showCost: boolean }) {
   const sample = useRunUsage(run.id)
   const resources = usageCells(run, sample)
-  return <dl id={`mobile-resources-${run.id}`} className="mt-3 grid grid-cols-2 gap-3 rounded-md bg-muted p-3 text-xs">
+  return <dl id={`mobile-resources-${run.id}`} className="grid grid-cols-2 gap-3 rounded-md bg-muted p-3 text-xs">
     {run.branch ? <div><dt>Branch</dt><dd>{run.branch}</dd></div> : null}
     <div><dt>CPU</dt><dd>{resources.cpu.text || '—'}</dd></div><div><dt>Memory</dt><dd>{resources.mem.text || '—'}</dd></div>
     {showTokens ? <div><dt>IN / OUT</dt><dd><DirectionalUsage inputTokens={run.inputTokens} outputTokens={run.outputTokens} /></dd></div> : null}

@@ -7,7 +7,6 @@ import type { ApiRun } from '@open-mercato/cezar-api-client'
 
 import { createQueryClient } from '@/api/query-client'
 import { ProjectScopeProvider } from '@/api/project-scope-context'
-import { archiveInComposer } from './run-actions'
 import { CompletionStatus } from './completion-status'
 
 const run: ApiRun = {
@@ -75,7 +74,6 @@ it('shows the shared archive blocker with scoped task, PR and manual Archive act
   expect(screen.getByRole('link', { name: 'Open blocking task' }).getAttribute('href')).toBe('/p/project/tasks/worker')
   expect(screen.getByRole('link', { name: 'Open blocking PR' }).getAttribute('href')).toBe('https://github.com/owner/repo/pull/43')
   expect(screen.getByRole('button', { name: 'Archive task' })).toBeTruthy()
-  expect(archiveInComposer(record)).toBe(false)
   fireEvent.click(screen.getByRole('button', { name: 'Archive task' }))
   expect(screen.getByRole('alertdialog').textContent).toContain('Archive task?')
 })

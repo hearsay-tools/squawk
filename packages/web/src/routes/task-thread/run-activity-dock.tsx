@@ -374,8 +374,11 @@ function FoldedSummary({
   return (
     <>
       <span data-slot="run-activity-status" title={statusText} className={cn('inline-flex min-w-[calc(0.875rem+3ch)] flex-[0_1_auto] items-center gap-1.5 text-[13px] whitespace-nowrap text-muted-foreground', statusTone(activity))}>{activity.glyph}<span data-slot="run-activity-status-label" className="min-w-0 truncate">{statusText}</span></span>
+      {/* A run that waits for the user is not moving its step: on a phone the step would only cut
+          to a half word beside "Needs you", so the status stands alone there. The accessible name
+          and the open card keep the step. */}
       {activeStep ? (
-        <span data-slot="run-activity-step" className="flex max-w-max min-w-[calc(1.375rem+2ch)] flex-[1000_1_0] items-center gap-1.5 text-[13px] text-muted-foreground">
+        <span data-slot="run-activity-step" className={cn('flex max-w-max min-w-[calc(1.375rem+2ch)] flex-[1000_1_0] items-center gap-1.5 text-[13px] text-muted-foreground', run.status === 'waiting' && 'max-md:hidden')}>
           <WorkflowGlyph step={activeStep} decorative />
           <span data-slot="run-activity-step-name" title={activeStep.name} className="min-w-0 truncate">{activeStep.name}</span>
         </span>

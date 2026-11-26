@@ -59,8 +59,7 @@ import { OpenInMenuForRun, copyToClipboard, useResumeInTerminal, useRunReference
 import { HandoffAction, useHandoffActionVisible } from './handoff-action'
 import { Markdown } from './markdown'
 import { TaskFileScope } from './task-file-scope'
-import { archiveInComposer, resumeHint, runActionFlags } from './run-actions'
-import { useWorkersLive } from './run-relationships'
+import { resumeHint, runActionFlags } from './run-actions'
 import { CompactParentTaskLink, ParentTaskLink } from './parent-task-link'
 import { ownsDirectory } from '@open-mercato/cezar-api-client/contract/delegation'
 
@@ -178,17 +177,11 @@ function WorkerParentLink({ run, compact = false }: { run: ApiRun; compact?: boo
   return compact ? <CompactParentTaskLink id={id} /> : <ParentTaskLink id={id} />
 }
 
-/** #281: Archive out of the kebab row. The Session tab's composer carries it — within a
- *  thumb's reach, which this header is not on a phone, where it scrolls away by
- *  design. The three git tabs have no composer, so the header carries it there, and
- *  exactly one surface offers it on any given screen. Stop takes the composer's slot on a
- *  failed run holding wait results (hearsay-tools/cezarion#1233) or live workers
- *  (hearsay-tools/squawk#3360), so the header carries
- *  Archive on the Session tab too. */
-function headerArchiveButton(run: ApiRun, flags: ReturnType<typeof runActionFlags>, tab: RunTab, workersLive: boolean) {
-  return !run.archiveBlocker && flags.archive && (tab !== 'session' || !archiveInComposer(run, workersLive))
-    ? <ArchiveButton run={run} />
-    : null
+/** #281: Archive out of the kebab row, into one fixed header slot on all four tabs, so switching
+ *  between Session, Changes, Commits and Files never moves it. A blocker shows the same manual
+ *  Archive control beside its reason instead. Phones keep it in the kebab. */
+function headerArchiveButton(run: ApiRun, flags: ReturnType<typeof runActionFlags>) {
+  return !run.archiveBlocker && flags.archive ? <ArchiveButton run={run} /> : null
 }
 
 /** The auto-archive provenance line: shown only when the run is archived right now by the
@@ -316,7 +309,6 @@ export function RunHeader({
 }) {
   const attention = deriveAttention(run)
   const flags = runActionFlags(run)
-  const workersLive = useWorkersLive(run)
   const [notesOpen, setNotesOpen] = useState(false)
   const [openChooser, setOpenChooser] = useState(false)
   const actions = useRunActions(run, onMarkedUnread)
@@ -361,12 +353,13 @@ export function RunHeader({
     />
   )
 
-  const archiveButton = headerArchiveButton(run, flags, tab, workersLive)
+  const archiveButton = headerArchiveButton(run, flags)
 
   return (
     <ReferenceStatusProvider projectId={referenceProjectId} repoBase={repoBase} requests={referenceRequests}>
     <header
       data-slot="run-header"
+      data-sticky={tab === 'session' || undefined}
       className={cn(
         // Pushed phone screen: the facet tabs sit directly under the shell's top bar (#621), so
         // the header has no top padding of its own there.

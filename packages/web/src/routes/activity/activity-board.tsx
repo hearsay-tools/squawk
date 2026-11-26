@@ -1,6 +1,7 @@
 import * as React from 'react'
 import type { ActivityProject, ActivityRequest, ActivityRun } from '@open-mercato/cezar-api-client/contract/activity'
 
+import { cn } from '@/lib/utils'
 import type { FeedEntry } from './activity-feed'
 import { ActivityCard } from './activity-card'
 import { ActivityLines } from './activity-lines'
@@ -97,6 +98,9 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
   const columns = useStablePlacement([...tasks.keys()], count, weight)
   // Narrow is about the width, not the count: one card on a wide graph still draws its lines.
   const narrow = fit === 1
+  // One card per column is one visual row: those cards stretch to one height and share a bottom
+  // edge. Taller columns keep their packed, top-aligned stacks.
+  const oneRow = count > 1 && columns.every((column) => column.length <= 1)
   const dense = project.tasks.length > DENSE_AFTER
   const ctx: NowContext = { now, titleOf: (runId) => nameOf(index, runId) }
   const placement = columns.map((column) => column.join(',')).join('|')
@@ -105,7 +109,7 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
   useFlip(hostRef, 'data-flip', placement, !still && !paused)
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-5">
       <div className="min-w-0">
         {project.tasks.length === 0 ? (
           <p data-slot="activity-empty" className="py-6 text-[13px] text-muted-foreground">No active work in this project.</p>
@@ -115,11 +119,12 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
           data-slot="activity-graph"
           data-columns={count}
           data-dense={dense ? 'true' : undefined}
-          className="relative grid items-start"
+          data-one-row={oneRow ? 'true' : undefined}
+          className={cn('relative grid', oneRow ? 'items-stretch' : 'items-start')}
           style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, columnGap }}
         >
           {columns.map((column, i) => (
-            <div key={i} data-slot="activity-column" className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-[30px] max-md:gap-4">
+            <div key={i} data-slot="activity-column" className={cn('grid min-w-0 grid-cols-[minmax(0,1fr)] gap-[30px] max-md:gap-4', oneRow ? 'content-stretch' : 'content-start')}>
               {column.map((id) => {
                 const task = tasks.get(id)
                 if (!task) return null
