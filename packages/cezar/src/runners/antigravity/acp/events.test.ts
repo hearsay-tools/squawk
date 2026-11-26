@@ -140,6 +140,16 @@ it('releases held text on a usage update without closing the item, and never re-
   expect(items).toEqual([items[0], items[0]!.replace('started', 'completed')]);
 });
 
+it('holds an open marker line across a usage update and releases the prose before it', () => {
+  const { events, v1 } = v1Texts();
+  texts(events, ['Opened the PR.\n\nCEZ:PR=4']);
+  events.update({ sessionUpdate: 'usage_update', used: 1, size: 10 });
+  expect(v1).toEqual(['Opened the PR.\n\n']);
+  texts(events, ['104\n']);
+  events.finish('end_turn');
+  expect(v1).toEqual(['Opened the PR.\n\n', 'CEZ:PR=4104\n']);
+});
+
 it('emits held text and the completed item once when a text listener flushes again', () => {
   const v1: string[] = [];
   const completed: UiEvent[] = [];
