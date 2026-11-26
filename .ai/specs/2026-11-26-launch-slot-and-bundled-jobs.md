@@ -1,17 +1,16 @@
 # Launch slot and bundled jobs feature plugin
-Status: active
+Status: done
 
 Epic hearsay-tools/squawk#4309. Step 5 (first version) of
 [the plugin core roadmap](2026-11-18-plugin-core-roadmap.md). Builds on
 [ADR 0065](../../docs/adr/0065-define-the-core-by-a-layer-map.md),
 [ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md),
 [ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md),
-[ADR 0070](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md), and
+[ADR 0070](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md) (amending section 6), and
 [ADR 0071](../../docs/adr/0071-keep-runner-folders-self-contained.md).
+Recorded in [ADR 0072](../../docs/adr/0072-add-a-launch-slot-and-load-bundled-feature-plugins.md).
 Baseline: `main` at `a1bfe21d2`. The owner settled all six product decisions on 2026-11-26
-(task `62289188`). The working plan lives in
-[2026-11-26-launch-slot-and-bundled-jobs-plan.md](2026-11-26-launch-slot-and-bundled-jobs-plan.md).
-Paths are under `packages/cezar/` unless noted.
+(task `62289188`). Paths are under `packages/cezar/` unless noted.
 
 ## Goal
 
@@ -268,3 +267,49 @@ Four child issues execute after S0 lands on `main`:
 | S2 | hearsay-tools/squawk#4313 | Bundled feature loader (`plugin/bundled-features.ts`) and `hsq --help` runtime boot | S0 | 77 (or 83) |
 | S3 | hearsay-tools/squawk#4314 | Move `jobs` to `features/jobs/`, deletion-gate scratch hold, core process helpers, `cez/bundled-feature-import` | S1, S2 | 77 -> 76 |
 | S4 | hearsay-tools/squawk#4315 | Absent-jobs test, live runner job acceptance, ADR 0072 + ADR 0070 amendment, roadmap counts, close-out | S3 | 76 |
+
+## Implementation record
+
+Completed on 2026-11-26 across five slices:
+
+- **S0 (spec & plan):** PR hearsay-tools/squawk#4316 (merged at `ebe548461`).
+- **S1 (launch slot, closes hearsay-tools/squawk#4312):** PR hearsay-tools/squawk#4317 (merged at
+  `a63806d3d`). Added `src/core/launch-registry.ts`, `SquawkPluginApi.registerLaunchPart`,
+  `PluginContributions.launchParts`, `src/built-in-launch-parts.ts`, shared
+  `launchSessionEnvironment`, and dropped `layer-import.baseline.json` from 83 to 77 entries.
+- **S2 (bundled feature loader & `--help`, closes hearsay-tools/squawk#4313):** PR
+  hearsay-tools/squawk#4318 (merged at `d3cd7df09`). Added `src/plugin/bundled-features.ts`,
+  `loadBundledFeatures()` in `src/plugin/loader.ts` and `src/boot.ts`, runtime-booted root
+  `--help` with quiet home degradation, and amended ADR 0070 section 6.
+- **S3 (move `jobs` to `features/jobs/`, closes hearsay-tools/squawk#4314):** PR
+  hearsay-tools/squawk#4337 (merged at `53c272074`). Added `src/core/process-ownership.ts`,
+  extended `DeletionGate` with `DeletionGateContext` and `refuseDirectory`, moved `src/jobs/*` to
+  `src/features/jobs/*` with `index.ts` registering `job`, `jobsDeletionGate`, and `jobs` launch
+  part (`order: 40`), gated `cezar_wait` job wording via `cliCommandAdvertised('job')`, added
+  strict `cez/bundled-feature-import` (0 baseline entries), enforced `dist/features/<id>/index.js`
+  in `check:pack`, and dropped `layer-import.baseline.json` from 77 to 76 entries.
+- **S4 (acceptance, ADR 0072 & close-out, closes hearsay-tools/squawk#4315 and
+  hearsay-tools/squawk#4309):** Added `src/workflows/absent-jobs-feature.test.ts`, ran live
+  acceptance on built `dist/index.js` with `claude` (`haiku`), wrote
+  [ADR 0072](../../docs/adr/0072-add-a-launch-slot-and-load-bundled-feature-plugins.md), updated
+  `docs/plugins.md`, `docs/areas/cli.md`, and the roadmap, and deleted `-plan.md`.
+
+### Final Squeal rule-5 selection counts
+
+Measured on `main` at `53c272074` (`squeal status <path> --json`, both `complete: true`):
+
+- `packages/cezar/src/core/registry.ts`: **1,191 test files** (baseline `a1bfe21d2`: 1,187; +4 from
+  new launch-registry, bundled-feature, and jobs tests).
+- `packages/cezar/src/core/launch-registry.ts`: **672 test files** (new module; core testkits seal
+  an empty launch-parts registry so non-launch tests stay outside the built-in launch-parts
+  closure).
+
+### Sanitized live acceptance record (2026-11-26)
+
+- **Build & plugin report (`53c272074`):** Built `packages/cezar/dist/index.js` (`dist/features/jobs/index.js` emitted). `hsq plugins` in a sandbox `HSQ_HOME` reported 7 bundled plugins (6 runners plus `jobs  bundled`) and 0 skipped, with `jobs` listing `commands: job`, `removal slots: 1`, and `launch parts: jobs`.
+- **Live runner task:** Ran headless `node packages/cezar/dist/index.js run` in a disposable `/tmp` git repo with isolated `HSQ_HOME`, `HSQ_DRY_RUN=0`, `HSQ_AUTONAME=0`, `HSQ_REVIEW_GATE=0`, `--model haiku --no-workers --no-messaging` on the real `claude` CLI.
+  - Task started: `2026-11-26T19:34:42Z` (isolated worktree, workflow `quick-task`).
+  - Agent invoked the `job start` command from the `## Long commands` launch part to start job `live-proof` (`sh -c 'sleep 12 && printf survived > <tmp>/job-survived.txt'`), printed the returned JSON (`replaced: false`), and called `cezar_done` without waiting.
+  - Agent session closed and `hsq run` exited (`run done`): `2026-11-26T19:34:55Z`.
+  - Immediately after session close: task scratch directory and `live-proof.job.db` were preserved by `jobsDeletionGate`; `hsq job status live-proof --dir <scratch>` reported `state: "running"` and `kill -0 <pid>` confirmed the process was still alive.
+  - At `2026-11-26T19:35:01Z` (6 seconds after session close): `hsq job status live-proof --dir <scratch>` reported `state: "exited"`, `exitCode: 0`, `exitFile` contained `0`, and output file contained `survived`.

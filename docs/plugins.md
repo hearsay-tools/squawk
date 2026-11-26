@@ -1,14 +1,15 @@
 # Plugins
 
-A plugin adds a runner, an agent tool, a wait kind, a workflow step kind, a CLI command, a run
-removal slot or a run-lifecycle listener to Squawk. Squawk loads plugins from one folder on the
+A plugin adds a runner, an agent tool, a wait kind, a workflow step kind, a CLI command, a launch
+part, a run removal slot or a run-lifecycle listener to Squawk. Squawk loads plugins from one folder on the
 host: `<config>/plugins/` (see the [platform roots](migration.md#home-directories); with
 `HSQ_HOME` set, `$HSQ_HOME/config/plugins/`). Nothing needs to be configured: a folder that is
 not there loads nothing.
 
 [ADR 0070](adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md) records the loader and
 runner kit design; [ADR 0071](adr/0071-keep-runner-folders-self-contained.md) records the
-self-contained runner folder rules.
+self-contained runner folder rules; [ADR 0072](adr/0072-add-a-launch-slot-and-load-bundled-feature-plugins.md)
+records the launch slot and bundled feature plugins.
 
 ## Trust: a plugin runs as Squawk
 
@@ -56,7 +57,7 @@ export default function setup(api) {
 The fields of each registration are in the types that `@hearsay-tools/squawk/plugin` exports
 (`packages/cezar/src/plugin/index.ts`). The API object has `registerRunner`,
 `registerAgentTool`, `registerWaitKind`, `registerStepKind`, `registerCliCommand`,
-`registerRemovalSlots` and `onRunLifecycle`. The setup function may be `async`.
+`registerRemovalSlots`, `registerLaunchPart` and `onRunLifecycle`. The setup function may be `async`.
 
 A plugin imports Squawk code only from `@hearsay-tools/squawk/plugin` and these subpaths:
 `/runtime`, `/model-settings`, `/managed-cli` and `/pi-rpc`. Squawk maps them to its own running

@@ -51,7 +51,7 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 | 2 | A typed run lifecycle, and a narrower run store | Done: epic hearsay-tools/squawk#4007, [spec](2026-11-21-run-lifecycle-and-store-ports.md), [ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md) |
 | 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Done: epic hearsay-tools/squawk#4152, [spec](2026-11-23-open-registries-and-tables.md), [ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md) |
 | 4 | Loader and package format | Done (first version, host folder only): epic hearsay-tools/squawk#4188, [spec](2026-11-24-plugin-loader-and-runner-kit.md), [ADR 0070](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md); self-contained runner folders done (epic hearsay-tools/squawk#4232, [spec](2026-11-25-self-contained-runner-folders.md), [ADR 0071](../../docs/adr/0071-keep-runner-folders-self-contained.md)); project plugins, a trust gate and npm or git installation wait for a later epic |
-| 5 | Move features out of the core, smallest first | First epic filed: hearsay-tools/squawk#4309, a launch slot and jobs as the first bundled feature plugin. Later epics are not filed |
+| 5 | Move features out of the core, smallest first | First epic done: hearsay-tools/squawk#4309 ([spec](2026-11-26-launch-slot-and-bundled-jobs.md), [ADR 0072](../../docs/adr/0072-add-a-launch-slot-and-load-bundled-feature-plugins.md)), launch slot and `jobs` as the first bundled feature plugin. Later epics (HTTP routes and server start/stop slots) are not filed |
 | 6 | Cockpit slots | Not filed |
 
 Steps 0 to 3 pay off with no outside plugin: the code is modular and every change is internal.
@@ -224,6 +224,26 @@ module). The jobs move removes the seventh: `workflows/run/run-settlement.ts` im
 `jobs/job.ts`. Second, no file outside the jobs folder imports it. The baseline cannot show
 that, because `cez/layer-import` checks core files only and a `shell` file may import a
 feature.
+
+Done on 2026-11-26 (first epic, hearsay-tools/squawk#4309).
+[ADR 0072](../../docs/adr/0072-add-a-launch-slot-and-load-bundled-feature-plugins.md) records the
+result (and amends
+[ADR 0070 section 6](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md#6-help-loads-commands-version-and-cold-commands-stay-cold)
+so `hsq --help` boots runtime and lists bundled feature and host plugin commands).
+`SquawkPluginApi.registerLaunchPart` opens the ninth register-then-seal registry
+(`core/launch-registry.ts`), `plugin/bundled-features.ts` discovers bundled features under
+`features/<id>/`, and `jobs` lives in `features/jobs/` registering its command (`job`), deletion
+gate (`jobsDeletionGate`), and launch part (`jobs`, order `40`) solely through the plugin API.
+`layer-import.baseline.json` holds 76 entries (down from 83), and `cez/bundled-feature-import`
+passes with zero baseline entries. `workflows/absent-jobs-feature.test.ts` proves booting with an
+empty `bundledFeaturesDir` omits `jobs` from `hsq plugins`, rejects `hsq job`, omits job text from
+`cezar_wait` metadata, and completes a task with no job launch prompt; a live task on the real
+`claude` CLI (`haiku`) started a `live-proof` job via `hsq job start` that outlived the agent
+session and exited `0` (details in the
+[spec's implementation record](2026-11-26-launch-slot-and-bundled-jobs.md#implementation-record)).
+Squeal rule-5 selection counts on `main` at `53c272074` (`complete: true`): `core/registry.ts`
+selects 1,191 test files (1,187 at baseline `a1bfe21d2`, +4 from new tests) and
+`core/launch-registry.ts` selects 672 test files.
 
 The other three features that use the launch slot each have a server part. Webhooks is tied
 to task start and to the project settings routes. Artifacts has routes, a WebSocket topic and
