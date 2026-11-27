@@ -584,7 +584,7 @@ describe('the GitHub detail pane', () => {
 
     const override = await screen.findByRole('checkbox', { name: /Merge without waiting for requirements/ })
     expect(screen.getByRole('button', { name: 'Squash and merge' }).hasAttribute('disabled')).toBe(true)
-    expect(document.querySelectorAll('[data-slot="gh-merge-status-info"]')).toHaveLength(1)
+    expect(document.querySelectorAll('[data-slot="gh-merge-status-review"]')).toHaveLength(1)
     expect(document.querySelectorAll('[data-slot="gh-merge-status-pending"]')).toHaveLength(1)
     fireEvent.click(override)
     fireEvent.click(screen.getByRole('button', { name: 'Squash and merge' }))
