@@ -11,12 +11,13 @@ test('PR Readiness has only trusted default-branch triggers and no repository wr
   const w = read('pr-readiness.yml'), job = w.jobs.sync, discovery = w.jobs.discover;
   assert.equal(w.name, 'PR Readiness');
   assert.deepEqual(w.permissions, {});
-  assert.deepEqual(Object.keys(w.on).sort(), ['pull_request_target', 'status', 'workflow_dispatch', 'workflow_run']);
-  assert.equal(w.on.status, null, 'every status event; discovery filters the context');
+  assert.deepEqual(Object.keys(w.on).sort(), ['pull_request_target', 'workflow_dispatch', 'workflow_run']);
   assert.deepEqual(w.on.workflow_run, { workflows: ['CI', 'Review signal'], types: ['completed'] });
-  // Human draft/ready flips and new heads resync the board.
-  assert.deepEqual(w.on.pull_request_target, { types: ['opened', 'reopened', 'synchronize', 'ready_for_review', 'converted_to_draft'],
-    branches: ['main'] });
+  // Human draft/ready flips, new heads and pre-pr-review label changes resync the board.
+  assert.deepEqual(w.on.pull_request_target, {
+    types: ['opened', 'reopened', 'synchronize', 'ready_for_review', 'converted_to_draft', 'labeled', 'unlabeled'],
+    branches: ['main'],
+  });
   assert.equal(w.on.workflow_dispatch.inputs.pr_number.required, true);
   assert.equal(w.concurrency, undefined, 'discovery cannot be coalesced across PRs');
   assert.deepEqual(job.concurrency, { group: 'pr-readiness-pr-${{ matrix.pr }}', 'cancel-in-progress': false });
@@ -25,8 +26,9 @@ test('PR Readiness has only trusted default-branch triggers and no repository wr
   assert.deepEqual(job.strategy, { 'fail-fast': false, 'max-parallel': 4,
     matrix: { pr: '${{ fromJSON(needs.discover.outputs.numbers) }}' } });
   assert.equal(discovery.concurrency, undefined, 'each event discovers independently');
-  assert.equal(discovery.if, "github.event_name != 'status' || github.event.context == 'pre-pr-review'",
-    'another status context skips discovery');
+  assert.equal(discovery.if,
+    "github.event_name != 'pull_request_target' || (github.event.action != 'labeled' && github.event.action != 'unlabeled') || github.event.label.name == 'pre-pr-review'",
+    'unrelated label events skip discovery');
   assert.deepEqual(discovery.permissions, { contents: 'read', 'pull-requests': 'read', actions: 'read' });
   assert.deepEqual(discovery.outputs, { numbers: '${{ steps.discover.outputs.numbers }}' });
   assert.deepEqual(job.permissions, { contents: 'read', 'pull-requests': 'read', checks: 'read', statuses: 'read' });

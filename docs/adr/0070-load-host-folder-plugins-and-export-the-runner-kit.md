@@ -46,7 +46,7 @@ plugin API types and the runner kit. Paths are under `packages/cezar/src/` unles
 - Before it loads the first plugin, the loader installs an in-process `node:module`
   `registerHooks` resolve hook (`plugin/resolve-hook.ts`). The hook maps
   `@hearsay-tools/squawk/plugin` and its documented runner-kit subpaths
-  (`@hearsay-tools/squawk/plugin/runtime`, `/model-settings`, `/managed-cli`, `/pi-rpc`) to the
+  (`@hearsay-tools/squawk/plugin/runtime`, `/model-settings`, `/managed-cli`, `/pi-rpc`, `/acp`) to the
   modules of the Squawk copy that is running (`.ts` under source and tests, `.js` under `dist/`).
 - The hook refuses every other specifier in `@hearsay-tools/squawk`: the package root and any
   other subpath. No running copy backs them, and an installed second copy would split process
@@ -55,11 +55,12 @@ plugin API types and the runner kit. Paths are under `packages/cezar/src/` unles
 - `@hearsay-tools/squawk/plugin` (`plugin/index.ts`, `plugin/runner-kit.ts`) holds the plugin
   API types, runner definition types and pure data and environment helpers. The heavy runtime
   helpers live on the subpaths: `runtime` (child processes, session leaders, adapter helpers),
-  `model-settings` (TOML and YAML parsers), `managed-cli` (managed CLI storage) and `pi-rpc` (the
-  Pi-family RPC wire). `bootRuntime()` imports every runner's `definition.ts` and therefore the
+  `model-settings` (TOML and YAML parsers), `managed-cli` (managed CLI storage), `pi-rpc` (the
+  Pi-family RPC wire) and `acp` (the ACP v1 session, transport, hooks, protocol schemas and event
+  sink). Every subpath is unstable until Squawk installs plugins from npm or git. `bootRuntime()` imports every runner's `definition.ts` and therefore the
   main entry; the subpaths keep that boot light, because a runner loads them only when its adapter
   or catalog loads.
-- `packages/cezar/package.json` exports the same five paths, and the hook refuses any specifier
+- `packages/cezar/package.json` exports the same six paths, and the hook refuses any specifier
   outside them.
 
 ### 4. One boot boundary and one load order

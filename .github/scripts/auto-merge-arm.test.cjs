@@ -1,7 +1,7 @@
 'use strict';
 // The arming check in .ai/skills/auto-merge/arm-check.mjs: auto-merge is armed only
-// while no review thread on the pull request is unresolved and CodeRabbit is not still
-// reviewing the head.
+// while no review thread on the pull request is unresolved, no pre-pr-review label
+// holds the PR, and CodeRabbit is not still reviewing the head.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -31,9 +31,9 @@ function threadPages(...pages) {
 }
 const thread = (id, isResolved) => ({ id, isResolved });
 const coderabbit = (status) => ({ name: 'CodeRabbit', app: { slug: 'coderabbitai' }, status });
-const args = (github, readHead = async () => HEAD, runs = [coderabbit('completed')], review = null) => ({
-  github, reviewedHead: HEAD, readHead, readCheckRuns: async (sha) => { assert.equal(sha, HEAD); return runs; },
-  readReviewStatus: async (sha) => { assert.equal(sha, HEAD); return review; }, owner: 'o', repo: 'r', pullNumber: 7,
+const args = (github, readPull = async () => ({ head: HEAD, labels: [] }), runs = [coderabbit('completed')]) => ({
+  github, reviewedHead: HEAD, readPull, readCheckRuns: async (sha) => { assert.equal(sha, HEAD); return runs; },
+  owner: 'o', repo: 'r', pullNumber: 7,
 });
 
 test('arms the head when every review thread is resolved', async () => {
@@ -96,7 +96,7 @@ test('reads every page of threads before it decides', async () => {
 test('refuses when the live head is not the reviewed head, before any other read', async () => {
   const { decideArm } = await load();
   const github = threadPages([]);
-  const result = await decideArm(args(github, async () => 'b'.repeat(40)));
+  const result = await decideArm(args(github, async () => ({ head: 'b'.repeat(40), labels: [] })));
   assert.equal(result.outcome, 'refuse');
   assert.deepEqual(result.reasons, [`the head is ${'b'.repeat(40)}, not the reviewed head ${HEAD}: decide again for the new head`]);
   assert.equal(github.calls.length, 0);
@@ -104,22 +104,20 @@ test('refuses when the live head is not the reviewed head, before any other read
 
 test('refuses when the head moves during the check', async () => {
   const { decideArm } = await load();
-  const heads = [HEAD, 'b'.repeat(40)];
-  const result = await decideArm(args(threadPages([]), async () => heads.shift()));
+  const pulls = [{ head: HEAD, labels: [] }, { head: 'b'.repeat(40), labels: [] }];
+  const result = await decideArm(args(threadPages([]), async () => pulls.shift()));
   assert.equal(result.outcome, 'refuse');
   assert.match(result.reasons[0], /the head moved/);
 });
 
-test('refuses while the pre-PR review round is open or blocked, and arms once it is clean', async () => {
+test('refuses while the PR carries the pre-pr-review label, including when added during the check, and arms once removed', async () => {
   const { decideArm } = await load();
-  const open = await decideArm(args(threadPages([]), undefined, undefined, 'pending'));
-  assert.deepEqual(open, { outcome: 'refuse', head: HEAD, reasons: [`the pre-pr-review round on ${HEAD} is still open: arm only after it is clean`] });
-  for (const state of ['failure', 'error']) {
-    const blocked = await decideArm(args(threadPages([]), undefined, undefined, state));
-    assert.equal(blocked.outcome, 'refuse');
-    assert.match(blocked.reasons[0], /found a finding scored 5 or more/);
-  }
-  assert.equal((await decideArm(args(threadPages([]), undefined, undefined, 'success'))).outcome, 'arm');
+  const labeled = await decideArm(args(threadPages([]), async () => ({ head: HEAD, labels: [{ name: 'auto-merge' }, { name: 'pre-pr-review' }] })));
+  assert.deepEqual(labeled, { outcome: 'refuse', head: HEAD,
+    reasons: ['the PR carries the pre-pr-review label: arm only after the review round marks it clean'] });
+  const addedDuring = [{ head: HEAD, labels: [] }, { head: HEAD, labels: [{ name: 'pre-pr-review' }] }];
+  assert.equal((await decideArm(args(threadPages([]), async () => addedDuring.shift()))).outcome, 'refuse');
+  assert.equal((await decideArm(args(threadPages([]), async () => ({ head: HEAD, labels: [{ name: 'auto-merge' }] })))).outcome, 'arm');
 });
 
 test('a malformed thread page is an error, not a decision', async () => {
@@ -138,9 +136,9 @@ const fixture = require(${JSON.stringify(path.join(dir, 'fixture.json'))});
 const argv = process.argv.slice(2);
 if (fixture.fail) { process.stderr.write(fixture.fail + '\\n'); process.exit(1); }
 if (argv[0] === 'repo') process.stdout.write('o/r\\n');
-else if (argv[0] === 'pr') process.stdout.write(fixture.head + '\\n');
-else if (argv[1] === 'repos/o/r/commits/' + fixture.head + '/status?per_page=100') {
-  process.stdout.write(JSON.stringify({ statuses: fixture.statuses ?? [] }));
+else if (argv[0] === 'pr') {
+  if (!argv.includes('headRefOid,labels')) process.exit(4);
+  process.stdout.write(JSON.stringify({ headRefOid: fixture.head, labels: fixture.labels ?? [] }));
 }
 else if (argv[1] !== 'graphql') {
   if (argv[1] !== 'repos/o/r/commits/' + fixture.head + '/check-runs?check_name=CodeRabbit&per_page=100') process.exit(3);
@@ -155,7 +153,7 @@ else process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { 
 }
 
 test('the command prints ARM with the head and exits 0', (t) => {
-  const run = runCli(t, { head: HEAD, threads: [thread('t1', true)] }, ['--pr', '7', '--head', HEAD]);
+  const run = runCli(t, { head: HEAD, threads: [thread('t1', true)], labels: [{ name: 'auto-merge' }] }, ['--pr', '7', '--head', HEAD]);
   assert.equal(run.status, 0, run.stderr);
   assert.equal(run.stdout, `ARM ${HEAD}\n`);
 });
@@ -172,11 +170,11 @@ test('the command prints WAIT and exits 1 while CodeRabbit reviews the head', (t
   assert.equal(run.stdout, `WAIT\n- CodeRabbit is reviewing ${HEAD}: run the check again when its check run completes\n`);
 });
 
-test('the command prints DO NOT ARM and exits 1 while the review round is open', (t) => {
-  const run = runCli(t, { head: HEAD, threads: [], statuses: [{ context: 'CodeRabbit', state: 'pending' }, { context: 'pre-pr-review', state: 'pending' }] },
+test('the command prints DO NOT ARM and exits 1 while the pre-pr-review label is present', (t) => {
+  const run = runCli(t, { head: HEAD, threads: [], labels: [{ name: 'auto-merge' }, { name: 'pre-pr-review' }] },
     ['--pr', '7', '--head', HEAD]);
   assert.equal(run.status, 1, run.stderr);
-  assert.equal(run.stdout, `DO NOT ARM\n- the pre-pr-review round on ${HEAD} is still open: arm only after it is clean\n`);
+  assert.equal(run.stdout, 'DO NOT ARM\n- the PR carries the pre-pr-review label: arm only after the review round marks it clean\n');
 });
 
 test('the command exits 2 when gh fails or the number is missing', (t) => {

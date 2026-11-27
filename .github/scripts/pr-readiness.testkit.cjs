@@ -3,7 +3,7 @@ const HEAD = 'a'.repeat(40), BASE = 'b'.repeat(40);
 const VERIFY = 'Unit, build, E2E, and package';
 const SIGNAL_PATH = '.github/workflows/review-signal.yml';
 function pullFixture(overrides = {}) {
-  return { number: 7, node_id: 'PR_7', state: 'open', draft: false, user: { login: 'author' },
+  return { number: 7, node_id: 'PR_7', state: 'open', draft: false, labels: [], user: { login: 'author' },
     head: { sha: HEAD, ref: 'feature', repo: { full_name: 'o/r' } },
     base: { sha: BASE, ref: 'main', repo: { full_name: 'o/r' } }, ...overrides };
 }
@@ -31,7 +31,6 @@ function readinessData(s, route, args) {
   if (route.endsWith('/pulls/{pull_number}')) return livePull(s, args.pull_number);
   if (route.endsWith('/rules/branches/{branch}')) return s.rules;
   if (route.endsWith('/commits/{ref}/status')) return { statuses: s.statuses };
-  if (route.endsWith('/commits/{commit_sha}/pulls')) return s.commitPulls ?? s.pulls.filter(p => p.head.sha === args.commit_sha);
   if (route.endsWith('/commits/{ref}/check-runs')) return { total_count: s.checkRuns.length, check_runs: s.checkRuns };
   if (route.includes('/actions/')) return actionsData(s, route, args);
   if (route === 'POST /graphql') return { data: { repository: { pullRequest: { reviewThreads: {

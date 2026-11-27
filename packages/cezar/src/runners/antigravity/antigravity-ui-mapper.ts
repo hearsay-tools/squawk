@@ -1,6 +1,5 @@
 import { z, type TokenUsage, type UiEvent } from '@hearsay-tools/squawk/plugin';
-import { AcpEvents } from './acp/events.ts';
-import { addUsage } from './acp/usage.ts';
+import { AcpEvents, addUsage } from '@hearsay-tools/squawk/plugin/acp';
 import { AntigravitySubagentTracker } from './subagent-tracker.ts';
 import { antigravityUsage } from './usage.ts';
 import { antigravityWireHooks } from './wire-updates.ts';

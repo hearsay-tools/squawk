@@ -1,17 +1,13 @@
 'use strict';
-// The pre-PR review status helper (hearsay-tools/squawk#4191).
+// The pre-PR review label and banner helper (hearsay-tools/squawk#4394).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { REVIEW_CONTEXT, BANNER_START, BANNER_END, bannerBody, parse, description, run } = require('./pre-pr-review.cjs');
-
-const HEAD = 'a'.repeat(40);
-const OTHER = 'b'.repeat(40);
-const TASK = 'c5aff4f7-9a93-4dbe-9939-12f048ff0bad';
+const { REVIEW_LABEL, BANNER_START, BANNER_END, bannerBody, parse, run } = require('./pre-pr-review.cjs');
 
 // A gh double: records each call and answers `pr view` from `pull`.
-function fakeGh(pull = { body: 'Closes #1', headRefOid: HEAD }) {
+function fakeGh(pull = { body: 'Closes #1', labels: [] }) {
   const calls = [];
   const gh = (args, input) => {
     calls.push({ args, input });
@@ -21,38 +17,62 @@ function fakeGh(pull = { body: 'Closes #1', headRefOid: HEAD }) {
   };
   return { calls, gh };
 }
-const statusCall = calls => calls.find(({ args }) => args[0] === 'api');
+const apiCalls = calls => calls.filter(({ args }) => args[0] === 'api');
 const edits = calls => calls.filter(({ args }) => args[0] === 'pr' && args[1] === 'edit');
 
-test('each action sets its state on the reviewed head under the pre-pr-review context', () => {
-  for (const [action, state] of [['open', 'pending'], ['clean', 'success'], ['blocked', 'failure']]) {
-    const { calls, gh } = fakeGh();
-    assert.equal(run({ action, head: HEAD, pr: null, repo: null, taskId: TASK, gh, log: () => {} }).status, state);
-    const { args } = statusCall(calls);
-    assert.deepEqual(args.slice(0, 4), ['api', '-X', 'POST', `repos/o/r/statuses/${HEAD}`]);
-    assert.ok(args.includes(`state=${state}`));
-    assert.ok(args.includes(`context=${REVIEW_CONTEXT}`));
-    assert.equal(edits(calls).length, 0, 'no PR, no body edit');
-  }
-});
-
-test('the description names the short task id and nothing else from the environment', () => {
-  assert.equal(description('open', TASK), 'Review round open (task c5aff4f7)');
-  assert.equal(description('clean', undefined), 'Review round clean');
-  assert.equal(description('blocked', 'not a task; $(id)'), 'Review found a finding scored 5 or more');
-});
-
-test('open writes the banner on top and keeps the body', () => {
+test('open adds the pre-pr-review label, writes the open banner, and sets no commit status', () => {
   const { calls, gh } = fakeGh();
-  assert.equal(run({ action: 'open', head: HEAD, pr: 7, repo: 'o/r', taskId: TASK, gh, log: () => {} }).banner, 'written');
+  const logs = [];
+  const result = run({ action: 'open', pr: 7, repo: null, gh, log: line => logs.push(line) });
+  assert.deepEqual(result, { label: 'added', banner: 'written' });
+  const apis = apiCalls(calls);
+  assert.equal(apis.length, 1);
+  assert.deepEqual(apis[0].args, ['api', '-X', 'POST', 'repos/o/r/issues/7/labels', '-f', `labels[]=${REVIEW_LABEL}`]);
+  assert.equal(calls.some(({ args }) => args.some(arg => String(arg).includes('/statuses/'))), false, 'no commit status');
   const [edit] = edits(calls);
   assert.deepEqual(edit.args, ['pr', 'edit', '7', '--repo', 'o/r', '--body-file', '-']);
   assert.ok(edit.input.startsWith(`${BANNER_START}\n`));
   assert.match(edit.input, /Review open/);
   assert.ok(edit.input.endsWith(`${BANNER_END}\n\nCloses #1`));
+  const labelIndex = calls.indexOf(apis[0]);
+  const editIndex = calls.indexOf(edit);
+  assert.ok(labelIndex < editIndex, 'label blocks the PR before the body edit');
 });
 
-test('blocked replaces the open banner, and clean removes it and restores the body', () => {
+test('blocked adds the label when missing, skips adding when present, and writes the blocked banner', () => {
+  const fresh = fakeGh();
+  assert.deepEqual(run({ action: 'blocked', pr: 7, repo: 'o/r', gh: fresh.gh, log: () => {} }), { label: 'added', banner: 'written' });
+  assert.deepEqual(apiCalls(fresh.calls)[0].args, ['api', '-X', 'POST', 'repos/o/r/issues/7/labels', '-f', `labels[]=${REVIEW_LABEL}`]);
+  assert.match(edits(fresh.calls)[0].input, /scored 5 or more/);
+
+  const alreadyOpen = fakeGh({ body: bannerBody('Closes #1', 'open'), labels: [{ name: REVIEW_LABEL }] });
+  assert.deepEqual(run({ action: 'blocked', pr: 7, repo: 'o/r', gh: alreadyOpen.gh, log: () => {} }),
+    { label: 'unchanged', banner: 'written' });
+  assert.equal(apiCalls(alreadyOpen.calls).length, 0, 'label already present');
+  assert.match(edits(alreadyOpen.calls)[0].input, /scored 5 or more/);
+  assert.doesNotMatch(edits(alreadyOpen.calls)[0].input, /Review open/);
+});
+
+test('clean removes the banner before removing the label, and sets no commit status', () => {
+  const { calls, gh } = fakeGh({ body: bannerBody('Body\n\nmore', 'blocked'), labels: [{ name: 'bug' }, { name: REVIEW_LABEL }] });
+  assert.deepEqual(run({ action: 'clean', pr: 7, repo: 'o/r', gh, log: () => {} }), { label: 'removed', banner: 'removed' });
+  const [edit] = edits(calls);
+  const [del] = apiCalls(calls);
+  assert.equal(edit.input, 'Body\n\nmore');
+  assert.deepEqual(del.args, ['api', '-X', 'DELETE', `repos/o/r/issues/7/labels/${REVIEW_LABEL}`]);
+  assert.ok(calls.indexOf(edit) < calls.indexOf(del), 'banner clears before label removal wakes readiness');
+});
+
+test('clean on a PR without the label or banner writes nothing', () => {
+  const { calls, gh } = fakeGh({ body: 'Plain', labels: [{ name: 'bug' }] });
+  assert.deepEqual(run({ action: 'clean', pr: 7, repo: 'o/r', gh, log: () => {} }), { label: 'unchanged', banner: 'unchanged' });
+  assert.equal(apiCalls(calls).length, 0);
+  assert.equal(edits(calls).length, 0);
+  assert.equal(bannerBody(null, 'clean'), '');
+  assert.equal(bannerBody(`x ${BANNER_START} unterminated`, 'clean'), `x ${BANNER_START} unterminated`);
+});
+
+test('bannerBody replaces open with blocked and removes repeated banners on clean', () => {
   const opened = bannerBody('Body\n\nmore', 'open');
   const blocked = bannerBody(opened, 'blocked');
   assert.equal(blocked.split(BANNER_START).length, 2, 'one banner only');
@@ -62,33 +82,18 @@ test('blocked replaces the open banner, and clean removes it and restores the bo
   assert.equal(bannerBody(bannerBody(opened, 'open'), 'clean'), 'Body\n\nmore');
 });
 
-test('clean on a body without a banner edits nothing', () => {
-  const { calls, gh } = fakeGh({ body: 'Plain', headRefOid: HEAD });
-  assert.equal(run({ action: 'clean', head: HEAD, pr: 7, repo: 'o/r', taskId: TASK, gh, log: () => {} }).banner, 'unchanged');
-  assert.equal(edits(calls).length, 0);
-  assert.equal(bannerBody(null, 'clean'), '');
-  assert.equal(bannerBody(`x ${BANNER_START} unterminated`, 'clean'), `x ${BANNER_START} unterminated`);
-});
-
-test('a PR whose live head moved keeps its banner, and the status still lands on the reviewed head', () => {
-  const { calls, gh } = fakeGh({ body: 'Body', headRefOid: OTHER });
-  const logs = [];
-  assert.equal(run({ action: 'clean', head: HEAD, pr: 7, repo: 'o/r', taskId: TASK, gh, log: m => logs.push(m) }).banner, 'other-head');
-  assert.equal(edits(calls).length, 0);
-  assert.ok(statusCall(calls).args.includes(`repos/o/r/statuses/${HEAD}`));
-  assert.match(logs.at(-1), /banner is unchanged/);
-});
-
-test('parse refuses an unknown action, a short head and a bad PR number', () => {
-  assert.deepEqual(parse(['open', '--head', HEAD, '--pr', '7']), { action: 'open', head: HEAD, pr: 7, repo: null });
-  assert.throws(() => parse(['start', '--head', HEAD]), /open, clean or blocked/);
-  assert.throws(() => parse(['open', 'clean', '--head', HEAD]), /open, clean or blocked/);
-  assert.throws(() => parse(['open', '--head', 'abc']), /--head/);
-  assert.throws(() => parse(['open', '--head', HEAD, '--pr', '0']), /--pr/);
+test('parse requires --pr and refuses unknown actions, flags or bad PR numbers', () => {
+  assert.deepEqual(parse(['open', '--pr', '7']), { action: 'open', pr: 7, repo: null });
+  assert.deepEqual(parse(['clean', '--pr', '7', '--repo', 'o/r']), { action: 'clean', pr: 7, repo: 'o/r' });
+  assert.throws(() => parse(['start', '--pr', '7']), /open, clean or blocked/);
+  assert.throws(() => parse(['open', 'clean', '--pr', '7']), /open, clean or blocked/);
+  assert.throws(() => parse(['open']), /--pr/);
+  assert.throws(() => parse(['open', '--pr', '0']), /--pr/);
+  assert.throws(() => parse(['open', '--pr', '7', '--head', 'a'.repeat(40)]), /Unknown option/);
 });
 
 test('the command exits 2 with one line on bad arguments', () => {
   const result = spawnSync(process.execPath, [path.join(__dirname, 'pre-pr-review.cjs'), 'open'], { encoding: 'utf8' });
   assert.equal(result.status, 2);
-  assert.match(result.stderr, /^pre-pr-review: pass --head/);
+  assert.match(result.stderr, /^pre-pr-review: --pr takes a pull request number/);
 });

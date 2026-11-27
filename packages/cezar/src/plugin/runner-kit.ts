@@ -2,9 +2,9 @@
  * Lightweight definition-time runner kit re-exported by `@hearsay-tools/squawk/plugin`
  * (spec 2026-11-24-plugin-loader-and-runner-kit, § 3). Holds all runner kit types plus the pure
  * metadata/env values that runner `definition.ts` and data modules read at boot. Heavy runtime
- * helpers live under `@hearsay-tools/squawk/plugin/{runtime,model-settings,managed-cli,pi-rpc}` so
+ * helpers live under `@hearsay-tools/squawk/plugin/{runtime,model-settings,managed-cli,pi-rpc,acp}` so
  * `bootRuntime()` never eagerly loads `node:child_process`, TOML/YAML parsers, managed-CLI
- * storage, or Pi RPC code.
+ * storage, Pi RPC, or ACP code.
  * Unstable: it may change in any release until Squawk installs plugins from npm or git.
  */
 

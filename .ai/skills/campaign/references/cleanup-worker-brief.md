@@ -105,7 +105,7 @@ Before the PR, in this order:
    coordinator that SHA, the round's result and the readiness evidence. Push
    and open the PR only after its reply for that head (PR-opening gate above).
    A round on a pushed head while the PR is open: mark it with
-   node .github/scripts/pre-pr-review.cjs open|blocked|clean --head <sha> --pr <n>
+   node .github/scripts/pre-pr-review.cjs open|blocked|clean --pr <n>
    (.ai/skills/auto-merge/SKILL.md § Show an open review round on the PR).
    Never add the PR to the merge queue or remove it. A push refused with
    GH006 (the PR is queued) goes to the coordinator as a request; do not
