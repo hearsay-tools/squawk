@@ -575,10 +575,20 @@ const LINE_BG: Record<HunkLine['kind'], string | undefined> = {
 }
 const MARKER: Record<HunkLine['kind'], string> = { add: '+', del: '−', context: ' ' }
 
-/** The hunk's `@@ … @@` line: a band with a hairline above and below, legible in both themes. */
-function HunkHeaderRow({ hunk }: { hunk: Hunk }) {
+/** The hunk's `@@ … @@` line: a band with a hairline above and below, legible in both themes.
+ *  Each row paints inside `content-visibility: auto`, which clips overflow, so the header
+ *  never runs past the card edge: it wraps with the body lines, or ends in an ellipsis
+ *  (full text in the tooltip) when wrap is off. */
+function HunkHeaderRow({ hunk, wrap }: { hunk: Hunk; wrap: boolean }) {
   return (
-    <div data-slot="diff-hunk" className="border-y border-border/70 bg-muted/60 px-4 py-0.5 whitespace-pre text-muted-foreground">
+    <div
+      data-slot="diff-hunk"
+      title={wrap ? undefined : hunk.header}
+      className={cn(
+        'border-y border-border/70 bg-muted/60 px-4 py-0.5 text-muted-foreground',
+        wrap ? 'break-words whitespace-pre-wrap' : 'truncate',
+      )}
+    >
       {hunk.header}
     </div>
   )
@@ -646,7 +656,7 @@ function UnifiedRowView({
   tokensFor: (line: HunkLine) => SynToken[] | null
   onExpand?: ((gap: ContextGap) => void) | undefined
 }) {
-  if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} />
+  if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} wrap={wrap} />
   if (row.type === 'gap') return <GapRow gap={row.gap} onExpand={onExpand} />
   const { line } = row.cell
   return (
@@ -670,7 +680,7 @@ function SplitRowView({
   tokensFor: (line: HunkLine) => SynToken[] | null
   onExpand?: ((gap: ContextGap) => void) | undefined
 }) {
-  if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} />
+  if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} wrap={wrap} />
   if (row.type === 'gap') return <GapRow gap={row.gap} onExpand={onExpand} />
   return (
     <div data-slot="diff-pair" className="grid grid-cols-2">

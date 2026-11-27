@@ -156,7 +156,7 @@ export function FileEntryView({
         <span className="min-w-0 truncate font-mono font-medium text-foreground" title={shownPath}>
           {shownPath}
         </span>
-        <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">{formatFileSize(entry.size)}</span>
+        <span data-slot="file-preview-size" className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">{formatFileSize(entry.size)}</span>
         {/* Compact beside the size on a desktop mouse; the 44px target on a phone or touch pointer. */}
         {code ? <WrapToggle wrap={wrap} onWrapChange={setWrap} className="size-8 rounded-md max-md:size-11 pointer-coarse:size-11" /> : null}
       </header>

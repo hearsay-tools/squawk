@@ -396,6 +396,9 @@ describe('the Git view Recently on main section', () => {
     expect(meta?.textContent).toContain('feat: add the thing')
     expect(meta?.textContent).toContain('Ada')
     expect(meta?.querySelector(`[title="${COMMIT.sha}"]`)?.textContent).toBe(COMMIT.sha.slice(0, 8))
+    // Its ± stat ends that metadata line, not the back link's row.
+    expect(meta?.querySelector('[data-slot="commit-stat"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="commit-back"]')?.parentElement?.querySelector('[data-slot="commit-stat"]')).toBeNull()
     // The same <Diff> facade renders the commit's file.
     await waitFor(() =>
       expect(document.querySelector('[data-slot="diff-file"][data-path="notes.md"]')).not.toBeNull(),

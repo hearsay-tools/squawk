@@ -18,8 +18,9 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
   const navigate = useNavigate()
   // hearsay-tools/cezarion#1465: the list shows archived one-time schedules on request only.
   const [archived, setArchived] = useState(false)
-  // A schedule looked up by id may be archived: its read-only record is still reachable by link.
-  const { data, error, refresh } = useAutomations(mode === 'list' ? (archived ? 'only' : undefined) : 'include')
+  // One list with the archived entries in it: the list splits it into its two tabs and counts
+  // both, and a schedule looked up by id may be archived, its read-only record still reachable.
+  const { data, error, refresh } = useAutomations('include')
   // Bumped by the editor's Reload and nothing else: a background revision change must reach the
   // user as the save-time 409, not as a form that silently resets under their typing.
   const [reloadToken, setReloadToken] = useState(0)

@@ -165,6 +165,11 @@ describe('the GitHub tab lists', () => {
 
     await waitFor(() => expect(document.querySelector('[data-slot="gh-header"]')).not.toBeNull())
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Issues · All open')
+    // The view qualifier is muted and regular weight, like "Activity · acme-api".
+    const qualifier = document.querySelector('[data-slot="gh-title-qualifier"]')!
+    expect(qualifier.textContent).toBe('· All open')
+    expect(qualifier.className).toContain('font-normal')
+    expect(qualifier.className).toContain('text-muted-foreground')
     expect(document.querySelector('[data-slot="gh-repo"]')?.textContent).toBe('acme/demo')
 
     const tabs = [...document.querySelectorAll('[data-slot="gh-tabs"] a')].map((a) => ({

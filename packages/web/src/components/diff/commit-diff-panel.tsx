@@ -45,7 +45,6 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
             {backLabel}
           </Link>
         </Button>
-        {commit.data ? <DiffStatLabel stat={commit.data.stat} /> : null}
         <span className="ml-auto hidden items-center gap-1 md:flex">
           <DiffViewToggles mode={mode} wrap={wrap} onModeChange={setMode} onWrapChange={setWrap} />
         </span>
@@ -73,6 +72,9 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
               <span title={commit.data.when}>{gitAge(commit.data.when)}</span>
               <span aria-hidden="true">·</span>
               <span className="font-mono select-all" title={commit.data.sha}>{commit.data.sha.slice(0, 8)}</span>
+              {/* The stat belongs to the commit, so it ends the commit's own line (as in the task's
+                  Commits tab), not the back link's. */}
+              <span data-slot="commit-stat" className="ml-0.5"><DiffStatLabel stat={commit.data.stat} /></span>
             </p>
           </div>
           {commit.data.files.length === 0 ? (

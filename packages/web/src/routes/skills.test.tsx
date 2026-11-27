@@ -43,6 +43,8 @@ it('shows duplicate ids with runner metadata and problems, without edit controls
   expect(screen.getByRole('region', { name: 'Your skills' }).textContent).toContain('User copy')
   expect(screen.queryByRole('switch')).toBeNull()
   expect(document.querySelector('[data-slot="skill-body"]')).toBeNull()
+  // Every row says it opens in place: a trailing chevron, so a clamped description is no dead end.
+  for (const row of rows) expect(row.querySelector('summary [data-slot="skill-row-cue"]')).not.toBeNull()
   expect(requests.every((url) => !url.includes('/skills/') && !url.endsWith('/skills'))).toBe(true)
 })
 

@@ -274,7 +274,7 @@ describe('scheduled automations on a default-on fixture server', () => {
     browser.waitForValue(`${cardOf} ? null : true`)
 
     // The Archived filter, by keys, shows the row without actions.
-    browser.evaluate(`[...document.querySelectorAll('button[aria-pressed]')].find((button) => button.textContent === 'Archived').focus()`)
+    browser.evaluate(`[...document.querySelectorAll('button[aria-pressed]')].find((button) => button.dataset.view === 'archived').focus()`)
     browser.press('Enter')
     const archivedCard = browser.waitForValue(`(() => {
       const card = ${cardOf}

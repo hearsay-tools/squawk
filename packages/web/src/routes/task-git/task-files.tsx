@@ -1,5 +1,5 @@
 import { FolderTreeIcon } from 'lucide-react'
-import { SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
+import { RefreshCwIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useEffect, useState } from 'react'
@@ -71,7 +71,7 @@ function FilesView({ run }: { run: ApiRun }) {
         <section className="mt-4 border-t border-border pt-3" aria-label="Published artifacts">
           <h2 className="text-sm font-medium">Published artifacts</h2>
           {artifacts.isPending ? <p className="py-2 text-xs">Loading published files…</p> : artifacts.isError ? <p role="alert" className="py-2 text-xs">Could not load published files.</p> : artifacts.data.artifacts.length === 0 ? <p className="py-2 text-xs text-muted-foreground">No published files yet.</p> : <ul>{artifacts.data.artifacts.map(artifact => <li key={artifact.id}><button type="button" aria-current={artifact.id === artifactId ? 'true' : undefined} className="min-h-11 w-full rounded px-2 py-2 text-left text-xs wrap-anywhere hover:bg-muted focus-visible:ring-2" onClick={() => select('artifact', artifact.id)}>{artifact.name}</button></li>)}</ul>}
-          <Button variant="ghost" className="min-h-11" onClick={() => void artifacts.refetch()}>Refresh published files</Button>
+          <Button variant="outline" size="sm" data-action="refresh-artifacts" className="mt-2 max-md:h-11 no-hover:h-11" onClick={() => void artifacts.refetch()}><RefreshCwIcon aria-hidden="true" />Refresh published files</Button>
         </section>
       </aside>
       {conflict ? <p role="alert" className="p-4">Invalid file link: choose either a path or a published artifact.</p> : selected !== null || artifactId !== null || root.isSuccess ? <LinkedFilePreview runId={run.id} path={selected} artifactId={artifactId} worktreePath={run.worktreePath} /> : null}

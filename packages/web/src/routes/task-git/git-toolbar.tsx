@@ -74,7 +74,10 @@ export function GitToolbar({
         </span>
       ) : null}
 
-      <span className={cn('flex items-center gap-2', onPreviewChange ? 'max-md:ml-auto' : 'ml-auto')}>
+      {/* Below md the action row takes a full line of its own and spans the content gutter
+          edge to edge: the buttons share the width, the overflow menu closes it flush right,
+          so the row lines up with the branch chip above and the Changed files card below. */}
+      <span className={cn('flex items-center gap-2 max-md:w-full', !onPreviewChange && 'md:ml-auto')}>
         {/* View toggles — layout preferences, not git actions, so not the policy's business.
             Hidden below md: phones force unified+wrap (the parent owns that rule). */}
         <span className="hidden items-center gap-1.5 md:flex">
@@ -82,7 +85,7 @@ export function GitToolbar({
         </span>
         <span aria-hidden="true" className="hidden h-5 w-px bg-border md:block" />
 
-        <span className="flex items-center gap-1.5">
+        <span data-slot="git-toolbar-actions" className="flex items-center gap-1.5 max-md:flex-1 max-md:[&>*]:flex-1">
           {bar.secondary.map((action) => (
             <ActionButton key={action.id} action={action} variant="outline" onAction={onAction} />
           ))}
@@ -92,7 +95,12 @@ export function GitToolbar({
         {bar.menu.length > 0 ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="More git actions">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="More git actions"
+                className="max-md:min-w-11 max-md:border max-md:border-border max-md:bg-card"
+              >
                 <EllipsisVerticalIcon aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>

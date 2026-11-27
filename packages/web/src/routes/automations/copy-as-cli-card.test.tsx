@@ -37,6 +37,28 @@ describe('CopyAsCliCard', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).not.toBeNull())
   })
 
+  // The command box starts folded: Copy works while it is closed, and the open box wraps every
+  // token inside the card instead of clipping it at the right edge.
+  it('folds the command behind Show command and wraps it when open', async () => {
+    const writeText = vi.fn(async () => undefined)
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
+    renderInProject(<CopyAsCliCard draft={draft} />)
+    const toggle = screen.getByRole('button', { name: 'Show command' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    const box = document.getElementById(toggle.getAttribute('aria-controls')!)!
+    expect(box.hidden).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(cliLines(line)))
+
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Hide command' }).getAttribute('aria-expanded')).toBe('true')
+    expect(box.hidden).toBe(false)
+    const pre = box.querySelector('pre')!
+    expect(pre.className).toContain('whitespace-pre-wrap')
+    expect(pre.className).toContain('break-all')
+    expect(pre.className).not.toContain('overflow-x-auto')
+  })
+
   it('says so when the clipboard refuses', async () => {
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: vi.fn(async () => { throw new Error('denied') }) } })
     renderInProject(<CopyAsCliCard draft={draft} />)

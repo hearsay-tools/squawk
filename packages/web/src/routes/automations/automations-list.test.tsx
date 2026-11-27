@@ -62,7 +62,7 @@ it('reports a refused run under the card without losing the row', async () => {
 it('shows a github row with Test filter and no Run now', () => {
   routed(() => undefined)
   mount(response([github], { available: false, reason: 'No GitHub remote configured.' }))
-  expect(screen.getByText('on issue.opened · every 5 min')).not.toBeNull()
+  expect(screen.getByText('When an issue opens · every 5 min')).not.toBeNull()
   expect(screen.getByText('continuous')).not.toBeNull()
   expect(screen.getByRole('button', { name: 'Test filter' })).not.toBeNull()
   expect(screen.queryByRole('button', { name: 'Run now' })).toBeNull()
@@ -155,7 +155,7 @@ it('opening the cancel confirm moves focus to Keep, and Keep returns it to Cance
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }))
 })
 
-it('Archived filter requests archived=only and links the run', () => {
+it('Archived filter shows only archived entries, counts them and links the run', () => {
   routed(() => undefined)
   const onChange = vi.fn()
   mount(response([once]), '', undefined, { value: false, onChange })
@@ -167,7 +167,9 @@ it('Archived filter requests archived=only and links the run', () => {
   const launched = { ...once, enabled: false, nextRunAt: undefined, onceStatus: 'archived', archived: { at: '2030-01-15T08:00:05Z', outcome: 'launched', runId: 'run-9' } }
   const cancelled = { ...once, id: 'o3', name: 'Dropped', enabled: false, nextRunAt: undefined, onceStatus: 'archived', archived: { at: '2026-10-22T13:00:00Z', outcome: 'cancelled' } }
   mount(response([launched, cancelled]), '', undefined, { value: true, onChange })
-  expect(screen.getByRole('button', { name: 'Archived' }).getAttribute('aria-pressed')).toBe('true')
+  const archivedTab = screen.getByRole('button', { name: /^Archived/ })
+  expect(archivedTab.getAttribute('aria-pressed')).toBe('true')
+  expect(archivedTab.querySelector('[data-slot="automations-tab-count"]')?.textContent).toBe('· 2')
   expect(screen.getAllByText('Archived', { selector: '[data-slot="pill"], [data-slot="pill"] *' }).length).toBeGreaterThan(0)
   expect(screen.getByRole('link', { name: 'Open task' }).getAttribute('href')).toBe('/tasks/run-9')
   expect(screen.getByText('Cancelled — no task was started.')).not.toBeNull()

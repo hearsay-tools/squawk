@@ -127,7 +127,7 @@ function TaskFields({ draft, patch, saving, automation }: {
           value={draft.prompt}
           onChange={(event) => patch({ prompt: event.target.value })}
           rows={3}
-          className="[field-sizing:fixed] min-h-[88px] resize-y bg-background"
+          className="[field-sizing:fixed] min-h-[88px] resize-none bg-background"
           required
         />
         <p className="text-xs break-words text-muted-foreground">

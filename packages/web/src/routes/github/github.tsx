@@ -2,7 +2,7 @@ import './github-layout.css'
 import { useQueryClient } from '@tanstack/react-query'
 import { LoaderCircleIcon } from 'lucide-react'
 import { Virtualizer } from 'virtua'
-import { ArrowLeftIcon, CheckIcon, CircleDotIcon, ChevronDownIcon, GitPullRequestIcon, RefreshCwIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
+import { CheckIcon, CircleDotIcon, ChevronDownIcon, GitPullRequestIcon, RefreshCwIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
 import {
   useEffect,
   useRef,
@@ -53,9 +53,10 @@ import { IssueFilters } from './issue-filters'
 import { allLabels, labelChipStyle } from './github-filter'
 import { GithubFilterScreen } from './github-filter-screen'
 import { GithubLoading } from './github-loading'
+import { GithubMasthead } from './github-masthead'
 import { useGithubListPaging, type GithubListPaging, type GithubPagesQuery } from './github-paging'
 import {
-  githubFilterPath, GITHUB_PAGE_SIZE, ISSUE_ROWS, PR_ROWS, ACTIVE_FILTER_LABEL, type GithubFilter,
+  githubFilterPath, GITHUB_PAGE_SIZE, type GithubFilter,
 } from './github-sidebar-model'
 import { useIsDesktop } from '@/lib/use-desktop'
 import { HandToAgent } from './hand-to-agent'
@@ -584,43 +585,6 @@ function GithubUnavailable({ reason, refreshing, onRetry }: {
           Everything else in Squawk works without it.
         </p>
       </CenteredState>
-    </div>
-  )
-}
-
-/** The title row: the list on screen, the phone's way back to its filters, and the repo line. */
-function GithubMasthead({ view, activeFilter, isDesktop, rawFilterParam, n, gh }: {
-  view: GithubView
-  activeFilter: GithubFilter
-  isDesktop: boolean
-  rawFilterParam: string | null
-  n: string | undefined
-  gh: GithubData
-}) {
-  return (
-    <div data-slot="gh-masthead" className="flex min-w-0 shrink-0 flex-col">
-      <h1 className="text-[26px] leading-[1.2] font-semibold tracking-tight text-foreground md:text-[28px]">
-        {isDesktop ? `${view === 'issues' ? 'Issues' : 'Pull requests'} · ${ACTIVE_FILTER_LABEL[activeFilter]}` : 'GitHub'}
-      </h1>
-      {rawFilterParam !== null && n === undefined ? (
-        <div data-slot="gh-filter-context" className="mt-1 flex min-w-0 items-center gap-3 md:hidden">
-          <Link to="/github" data-slot="gh-back-filters" className="inline-flex min-h-11 items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
-            <ArrowLeftIcon size={16} aria-hidden="true" className="size-3.5" />
-            Back to filters
-          </Link>
-          {activeFilter !== 'all' ? (
-            <span data-slot="gh-active-filter" className="truncate text-xs text-muted-foreground">
-              {[...ISSUE_ROWS, ...PR_ROWS].find((row) => row.id === activeFilter)?.label}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-      {gh.repo ? (
-        <p className="mt-1 min-w-0 truncate text-[13px] text-muted-foreground">
-          <span data-slot="gh-repo">{gh.repo}</span>
-          <span data-slot="gh-synced" title={gh.syncedAt ? new Date(gh.syncedAt).toLocaleString() : undefined}> · {gh.syncedAt ? `Synced ${shortAge(gh.syncedAt)}` : 'Not synced yet'}</span>
-        </p>
-      ) : null}
     </div>
   )
 }

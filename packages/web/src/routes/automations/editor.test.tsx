@@ -291,7 +291,7 @@ it('does not let an existing automation change its kind', () => {
 it('shows the GitHub fields and how it polls, instead of a preview, for a GitHub automation', () => {
   stubFetch(() => json({}))
   mount({ automation: { ...stored, kind: 'github', schedule: undefined, events: ['issue.opened'], intervalSeconds: 600, filters: { lookbackDays: 7, maxRecords: 25 } } as AutomationDefinition })
-  expect(screen.getByRole('button', { name: 'issue.opened' }).getAttribute('aria-pressed')).toBe('true')
+  expect(screen.getByRole('button', { name: 'Issue opened' }).getAttribute('aria-pressed')).toBe('true')
   expect(screen.queryByRole('list', { name: 'Next 5 runs' })).toBeNull()
   expect(screen.getByText(/every 10 minutes/)).not.toBeNull()
 })

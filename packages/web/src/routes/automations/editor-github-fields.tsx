@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { ChipButton } from './chip-button'
+import { EVENT_CHIP_LABEL } from './event-phrases'
 import type { AutomationDraft } from './editor-draft'
 
 const EVENTS = automationEventSchema.options
@@ -62,7 +63,7 @@ export function GithubFields({ draft, onChange, disabledReason }: { draft: Autom
       {disabledReason ? <p className="text-xs text-pending-strong">{`GitHub unavailable · ${disabledReason}`}</p> : null}
       <div role="group" aria-label="GitHub events" className="inline-flex w-fit max-w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/60 p-1">
         {EVENTS.map((event) => (
-          <ChipButton key={event} pressed={draft.events.includes(event)} onClick={() => toggleEvent(event)}>{event}</ChipButton>
+          <ChipButton key={event} pressed={draft.events.includes(event)} onClick={() => toggleEvent(event)}>{EVENT_CHIP_LABEL[event]}</ChipButton>
         ))}
       </div>
       <div className="grid gap-2">

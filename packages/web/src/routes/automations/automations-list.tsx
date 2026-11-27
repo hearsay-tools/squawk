@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { dayTime, relativeIn } from '@/lib/automation-format'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
+import { eventsSentence } from './event-phrases'
 import { InlineLog } from './log'
 import { PageFrame, PageState } from './page-frame'
 
@@ -70,6 +71,13 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
     throw new Error('Preview is still running')
   })
 
+  // The route fetches active and archived entries in one list, so both tabs can carry a count
+  // the way the Tasks tabs do; the view only picks which of the two it renders.
+  const all = data?.automations ?? []
+  const activeEntries = all.filter((automation) => !automation.archived)
+  const archivedEntries = all.filter((automation) => Boolean(automation.archived))
+  const shown = archived ? archivedEntries : activeEntries
+
   return (
     <PageFrame
       title="Automations"
@@ -95,9 +103,7 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
                   )}
                 >
                   Active
-                  {!archived && data.automations.length > 0 ? (
-                    <span className="tabular-nums text-muted-foreground">· {data.automations.length}</span>
-                  ) : null}
+                  <TabCount count={activeEntries.length} />
                 </button>
                 <button
                   type="button"
@@ -111,6 +117,7 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
                   )}
                 >
                   Archived
+                  <TabCount count={archivedEntries.length} />
                 </button>
               </div>
             ) : <span />}
@@ -118,9 +125,9 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
               <SchedulerStatus data={data} />
             </div>
           </div>
-          {archived && data.automations.length === 0 ? (
+          {archived && shown.length === 0 ? (
             <PageState text="No archived one-time schedules." />
-          ) : data.automations.length === 0 ? (
+          ) : shown.length === 0 ? (
             <CenteredState
               icon={<ZapIcon />}
               tone="neutral"
@@ -131,7 +138,7 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
             />
           ) : (
             <ul className="grid gap-3" aria-label="Automations">
-              {data.automations.map((automation) => (
+              {shown.map((automation) => (
                 <AutomationCard
                   key={automation.id}
                   automation={automation}
@@ -152,6 +159,12 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
   )
 }
 
+/** A tab's "· N", the Tasks tabs' grammar; nothing for an empty view. */
+function TabCount({ count }: { count: number }) {
+  if (count === 0) return null
+  return <span data-slot="automations-tab-count" className="tabular-nums text-muted-foreground">{`· ${count}`}</span>
+}
+
 function SchedulerStatus({ data }: { data: AutomationsResponse }) {
   const tone = data.scheduler.state === 'scheduled' ? 'text-success' : 'text-muted-foreground'
   return (
@@ -164,7 +177,7 @@ function SchedulerStatus({ data }: { data: AutomationsResponse }) {
 /** `scheduleLabel` for a schedule; the event list and poll interval for a GitHub check. */
 function triggerLabel(automation: AutomationListEntry): string {
   if (automation.kind === 'schedule' && automation.schedule) return scheduleLabel(automation.schedule)
-  return `on ${(automation.events ?? []).join(', ')} · every ${Math.round((automation.intervalSeconds ?? 300) / 60)} min`
+  return `${eventsSentence(automation.events ?? [])} · every ${Math.round((automation.intervalSeconds ?? 300) / 60)} min`
 }
 
 /** A one-time schedule's status badge: the words and the dot tone (hearsay-tools/cezarion#1465). */

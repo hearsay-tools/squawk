@@ -8,7 +8,7 @@ import { SearchIcon } from '@/components/design-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Link } from '@/lib/project-router'
-import { shortAge } from '@/lib/format'
+import { shortAge, withAgo } from '@/lib/format'
 import { reportTitle } from '@/lib/report-title'
 import { useSearchParamsWriter } from '@/lib/use-search-params-writer'
 import './reports.css'
@@ -117,7 +117,7 @@ export function ReportsRoute() {
                       <span className="min-w-0 truncate">{reportTitle(report)}</span>
                     </Link>
                   </h2>
-                  {/* Line two: the source task, then the compact age. */}
+                  {/* Line two: the source task, then when it was published ("Published 37s ago"). */}
                   <div className="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
                     <Link
                       className="reports-task min-w-0 truncate text-xs text-muted-foreground no-underline hover:text-foreground hover:underline"
@@ -131,7 +131,7 @@ export function ReportsRoute() {
                       dateTime={report.createdAt}
                       title={formatFullReportTimestamp(report.createdAt)}
                     >
-                      {shortAge(report.createdAt)}
+                      {publishedAge(report.createdAt)}
                     </time>
                   </div>
                 </div>
@@ -151,4 +151,10 @@ export function ReportsRoute() {
       </div>
     </section>
   )
+}
+
+/** "Published 37s ago" / "Published just now": a bare "37s" does not say what it measures. */
+function publishedAge(createdAt: string): string {
+  const age = shortAge(createdAt)
+  return age ? `Published ${withAgo(age)}` : ''
 }
