@@ -390,4 +390,45 @@ describe('Streamable HTTP /api/v1/mcp auth matrix and lifecycle (hearsay-tools/s
       await client.close();
     }
   }, 20_000);
+
+  it('derives returned task URLs from public proxy headers in hosted mode and ignores forwarded headers locally', async () => {
+    const created = createMcpToken({ port: cockpit.port, name: 'proxy-origin', home: testHome() });
+    const startReq = (headers: Record<string, string>) => fetch(`${cockpit.origin}/api/v1/mcp`, {
+      method: 'POST',
+      headers: { ...MCP_HEADERS, authorization: `Bearer ${created.token}`, ...headers },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'tools/call',
+        params: { name: 'task_start', arguments: { project: cockpit.projectA, task: 'Proxy URL check' } },
+      }),
+    });
+    const readRpcToolData = async (res: Response) => {
+      const text = await res.text();
+      const dataLine = text.split('\n').find((line) => line.startsWith('data: '));
+      const payload = JSON.parse(dataLine ? dataLine.slice(6) : text) as { result?: unknown };
+      return parseToolResult(payload.result);
+    };
+
+    // Local mode ignores X-Forwarded-Proto and X-Forwarded-Host.
+    const localRes = await startReq({ 'x-forwarded-proto': 'https', 'x-forwarded-host': 'spoof.example.com' });
+    expect(localRes.status).toBe(200);
+    const localResult = await readRpcToolData(localRes);
+    expect(localResult.isError).toBe(false);
+    expect(localResult.data.url).toBe(`${cockpit.origin}/p/${cockpit.projectA}/tasks/${localResult.data.id}`);
+
+    // Hosted mode uses X-Forwarded-Proto + X-Forwarded-Host / Host for returned task links.
+    const savedRemote = process.env.CEZ_REMOTE;
+    process.env.CEZ_REMOTE = '1';
+    try {
+      const hostedRes = await startReq({ 'x-forwarded-proto': 'https', 'x-forwarded-host': 'cockpit.example.com' });
+      expect(hostedRes.status).toBe(200);
+      const hostedResult = await readRpcToolData(hostedRes);
+      expect(hostedResult.isError).toBe(false);
+      expect(hostedResult.data.url).toBe(`https://cockpit.example.com/p/${cockpit.projectA}/tasks/${hostedResult.data.id}`);
+    } finally {
+      if (savedRemote === undefined) delete process.env.CEZ_REMOTE;
+      else process.env.CEZ_REMOTE = savedRemote;
+    }
+  });
 });

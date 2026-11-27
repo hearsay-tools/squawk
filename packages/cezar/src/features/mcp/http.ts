@@ -100,6 +100,43 @@ function wrapStreamCleanup(body: ReadableStream<Uint8Array>, onDone: () => void)
   });
 }
 
+function firstHeaderToken(value: string | null): string | null {
+  if (!value) return null;
+  const first = value.split(',')[0]?.trim();
+  return first ? first : null;
+}
+
+function parseRequestUrl(url: string): URL | null {
+  try { return new URL(url); } catch { return null; }
+}
+
+function parseOriginAuthority(proto: 'http' | 'https', rawHost: string | null): string | null {
+  if (!rawHost || /[\s/@\\]/.test(rawHost)) return null;
+  const parsed = parseRequestUrl(`${proto}://${rawHost}`);
+  if (!parsed) return null;
+  const hasExtras = Boolean(parsed.username || parsed.password || parsed.search || parsed.hash);
+  return hasExtras || parsed.pathname !== '/' ? null : parsed.origin;
+}
+
+/**
+ * Resolve the cockpit origin returned in MCP task URLs. Behind a hosted reverse proxy, honor
+ * `X-Forwarded-Proto` and `X-Forwarded-Host` (falling back to `Host`); in local mode, ignore
+ * forwarded headers and use the loopback request host. Invalid authorities fall back safely.
+ */
+export function resolvePublicOrigin(request: Request, context: HttpRouteContext, loopbackOrigin: string): string {
+  const requestUrl = parseRequestUrl(request.url);
+  const hosted = context.isHostedMode();
+  const forwardedProto = hosted ? firstHeaderToken(request.headers.get('x-forwarded-proto'))?.toLowerCase() : undefined;
+  const proto: 'http' | 'https' = forwardedProto === 'http' || forwardedProto === 'https'
+    ? forwardedProto
+    : requestUrl?.protocol === 'https:' ? 'https' : 'http';
+  const rawHost = (hosted ? firstHeaderToken(request.headers.get('x-forwarded-host')) : null)
+    ?? firstHeaderToken(request.headers.get('host'))
+    ?? requestUrl?.host
+    ?? null;
+  return parseOriginAuthority(proto, rawHost) ?? loopbackOrigin;
+}
+
 function unauthorizedResponse(): Response {
   return Response.json(
     { error: 'unauthorized: valid Bearer token required' },
@@ -156,14 +193,17 @@ export async function handleMcpHttpRequest(
   if (request.signal.aborted) onRequestAbort();
   else request.signal.addEventListener('abort', onRequestAbort, { once: true });
 
-  const origin = port !== undefined ? `http://127.0.0.1:${port}` : 'http://127.0.0.1';
+  const loopbackOrigin = port !== undefined ? `http://127.0.0.1:${port}` : 'http://127.0.0.1';
+  const publicOrigin = resolvePublicOrigin(request, context, loopbackOrigin);
   const inProcessFetch: FetchFn = (input, init) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    return context.fetchApp(new Request(url, init));
+    const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const target = new URL(rawUrl, loopbackOrigin);
+    const internalUrl = `${loopbackOrigin}${target.pathname}${target.search}`;
+    return context.fetchApp(new Request(internalUrl, init));
   };
 
   const server = createOrchestratorMcpServer({
-    origin,
+    origin: publicOrigin,
     version: context.version,
     fetch: inProcessFetch,
     allowedProject: verified.project,
