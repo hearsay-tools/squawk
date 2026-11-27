@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -644,12 +645,12 @@ describe('PreviewSplit', () => {
     const header = screen.getByText('header')
     const transcript = screen.getByTestId('transcript')
     expect(main.contains(header)).toBe(true)
-    // Verify the preview.css collapse selectors hide transcript while keeping ReadingPage's frame,
-    // body wrapper, and RunHeader visible.
-    const collapseHideSelector =
-      "[data-slot='task-main'][data-collapsed] [data-route] > :not([data-slot='run-header']):not([data-slot='page-shell-frame']), " +
-      "[data-slot='task-main'][data-collapsed] [data-route] > [data-slot='page-shell-frame'] > :not([data-slot='page-shell-body']), " +
-      "[data-slot='task-main'][data-collapsed] [data-route] > [data-slot='page-shell-frame'] > [data-slot='page-shell-body'] > :not([data-slot='run-header'])"
+    // Verify the shipped preview.css collapse rule hides the transcript while keeping ReadingPage's
+    // frame, body wrapper, and RunHeader visible.
+    const previewCss = readFileSync(new URL('./preview.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const collapseHideMatch = previewCss.match(/(\[data-slot='task-main'\]\[data-collapsed\][^{]+)\{\s*display:\s*none;\s*\}/)
+    expect(collapseHideMatch, 'preview.css must declare the task-main collapse hide rule').not.toBeNull()
+    const collapseHideSelector = collapseHideMatch![1]!.trim()
     expect(header.closest(collapseHideSelector)).toBeNull()
     expect(transcript.matches(collapseHideSelector)).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Session' }))

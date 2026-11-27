@@ -151,9 +151,36 @@ it('takes the main area at medium width and steps back with Conversation', () =>
   openConversation()
   openReport()
   const control = '[data-slot="report-bar"] button[aria-label="Conversation"]'
-  const sample = waitForSettledSample<{ text: string; width: number; paneWidth: number }>(browser, `(() => ({ text: document.querySelector('${control}').textContent, width: document.querySelector('[data-slot="task-split"]').getBoundingClientRect().width, paneWidth: document.querySelector('${READER}').getBoundingClientRect().width }))()`)
+  const sample = waitForSettledSample<{
+    text: string
+    width: number
+    paneWidth: number
+    collapsed: boolean
+    headerVisible: boolean
+    headerHeight: number
+    cardVisible: boolean
+  }>(
+    browser,
+    `(() => {
+      const header = document.querySelector('[data-route="task-thread"] [data-slot="run-header"]');
+      const card = document.querySelector('${CARD}');
+      return {
+        text: document.querySelector('${control}').textContent,
+        width: document.querySelector('[data-slot="task-split"]').getBoundingClientRect().width,
+        paneWidth: document.querySelector('${READER}').getBoundingClientRect().width,
+        collapsed: document.querySelector('[data-slot="task-main"]')?.hasAttribute('data-collapsed') ?? false,
+        headerVisible: header ? header.checkVisibility({ visibilityProperty: true }) : false,
+        headerHeight: header ? Math.round(header.getBoundingClientRect().height) : 0,
+        cardVisible: card ? card.checkVisibility({ visibilityProperty: true }) : false,
+      };
+    })()`,
+  )
   expect(sample.text).toContain('Conversation')
   expect(Math.abs(sample.width - sample.paneWidth)).toBeLessThanOrEqual(1)
+  expect(sample.collapsed).toBe(true)
+  expect(sample.headerVisible).toBe(true)
+  expect(sample.headerHeight).toBeGreaterThan(20)
+  expect(sample.cardVisible).toBe(false)
   browser.click(control)
   expectReturned()
   browser.setViewport(1440, 900)
