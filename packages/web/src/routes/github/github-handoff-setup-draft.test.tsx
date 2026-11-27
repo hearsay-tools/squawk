@@ -79,7 +79,7 @@ describe('the hand-to-agent backend pills (#401)', () => {
     await openDetail()
 
     await waitFor(() => expect(document.querySelector('[data-slot="runner-pill"]')).not.toBeNull())
-    await pickPill('runner-pill', 'codex')
+    await pickPill('runner-pill', 'Codex')
     await pickPill('model-pill', 'gpt-future')
 
     fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
@@ -102,7 +102,7 @@ describe('the hand-to-agent backend pills (#401)', () => {
     await waitFor(() => expect(document.querySelector('[data-slot="runner-pill"]')).not.toBeNull())
     // Pin a claude model, then move to codex: the claude id must not survive onto codex.
     await pickPill('model-pill', 'opus')
-    await pickPill('runner-pill', 'codex')
+    await pickPill('runner-pill', 'Codex')
 
     fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
 
@@ -120,14 +120,14 @@ describe('the hand-to-agent backend pills (#401)', () => {
     await openDetail()
 
     await waitFor(() => expect(document.querySelector('[data-slot="runner-pill"]')).not.toBeNull())
-    await pickPill('runner-pill', 'codex')
+    await pickPill('runner-pill', 'Codex')
 
     // Hop to the other issue — HandToAgent remounts (key={item.url}), the pick must not.
     fireEvent.click(rows().find((row) => row.dataset.number === '139')!)
     await waitFor(() =>
       expect(document.querySelector('[data-slot="gh-hand"]')).not.toBeNull(),
     )
-    expect(document.querySelector('[data-slot="runner-pill"]')?.textContent).toContain('codex')
+    expect(document.querySelector('[data-slot="runner-pill"]')?.textContent).toContain('Codex')
 
     fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
     await waitFor(() => expect(postedRun(sent)).toBeDefined())
@@ -277,8 +277,8 @@ describe('the hand-to-agent agent account', () => {
         within(menu).getAllByRole('menuitemradio').map((o) => o.textContent),
       ).toEqual(
         expect.arrayContaining([
-          expect.stringContaining('claude · Default'),
-          expect.stringContaining('claude · Klaudiusz'),
+          expect.stringContaining('Claude Code · Default'),
+          expect.stringContaining('Claude Code · Klaudiusz'),
         ]),
       ),
     )
@@ -358,7 +358,7 @@ describe('the hand-to-agent agent account', () => {
     await waitFor(() => expect(document.querySelector('[data-slot="runner-pill"]')).not.toBeNull())
     // The project's row is the selected one until overridden.
     expect(document.querySelector('[data-slot="runner-pill"]')?.textContent).toContain('Klaudiusz')
-    await pickPill('runner-pill', 'claude · Default')
+    await pickPill('runner-pill', 'Claude Code · Default')
     await waitForAgentRunEnabled()
 
     fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
@@ -397,8 +397,8 @@ describe('the hand-to-agent agent account', () => {
     await openDetail()
 
     await waitFor(() => expect(document.querySelector('[data-slot="runner-pill"]')).not.toBeNull())
-    await pickPill('runner-pill', 'claude · Klaudiusz')
-    await pickPill('runner-pill', 'codex')
+    await pickPill('runner-pill', 'Claude Code · Klaudiusz')
+    await pickPill('runner-pill', 'Codex')
     await waitForAgentRunEnabled()
 
     fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
@@ -419,7 +419,7 @@ describe('the hand-to-agent agent account', () => {
 
     await waitFor(() => expect(document.querySelector('[data-slot="runner-pill"]')).not.toBeNull())
     await pickPill('model-pill', 'opus')
-    await pickPill('runner-pill', 'claude · Klaudiusz')
+    await pickPill('runner-pill', 'Claude Code · Klaudiusz')
     await waitForAgentRunEnabled()
 
     fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))

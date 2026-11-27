@@ -19,7 +19,7 @@ import { waitForStatus } from './poll'
  * available without the network) and the git surface is fully lit.
  *
  * What the dry-run backend honestly provides — verified, not assumed:
- *  - the fixture has no PR URL, so the toolbar deterministically offers Create PR. The
+ *  - the fixture has no PR URL, so the toolbar deterministically offers Draft PR. The
  *    create → View PR transition is pinned in task-changes.test.tsx.
  *  - the settle autosave leaves the worktree clean; the Commit test dirties it again from
  *    the outside (as a user editing in the worktree would) so the commit is REAL.
@@ -139,10 +139,10 @@ describe('the Changes tab against a live dry run', () => {
     expect(browser.text('[data-slot="changes-stat"]')).toContain('+1')
   })
 
-  it('the toolbar comes from the policy: Push, Create PR, Commit, and kebab', () => {
+  it('the toolbar comes from the policy: Push, Draft PR, Commit, and kebab', () => {
     browser.goto(`${baseUrl}${scoped(`/tasks/${runId}/changes`)}`)
     browser.waitForFunction(`document.querySelector('[data-slot="git-toolbar"]') !== null`)
-    // Commit reads /changes, Push reads /repo, and Create PR reads /health.
+    // Commit reads /changes, Push reads /repo, and Draft PR reads /health.
     // Wait for their inputs, then assert the policy on the same sample.
     const actions = browser.waitForValue(`(() => {
       const toolbar = document.querySelector('[data-slot="git-toolbar"]')
@@ -227,18 +227,36 @@ describe('the Changes tab against a live dry run', () => {
     ).toBe('Files')
   })
 
-  it('below md the segments stay tappable and the diff forces unified+wrap (toggles gone)', () => {
+  it('below md the segments stay tappable, the diff forces unified and wraps by default, and the tree folds above it', () => {
     browser.setViewport(390, 844)
     browser.goto(`${baseUrl}${scoped(`/tasks/${runId}/changes`)}`)
     browser.waitForFunction(`document.querySelector('[data-slot="diff"]') !== null`)
 
-    // Forced mobile combination, no matter what the desktop toggles said.
+    // Forced unified, no matter what the desktop toggle said; the unified/split group is hidden.
     expect(browser.evaluate(`document.querySelector('[data-slot="diff"]').dataset.mode`)).toBe('unified')
-    // The mode/wrap toggles are hidden below md.
     expect(
       browser.evaluate(`document.querySelector('[data-slot="diff-mode-toggle"]').checkVisibility()`),
     ).toBe(false)
-    // The integrated mobile design stacks the selectable file tree above the diff.
+    // Lines wrap by default, and the phone keeps one wrap switch: pressed, a 44px target, on screen.
+    expect(
+      browser.waitForValue(`(() => {
+        const toggles = [...document.querySelectorAll('[data-slot="wrap-toggle"]')].filter((el) => el.checkVisibility())
+        const bodies = [...document.querySelectorAll('[data-slot="diff-file-body"]')]
+        if (toggles.length !== 1 || bodies.length === 0) return null
+        const box = toggles[0].getBoundingClientRect()
+        return toggles[0].getAttribute('aria-pressed') === 'true' && box.width >= 44 && box.height >= 44
+          && box.left >= 0 && box.right <= innerWidth && bodies.every((body) => body.dataset.wrap === 'true')
+      })()`, (value) => value !== null),
+    ).toBe(true)
+    // The file tree folds into a 44px disclosure bar above the diff, closed until tapped.
+    browser.waitForFunction(`document.querySelector('[data-slot="changes-tree-toggle"]') !== null`)
+    expect(
+      waitForSettledSample(browser,
+        `(() => { const bar = document.querySelector('[data-slot="changes-tree-toggle"]'); const tree = document.querySelector('[data-slot="changes-tree"]'); const diff = document.querySelector('[data-slot="diff"]'); const box = bar.getBoundingClientRect(); return bar.checkVisibility() && box.height >= 44 && box.right <= innerWidth && box.bottom <= diff.getBoundingClientRect().top && bar.getAttribute('aria-expanded') === 'false' && tree !== null && !tree.checkVisibility() })()`,
+      ),
+    ).toBe(true)
+    browser.click('[data-slot="changes-tree-toggle"]')
+    browser.waitForFunction(`document.querySelector('[data-slot="changes-tree-toggle"]').getAttribute('aria-expanded') === 'true'`)
     expect(
       waitForSettledSample(browser,
         `(() => { const el = document.querySelector('[data-slot="changes-tree"]'); return el !== null && el.checkVisibility() && el.getBoundingClientRect().width <= innerWidth })()`,

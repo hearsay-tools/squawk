@@ -165,7 +165,16 @@ describe('the GitHub tab lists', () => {
 
     await waitFor(() => expect(document.querySelector('[data-slot="gh-header"]')).not.toBeNull())
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Issues · All open')
+    // The view qualifier is muted and regular weight, like "Activity · acme-api".
+    const qualifier = document.querySelector('[data-slot="gh-title-qualifier"]')!
+    expect(qualifier.textContent).toBe('· All open')
+    expect(qualifier.className).toContain('font-normal')
+    expect(qualifier.className).toContain('text-muted-foreground')
     expect(document.querySelector('[data-slot="gh-repo"]')?.textContent).toBe('acme/demo')
+    // Refresh is a page action on the title row, like the Tasks and Automations headers; the tab
+    // row holds only the two tabs.
+    expect(document.querySelector('[data-slot="gh-masthead"] [data-slot="gh-page-actions"] [data-slot="gh-refresh"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="gh-tabs"] [data-slot="gh-refresh"]')).toBeNull()
 
     const tabs = [...document.querySelectorAll('[data-slot="gh-tabs"] a')].map((a) => ({
       text: a.textContent,
@@ -284,6 +293,22 @@ describe('the GitHub tab lists', () => {
     expect(badge('142')?.getAttribute('aria-label')).toBe('3 comments')
     expect(badge('142')?.textContent).toContain('3')
     expect(badge('139')).toBeNull()
+  })
+
+  it('separates a row\'s meta facts with middle dots, and adds none for a missing comment count', async () => {
+    stubFetch()
+    renderAt('/github')
+
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    const meta = (number: string) =>
+      document.querySelector(`[data-slot="gh-row"][data-number="${number}"] [data-slot="gh-row-meta"]`)!
+    const dots = (number: string) => meta(number).querySelectorAll('[data-slot="gh-row-dot"]')
+
+    // Row 142: number · author · age · comments. Row 139 has no comments, so no trailing dot.
+    expect(dots('142')).toHaveLength(3)
+    expect(dots('139')).toHaveLength(2)
+    for (const dot of dots('142')) expect(dot.getAttribute('aria-hidden')).toBe('true')
+    expect(meta('139').lastElementChild?.tagName).toBe('TIME')
   })
 
   it('shows the exact open count from the single fast load — no 30+ guesswork (#664)', async () => {
@@ -1158,11 +1183,21 @@ describe('groupCommitRuns', () => {
   })
 })
 
+async function selectProjectBoard(label: string) {
+  Element.prototype.scrollIntoView = vi.fn()
+  Element.prototype.hasPointerCapture = vi.fn(() => false)
+  const trigger = await screen.findByRole('combobox', { name: 'Project board' })
+  fireEvent.keyDown(trigger, { key: 'Enter' })
+  fireEvent.click(await screen.findByRole('option', { name: label }))
+  return trigger
+}
+
 describe('issue assignee and board controls', () => {
   const filteredData = { ...GITHUB, viewerLogin: 'alice', projects: [{ id: 'P1', title: 'Delivery', url: 'https://github.com/users/acme/projects/1' }], issues: [
     { ...ISSUE_142, assignees: ['alice'], projectIds: ['P1'] },
     { ...ISSUE_139, assignees: ['bob'], projectIds: [] },
   ] }
+
   it('composes Assigned to me with the board and search, then clears every filter', async () => {
     stubFetch({ 'GET /api/v1/github?limit=50': () => jsonResponse(filteredData) })
     renderAt('/github')
@@ -1170,7 +1205,7 @@ describe('issue assignee and board controls', () => {
     expect(rows().map(r => r.textContent).join()).toContain(ISSUE_142.title)
     expect(rows().map(r => r.textContent).join()).not.toContain(ISSUE_139.title)
     expect(screen.queryByText('Project board')).toBeNull()
-    fireEvent.change(screen.getByRole('combobox', { name: 'Project board' }), { target: { value: 'P1' } })
+    await selectProjectBoard('Delivery')
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search issues' }), { target: { value: 'no match' } })
     expect(rows()).toHaveLength(0)
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
@@ -1240,9 +1275,9 @@ it('keeps legacy metadata usable with disabled personal filtering and no board p
 it('renders a disabled No boards picker on the filter row when projects is empty', async () => {
   stubFetch({ 'GET /api/v1/github?limit=50': () => jsonResponse({ ...GITHUB, viewerLogin: 'alice', projects: [] }) })
   renderAt('/github')
-  const picker = await screen.findByRole('combobox', { name: 'Project board' }) as HTMLSelectElement
+  const picker = await screen.findByRole('combobox', { name: 'Project board' }) as HTMLButtonElement
   expect(picker.disabled).toBe(true)
-  expect([...picker.options].map(option => option.textContent)).toEqual(['No boards'])
+  expect(picker.textContent).toContain('No boards')
   expect(screen.queryByText('No linked project boards.')).toBeNull()
 })
 
@@ -1256,7 +1291,7 @@ it.each([[], undefined])('does not restore a stale board selection after refresh
     'GET /api/v1/github?limit=50&refresh=1': () => jsonResponse(++refreshes === 1 ? { ...boardData, projects } : boardData),
   })
   renderAt('/github')
-  fireEvent.change(await screen.findByRole('combobox', { name: 'Project board' }), { target: { value: 'P1' } })
+  await selectProjectBoard('Delivery')
   expect(rows()).toHaveLength(1)
   fireEvent.click(screen.getByTitle('Refresh from GitHub'))
   await waitFor(() => expect(rows()).toHaveLength(2))
@@ -1264,7 +1299,7 @@ it.each([[], undefined])('does not restore a stale board selection after refresh
   await waitFor(() => expect((screen.getByTitle('Refresh from GitHub') as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(screen.getByTitle('Refresh from GitHub'))
   const picker = await screen.findByRole('combobox', { name: 'Project board' })
-  expect((picker as HTMLSelectElement).value).toBe('')
+  expect(picker.getAttribute('data-value')).toBe('')
   expect(rows()).toHaveLength(2)
 })
 
@@ -1337,19 +1372,18 @@ it.each(['ready', 'unavailable', 'network'] as const)('keeps the board filter an
     [`GET /api/v1/github/projects?generation=${generation}`]: () => new Promise<Response>(resolve => { finish = resolve }),
   })
   renderAt('/github')
-  const picker = await screen.findByRole('combobox', { name: 'Project board' })
-  fireEvent.change(picker, { target: { value: 'P1' } })
+  const picker = await selectProjectBoard('Delivery')
   expect(rows()).toHaveLength(1)
   fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
   await screen.findByText(/Refreshing project boards/)
-  expect((picker as HTMLSelectElement).value).toBe('P1')
+  expect(picker.getAttribute('data-value')).toBe('P1')
   expect(rows()).toHaveLength(2)
   await waitFor(() => expect(finish).toBeTypeOf('function'))
   finish(state === 'network' ? new Response('offline', { status: 503 }) : jsonResponse(state === 'ready'
     ? { generation, state, projects: boardData.projects, membership: { 142: ['P1'], 139: [] } }
     : { generation, state, reason: 'Project lookup failed.' }))
   await waitFor(() => expect(screen.queryByText(/Refreshing project boards/)).toBeNull())
-  expect((picker as HTMLSelectElement).value).toBe('P1')
+  expect(picker.getAttribute('data-value')).toBe('P1')
   expect(rows()).toHaveLength(state === 'ready' ? 1 : 2)
   if (state !== 'ready') expect(screen.getByText(/Previous memberships are shown/)).toBeTruthy()
 })

@@ -18,23 +18,23 @@
 [data-slot="skill-body"] h2 { font-size: 18px; font-weight: 600; }
 [data-slot="skill-body"] h3 { font-size: 14px; font-weight: 600; }
 [data-slot="wb-metadata"] { gap: 14px; }
-[data-slot="wb-load"] { margin-block-end: -6px; }
-[data-slot="wb-load"] label { font-size: 11px; }
-[data-slot="wb-name"] { padding-inline: 14px; }
+[data-slot="wb-load"] label { font-size: 12px; }
+[data-slot="wb-name"] { padding-inline: 12px; }
 [data-slot="wb-actions"] button { padding-inline: 12px; gap: 8px; border-radius: 8px; }
 [data-slot="wb-actions"] svg { width: 16px; height: 16px; }
 [data-slot="wb-auto-panel"] { border-color: color-mix(in oklch, var(--accent-strong) 35%, var(--border)); }
 [data-slot="wb-auto-cancel"] { border: 1px solid var(--border); background: var(--card); }
-[data-slot="wb-palette"] { margin-block-start: 16px; gap: 16px; }
+/* The Available skills list has the density of the cockpit's other lists: 4px between rows, and
+   from md up a 36px row with a 32px add target (phones keep the 44px touch rows). */
+[data-slot="wb-palette"] { margin-block-start: 12px; gap: 4px; }
 [data-slot="wb-skill"] { padding: 0; }
 [data-slot="wb-skill-add"] { width: 24px; }
 [data-slot="wb-aside"] h2 { font-size: 16px; }
 [data-slot="wb-aside"] h3 { margin-block-start: 16px; }
-[data-slot="wb-step-grip"] span { font-family: inherit; padding: 0; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; }
-[data-slot="wb-step-heading"] > div { font-weight: 400; }
+[data-slot="wb-step-grip"] span { font-family: inherit; padding: 0 4px; min-width: 28px; height: 26px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; }
+[data-slot="wb-step-heading"] > div { font-weight: 500; }
 [data-slot="wb-main"] > p:last-of-type { font-size: 11px; }
 [data-slot="wb-import-panel"] > div { flex-direction: row-reverse; justify-content: flex-end; gap: 12px; margin-block-start: 16px; }
-[data-slot="wb-import-run"], [data-slot="wb-add-dialog"] button[data-variant="primary"] { background: var(--accent-strong); color: var(--accent-strong-foreground); }
 [data-slot="wb-import-cancel"] { border: 1px solid var(--border); }
 [data-slot="wb-import-panel"] { display: flex; flex-direction: column; }
 [data-slot="wb-import-error"] { order: 1; margin-block-start: 16px; font-size: 12px; }
@@ -48,8 +48,7 @@
   [data-slot="skill-row"][aria-current="page"] { background: transparent; border-color: var(--border); }
 }
 [data-route="skills"] h1, [data-route="workflows"] h1 { line-height: 1.2; letter-spacing: -.7px; }
-[data-route="skills"] header p, [data-route="workflows"] header p { line-height: 1.6; color: var(--soft-foreground); }
-[data-slot="skill-row"] { padding-block: 14px; gap: 8px; }
+[data-route="skills"] header p, [data-route="workflows"] header p { line-height: 1.6; color: var(--muted-foreground); }
 [data-slot="skill-row"]::before { display: none; }
 [data-slot="skill-row"]:has([data-source="team"]) > span:first-child > span { font-weight: 500; line-height: 1.6; }
 [data-slot="skill-row"] [data-source="team"] { font-weight: 400; }
@@ -114,6 +113,8 @@
 [data-slot="wb-step-heading"] :is([data-slot="wb-step-grip"], [data-slot="wb-step-actions"]) {
   position: relative; min-width: 26px; min-height: 26px; width: 26px; height: 26px;
 }
+/* The grip holds the handle glyph AND the step number, so it takes their width, not 26px. */
+[data-slot="wb-step-heading"] [data-slot="wb-step-grip"] { width: auto; gap: 4px; }
 [data-slot="wb-step-heading"] :is([data-slot="wb-step-grip"], [data-slot="wb-step-actions"])::after {
   content: ''; position: absolute; inset: -9px;
 }
@@ -130,7 +131,7 @@
 /* Source frame geometry: inset strokes and explicit text line boxes. */
 [data-slot="wb-step-grip"] span { border-radius: 5px; }
 [data-slot="wb-main"], [data-slot="wb-aside"] { padding: 19px; }
-[data-slot="wb-step"] { padding: 15px; }
+[data-slot="wb-step"] { padding: 12px 14px; }
 [data-slot="wb-step-heading"] > div { line-height: 24px; }
 [data-slot="wb-step-summary"], [data-slot="wb-main"] > p:first-child,
 [data-slot="wb-main"] footer p, [data-slot="wb-aside"] > p { line-height: 19px; }
@@ -163,6 +164,8 @@
 }
 @media (min-width: 768px) {
   [data-slot="skill-detail"] > div:first-child :is(h2,h3) { line-height: 38px; }
+  [data-slot="wb-skill"] { min-height: 36px; padding-block: 4px; }
+  [data-slot="wb-skill-add"] { height: 32px; }
 }
 
 [data-slot="wb-auto-panel"] > h2 { line-height: 29px; }
@@ -173,4 +176,4 @@
   [data-slot="skill-row"][aria-current="page"] { box-shadow: inset 0 -1px var(--border); }
 }
 [data-slot="wb-yaml-toggle"] svg { margin-inline-end: 0; }
-[data-slot="wb-description"] { field-sizing: content; padding: 13px; font-size: 13px; line-height: 21px; color: var(--muted-foreground); }
+[data-slot="wb-description"] { field-sizing: content; padding: 9px 12px; font-size: 13px; line-height: 20px; color: var(--foreground); }

@@ -135,15 +135,6 @@ export function runActionFlags(run: ApiRun, workersLive = false): RunActionFlags
   }
 }
 
-/** Archive in the composer's outline slot (#281). Stop takes the slot when the run offers both,
- *  on a failed run holding wait results or live workers, and the header carries Archive on the
- *  Session tab then. */
-export function archiveInComposer(run: RunRecord, workersLive = false): boolean {
-  const flags = runActionFlags(run, workersLive)
-  // A blocker puts the same manual Archive control beside its reason in the header.
-  return flags.archive && !flags.cancel && !run.archiveBlocker
-}
-
 /** Promote only an authoritative clear verdict on a Needs-you task. Unknown eligibility
  * stays hidden until the detail response arrives; the client never reconstructs blockers. */
 export function offersComposerFinish(run: ApiRun): boolean {

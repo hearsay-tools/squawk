@@ -3,7 +3,8 @@ import { cn } from '@/lib/utils'
 
 /**
  * `+128 −14` — a run's aggregate diff numbers, the mockup's `.adds`/`.dels` pair
- * (`tasks-home.html`): mono, tabular, adds in the success token, deletions in the danger token.
+ * (`tasks-home.html`): mono, tabular, adds in the success token, deletions in the danger token,
+ * and a zero half left out (`+12`, `−7`, `—` when both are zero).
  * One component so the table's ± column, the sidebar quick-list and the mobile cards can never
  * disagree about what a diff stat looks like.
  *
@@ -60,13 +61,26 @@ export function DiffStatLabel({
       {...(compact && !caveat ? { 'aria-label': counts } : {})}
       title={caveat ?? counts}
       className={cn(
-        'font-mono text-xs font-semibold tabular-nums',
+        // `font-mono!`: a surface may restyle weight or wrapping, never the family, so ± stats
+        // read the same in tables, the review gate and the Changes toolbar.
+        'font-mono! text-xs font-semibold tabular-nums',
         stat.repointed && 'cursor-help underline decoration-dotted underline-offset-2',
         className
       )}
     >
-      <span className="text-success">+{compact ? compactDiffCount(stat.adds) : stat.adds.toLocaleString('en-US')}</span>{' '}
-      <span className="text-danger">−{compact ? compactDiffCount(stat.dels) : stat.dels.toLocaleString('en-US')}</span>
+      {/* A zero half is not a change, so it is not shown: `+12`, `−7`, and `—` when both are zero. */}
+      {stat.adds === 0 && stat.dels === 0 ? (
+        <span data-zero className="text-muted-foreground">
+          —
+        </span>
+      ) : null}
+      {stat.adds > 0 ? (
+        <span className="text-success">+{compact ? compactDiffCount(stat.adds) : stat.adds.toLocaleString('en-US')}</span>
+      ) : null}
+      {stat.adds > 0 && stat.dels > 0 ? ' ' : null}
+      {stat.dels > 0 ? (
+        <span className="text-danger">−{compact ? compactDiffCount(stat.dels) : stat.dels.toLocaleString('en-US')}</span>
+      ) : null}
     </span>
   )
 }

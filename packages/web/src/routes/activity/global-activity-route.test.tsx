@@ -73,6 +73,8 @@ function renderRoute(pathname = '/activity', state?: unknown) {
   )
 }
 
+/** The scope switch's link back to a project. */
+const projectLink = (name: string) => within(screen.getByRole('navigation', { name: 'Activity scope' })).getByRole('link', { name })
 const panelIds = () => Array.from(document.querySelectorAll('[data-slot="activity-panel"]')).map((panel) => panel.getAttribute('data-project'))
 const panel = (id: string) => document.querySelector(`[data-slot="activity-panel"][data-project="${id}"]`) as HTMLElement
 const pill = (runId: string) => document.querySelector(`[data-activity-pill="${runId}"]`) as HTMLElement
@@ -87,25 +89,26 @@ describe('GlobalActivityRoute', () => {
 
     fireEvent.click(screen.getByRole('link', { name: 'All projects' }))
     await screen.findByRole('heading', { level: 1, name: 'Activity · All projects' })
-    const back = await screen.findByRole('link', { name: 'This project' })
+    // On the global view the project segment reads as the project's name.
+    const back = await waitFor(() => projectLink(projectId))
     expect(back.getAttribute('href')).toBe(`/p/${projectId}/activity`)
     fireEvent.click(back)
     expect(await screen.findByRole('heading', { level: 1, name: `Activity · ${projectId}` })).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'This project' }).getAttribute('aria-current')).toBe('page')
+    expect(projectLink(projectId).getAttribute('aria-current')).toBe('page')
   })
 
   it('restores the originating project from the global history entry', async () => {
     serve()
     renderRoute('/activity', { activityProjectId: 'gamma' })
     await screen.findByRole('heading', { level: 2, name: 'gamma' })
-    expect(screen.getByRole('link', { name: 'This project' }).getAttribute('href')).toBe('/p/gamma/activity')
+    expect(projectLink('gamma').getAttribute('href')).toBe('/p/gamma/activity')
   })
 
   it.each([null, 'gamma', { activityProjectId: 123 }, { activityProjectId: 'removed' }])('keeps the boot fallback for unusable history state %j', async (state) => {
     serve()
     renderRoute('/activity', state)
     await screen.findByRole('heading', { level: 2, name: 'gamma' })
-    expect(screen.getByRole('link', { name: 'This project' }).getAttribute('href')).toBe('/p/alpha/activity')
+    expect(projectLink('alpha').getAttribute('href')).toBe('/p/alpha/activity')
   })
 
   it('shows one panel per project with work or a notice, in project-rail order', async () => {
@@ -141,7 +144,9 @@ describe('GlobalActivityRoute', () => {
     expect(screen.getByRole('link', { name: /3 in review/ }).getAttribute('href')).toBe('/tasks')
     const scope = screen.getByRole('navigation', { name: 'Activity scope' })
     expect(within(scope).getByRole('link', { name: 'All projects' }).getAttribute('aria-current')).toBe('page')
-    expect(within(scope).getByRole('link', { name: 'This project' }).getAttribute('href')).toBe('/p/alpha/activity')
+    expect(within(scope).getByRole('link', { name: 'alpha' }).getAttribute('href')).toBe('/p/alpha/activity')
+    // The project segment reads as the project's name on every view, never as 'This project'.
+    expect(within(scope).queryByRole('link', { name: 'This project' })).toBeNull()
   })
 
   it('draws a pill per card with its verb, main line, heartbeat and one dot per live worker', async () => {
@@ -150,7 +155,9 @@ describe('GlobalActivityRoute', () => {
     await screen.findByRole('heading', { level: 2, name: 'gamma' })
     expect(within(panel('alpha')).getByRole('link', { name: 'Open project activity →' }).getAttribute('href')).toBe('/p/alpha/activity')
     expect(panel('gamma').querySelector('[data-slot="activity-panel-detail"]')?.textContent).toBe('1 active task · 2 workers')
-    expect(pill('a2').querySelector('[data-slot="activity-pill-line"]')?.textContent).toBe('Needs you · Retry the shard?')
+    // The age ticks from the server clock and the client's receive time: about a minute.
+    expect(pill('a2').querySelector('[data-slot="activity-pill-line"]')?.textContent).toMatch(/^Needs you · (59s|1m) · Retry the shard\?$/)
+    expect(within(pill('a2')).getByRole('link', { name: 'Answer' }).getAttribute('href')).toBe('/p/alpha/tasks/a2')
     expect(pill('a1').querySelector('[data-slot="activity-heartbeat"]')).not.toBeNull()
     expect(pill('g1').querySelectorAll('[data-slot="activity-pill-workers"] [data-activity-anchor]')).toHaveLength(2)
     expect(pill('g1').querySelector('[data-slot="activity-pill-workers"]')?.textContent).toBe('2 workers')
@@ -188,7 +195,7 @@ describe('GlobalActivityRoute', () => {
     renderRoute()
     expect(screen.getByRole('heading', { level: 1, name: 'Activity · All projects' })).toBeTruthy()
     expect(screen.getByRole('status').textContent).toBe('Loading activity…')
-    expect((await screen.findByRole('link', { name: 'This project' })).getAttribute('href')).toBe('/p/alpha/activity')
+    expect((await waitFor(() => projectLink('alpha'))).getAttribute('href')).toBe('/p/alpha/activity')
   })
 
   it('says when there is no project to show', async () => {

@@ -186,7 +186,9 @@ export function mainTranscriptSections(
       entries: [],
     })
   }
+  const lastTurn = thread.turns.at(-1)
   for (const turn of thread.turns) {
+    const items = run.status === 'review' && turn === lastTurn ? withoutReviewGateEcho(turn.items) : turn.items
     sections.push({
       id: turn.id,
       userMessageKey: `${turn.id}:user`,
@@ -203,7 +205,7 @@ export function mainTranscriptSections(
         : {}),
       ...(turn.startedAt !== undefined ? { startedAt: turn.startedAt } : {}),
       ...(turn.completed?.ts !== undefined ? { completedAt: turn.completed.ts } : {}),
-      entries: stablePresentedEntries(turn.items, overlayAgentInputNotes(run, turn.items.filter(entry => !run.task || !isSkillInputEcho(entry, 'opening')).map(entry => {
+      entries: stablePresentedEntries(turn.items, overlayAgentInputNotes(run, items.filter(entry => !run.task || !isSkillInputEcho(entry, 'opening')).map(entry => {
         if (entry.kind === 'ask' && answeredAsks.has(entry.id)) return { ...entry, placement: 'origin' as const }
         if (pendingAskId !== undefined && entry.kind === 'ask') return placeAsk(entry, pendingAskId, pinnedAsk)
         if (entry.kind !== 'permission') return entry
@@ -220,6 +222,16 @@ export function mainTranscriptSections(
     sections.push({ id: PENDING_ASK_SECTION_ID, entries: [{ ...pinnedAsk, placement: 'pinned' }], inDaySequence: false })
   }
   return sections
+}
+
+/** The settlement's lifecycle line for a run that rests at review (`run-settlement.ts`). */
+const REVIEW_GATE_NOTE = 'changes ready for review'
+
+/** While the review gate shows, the closed footer and the review panel already say the run waits
+ *  for review, so the last turn drops the settlement's own line instead of stating it a third time.
+ *  Earlier turns keep theirs: they record review rounds that feedback already answered. */
+function withoutReviewGateEcho(items: readonly ThreadEntry[]): readonly ThreadEntry[] {
+  return items.filter(entry => !(entry.kind === 'note' && entry.tone === 'dim' && entry.text.startsWith(REVIEW_GATE_NOTE)))
 }
 
 /** The row holding one copy of an ask, for navigation between the marker and the pinned card. */

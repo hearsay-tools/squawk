@@ -101,13 +101,13 @@ export function ProjectGeneral() {
 /** The registry entry, read out: what Squawk probed about this folder the last time it looked. */
 function ProjectFacts({ project }: { project: ProjectListEntry }) {
   return <dl data-slot="project-facts" className="grid grid-cols-1 gap-4 text-[13px] sm:grid-cols-3">
-    <div><dt className="text-[11px] text-muted-foreground">Project</dt><dd className="mt-1 font-medium">{project.name}</dd></div>
-    <div><dt className="text-[11px] text-muted-foreground">Branch</dt><dd className="mt-1 break-all">{project.branch ?? '—'}</dd></div>
-    <div><dt className="text-[11px] text-muted-foreground">Status</dt><dd data-slot="project-general-status" className={project.status === 'missing' ? 'mt-1 text-danger' : 'mt-1'}>
+    <div><dt className="text-xs text-muted-foreground">Project</dt><dd className="mt-1 font-medium">{project.name}</dd></div>
+    <div><dt className="text-xs text-muted-foreground">Branch</dt><dd className="mt-1 break-all">{project.branch ?? '—'}</dd></div>
+    <div><dt className="text-xs text-muted-foreground">Status</dt><dd data-slot="project-general-status" className={project.status === 'missing' ? 'mt-1 text-danger' : 'mt-1'}>
       {STATUS_LABEL[project.status]}{project.status === 'missing' ? ' — remove it below, or restore the folder' : null}
     </dd></div>
-    <div><dt className="text-[11px] text-muted-foreground">Added</dt><dd className="mt-1">{fullDate(project.addedAt)}<span className="text-soft-foreground">{project.source === 'checkout' ? ' · cloned from GitHub' : ' · opened locally'}</span></dd></div>
-    <div><dt className="text-[11px] text-muted-foreground">Last opened</dt><dd className="mt-1">{fullDate(project.lastOpenedAt)}</dd></div>
+    <div><dt className="text-xs text-muted-foreground">Added</dt><dd className="mt-1">{fullDate(project.addedAt)}<span className="text-soft-foreground">{project.source === 'checkout' ? ' · cloned from GitHub' : ' · opened locally'}</span></dd></div>
+    <div><dt className="text-xs text-muted-foreground">Last opened</dt><dd className="mt-1">{fullDate(project.lastOpenedAt)}</dd></div>
   </dl>
 }
 
@@ -154,7 +154,7 @@ function RemoveProject({ project, bootProject }: { project: ProjectListEntry; bo
           Remove {project.name}
         </Button>
         {isBoot ? (
-          <span data-slot="project-general-remove-boot" className="text-[11px] text-soft-foreground">
+          <span data-slot="project-general-remove-boot" className="text-xs text-soft-foreground">
             Squawk is serving this project — it re-registers itself at every start.
           </span>
         ) : null}

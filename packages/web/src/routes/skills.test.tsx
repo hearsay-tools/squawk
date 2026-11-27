@@ -43,6 +43,8 @@ it('shows duplicate ids with runner metadata and problems, without edit controls
   expect(screen.getByRole('region', { name: 'Your skills' }).textContent).toContain('User copy')
   expect(screen.queryByRole('switch')).toBeNull()
   expect(document.querySelector('[data-slot="skill-body"]')).toBeNull()
+  // Every row says it opens in place: a trailing chevron, so a clamped description is no dead end.
+  for (const row of rows) expect(row.querySelector('summary [data-slot="skill-row-cue"]')).not.toBeNull()
   expect(requests.every((url) => !url.includes('/skills/') && !url.endsWith('/skills'))).toBe(true)
 })
 
@@ -61,7 +63,7 @@ it('does not send an account picked for another runner with the resolved runner'
   await screen.findByRole('option', { name: 'Work' })
   fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'work' } })
   await waitFor(() => expect(requests).toContain('/api/v1/runner-skills?runner=codex&account=work'))
-  fireEvent.click(screen.getByRole('button', { name: 'pi' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Pi' }))
   await waitFor(() => expect(requests).toContain('/api/v1/runner-skills?runner=pi'))
   expect(requests.some((url) => url.includes('runner=pi&account='))).toBe(false)
 })
@@ -81,7 +83,7 @@ it('reads the selected runner and account and re-reads with refresh=1', async ()
   await waitFor(() => expect((screen.getByRole('button', { name: 'Re-read' }) as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(screen.getByRole('button', { name: 'Re-read' }))
   await waitFor(() => expect(requests).toContain('/api/v1/runner-skills?runner=codex&account=work&refresh=1'))
-  fireEvent.click(screen.getByRole('button', { name: 'pi' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Pi' }))
   await waitFor(() => expect(requests).toContain('/api/v1/runner-skills?runner=pi'))
 })
 

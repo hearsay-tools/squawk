@@ -16,8 +16,17 @@ export const PAGE_TITLE_ROUTES = [
   { pattern: '/new', pageLabel: 'New task' },
   // The project view and the global `/activity` share one row: the global path has no prefix.
   { pattern: '/activity', pageLabel: 'Activity' },
+  // A Git section names itself after `Git`; bare `/git` and a commit keep `Git`, because the
+  // table does not know the base branch that titles Recently on <branch>.
+  { pattern: '/git/not-landed', pageLabel: 'Git / Not landed' },
+  { pattern: '/git/branches', pageLabel: 'Git / All branches' },
+  { pattern: '/git/changes', pageLabel: 'Git / Uncommitted changes' },
+  { pattern: '/git/cleanup', pageLabel: 'Git / Cleanup' },
   { pattern: '/git/*', pageLabel: 'Git' },
   { pattern: '/github/*', pageLabel: 'GitHub' },
+  // The editor names what it edits; `new` is listed before `:id` so it is not read as an id.
+  { pattern: '/automations/new', pageLabel: 'Automations / New automation' },
+  { pattern: '/automations/:automationId', pageLabel: 'Automations / Edit automation' },
   { pattern: '/automations/*', pageLabel: 'Automations' },
   { pattern: '/skills', pageLabel: 'Skills' },
   { pattern: '/reports', pageLabel: 'Reports' },

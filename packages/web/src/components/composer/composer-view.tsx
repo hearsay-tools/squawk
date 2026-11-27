@@ -314,8 +314,12 @@ export function composerChevronClass(mobileOpen: boolean): string {
   return cn('transition-transform motion-reduce:transition-none', !mobileOpen && 'rotate-180')
 }
 
+/** The outlined 44px icon square that Attach and Dictation share on every composer. */
+export const COMPOSER_TOOL_SQUARE = 'size-11 shrink-0 rounded-[9px] border border-border p-0 text-muted-foreground'
+
 export function composerDictationButtonClass(mobileCompact: boolean): string {
-  return cn('h-11 gap-1.5 px-2.5 text-xs font-medium text-muted-foreground md:h-8', mobileCompact && 'hidden md:inline-flex')
+  // One icon-only square on every composer: New task, a waiting thread and a review thread.
+  return cn(COMPOSER_TOOL_SQUARE, mobileCompact && 'hidden md:inline-flex')
 }
 
 export function composerSendDisabled(mode: ComposerSubmitMode): boolean {

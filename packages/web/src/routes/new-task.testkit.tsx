@@ -351,7 +351,7 @@ export const postedBody = () => requests.find((r) => r.method === 'POST' && r.ur
 
 export const planToggle = () => screen.getByRole('radio', { name: /Plan first|Planning…/ })
 
-export const startToggle = () => screen.getByRole('radio', { name: 'Start' })
+export const startToggle = () => screen.getByRole('radio', { name: 'Run now' })
 
 export const stepIds = () =>
   [...document.querySelectorAll('[data-slot="plan-step"]')].map((el) =>

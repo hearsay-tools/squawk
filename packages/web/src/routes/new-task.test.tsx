@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { workspaceQueryKeys } from '@/api/queries'
 import type { HealthResponse } from '@open-mercato/cezar-api-client'
+import { SWITCH_THUMB_COLORS, SWITCH_TRACK_COLORS } from '@/components/ui/switch'
 import { resetToasts } from '@/components/ui/toaster'
 import { readDraft, resetDraft, writeDraft } from './new-task-draft'
 
@@ -304,7 +305,7 @@ describe('submit', () => {
     await pillReady()
     fireEvent.pointerDown(document.querySelector('[data-slot="runner-pill"]') as HTMLElement)
     const options = await screen.findAllByRole('menuitemradio')
-    fireEvent.click(options.find((option) => option.textContent?.includes('codex')) as HTMLElement)
+    fireEvent.click(options.find((option) => option.textContent?.includes('Codex')) as HTMLElement)
     fireEvent.change(textarea(), { target: { value: 'pin codex' } })
     await startTask()
     expect(postedBody()).toMatchObject({ runner: 'codex' })
@@ -322,6 +323,21 @@ describe('submit', () => {
       expect(control.getAttribute('aria-checked')).toBe('false')
     }
     expect(screen.queryByText(/recommends an interactive run/i)).toBeNull()
+  })
+
+  it('draws its toggles with the shared Switch colours, keyed on the same data-state', async () => {
+    serve()
+    renderNewTask()
+    const control = await waitFor(() => document.querySelector('[data-slot="worktree-toggle"]')!)
+    const track = control.querySelector('[data-slot="toggle-track"]')!
+    const thumb = track.firstElementChild!
+    expect(track.getAttribute('data-state')).toBe('checked')
+    expect(thumb.getAttribute('data-state')).toBe('checked')
+    for (const token of SWITCH_TRACK_COLORS.split(' ')) expect(track.classList.contains(token)).toBe(true)
+    for (const token of SWITCH_THUMB_COLORS.split(' ')) expect(thumb.classList.contains(token)).toBe(true)
+    fireEvent.click(control)
+    expect(track.getAttribute('data-state')).toBe('unchecked')
+    expect(thumb.getAttribute('data-state')).toBe('unchecked')
   })
 
   it('lets a multi-step workflow opt out and submits worktree:false', async () => {

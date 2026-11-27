@@ -55,6 +55,8 @@ afterAll(async () => {
  *  width the New Task column gets, so desktop viewports grow by the rail and keep that column. */
 const RAIL_WIDTH = 60
 const viewportWidth = (width: number): number => (width >= 768 ? width + RAIL_WIDTH : width)
+/** The runner picker names each agent by its display name, not its id. */
+const RUNNER_NAME = 'OpenCode'
 
 type Box = { left: number; right: number; top: number; bottom: number; width: number; height: number }
 type Layout = { runner: Box; model: Box; effort: Box; group: Box; editorWidth: number; editorBottom: number; executionTop: number; sidebarWidth: number; viewportOverflow: boolean; clipped: string[]; truncated: string[]; incorrectPrefixes: string[] }
@@ -111,10 +113,10 @@ it('lays out New Task pickers in reading order without clipping at desktop, narr
       // Exercise the long selected values at every layout size, not just on desktop.
       browser.click('[data-slot="runner-pill"]')
       browser.waitForFunction(`document.querySelector('[data-testid="runner-pill-menu"] [role="menuitemradio"]') !== null`)
-      const runnerIndex = browser.evaluate(`[...document.querySelectorAll('[data-testid="runner-pill-menu"] [role="menuitemradio"]')].findIndex(el => el.textContent.includes('opencode')) + 1`) as number
+      const runnerIndex = browser.evaluate(`[...document.querySelectorAll('[data-testid="runner-pill-menu"] [role="menuitemradio"]')].findIndex(el => el.textContent.includes('${RUNNER_NAME}')) + 1`) as number
       expect(runnerIndex).toBeGreaterThan(0)
       browser.click(`[data-testid="runner-pill-menu"] [role="menuitemradio"]:nth-child(${runnerIndex})`)
-      browser.waitForFunction(`document.querySelector('[data-slot="runner-pill"]')?.textContent?.includes('opencode') === true`)
+      browser.waitForFunction(`document.querySelector('[data-slot="runner-pill"]')?.textContent?.includes('${RUNNER_NAME}') === true`)
       browser.click('[data-slot="effort-pill"]')
       browser.waitForFunction(`document.querySelector('[data-testid="effort-pill-menu"] [role="menuitemradio"]') !== null`)
       const effortIndex = browser.evaluate(`[...document.querySelectorAll('[data-testid="effort-pill-menu"] [role="menuitemradio"]')].findIndex(el => el.textContent.includes('medium')) + 1`) as number
@@ -125,7 +127,7 @@ it('lays out New Task pickers in reading order without clipping at desktop, narr
       // The opencode default model reaches the pill after the runner switch, once `/config`
       // answers. Measure the long value, not `Model · auto` (hearsay-tools/cezarion#946).
       browser.waitForFunction(`document.querySelector('[data-slot="model-pill"]')?.textContent?.includes('opencode/muse-spark-1.3-contributor-free') === true`)
-      expect(browser.text('[data-slot="runner-pill"]')).toContain('opencode')
+      expect(browser.text('[data-slot="runner-pill"]')).toContain(RUNNER_NAME)
       expect(browser.text('[data-slot="effort-pill"]')).toContain('medium')
       const boxes = layout()
       if (theme === 'light' && ((width === 375 && sidebar === 0) || (width === 1440 && sidebar === 420))) {

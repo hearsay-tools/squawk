@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { CircleCheckIcon, CircleXIcon, Clock3Icon } from 'lucide-react'
 import { GitBranchIcon, GitPullRequestIcon, PlusIcon, SearchIcon } from '@/components/design-icons'
 import { useState, type FormEvent } from 'react'
 
@@ -75,45 +76,46 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
   }
 
   return (
-    <section data-slot="repo-branches" className="grid min-w-0 grid-cols-1 gap-5 px-[18px] py-[22px] md:grid-cols-[minmax(0,1fr)_290px] md:px-9">
+    <section data-slot="repo-branches" className="grid min-w-0 grid-cols-1 gap-5 px-4 pt-0 pb-9 md:grid-cols-[minmax(0,1fr)_290px] md:px-9">
       <div className="min-w-0 rounded-xl border border-border bg-card p-5">
         <h2 className="sr-only">Branches</h2>
         <label className="relative block">
-        <SearchIcon size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-3.5 size-4 text-muted-foreground" />
+        <SearchIcon size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
         <Input
           aria-label="Filter branches"
           placeholder="Filter branches…"
           value={branchQuery}
           onChange={(event) => setBranchQuery(event.target.value)}
-          className="h-11 pl-10"
+          className="h-10 rounded-lg border-border bg-card pl-10"
         />
         </label>
-        <ul data-slot="repo-branch-list" className="mt-4 flex min-w-0 flex-col divide-y divide-border border-t border-border md:max-h-[40rem] md:overflow-y-auto md:overscroll-contain">
+        <ul data-slot="repo-branch-list" className="mt-3.5 flex min-w-0 flex-col divide-y divide-border border-t border-border md:max-h-[40rem] md:overflow-y-auto md:overscroll-contain">
           {filteredBranches.map((name) => {
             const current = name === info.branch
             const entry = byName.get(name)
             return (
-              <li key={name} data-slot="branch-row" data-branch={name} data-branch-class={entry?.class} className="flex min-h-20 flex-col items-start justify-center gap-2 py-3 md:flex-row md:items-center md:justify-start md:py-2.5">
+              <li key={name} data-slot="branch-row" data-branch={name} data-branch-class={entry?.class} className="flex min-h-[60px] flex-col items-start justify-center gap-1.5 py-2 md:flex-row md:items-center md:justify-start md:gap-2.5">
                 <span className="flex min-w-0 items-center gap-[8px]">
                   {entry?.runId ? (
                     <Link
                       to={`/tasks/${entry.runId}`}
                       data-slot="branch-task-link"
                       title={entry.title ? `Open the task ${entry.title}` : 'Open the task'}
-                      className="min-w-0 truncate rounded-[2px] text-[13px] underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                      className="min-w-0 truncate rounded-[2px] font-mono text-[12px] underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
                     >
                       {name}
                     </Link>
                   ) : (
-                    <span className={cn('min-w-0 truncate text-[13px]', current && 'font-normal')}>{name}</span>
+                    <span className={cn('min-w-0 truncate font-mono text-[12px]', current && 'font-medium')}>{name}</span>
                   )}
-                  {entry ? <BranchClassLabel entry={entry} /> : null}
+                  {/* The checkout is in use by definition: Current already says so. */}
+                  {entry && !(current && entry.class === 'active') ? <BranchClassLabel entry={entry} /> : null}
                 </span>
                 {entry ? <BranchKeptReason entry={entry} /> : null}
                 {name.startsWith('cez/') && !current ? null : current ? (
                   <span
                     data-slot="branch-current"
-                    className="md:ml-auto flex shrink-0 items-center rounded-md bg-accent-strong/10 px-2 py-1.5 text-[12px] font-medium text-accent-text"
+                    className="flex h-8 shrink-0 items-center rounded-md bg-accent-strong/10 px-2.5 text-[12px] font-medium text-accent-text md:ml-auto"
                   >
                     Current
                   </span>
@@ -122,7 +124,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
                     variant="outline"
                     size="sm"
                     data-action="switch-branch"
-                    className="md:ml-auto h-11"
+                    className="h-8 max-md:h-11 no-hover:h-11 md:ml-auto"
                     disabled={branchAction.isPending}
                     onClick={() => branchAction.mutate(name)}
                   >
@@ -134,7 +136,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
             )
           })}
           {filteredBranches.length === 0 ? (
-            <li data-slot="branch-empty" className="py-3 text-xs text-soft-foreground">
+            <li data-slot="branch-empty" className="py-3 text-xs text-muted-foreground">
               No branches match “{branchQuery.trim()}”.
             </li>
           ) : null}
@@ -143,14 +145,16 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
 
       <div className="min-w-0 self-start rounded-xl border border-border bg-card p-5">
         <h2 className="text-base font-semibold">Create a branch</h2>
-        <form data-slot="branch-create" className="mt-7 flex flex-col items-stretch gap-3" onSubmit={submitCreate}>
+        <form data-slot="branch-create" className="mt-5 flex flex-col items-stretch gap-3" onSubmit={submitCreate}>
           <label htmlFor="new-branch-name" className="text-sm font-medium">Branch name</label>
-          <p className="-mt-1 text-xs text-muted-foreground">Create from the selected base.</p>
+          <p data-slot="branch-create-base" className="-mt-1 text-xs text-muted-foreground">
+            Create from <span className="font-mono text-[11px] text-foreground">{info.branch}</span>.
+          </p>
           <Input
             id="new-branch-name"
             aria-label="New branch name"
             placeholder="new-branch-name"
-            className="h-11 bg-background"
+            className="h-11 bg-background placeholder:text-muted-foreground/70"
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
           />
@@ -166,7 +170,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
             Create branch
           </Button>
         </form>
-        <p className="mt-3 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground">Switching branches changes your working tree. Review uncommitted changes first.</p>
+        <p data-slot="branch-create-note" className="mt-4 text-xs leading-relaxed text-muted-foreground">Switching branches changes your working tree. Review uncommitted changes first.</p>
       </div>
 
       {health.data?.forge?.available ? <ForgePullRequests /> : null}
@@ -180,20 +184,20 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
 function ForgePullRequests() {
   const github = useGithub({ limit: 20 })
   return (
-    <div data-slot="repo-prs" className="max-w-xl">
-      <h2 className="text-xs font-semibold tracking-wide text-soft-foreground uppercase">Open pull requests</h2>
+    <div data-slot="repo-prs" className="min-w-0 rounded-xl border border-border bg-card p-5 md:col-span-2">
+      <h2 className="text-base font-semibold">Open pull requests</h2>
       {github.isPending ? (
-        <p className="mt-2 text-xs text-soft-foreground">Loading pull requests…</p>
+        <p className="mt-3 text-xs text-muted-foreground">Loading pull requests…</p>
       ) : github.isError ? (
-        <p className="mt-2 text-xs text-soft-foreground">{github.error.message}</p>
+        <p className="mt-3 text-xs text-muted-foreground">{github.error.message}</p>
       ) : !github.data.available ? (
-        <p data-slot="repo-prs-unavailable" className="mt-2 text-xs text-soft-foreground">
+        <p data-slot="repo-prs-unavailable" className="mt-3 text-xs text-muted-foreground">
           {github.data.reason ?? 'The forge is unreachable right now.'}
         </p>
       ) : github.data.prs.length === 0 ? (
-        <p className="mt-2 text-xs text-soft-foreground">No open pull requests.</p>
+        <p className="mt-3 text-xs text-muted-foreground">No open pull requests.</p>
       ) : (
-        <ul className="mt-2 flex flex-col divide-y divide-border">
+        <ul className="mt-3 flex flex-col divide-y divide-border border-t border-border">
           {github.data.prs.map((pr) => (
             <PullRequestRow key={pr.number} pr={pr} />
           ))}
@@ -212,7 +216,7 @@ function PullRequestRow({ pr }: { pr: GithubItem }) {
       {pr.checks ? <ChecksBadge checks={pr.checks} /> : null}
     </>
   )
-  const rowClass = 'flex min-w-0 items-center gap-2 rounded-sm px-1.5 py-2'
+  const rowClass = 'flex min-h-11 min-w-0 items-center gap-2 rounded-sm px-1.5 py-2'
   return (
     <li data-slot="pr-row" data-number={pr.number}>
       {/* href protocol guard (#431): link only for http(s) URLs, else inert row. */}
@@ -227,19 +231,21 @@ function PullRequestRow({ pr }: { pr: GithubItem }) {
   )
 }
 
-/** The checks badge — the same three words the GitHub tab uses, tinted by outcome. */
+/** The checks badge — the same three words the GitHub tab uses, paired with crisp status icons. */
 function ChecksBadge({ checks }: { checks: 'passing' | 'failing' | 'pending' }) {
+  const Icon = checks === 'passing' ? CircleCheckIcon : checks === 'failing' ? CircleXIcon : Clock3Icon
   return (
     <span
       data-slot="pr-checks"
       data-checks={checks}
       className={cn(
-        'shrink-0 text-[12px] font-medium',
+        'inline-flex shrink-0 items-center gap-1 text-[12px] font-medium',
         checks === 'passing' && 'text-success',
         checks === 'failing' && 'text-danger',
         checks === 'pending' && 'text-muted-foreground',
       )}
     >
+      <Icon aria-hidden="true" className="size-3.5 shrink-0" />
       {checks}
     </span>
   )
@@ -260,7 +266,7 @@ function BranchClassLabel({ entry }: { entry: RepoBranchEntry }) {
     <span
       data-slot="branch-class"
       className={cn(
-        'shrink-0 rounded-[4px] border px-[5px] py-[1px] text-[10.5px] leading-[14px]',
+        'shrink-0 rounded-[4px] border px-1.5 py-px text-[11px] leading-4 font-medium',
         entry.class === 'active' ? 'border-status-running/40 text-status-running'
           : entry.class === 'not-landed' || entry.class === 'orphan' ? 'border-inbox-count-foreground/40 text-inbox-count-foreground'
           : 'border-border text-soft-foreground',

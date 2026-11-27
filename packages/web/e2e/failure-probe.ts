@@ -3,7 +3,7 @@
 export type FailureReason =
   | { kind: 'wait-selector'; action: 'click' | 'hover' | 'fill'; selector: string }
   | { kind: 'wait-fn'; predicate: string }
-  | { kind: 'wait-enabled'; action: 'click' | 'fill'; selector: string; state: string }
+  | { kind: 'wait-enabled'; action: 'click' | 'fill' | 'hover'; selector: string; state: string }
   | { kind: 'wait-value'; expression: string; lastValue: unknown; lastError?: string }
   | { kind: 'test' }
 

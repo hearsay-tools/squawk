@@ -21,7 +21,6 @@ import type { ApiRun, RunRecord, RunStatus, StepState } from '@open-mercato/ceza
 import { isUnread } from '@/lib/read-state'
 
 import {
-  archiveInComposer,
   cliTargetResumes,
   finishTitle,
   lastSessionId,
@@ -138,7 +137,6 @@ describe('runActionFlags — the visibility matrix, all 7 statuses × archived',
     const root = { delegation: { role: 'root' as const, permissions: [], receipts: [] } }
     for (const record of [run('failed', root), run('waiting', { ...root, autoResumeAt: '2026-07-14T13:00:00.000Z' })]) {
       expect(runActionFlags(record, true).cancel).toBe(true)
-      expect(archiveInComposer(record, true)).toBe(false)
       expect(runActionFlags(record, false).cancel).toBe(false)
     }
     expect(runActionFlags(run('failed'), true).cancel).toBe(false)
@@ -433,42 +431,19 @@ describe('offersComposerFinish — the gold primary on a Needs-you task (#281)',
   })
 })
 
-describe('the composer slot holds exactly one of Stop and Archive (#281)', () => {
-  // The composer's outline slot holds Stop when the run offers it and Archive otherwise. On every
-  // status `cancel` is `active` and `archive` is `!active`, so the slot is never contested and
-  // never empty. A failed run holding wait results offers both: Stop takes the slot and the header
-  // carries Archive instead (`archiveInComposer`). Pinned here because the slot's correctness rests
-  // on it — a record that put two controls in one place, or left a hole, fails below.
-  const statuses: RunStatus[] = ['queued', 'running', 'waiting', 'review', 'done', 'failed', 'cancelled']
-  const records = [...statuses.map(status => run(status)), heldFailed()]
-
-  it.each(records.map(record => [record.waits?.length ? 'failed holding wait results' : record.status, record] as const))(
-    '%s puts exactly one control in the slot',
-    (_name, record) => {
-      for (const archived of [false, true]) {
-        const flags = runActionFlags({ ...record, archived })
-        expect([flags.cancel, archiveInComposer({ ...record, archived })].filter(Boolean)).toHaveLength(1)
-      }
-    },
-  )
-
-  it('Archive leaves the slot only for the run that offers both, so the header carries it there', () => {
-    for (const record of records) {
-      const flags = runActionFlags(record)
-      expect(archiveInComposer(record)).toBe(flags.archive && !flags.cancel)
+describe('Archive keeps one header slot (#281)', () => {
+  it('offers Archive on every settled status and beside an archive blocker, never on an active run', () => {
+    const statuses: RunStatus[] = ['queued', 'running', 'waiting', 'review', 'done', 'failed', 'cancelled']
+    for (const status of statuses) {
+      const flags = runActionFlags(run(status))
+      expect(flags.archive).toBe(!flags.cancel)
     }
-    expect(archiveInComposer(heldFailed())).toBe(false)
     expect(runActionFlags(heldFailed()).archive).toBe(true)
-  })
-
-  it('puts manual Archive beside an archive blocker and keeps restore available', () => {
-    const record = { ...run('done'), archiveBlocker: { message: 'A worker still has an open PR.' } }
-    expect(archiveInComposer(record)).toBe(false)
-    expect(runActionFlags(record).archive).toBe(true)
-    expect(runActionFlags({ ...record, archived: true }).archive).toBe(true)
+    const blocked = { ...run('done'), archiveBlocker: { message: 'A worker still has an open PR.' } }
+    expect(runActionFlags(blocked).archive).toBe(true)
+    expect(runActionFlags({ ...blocked, archived: true }).archive).toBe(true)
   })
 })
-
 
 it('hides terminal actions and the resume hint for a protocol-only runner', () => {
   const record = run(RUN_STATUS.done, { cliHandoff: false, cliResumeCommand: 'stale command' })

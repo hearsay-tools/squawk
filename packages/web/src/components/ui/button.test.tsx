@@ -11,8 +11,9 @@ describe('Button', () => {
     render(<Button className="bg-muted">Label</Button>)
     const button = screen.getByRole('button')
 
-    expect(button.className).toContain('bg-muted')
-    expect(button.className).not.toContain('bg-action')
+    const classes = button.className.split(' ')
+    expect(classes).toContain('bg-muted')
+    expect(classes).not.toContain('bg-action')
   })
 
   it('renders the child element instead of a button when asChild is set', () => {
@@ -33,5 +34,22 @@ describe('Button', () => {
     const button = screen.getByRole('button')
 
     expect((button as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('turns a disabled primary button into a neutral surface at full opacity', () => {
+    render(<Button disabled>Label</Button>)
+    const classes = screen.getByRole('button').className.split(' ')
+
+    for (const name of ['disabled:border', 'disabled:border-border', 'disabled:bg-muted/80', 'disabled:text-muted-foreground', 'disabled:opacity-100']) expect(classes).toContain(name)
+    expect(classes).not.toContain('disabled:opacity-50')
+    expect(classes.some((name) => name.startsWith('disabled:') && name.includes('action'))).toBe(false)
+  })
+
+  it('sets the standard label size on icon sizes, so a labelled icon button matches its siblings', () => {
+    for (const size of ['icon', 'icon-sm'] as const) {
+      render(<Button size={size}>Continue</Button>)
+      expect(screen.getByRole('button', { name: 'Continue' }).className.split(' ')).toContain('text-[13px]')
+      cleanup()
+    }
   })
 })

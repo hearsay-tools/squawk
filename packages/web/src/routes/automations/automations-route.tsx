@@ -18,8 +18,9 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
   const navigate = useNavigate()
   // hearsay-tools/cezarion#1465: the list shows archived one-time schedules on request only.
   const [archived, setArchived] = useState(false)
-  // A schedule looked up by id may be archived: its read-only record is still reachable by link.
-  const { data, error, refresh } = useAutomations(mode === 'list' ? (archived ? 'only' : undefined) : 'include')
+  // One list with the archived entries in it: the list splits it into its two tabs and counts
+  // both, and a schedule looked up by id may be archived, its read-only record still reachable.
+  const { data, error, refresh } = useAutomations('include')
   // Bumped by the editor's Reload and nothing else: a background revision change must reach the
   // user as the save-time 409, not as a form that silently resets under their typing.
   const [reloadToken, setReloadToken] = useState(0)
@@ -33,7 +34,7 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
   // gated server — and a submit inside that window POSTs straight into a 409.
   if (availability === 'unknown') {
     return (
-      <div data-route="automations" className="task-flow-page flex min-h-full flex-col">
+      <div data-route="automations" className="flex min-h-full flex-col px-4 py-7 md:px-9">
         <PageState text="Loading automations…" />
       </div>
     )
@@ -42,7 +43,7 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
   // Before every mode branch, so all four `/automations*` routes degrade the same way.
   if (availability === 'unavailable') {
     return (
-      <div data-route="automations" className="task-flow-page flex min-h-full flex-col">
+      <div data-route="automations" className="flex min-h-full flex-col px-4 py-7 md:px-9">
         <CenteredState
           icon={<ZapIcon />}
           tone="neutral"
@@ -65,7 +66,7 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
   if (!data) {
     return error
       ? <PageFrame title="Automations" subtitle="Could not load automations."><div className="grid justify-items-start gap-3"><PageState text={error} /><Button variant="outline" onClick={() => void refresh()}>Retry</Button></div></PageFrame>
-      : <div data-route="automations" className="task-flow-page flex min-h-full flex-col"><PageState text="Loading automations…" /></div>
+      : <div data-route="automations" className="flex min-h-full flex-col px-4 py-7 md:px-9"><PageState text="Loading automations…" /></div>
   }
 
   const forge = { available: data.available, ...(data.reason ? { reason: data.reason } : {}) }

@@ -35,7 +35,7 @@
     "homePath": "/home/x/pi-work"
   },
   "runnerEntry": {
-    "displayName": "pi",
+    "displayName": "Pi",
     "modelListName": "Pi",
     "modelIdScope": "provider-spanning",
     "pickerLabel": "pi",

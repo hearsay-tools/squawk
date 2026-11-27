@@ -308,7 +308,7 @@ describe('the Changes tab route', () => {
     await waitFor(() => expect(toolbarAction('push')?.disabled).toBe(false))
   })
 
-  it('Create PR uses the existing /pr flow and flips to View PR once the record carries the URL', async () => {
+  it('Draft PR uses the existing /pr flow and flips to View PR once the record carries the URL', async () => {
     let record: ApiRun = RUN
     const sent = stubFetch({
       'POST /api/v1/runs/r1/pr': () => {
@@ -366,8 +366,11 @@ describe('the Changes tab Markdown preview (hearsay-tools/cezarion#1012)', () =>
     await waitFor(() => expect(document.querySelectorAll('[data-slot="diff-file"]')).toHaveLength(2))
     const button = toggle()!
     expect(button.getAttribute('aria-pressed')).toBe('false')
-    // Phones keep it: unlike unified/split and wrap, it is not inside the ≥md-only group.
+    // Phones keep it: unlike unified/split, it is not inside the ≥md-only group.
     expect(button.closest('.hidden')).toBeNull()
+    // So does a wrap switch: one copy sits beside the branch chip, outside the ≥md-only group.
+    const wraps = [...document.querySelectorAll('[data-slot="wrap-toggle"]')]
+    expect(wraps.some((wrap) => wrap.closest('.hidden') === null)).toBe(true)
 
     fireEvent.click(button)
     expect(button.getAttribute('aria-pressed')).toBe('true')

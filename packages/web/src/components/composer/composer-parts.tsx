@@ -14,6 +14,7 @@ import {
   composerAriaControls,
   composerChevronClass,
   composerDescribedBy,
+  COMPOSER_TOOL_SQUARE,
   composerDictationButtonClass,
   composerDictationInTools,
   composerEditorClass,
@@ -53,15 +54,14 @@ export function ComposerDictationButton({
     <Button
       type="button"
       variant="ghost"
-      size="sm"
+      size="icon-sm"
       disabled={mode.disabled || mode.readOnly}
       aria-label="Start dictation"
       title="Dictation"
       className={composerDictationButtonClass(mode.mobileCompact)}
       onClick={onStart}
     >
-      <MicIcon aria-hidden="true" className="size-3.5" />
-      {composerDictationInTools(mode.executionOptions, mode.sessionControls) ? null : 'Dictation'}
+      <MicIcon aria-hidden="true" className="size-4" />
     </Button>
   )
 }
@@ -168,6 +168,7 @@ export function ComposerFeedback({
 export function ComposerSubmitRow({
   mode,
   emptySubmitLabel,
+  emptySubmitVariant,
   optionsId,
   dictationButton,
   footerEnd,
@@ -178,6 +179,7 @@ export function ComposerSubmitRow({
 }: {
   mode: ComposerSubmitMode
   emptySubmitLabel: string | undefined
+  emptySubmitVariant?: 'primary' | 'outline' | undefined
   optionsId: string
   dictationButton: ReactNode
   footerEnd: ReactNode
@@ -203,6 +205,7 @@ export function ComposerSubmitRow({
           <Button
             type="button"
             size="icon-sm"
+            variant={mode.hasContent ? 'primary' : emptySubmitVariant ?? 'primary'}
             aria-label={mode.submitLabel}
             aria-busy={composerAriaBusy(mode.busy, mode.stopPending)}
             disabled={composerSendDisabled(mode)}
@@ -446,7 +449,7 @@ export function ComposerAttachButton({
         aria-label="Attach files"
         title="Attach an image, PDF, TXT or MD file (or paste a screenshot)"
         disabled={disabled}
-        className="size-11 text-muted-foreground"
+        className={COMPOSER_TOOL_SQUARE}
         onClick={() => inputRef.current?.click()}
       >
         <PaperclipIcon aria-hidden="true" className="size-[15px]" />

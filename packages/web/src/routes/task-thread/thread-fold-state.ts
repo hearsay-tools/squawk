@@ -105,11 +105,11 @@ export function str(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
-/** ` · 14:02` in the reader's locale, or nothing for an unparseable stamp. */
+/** ` · 14:02` (24-hour, like every thread clock), or nothing for an unparseable stamp. */
 export function clockTime(ts: unknown): string {
   const at = typeof ts === 'string' ? new Date(ts) : undefined
   if (!at || Number.isNaN(at.getTime())) return ''
-  return ` · ${at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+  return ` · ${at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}`
 }
 
 /**

@@ -95,8 +95,11 @@ it('keeps global summary column headers accessible on phones', () => {
   browser.setViewport(390, 844)
   browser.goto(`${fixture.origin}/tasks?tasks=virtual`)
   browser.waitForFunction(`document.querySelector('[data-slot="global-task-row"]') !== null`)
-  const headers = browser.waitForValue(`(() => { const table=document.querySelector('[data-slot="global-tasks-table"][role="table"]'); return [...table.querySelectorAll('[role="columnheader"]')].map(cell=>({name:cell.textContent,hidden:[cell,cell.parentElement].some(node=>getComputedStyle(node).display==='none'||getComputedStyle(node).visibility==='hidden')})) })()`)
-  expect(headers).toEqual(['Task', 'Workflow', 'Changes', 'Pull request', 'Started'].map(name => ({ name, hidden: false })))
+  const table = browser.waitForValue(`(() => { const table=document.querySelector('[data-slot="global-tasks-table"][role="table"]'); return table && { referenceColumn: table.dataset.referenceColumn, references: document.querySelectorAll('[data-slot="global-task-references"] a').length, headers: [...table.querySelectorAll('[role="columnheader"]')].map(cell=>({name:cell.textContent,hidden:[cell,cell.parentElement].some(node=>getComputedStyle(node).display==='none'||getComputedStyle(node).visibility==='hidden')})) } })()`) as { referenceColumn: string; references: number; headers: { name: string; hidden: boolean }[] }
+  // The Pull request column shows only while a task on the page has a reference; this fixture has none.
+  expect(table.references).toBe(0)
+  expect(table.referenceColumn).toBe('false')
+  expect(table.headers).toEqual(['Task', 'Workflow', 'Changes', 'Started'].map(name => ({ name, hidden: false })))
 })
 
 it('paints rows on the first frame that contains a large list', async () => {
@@ -194,9 +197,13 @@ it.each([['project', 1440, 900], ['project', 360, 640], ['global', 1440, 900], [
     browser.waitForFunction(`document.querySelector('[data-virtualized="true"] [data-run-id]') !== null && window.__cezIdle`)
     const route = `[data-route="${scope === 'project' ? 'tasks' : 'global-tasks'}"]`
     const finished = Number(browser.evaluate(`document.querySelector('${route} [data-bucket="Finished"] [data-slot="status-group-toggle"]').getAttribute('aria-label').match(/\\d+/)[0]`))
-    browser.evaluate(`(() => {const owner=document.querySelector('[data-slot="main"]'),group=document.querySelector('${route} [data-bucket="Working"]');owner.scrollTop+=group.getBoundingClientRect().top-owner.getBoundingClientRect().top+${scope === 'global' ? 90445 : 6500}})()`)
+    // Deep inside Working, but never at the end of the page: at the maximum scroll no position can
+    // hold the anchor while a row above it grows. Global goes halfway into its 63px-row group.
+    browser.evaluate(`(() => {const owner=document.querySelector('[data-slot="main"]'),group=document.querySelector('${route} [data-bucket="Working"]');owner.scrollTop+=group.getBoundingClientRect().top-owner.getBoundingClientRect().top+${scope === 'global' ? 'group.getBoundingClientRect().height/2' : 6500}})()`)
     const sample = `(() => {const owner=document.querySelector('[data-slot="main"]'),edge=owner.getBoundingClientRect().top;const rows=[...document.querySelectorAll('${route} [data-run-id]')].filter(e=>e.getBoundingClientRect().bottom>edge&&e.getBoundingClientRect().top<edge+owner.clientHeight);return rows.length>1?{id:rows[0].dataset.runId,top:rows[0].getBoundingClientRect().top,move:rows[rows.length-1].dataset.runId,project:rows[rows.length-1].dataset.project}:null})()`
     const before = waitForSettledSample(browser, sample) as { id: string; top: number; move: string; project?: string }
+    // Room to scroll by the moved row, or the anchor could not hold.
+    expect(waitForSettledSample<number>(browser, `(() => {const owner=document.querySelector('[data-slot="main"]');return owner.scrollHeight-owner.clientHeight-owner.scrollTop})()`)).toBeGreaterThan(200)
     browser.evaluate(startFrames(before.id))
     await large.control({ update: [{ projectId: before.project ?? 'boot', runId: before.move, patch: { status: RUN_STATUS.done } }] })
     browser.waitForFunction(`document.querySelector('${route} [data-bucket="Finished"] [data-slot="status-group-toggle"]')?.getAttribute('aria-label')?.startsWith('Finished ${finished + 1}') && window.__cezIdle`)

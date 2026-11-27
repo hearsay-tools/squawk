@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { GithubData } from '@open-mercato/cezar-api-client'
-import { ChevronDownIcon, RefreshCwIcon, TriangleAlertIcon } from '@/components/design-icons'
+import { ChevronDownIcon, RefreshCwIcon, TriangleAlertIcon, UserRoundIcon } from '@/components/design-icons'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 // The picker is sized by the control, never by its option text, so loading / unavailable / board names cannot move it.
 const picker = 'w-44 max-w-full'
-const control = 'min-h-11 min-w-11 rounded-md border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-ring disabled:opacity-50'
+const control = 'min-h-11 min-w-11 rounded-md border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-ring disabled:opacity-60'
+const ALL_BOARDS_VALUE = '__all__'
 
 function issueAssigneeLogins(issues: GithubData['issues'], assignees: readonly string[]): string[] {
   const logins = new Map<string, string>()
@@ -41,9 +43,9 @@ function IssueAssigneePicker({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className={control} disabled={options.length === 0}>
+        <button type="button" className={`${control} inline-flex items-center gap-1.5`} disabled={options.length === 0}>
           Assignee{assignees.length ? ` · ${assignees.length}` : ''}
-          <ChevronDownIcon size={12} aria-hidden="true" className="ml-1 inline size-3 shrink-0 align-[-1px] text-soft-foreground" />
+          <ChevronDownIcon size={12} aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 max-w-[calc(100vw-2rem)] p-2">
@@ -72,22 +74,55 @@ function IssueProjectPicker({
   data: GithubData
   projectId: string
   onProjectChange: (next: string) => void
-  pickerRef: RefObject<HTMLSelectElement | null>
+  pickerRef: RefObject<HTMLButtonElement | null>
 }) {
   if (data.projects?.length) {
     return (
-      <select ref={pickerRef} aria-label="Project board" className={`${control} ${picker}`} value={projectId}
-        onChange={event => onProjectChange(event.target.value)}>
-        <option value="">All boards</option>
-        {data.projects.map(board => <option key={board.id} value={board.id}>{board.title}</option>)}
-      </select>
+      <Select
+        value={projectId || ALL_BOARDS_VALUE}
+        onValueChange={(next) => onProjectChange(next === ALL_BOARDS_VALUE ? '' : next)}
+      >
+        <SelectTrigger
+          ref={pickerRef}
+          aria-label="Project board"
+          data-slot="gh-board-filter"
+          data-value={projectId}
+          className={`${control} ${picker} justify-between`}
+        >
+          <SelectValue placeholder="All boards" />
+        </SelectTrigger>
+        <SelectContent align="start">
+          <SelectItem value={ALL_BOARDS_VALUE}>All boards</SelectItem>
+          {data.projects.map(board => (
+            <SelectItem key={board.id} value={board.id} data-board={board.id}>
+              {board.title}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     )
   }
   if (data.projects || data.projectsState) {
+    const emptyLabel = data.projects
+      ? 'No boards'
+      : data.projectsState === 'refreshing'
+        ? 'Loading boards…'
+        : 'Boards unavailable'
     return (
-      <select ref={pickerRef} aria-label="Project board" className={`${control} ${picker}`} disabled value="">
-        <option value="">{data.projects ? 'No boards' : data.projectsState === 'refreshing' ? 'Loading boards…' : 'Boards unavailable'}</option>
-      </select>
+      <Select disabled value={ALL_BOARDS_VALUE}>
+        <SelectTrigger
+          ref={pickerRef}
+          aria-label="Project board"
+          data-slot="gh-board-filter"
+          data-value=""
+          className={`${control} ${picker} justify-between`}
+        >
+          <SelectValue placeholder={emptyLabel}>{emptyLabel}</SelectValue>
+        </SelectTrigger>
+        <SelectContent align="start">
+          <SelectItem value={ALL_BOARDS_VALUE}>{emptyLabel}</SelectItem>
+        </SelectContent>
+      </Select>
     )
   }
   return null
@@ -143,7 +178,7 @@ export function IssueFilters({ data, assignees, projectId, onAssigneesChange, on
   const [statusOpen, setStatusOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const pickerRef = useRef<HTMLSelectElement>(null)
+  const pickerRef = useRef<HTMLButtonElement>(null)
   const meRef = useRef<HTMLButtonElement>(null)
   const options = issueAssigneeLogins(data.issues, assignees)
   const isMe = issueIsAssignedToMe(data.viewerLogin, assignees)
@@ -180,8 +215,11 @@ export function IssueFilters({ data, assignees, projectId, onAssigneesChange, on
   return (
     <div className="contents" data-slot="gh-issue-filters">
       <IssueAssigneePicker options={options} assignees={assignees} onAssigneesChange={onAssigneesChange} />
-      <button ref={meRef} type="button" className={`${control} aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-background`} disabled={!data.viewerLogin} aria-pressed={isMe}
+      {/* A boolean filter chip, not a picker: a pill with a person glyph and no chevron, so it
+          never reads as one more dropdown beside Labels, Assignee and the board picker. */}
+      <button ref={meRef} type="button" data-slot="gh-assigned-me" className={`${control} inline-flex items-center gap-1.5 rounded-full aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-background`} disabled={!data.viewerLogin} aria-pressed={isMe}
         onClick={() => onAssigneesChange(isMe ? [] : [data.viewerLogin!])}>
+        <UserRoundIcon size={14} aria-hidden="true" className="size-3.5 shrink-0" />
         Assigned to me
       </button>
       <IssueProjectPicker data={data} projectId={projectId} onProjectChange={onProjectChange} pickerRef={pickerRef} />

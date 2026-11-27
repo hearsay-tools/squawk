@@ -19,6 +19,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ProjectScopeProvider } from '@/api/project-scope-context'
 import { createQueryClient } from '@/api/query-client'
+import { seedRunners } from '@/test/runners.testkit'
 import type { ApiRun, RunEvent, StepState, WorkerInspection } from '@open-mercato/cezar-api-client'
 
 import { RunActivityDock, resetActivityDisclosureForTests } from './run-activity-dock'
@@ -106,9 +107,10 @@ function renderDock(
   relationships: 'ok' | 'error' = 'ok',
   overrides: Record<string, () => Response> = {},
   // Activity starts folded (hearsay-tools/cezarion#1601); most cases read the open card.
-  { open = true, readerScroll, sticky = false, currentComplete }: {
+  { open = true, readerScroll, sticky = false, currentComplete, pendingAsk }: {
     open?: boolean
     currentComplete?: boolean
+    pendingAsk?: boolean
     readerScroll?: ((listener: ReaderScrollListener) => () => void) | undefined
     sticky?: boolean
   } = {},
@@ -132,13 +134,14 @@ function renderDock(
     }),
   )
   const client = createQueryClient()
+  seedRunners(client)
   client.setDefaultOptions({ queries: { retry: false } })
   const tree = (current: ApiRun) => (
     <QueryClientProvider client={client}>
       <ProjectScopeProvider projectId="sample">
         <MemoryRouter initialEntries={[`/p/sample/tasks/${record.id}`]}>
           <div data-slot="thread-dock" style={sticky ? { position: 'sticky' } : undefined}>
-            <RunActivityDock run={current} currentThread={reduceThread(events)} currentComplete={currentComplete} readerScroll={readerScroll} />
+            <RunActivityDock pendingAsk={pendingAsk} run={current} currentThread={reduceThread(events)} currentComplete={currentComplete} readerScroll={readerScroll} />
           </div>
         </MemoryRouter>
       </ProjectScopeProvider>
@@ -406,7 +409,8 @@ describe('RunActivityDock — the workflow glyph', () => {
   // disagree: a check mark on an unstarted or failed workflow reads as "this went fine".
   it.each([
     ['done', 'done'],
-    ['running', 'active'],
+    // The run waits: its live step is paused, not spinning.
+    ['running', 'paused'],
     ['pending', 'pending'],
     ['failed', 'failed'],
     ['cancelled', 'failed'],
@@ -632,7 +636,7 @@ describe('Session activity — status, usage and workspace (#1333)', () => {
     fireEvent.click(sectionHead('usage'))
     const body = section('usage')!.textContent
     expect(body).toContain('Runner')
-    expect(body).toContain('codex')
+    expect(body).toContain('Codex')
     expect(body).toContain('gpt-6')
     expect(body).toContain('high')
   })
@@ -645,10 +649,10 @@ describe('Session activity — status, usage and workspace (#1333)', () => {
     expect(usage).toContain('gpt-6')
     expect(usage).toContain('high')
     fireEvent.click(summary())
-    expect(summary().textContent).toContain('codex')
+    expect(summary().textContent).toContain('Codex')
     expect(summary().textContent).toContain('gpt-6')
     expect(summary().textContent).toContain('high')
-    expect(summary().getAttribute('aria-label')).toContain('runner codex; model gpt-6; effort high')
+    expect(summary().getAttribute('aria-label')).toContain('runner Codex; model gpt-6; effort high')
   })
 
   it('reads the saved provider even when the model already includes it', () => {
@@ -777,6 +781,21 @@ describe('Session activity — folded workflow step (#1478)', () => {
     expect(name()?.getAttribute('title')).toBe('Do the task')
   })
 
+  // A run paused for the user's reply shows a still amber dot beside its step, never the spinner
+  // that says the agent works; the open Workflow row and its rail agree.
+  it('draws a still paused dot, not a spinner, while the run waits for the user', () => {
+    renderDock(fresh({ status: RUN_STATUS.waiting, steps: one(STEP_STATUS.running) }), [])
+    fold()
+    expect(glyph()?.getAttribute('data-visual')).toBe('paused')
+    expect(glyph()?.getAttribute('class')).not.toContain('animate-spin')
+    expect(document.querySelectorAll('.animate-spin')).toHaveLength(0)
+    fireEvent.click(summary())
+    fireEvent.click(sectionHead('workflow'))
+    expect(document.querySelector('[data-slot="step-row"]')?.getAttribute('data-visual')).toBe('paused')
+    expect(screen.getAllByRole('img', { name: 'Step paused' }).length).toBeGreaterThan(0)
+    expect(screen.queryAllByRole('status', { name: 'Step running' })).toEqual([])
+  })
+
   it('follows the workflow as it advances while folded', () => {
     const record = fresh()
     const { rerenderRun } = renderDock(record, [])
@@ -794,7 +813,7 @@ describe('Session activity — folded workflow step (#1478)', () => {
     ['failed', 'failed', 'failed'],
     ['cancelled', 'failed', 'failed'],
     ['pending', 'pending', 'pending'],
-    ['waiting', 'active', 'running'],
+    ['waiting', 'paused', 'paused'],
     ['review', 'active', 'running'],
   ] as const)('matches the Workflow row for a %s step', (status, visual, spoken) => {
     renderDock(fresh({ status: status === 'waiting' || status === 'review' ? status : 'done', steps: one(status) }), [])
@@ -962,4 +981,16 @@ describe('Session activity — folded by default, folded while reading up (#1601
     view.unmount()
     expect(feed.size()).toBe(0)
   })
+})
+
+it('starts folded for a pending ask despite a saved open choice, then allows manual expansion', () => {
+  const record = run()
+  const first = renderDock(record)
+  expect(screen.getByRole('button', { name: /^Session activity/ }).getAttribute('aria-expanded')).toBe('true')
+  first.unmount()
+  renderDock(record, EVENTS, workers, 'ok', {}, { open: false, pendingAsk: true })
+  const toggle = screen.getByRole('button', { name: /^Session activity/ })
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(toggle)
+  expect(toggle.getAttribute('aria-expanded')).toBe('true')
 })

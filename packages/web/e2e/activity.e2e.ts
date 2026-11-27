@@ -192,7 +192,7 @@ describe('activity view', () => {
       facts !== null && Object.values(facts.cards).every(card => card !== null) && facts.worker !== null && facts.rail.length === 2,
     { failure: 'the activity board never showed every card, the worker row and two open requests' })
 
-    expect(before.cards.running?.verb).toBe('Doing')
+    expect(before.cards.running?.verb).toBe('Running')
     expect(before.cards.sender).toEqual({ verb: 'Waiting for reply', lines: [`Waiting for a reply from ${titles.recipient}`] })
     expect(before.cards.recipient).toEqual({ verb: 'Needs you', lines: [`${titles.sender} waits for your reply`, `${titles.waiter} waits for you to write`] })
     expect(before.cards.waiter).toEqual({ verb: 'Waiting for a peer', lines: [`Waiting for a message from ${titles.recipient}`] })
@@ -231,7 +231,7 @@ describe('activity view', () => {
       const facts = { running: verb(${JSON.stringify(runningId)}), parent: verb(${JSON.stringify(parentId)}), sender: verb(${JSON.stringify(senderId)}) };
       return Object.values(facts).every(Boolean) ? facts : null;
     })()`, undefined, { failure: 'the global view never listed the project panel with its pills' })
-    expect(pills.running).toBe('Doing')
+    expect(pills.running).toBe('Running')
     expect(pills.parent).toBe('Waiting for workers')
 
     browser.click(`[data-slot="activity-scope"] a[href="/p/${project}/activity"]`)

@@ -1,8 +1,10 @@
 import type { HTMLAttributes } from 'react'
 import type { ActivityRequest, ActivityRun, ActivityWorker } from '@open-mercato/cezar-api-client/contract/activity'
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 
 import { Button } from '@/components/ui/button'
 import { Link } from '@/lib/project-router'
+import { runnerDisplayName, useRunners } from '@/api/runners'
 import { cn } from '@/lib/utils'
 
 import { since, span } from './activity-format'
@@ -45,8 +47,8 @@ export interface CardProps {
 
 const taskPath = (runId: string) => `/tasks/${encodeURIComponent(runId)}`
 
-function metaLine(run: ActivityRun | ActivityWorker, now: number): string {
-  const parts = [run.runner, run.model, run.currentStepId ? `step ${run.currentStepId}` : undefined, run.startedAt ? span(since(run.startedAt, now)) : undefined]
+function metaLine(run: ActivityRun | ActivityWorker, now: number, runners: RunnersResponse | undefined): string {
+  const parts = [run.runner ? runnerDisplayName(runners, run.runner) : undefined, run.model, run.currentStepId ? `step ${run.currentStepId}` : undefined, run.startedAt ? span(since(run.startedAt, now)) : undefined]
   return parts.filter((part): part is string => Boolean(part)).join(' · ')
 }
 
@@ -73,6 +75,7 @@ function WorkerRow({ worker, parentId, requests, index, ctx, motion }: WorkerRow
   const ask = askOf(worker.runId, parentId, requests)
   const line = workerLine(worker, ctx, ask?.text)
   const hold = motion.workerHold[worker.runId]
+  const runners = useRunners().data
   return (
     <li
       data-slot="activity-worker"
@@ -90,7 +93,7 @@ function WorkerRow({ worker, parentId, requests, index, ctx, motion }: WorkerRow
       <span className="mt-[3px]"><RunShape run={worker} role="worker" /></span>
       <span className="min-w-0 truncate text-[12.5px] font-medium">
         <Link to={taskPath(worker.runId)} className="relative z-[1] hover:underline focus-visible:outline-2 focus-visible:outline-ring max-md:inline-flex max-md:min-h-11 max-md:items-center">{worker.title}</Link>
-        <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{[worker.runner, worker.model].filter(Boolean).join(' · ')}</span>
+        <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{[worker.runner ? runnerDisplayName(runners, worker.runner) : undefined, worker.model].filter(Boolean).join(' · ')}</span>
       </span>
       <span data-slot="activity-worker-line" className="col-start-2 truncate text-[11.5px] text-muted-foreground tabular-nums">
         <b className={cn('font-semibold', TONE_INK[line.tone])}>{line.verb}</b> · <span className={cn(line.mono && 'font-mono')}>{line.main}</span>
@@ -165,6 +168,7 @@ const NO_WAITS: readonly PeerWait[] = []
 
 export function ActivityCard({ task, requests, waits = NO_WAITS, index, ctx, dense, narrow, motion = EMPTY_MOTION, ghost = false, linked = false, onHover }: CardProps) {
   const box = rootNow(task, ctx)
+  const runners = useRunners().data
   // A ghost is not a line end: the lines measure only `data-activity-card`.
   const identity = ghost ? { 'data-activity-ghost': task.runId, inert: true, 'aria-hidden': true } : { 'data-activity-card': task.runId }
   const now = { sweep: task.rung === 'running' && isLiveStatus(task.status), slideKey: motion.slides[task.runId]?.key, passed: passedChecks(motion, task.runId) }
@@ -178,7 +182,9 @@ export function ActivityCard({ task, requests, waits = NO_WAITS, index, ctx, den
       {...(ghost ? {} : hoverHandlers(task.runId, onHover))}
       className={cn(
         'relative min-w-0 rounded-xl border bg-card px-3.5 py-3',
-        box.action ? 'border-pending' : 'border-border',
+        // One 1px border on every card; only its tone changes, at a matched strength, so waiting
+        // and running neighbours share their top and bottom edges to the pixel.
+        box.action ? 'border-pending/70' : now.sweep ? 'border-status-running/60' : 'border-border',
         linked && !ghost && 'outline-2 outline-offset-2 outline-message-peer-accent',
         cardMotion(task, motion, ghost),
       )}
@@ -191,14 +197,17 @@ export function ActivityCard({ task, requests, waits = NO_WAITS, index, ctx, den
             {task.title}
           </Link>
         </h3>
-        <Heartbeat rate={task.rate} />
       </header>
-      <p className="mt-0.5 mb-2 ml-5 truncate text-[11.5px] text-muted-foreground">{metaLine(task, ctx.now)}</p>
+      {/* The heartbeat shares the meta row, so the title keeps the header's full width. */}
+      <div className="mt-0.5 mb-2 ml-5 flex items-center gap-2">
+        <p className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground">{metaLine(task, ctx.now, runners)}</p>
+        <Heartbeat rate={task.rate} />
+      </div>
       <LineText texts={lineTexts(task.runId, requests, index, waits)} />
       <NowBoxView box={box} now={ctx.now} dense={dense} motion={now} />
       {box.action ? (
         <div className="mt-2 flex gap-1.5">
-          <Button asChild size="sm" variant={box.action === 'answer' ? 'primary' : 'outline'} className="relative z-[1] max-md:min-h-11">
+          <Button asChild size="sm" variant={box.action === 'answer' ? 'primary' : 'outline'} className="relative z-[1] h-8 max-md:min-h-11">
             <Link to={taskPath(task.runId)}>{box.action === 'answer' ? 'Answer' : 'Open task'}</Link>
           </Button>
         </div>

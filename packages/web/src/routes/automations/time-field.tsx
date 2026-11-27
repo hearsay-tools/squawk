@@ -24,7 +24,7 @@ export function TimeField({ label, value, max, onCommit }: { label: string; valu
         aria-describedby={invalid ? messageId : undefined}
         inputMode="numeric"
         maxLength={2}
-        className="w-20 text-center tabular-nums"
+        className="w-20 border-border text-center tabular-nums"
         value={text}
         onChange={(event) => {
           setText(event.target.value)

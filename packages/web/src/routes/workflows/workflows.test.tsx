@@ -399,6 +399,25 @@ describe('auto chain creator', () => {
 // ---- save --------------------------------------------------------------------------------------
 
 describe('save', () => {
+  it('keeps Save off with a visible No unsaved changes cue while the canvas matches the saved file, and turns it on after an edit', async () => {
+    stubFetch()
+    renderAt('/workflows')
+    await waitFor(() => expect(stepCards()).toHaveLength(2))
+    const save = () => document.querySelector<HTMLButtonElement>('[data-slot="wb-save"]')!
+    const cue = () => document.querySelector('[data-slot="wb-save-cue"]')
+    expect(save().disabled).toBe(true)
+    expect(cue()?.textContent).toBe('No unsaved changes')
+    expect(save().getAttribute('aria-describedby')).toBe(cue()?.id)
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Fix, then review.' } })
+    expect(save().disabled).toBe(false)
+    expect(cue()).toBeNull()
+    expect(save().hasAttribute('aria-describedby')).toBe(false)
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Fix then review.' } })
+    expect(save().disabled).toBe(true)
+    fireEvent.change(nameInput(), { target: { value: 'ship-it-copy' } })
+    expect(save().disabled).toBe(false)
+  })
+
   it('a pure stack saves in the portable compact form', async () => {
     const sent = stubFetch({
       'POST /api/v1/workflows': [
@@ -408,11 +427,12 @@ describe('save', () => {
     renderAt('/workflows')
     await waitFor(() => expect(stepCards()).toHaveLength(2))
 
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Fix, then review.' } })
     fireEvent.click(document.querySelector('[data-slot="wb-save"]')!)
     await screen.findByText('Saved — ship-it.yaml')
     expect(sent.find((r) => r.method === 'POST' && r.path === '/api/v1/workflows')?.body).toEqual({
       name: 'ship-it',
-      description: 'Fix then review.',
+      description: 'Fix, then review.',
       skills: ['om-fix', 'om-review'],
     })
   })
@@ -427,6 +447,7 @@ describe('save', () => {
     renderAt('/workflows')
     await waitFor(() => expect(stepCards()).toHaveLength(2))
 
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Fix, then review.' } })
     fireEvent.click(document.querySelector('[data-slot="wb-save"]')!)
     await screen.findByText('“ship-it” already exists')
     fireEvent.click(document.querySelector('[data-slot="wb-overwrite-confirm"]')!)
@@ -606,6 +627,7 @@ describe('draft editing and cancelled actions', () => {
     const sent = stubFetch({ 'POST /api/v1/workflows': [() => jsonResponse({ error: 'Exists', exists: true }, 409)] })
     renderAt('/workflows')
     await waitFor(() => expect(stepCards()).toHaveLength(2))
+    if (action === 'overwrite') fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Fix, then review.' } })
     fireEvent.click(document.querySelector(`[data-slot="wb-${action === 'overwrite' ? 'save' : 'delete'}"]`)!)
     const dialog = await screen.findByRole('alertdialog')
     // Fake time drains mutation callbacks; the refused write cannot arrive after the assertion.
@@ -632,6 +654,7 @@ describe('workflow failures and submission guards', () => {
     stubFetch({ [endpoint]: [() => jsonResponse({ error: 'Read only', exists: false }, 403)] })
     renderAt('/workflows')
     await waitFor(() => expect(stepCards()).toHaveLength(2))
+    if (action === 'save') fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Fix, then review.' } })
     fireEvent.click(document.querySelector(`[data-slot="wb-${action}"]`)!)
     if (action === 'auto') {
       fireEvent.change(screen.getByLabelText('Describe the chain to build'), { target: { value: 'build chain' } })

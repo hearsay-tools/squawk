@@ -80,7 +80,7 @@ function WorkPanel({ project, now, motion = EMPTY_MOTION, paused = false }: Pane
       <PanelHeader project={project} headingId={headingId} detail={panelCounts(project)} to={projectActivityPath(project.projectId)} label="Open project activity →" />
       {/* The arcs rise above the pills: their strip reserves the room above each row. */}
       <div className={cn('relative mt-3', room && 'md:mt-1 md:pt-10')}>
-        <ul data-slot="activity-pills" aria-label={`${project.name} tasks`} className={cn('grid grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] items-start gap-3.5', room && 'md:gap-y-11')}>
+        <ul data-slot="activity-pills" aria-label={`${project.name} tasks`} className={cn('grid grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))] items-start gap-3.5', room && 'md:gap-y-11')}>
           {project.tasks.map((task) => (
             <ActivityPill
               key={task.runId}

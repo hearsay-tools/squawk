@@ -21,7 +21,7 @@ function layout(scale = 1) {
   return (next: number) => { width = next; act(() => resize()) }
 }
 
-const visible = () => [...document.querySelectorAll('[data-summary-item][data-hidden="false"]')].map(el => el.textContent)
+const visible = () => [...document.querySelectorAll('[data-summary-item][data-hidden="false"]')].map(el => el.textContent?.replace(/^·/, ''))
 
 it('removes usage values in order, then restores them when space returns', () => {
   const resize = layout()
@@ -129,4 +129,16 @@ it('counts the lead before the first shown value and draws it there', () => {
   expect(visible()).toEqual(['claude', 'auto'])
   expect(document.querySelector<HTMLElement>('[data-summary-item="runner"]')?.style.marginInlineStart).toBe('8px')
   expect(document.querySelector<HTMLElement>('[data-summary-item="model"]')?.style.marginInlineStart).toBe('')
+})
+
+it('separates visible metadata without a leading dot on a standalone summary', () => {
+  layout()
+  render(<ActivitySummary items={[
+    { id: 'runner', priority: 2, content: 'Claude Code' },
+    { id: 'model', priority: 4, content: 'opus' },
+    { id: 'effort', priority: 3, content: 'high' },
+  ]} />)
+  // CSS draws each dot, so the text holds the values alone and no value carries a stray `·`.
+  expect(document.querySelector('[data-slot="activity-summary"]')?.textContent).toBe('Claude Codeopushigh')
+  expect(document.querySelectorAll('[data-slot="activity-separator"][aria-hidden="true"]')).toHaveLength(2)
 })

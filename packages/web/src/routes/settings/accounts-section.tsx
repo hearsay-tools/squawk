@@ -1,7 +1,8 @@
+import { SettingsSelect } from './settings-select'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { IdCardIcon } from 'lucide-react'
 import { CpuIcon } from '@/components/design-icons'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 
 import { ApiError, putWorkspaceConfig } from '@/api/client'
@@ -121,6 +122,14 @@ export function GlobalAgentsSection() {
   return <AgentsPane data={profiles.data!} runners={runners.data!} />
 }
 
+/** A config folder for display: the home folder as `~`, and a long path cut to its last three
+ *  segments. The full path stays in the element's `title`. */
+function shortPath(path: string): string {
+  const home = path.replace(/^\/(?:home|Users)\/[^/]+/, '~')
+  const parts = home.split('/')
+  return parts.length > 4 ? `…/${parts.slice(-3).join('/')}` : home
+}
+
 /** Scroll to the card a link named (`#agent-<id>`) once the cards exist. The router does not
  *  scroll to a hash on client navigation, so a link from the runner picker would land at the
  *  top of the page without this. */
@@ -148,12 +157,9 @@ function AgentsPane({ data, runners }: { data: AgentProfilesResponse; runners: R
       data-slot="accounts-section"
       className="mx-auto flex w-full max-w-2xl flex-col gap-5 p-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-6 md:pb-6"
     >
-      <p className="text-[13px] text-muted-foreground">
-        Install, update and sign in to each agent, and set what a project runs when it has not chosen.
-      </p>
       <RemoteSettingsNotice risk="Agent accounts run each CLI with the configured host folder" />
       {data.editable ? null : (
-        <p data-slot="accounts-hosted" className="text-[13px] text-soft-foreground">
+        <p data-slot="accounts-hosted" className="text-[13px] text-muted-foreground">
           Agent accounts are read-only on this remote cockpit. Run{' '}
           <code>{REMOTE_SETTINGS_ENABLE_COMMAND}</code> on the host to add, edit, or sign in to accounts here.
         </p>
@@ -162,7 +168,7 @@ function AgentsPane({ data, runners }: { data: AgentProfilesResponse; runners: R
       {/* Every agent gets a card, including one that cannot carry a second login: the card is
           where its install state lives, and hiding OpenCode would just move the question
           "is OpenCode set up?" somewhere else. */}
-      <div data-slot="agent-cards" className="flex flex-col gap-4">
+      <div data-slot="agent-cards" className="flex flex-col gap-3">
         {runners.runners.map((entry) => (
           <AgentCard
             key={entry.id}
@@ -233,25 +239,94 @@ function AgentsPane({ data, runners }: { data: AgentProfilesResponse; runners: R
   )
 }
 
-/** The host check as one line: Checking…, Installed · version, or Not installed with the hint. */
+/** The host check, inline in the card's summary. It names the CLI, so the top row reads as the
+ *  machine's answer (is the binary there, which version) and never as an account's login state. */
 function InstallReadout({ entry, check }: { entry: RunnerEntry; check: BackendCheck | undefined }) {
-  if (check === undefined) return <span data-slot="agent-installed">Checking…</span>
+  if (check === undefined) return <span data-slot="agent-installed">Checking CLI…</span>
   if (!check.available) {
     return (
       <span data-slot="agent-installed">
-        Not installed{entry.installHint ? <> — <code className="break-all">{entry.installHint}</code></> : null}
+        CLI not installed{entry.installHint ? <> — <code className="break-all">{entry.installHint}</code></> : null}
       </span>
     )
   }
   return (
-    <>
-      <span data-slot="agent-installed">Installed</span>
-      {check.version ? <><span aria-hidden="true"> · </span><span data-slot="agent-version">{check.version}</span></> : null}
-    </>
+    <span className="whitespace-nowrap">
+      <span data-slot="agent-installed">CLI installed</span>
+      {/* A middle dot, never parentheses: a version can carry its own. */}
+      {check.version ? <><span aria-hidden="true" className="settings-agent-summary-sep">·</span><VersionReadout version={check.version} /></> : null}
+    </span>
   )
 }
 
-/** One agent: what the machine has, then the logins configured for it. */
+/** The dry-run probe reports `mock (HSQ_DRY_RUN=1)` as its version: an env flag is not a version. */
+const DRY_RUN_VERSION = /^mock \(\w*DRY_RUN=1\)$/
+
+/** The CLI version, or a flat "Dry run" status tag when the host runs mock agents: a neutral fill
+ *  and no border, so it never reads as a button. The raw string stays in the tooltip, so the env
+ *  flag is one hover away and never in the copy. */
+function VersionReadout({ version }: { version: string }) {
+  if (DRY_RUN_VERSION.test(version)) {
+    return (
+      <span data-slot="agent-version" data-dry-run="" title={version} className="rounded bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+        Dry run
+      </span>
+    )
+  }
+  return <><span className="sr-only">, version </span><span data-slot="agent-version" className="text-muted-foreground">{version}</span></>
+}
+
+/** Inline summary items joined by a quiet middle dot. `null` items are skipped. */
+function SummaryLine({ items }: { items: ReactNode[] }) {
+  const shown = items.filter((item) => item !== null && item !== undefined && item !== false)
+  if (shown.length === 0) return null
+  return (
+    <p data-slot="agent-summary" className="settings-agent-summary">
+      {shown.map((item, index) => (
+        <span key={index} className="settings-agent-summary-item">
+          {index > 0 ? <span aria-hidden="true" className="settings-agent-summary-sep">·</span> : null}
+          {item}
+        </span>
+      ))}
+    </p>
+  )
+}
+
+/** The card's top row: name and inline summary on the left, compact actions on the right. */
+function AgentHead({ titleId, title, summary, actions, actionsSlot }: {
+  titleId: string
+  title: string
+  summary: ReactNode[]
+  actions: ReactNode
+  actionsSlot: 'account-actions' | 'accounts-actions'
+}) {
+  return (
+    <div data-slot="agent-head" className="settings-agent-head">
+      <div className="settings-agent-heading">
+        <h3 id={titleId} className="settings-account-provider-title">{title}</h3>
+        <SummaryLine items={summary} />
+      </div>
+      {actions ? <div data-slot={actionsSlot} className="settings-account-actions">{actions}</div> : null}
+    </div>
+  )
+}
+
+/** What the card shows about the agent itself, shared by every login of the same CLI. */
+interface AgentFacts {
+  titleId: string
+  title: string
+  /** The CLI install readout and the account count; `null` entries are skipped. */
+  facts: ReactNode[]
+  /** Add account, when this agent can carry another login here. */
+  addButton: ReactNode
+}
+
+/** One agent, flattened into a single card: a top row with the name, an inline status summary and
+ *  the actions, then one quiet metadata block per account. The top row describes the CLI (install
+ *  and version, account count); each account block carries its own login state and folder
+ *  readiness, so "signed in" never reads as "the folder is ready". The first account's actions
+ *  ride in the top row, because for most agents it is the only login and a second box around it
+ *  only cost height. */
 function AgentCard({
   entry,
   check,
@@ -276,11 +351,32 @@ function AgentCard({
   onRemove: (account: AgentProfile) => void
 }) {
   const provider = entry.id
+  const title = entry.displayName
   // The managed installer reports its own installed and latest versions; it renders only under
   // `settingsAdmin`, so without that grant the host check is the readout.
   const managed = entry.managedInstall === true && settingsAdmin
   const discoveredCount = accounts.filter((account) => account.isDefault).length
   const titleId = `${agentCardId(provider)}-title`
+  const addButton = editable && canCarryAccounts
+    ? <Button type="button" variant="outline" size="sm" data-action="accounts-add" data-provider={provider} onClick={onAdd}>Add account</Button>
+    : null
+  const agent: AgentFacts = {
+    titleId,
+    title,
+    facts: [
+      managed ? null : <InstallReadout entry={entry} check={check} />,
+      editable || accounts.length > 0 ? (
+        <span
+          className="settings-account-count"
+          title={`${discoveredCount} discovered, ${accounts.length - discoveredCount} added`}
+        >
+          {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}
+        </span>
+      ) : null,
+    ],
+    addButton,
+  }
+  const [primary, ...others] = accounts
 
   return (
     <section
@@ -289,43 +385,42 @@ function AgentCard({
       aria-labelledby={titleId}
       data-slot="accounts-provider"
       data-provider={provider}
-      className="settings-agent-card flex flex-col gap-4 rounded-lg border border-border bg-card p-4"
+      className="settings-agent-card flex flex-col rounded-lg border border-border bg-card"
     >
-      {/* Facts about the BINARY, not about any one account: a version and an install are shared by
-          every login of the same CLI, so they belong here rather than repeated on each row. */}
-      <h3 id={titleId} className="settings-account-provider-title">{entry.displayName}</h3>
+      {primary === undefined ? (
+        <AgentHead titleId={titleId} title={title} summary={agent.facts} actions={addButton} actionsSlot="accounts-actions" />
+      ) : null}
       {managed ? <ManagedCli runner={provider} /> : null}
-      <div className="settings-account-installation settings-readout">
-        {managed ? null : <InstallReadout entry={entry} check={check} />}
-        {editable || accounts.length > 0 ? (
-          <span className="settings-account-count">{accounts.length} {accounts.length === 1 ? 'account' : 'accounts'} ({discoveredCount} discovered, {accounts.length - discoveredCount} added)</span>
-        ) : null}
-      </div>
-
-      {accounts.length > 0 ? (
-        <ul>
-          {accounts.map((account) => (
-            <AccountRow key={account.id} account={account} runners={runners} editable={editable} onRemove={() => onRemove(account)} />
+      {primary !== undefined ? (
+        <ul className="settings-agent-accounts">
+          <AccountRow
+            account={primary}
+            runners={runners}
+            editable={editable}
+            onRemove={() => onRemove(primary)}
+            agent={agent}
+          />
+          {others.map((account) => (
+            <AccountRow
+              key={account.id}
+              account={account}
+              runners={runners}
+              editable={editable}
+              onRemove={() => onRemove(account)}
+            />
           ))}
         </ul>
       ) : null}
-      {editable ? (
-        canCarryAccounts ? (
-          <div className="settings-account-add-row">
-            <Button type="button" variant="outline" size="sm" data-action="accounts-add" data-provider={provider} onClick={onAdd}>Add account</Button>
-          </div>
-        ) : (
-          <p data-slot="accounts-single-only" className="text-[11px] text-soft-foreground">
-            {entry.displayName} can only hold one account here: it keeps its credentials
-            outside its config folder, so a second folder would change settings without changing the
-            login — which would say “work account” while billing the other one.
-          </p>
-        )
-      ) : accounts.length === 0 && entry.browserLogin ? (
+      {editable && !canCarryAccounts ? (
+        <p data-slot="accounts-single-only" className="settings-agent-note">
+          One account only: {title} keeps its login outside its config folder, so a second folder
+          would change settings without changing who is billed.
+        </p>
+      ) : !editable && accounts.length === 0 && entry.browserLogin ? (
         // Fallback for older servers that withhold account rows in hosted mode.
-        <div data-slot="hosted-sign-in" className="flex flex-wrap items-center gap-3">
-          <p className="text-[13px] text-muted-foreground">Discovered account</p>
-          <BrowserSignInButton provider={provider} label={entry.displayName} />
+        <div data-slot="hosted-sign-in" className="settings-agent-note flex flex-wrap items-center gap-3">
+          <span>Discovered account</span>
+          <BrowserSignInButton provider={provider} label={title} />
         </div>
       ) : null}
     </section>
@@ -384,15 +479,15 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
       <div className="settings-account-models flex flex-col gap-2">
         <label className="settings-model-agent-choice">
           <span>Default model for</span>
-          <select aria-label="Model agent" value={modelChoice} onChange={(event) => setModelRunner(event.target.value as Runner)}>
+          <SettingsSelect aria-label="Model agent" value={modelChoice} onChange={(event) => setModelRunner(event.target.value as Runner)}>
             {runners.runners.map((entry) => <option key={entry.id} value={entry.id}>{entry.displayName}</option>)}
-          </select>
+          </SettingsSelect>
         </label>
         {runners.runners.filter((entry) => entry.id === modelChoice).map((entry) => (
-          <label key={entry.id} className="settings-account-model flex items-center gap-3">
+          <label key={entry.id} className="settings-account-model flex flex-wrap items-center gap-3">
             <CpuIcon className="size-4 text-accent-icon shrink-0" />
-            <span className="w-24 shrink-0 text-xs text-muted-foreground">{entry.displayName}</span>
-            <select
+            <span className="w-28 shrink-0 text-xs text-muted-foreground">{entry.displayName}</span>
+            <SettingsSelect
               aria-label={`Default model for ${entry.pickerLabel}`}
               data-slot="accounts-default-model"
               data-runner={entry.id}
@@ -409,7 +504,7 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
                   },
                 })
               }
-              className="block w-full max-w-xs rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+              className="block w-64 max-w-full rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
             >
               {modelsForRunner(entry.id, runners, catalogs[entry.id]?.data, [models[entry.id]]).map((model) => (
                 <option key={model.id} value={model.id}>
@@ -417,7 +512,7 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
                 </option>
               ))}
               <CatalogStatusOption runner={entry.id} runners={runners} catalog={catalogs[entry.id]} />
-            </select>
+            </SettingsSelect>
           </label>
         ))}
       </div>
@@ -474,29 +569,38 @@ function AccountSignIn({ account, runners, status, editable }: {
   </>
 }
 
-function AccountFolderAdvisory({ account, runners, status, editable }: {
-  account: AgentProfile; runners: RunnersResponse; status: AgentProfile['status']; editable: boolean
-}) {
+/** The account folder's readiness: when the folder is missing or unrecognised, its label replaces
+ *  the login state on the status line, and one line of guidance sits under the path. `null` when
+ *  the folder is ready or not needed. */
+function folderAdvisory(account: AgentProfile, runners: RunnersResponse, status: AgentProfile['status'], editable: boolean):
+  { slot: 'account-missing' | 'account-unrecognised'; label: string; guidance: string } | null {
   if (!status || status.requiresAccountHome === false) return null
   if (!account.exists) {
-    return (
-      <span data-slot="account-missing">
-        {editable ? '— folder not created yet; Connect will make it' : '— not initialized on host yet'}
-      </span>
-    )
+    return {
+      slot: 'account-missing',
+      label: 'Not initialized',
+      guidance: editable
+        ? status.status === 'connected'
+          ? 'Folder not created yet. Use Check again to refresh.'
+          : 'Folder not created yet. Connect will make it.'
+        : 'Folder not created on the host yet.',
+    }
   }
   if (!account.looksValid && account.configDir) {
-    return (
-      <span data-slot="account-unrecognised">
-        — this folder does not look like {runnerDisplayName(runners, account.provider)} config yet
-      </span>
-    )
+    return {
+      slot: 'account-unrecognised',
+      label: 'Unrecognized folder',
+      guidance: `This folder does not look like ${runnerDisplayName(runners, account.provider)} config yet.`,
+    }
   }
   return null
 }
 
-function AccountRow({ account, runners, editable, onRemove }: {
+function AccountRow({ account, runners, editable, onRemove, agent }: {
   account: AgentProfile; runners: RunnersResponse; editable: boolean; onRemove: () => void
+  /** Set on the agent's first account: this row also renders the card's top row, so the account's
+   *  Check again sits beside the agent name instead of in a box of their own. */
+  agent?: AgentFacts
 }) {
   const routeId = agentAccountRouteId(account)
   const recheck = useRecheckAgentAccount()
@@ -506,64 +610,104 @@ function AccountRow({ account, runners, editable, onRemove }: {
   const probed = useAgentAccountStatus(routeId, account.status === undefined)
   const status = account.status ?? probed.data?.status
   const presentation = status ? STATUS_PRESENTATION[status.status] : undefined
+  const advisory = folderAdvisory(account, runners, status, editable)
+
+  // ONE readiness state per account. A folder that is missing or unrecognised is the state that
+  // matters: a green "Connected" beside "Not initialized" contradicted itself, so the folder's label
+  // takes the line with an amber dot, and the sign-in state moves to the tooltip.
+  // "Checking…" is a real, distinct state from any probe RESULT: the answer is not in yet.
+  // Showing `unknown` here would claim a verification that never ran.
+  const statusReadout = advisory ? (
+    <span className="inline-flex items-center gap-1.5" title={presentation ? `Sign-in: ${presentation.label}` : undefined}>
+      <StatusDot tone="pending" />
+      <span data-slot={advisory.slot} className="text-foreground">{advisory.label}</span>
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5">
+      <StatusDot tone={presentation?.tone ?? 'neutral'} pulse={presentation === undefined} />
+      <span data-slot="account-status" className="text-foreground">{presentation?.label ?? 'Checking…'}</span>
+    </span>
+  )
+  const actions = (
+    <>
+      <AccountSignIn account={account} runners={runners} status={status} editable={editable} />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        data-action="account-recheck"
+        disabled={recheck.isPending}
+        title="Re-probe this account's login now, instead of waiting for the cached answer"
+        onClick={() =>
+          recheck.mutate(routeId, {
+            onError: (error: Error) => toast(error.message, { tone: 'danger' }),
+          })
+        }
+      >
+        Check again
+      </Button>
+    </>
+  )
+  const name = (
+    <>
+      <span className="settings-account-label">{account.label}</span>
+      {account.isDefault ? (
+        <Badge variant="outline" data-slot="account-discovered" className="shrink-0 text-[11px] font-normal text-muted-foreground">
+          discovered
+        </Badge>
+      ) : null}
+    </>
+  )
+  const path = account.configDir ? (
+    <span data-slot="account-path" className="settings-account-path" title={account.path}>
+      {shortPath(account.configDir)}
+    </span>
+  ) : null
+  const guidance = advisory ? (
+    <p data-slot="account-folder-guidance" className="settings-account-hint">{advisory.guidance}</p>
+  ) : null
+  const hint = status?.hint ? <p className="settings-account-hint">{status.hint}</p> : null
+  const manage = editable && !account.isDefault ? <AccountManagement account={account} onRemove={onRemove} /> : null
+  // Every account line reads the same way: which login and its one readiness state, then the
+  // folder on its own line and what to do about it. The login state lives here, never in the
+  // card's top row, which describes the CLI alone. The status dot already separates the name from
+  // the state, so no middle dot sits between them.
+  const readout = (
+    <div className="settings-account-readout">
+      <div className="settings-account-meta-line">
+        {name}
+        {statusReadout}
+      </div>
+      {path}
+      {guidance}
+      {hint}
+    </div>
+  )
+
+  if (agent) {
+    return (
+      <li data-slot="account-row" data-account={account.id} data-primary="" className="settings-account-primary">
+        <AgentHead
+          titleId={agent.titleId}
+          title={agent.title}
+          summary={agent.facts}
+          actions={<>{actions}{agent.addButton}</>}
+          actionsSlot="account-actions"
+        />
+        <div className="settings-account-meta">
+          {readout}
+          {manage ? <div className="settings-account-actions">{manage}</div> : null}
+        </div>
+      </li>
+    )
+  }
 
   return (
-    <li
-      data-slot="account-row"
-      data-account={account.id}
-      className="flex flex-col gap-2 px-3.5 py-3"
-    >
-      <div className="settings-account-card">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] font-medium text-foreground">{account.label}</span>
-            {account.isDefault ? (
-              <Badge variant="ghost" className="shrink-0 text-[12px] text-muted-foreground">
-                discovered
-              </Badge>
-            ) : null}
-          </div>
-          <div className="settings-account-readout settings-readout">
-          {account.configDir ? (
-            <p
-              data-slot="account-path"
-              className="mt-0.5 truncate font-mono text-[11px] text-soft-foreground"
-              title={account.path}
-            >
-              {account.configDir}
-            </p>
-          ) : null}
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            {/* "Checking…" is a real, distinct state from any probe RESULT: the answer is not in
-                yet. Showing `unknown` here would claim a verification that never ran. */}
-            <StatusDot tone={presentation?.tone ?? 'neutral'} pulse={presentation === undefined} />
-            <span data-slot="account-status">{presentation?.label ?? 'Checking…'}</span>
-            <AccountFolderAdvisory account={account} runners={runners} status={status} editable={editable} />
-          </div>
-          {status?.hint ? <p className="text-xs text-muted-foreground">{status.hint}</p> : null}
-          </div>
-        </div>
-
-        {/* Public account actions stay separate from the opt-in identity details below. */}
-        <div className="settings-account-actions">
-          <AccountSignIn account={account} runners={runners} status={status} editable={editable} />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-action="account-recheck"
-            disabled={recheck.isPending}
-            title="Re-probe this account's login now, instead of waiting for the cached answer"
-            onClick={() =>
-              recheck.mutate(routeId, {
-                onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-              })
-            }
-          >
-            Check again
-          </Button>
-          {editable ? <AccountManagement account={account} onRemove={onRemove} /> : null}
-        </div>
+    <li data-slot="account-row" data-account={account.id} className="settings-account-line">
+      {readout}
+      <div data-slot="account-actions" className="settings-account-actions">
+        {actions}
+        {manage}
       </div>
     </li>
   )

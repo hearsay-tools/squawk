@@ -1,14 +1,14 @@
 import { latestSessionStep, sessionRunner, workerContinuationStep } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { useRunCacheWriter } from '@/api/use-run-cache-writer'
 import { runAddress } from '@/api/run-address'
-import { CpuIcon, GaugeIcon, TerminalIcon } from '@/components/design-icons'
+import { ChevronDownIcon, CpuIcon, GaugeIcon, TerminalIcon } from '@/components/design-icons'
 import { useMutation } from '@tanstack/react-query'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { useAgentAccounts } from '@/api/agent-accounts'
 import { ApiError, continueRun } from '@/api/client'
 import { useConfig, useHealth, useRunnerModels } from '@/api/queries'
-import { useRunners } from '@/api/runners'
+import { runnerDisplayName, useRunners } from '@/api/runners'
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import type { ApiRun, ContinueResponse, AttachmentInput, Runner } from '@open-mercato/cezar-api-client'
 import { PickerPill, PickerPillGroup, RunnerPill } from '@/components/picker-pill'
@@ -224,7 +224,11 @@ export function useContinueAction(run: ApiRun): ContinueAction {
     reason: continuation.reason,
     providerPending: continuation.providerPending,
     pills: (
-      <div data-slot="follow-up-engine" className="session-engine-controls">
+      <EngineControls
+        key={pickScope}
+        compact={run.status === 'review'}
+        summary={`${runnerDisplayName(registered.data, runner)} · ${modelLabel} · ${effortLabel}`}
+      >
 <PickerPillGroup>
         {/* Shown when there is a choice to make, or a signed-out runner to point at its Settings card
             (hearsay-tools/squawk#4116). Owned workers keep their accepted runner and account. */}
@@ -291,8 +295,42 @@ export function useContinueAction(run: ApiRun): ContinueAction {
           }))}
         />
 </PickerPillGroup>
-      </div>
+      </EngineControls>
     ),
     continueWith: (text, images) => mutation.mutateAsync({ text, images }),
   }
+}
+
+/**
+ * The runner, model and effort pills. On the review gate the gate itself is the thing to act on,
+ * so the pills fold into one quiet summary line (`Claude Code · sonnet · auto ▾`) that sits in the
+ * tool row; one click opens the three pickers and moves focus to the first one.
+ */
+function EngineControls({ compact, summary, children }: { compact: boolean; summary: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const folded = compact && !open
+  // The summary button unmounts on click, so focus follows to the first picker it opened.
+  useEffect(() => {
+    if (open) ref.current?.querySelector<HTMLElement>('button:not([disabled])')?.focus()
+  }, [open])
+  return (
+    <div ref={ref} data-slot="follow-up-engine" data-folded={folded || undefined} className={folded ? 'min-w-0' : 'session-engine-controls'}>
+      {folded ? (
+        <button
+          type="button"
+          data-slot="follow-up-engine-summary"
+          aria-expanded={false}
+          aria-label={`Agent settings: ${summary}`}
+          title="Change the runner, model or effort"
+          onClick={() => setOpen(true)}
+          className="inline-flex min-h-11 max-w-full min-w-0 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors outline-hidden hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <TerminalIcon aria-hidden="true" className="size-4 shrink-0 text-accent-text" />
+          <span className="min-w-0 truncate">{summary}</span>
+          <ChevronDownIcon aria-hidden="true" className="size-3.5 shrink-0" />
+        </button>
+      ) : children}
+    </div>
+  )
 }

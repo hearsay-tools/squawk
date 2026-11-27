@@ -17,12 +17,12 @@ type Row = [name: string, input: ActivityRun, expected: Partial<NowBox>]
 /** The spec's state table (2026-11-05-live-activity-view, "What the user sees"), one row each. */
 const STATE_TABLE: Row[] = [
   ['running, a tool in flight', run({ tool: { title: 'Edit workers/spawn.ts', toolKind: 'edit', status: TOOL_STATUS.running, startedAt: iso(-6_000) } }),
-    { verb: 'Doing', main: 'Edit workers/spawn.ts', mono: true, detail: 'Last tool 6 s ago', since: iso(-6_000) }],
+    { verb: 'Running', main: 'Edit workers/spawn.ts', mono: true, detail: 'Last tool 6s ago', since: iso(-6_000) }],
   ['running, the last tool ended under 10 s ago', run({ tool: { title: 'Read lease.ts', toolKind: 'read', status: TOOL_STATUS.completed, startedAt: iso(-9_000), endedAt: iso(-8_000) } }),
-    { verb: 'Doing', main: 'Read lease.ts', detail: 'Last tool 8 s ago' }],
+    { verb: 'Running', main: 'Read lease.ts', detail: 'Last tool 8s ago' }],
   ['running, the last tool ended over 10 s ago', run({ tool: { title: 'Read lease.ts', toolKind: 'read', status: TOOL_STATUS.completed, startedAt: iso(-30_000), endedAt: iso(-12_000) } }),
-    { verb: 'Doing', main: 'Thinking', detail: 'Last tool 12 s ago' }],
-  ['running, before the first tool call', run(), { verb: 'Doing', main: 'Thinking' }],
+    { verb: 'Running', main: 'Thinking', detail: 'Last tool 12s ago' }],
+  ['running, before the first tool call', run(), { verb: 'Running', main: 'Thinking' }],
   ['needs you with a question', waiting('needs-you', { kind: ACTIVITY_WAIT_KIND.human, since: iso(-60_000), detail: { reason: 'question', question: 'Accept the live activity prototype?' } }),
     { verb: 'Needs you', main: 'Accept the live activity prototype?', action: 'answer', tone: 'pending' }],
   ['needs you after a plain turn end', waiting('needs-you', { kind: ACTIVITY_WAIT_KIND.human, since: iso(-60_000), detail: { reason: 'turn-end' } }),
@@ -66,7 +66,7 @@ const STATE_TABLE: Row[] = [
     { verb: 'Waiting for a peer', main: 'For Fixing flaky shard' }],
   ['paused on a usage limit', waiting('usage-limit', { kind: ACTIVITY_WAIT_KIND['usage-limit'], detail: { resumeAt: iso(480_000) } }),
     { verb: 'Paused', main: 'Usage limit', detail: `Resumes ${clockOf(iso(480_000))} · in 8:00` }],
-  ['queued', run({ status: RUN_STATUS.queued, rung: 'queued', startedAt: iso(-180_000) }), { verb: 'Queued', main: 'Waiting for a free slot', detail: 'Waiting 3 min' }],
+  ['queued', run({ status: RUN_STATUS.queued, rung: 'queued', startedAt: iso(-180_000) }), { verb: 'Queued', main: 'Waiting for a free slot', detail: 'Waiting 3m' }],
   ['waiting for capacity', run({ status: RUN_STATUS.waiting, rung: 'waiting-for-capacity' }), { verb: 'Queued', main: 'Waiting for a free slot' }],
 ]
 
@@ -120,7 +120,7 @@ describe('rootNow: a root that is not active work but has live workers (D8)', ()
 describe('workerLine', () => {
   it('uses the short form of the state table', () => {
     const line = workerLine(worker({ tool: { title: 'Read workflows/run.ts', toolKind: 'read', status: TOOL_STATUS.running, startedAt: iso(-1_000) } }), ctx)
-    expect(line).toEqual({ verb: 'Doing', tone: 'running', main: 'Read workflows/run.ts', mono: true })
+    expect(line).toEqual({ verb: 'Running', tone: 'running', main: 'Read workflows/run.ts', mono: true })
   })
 
   it('says "Asks parent" with the question, tinted, while the worker asks its parent', () => {

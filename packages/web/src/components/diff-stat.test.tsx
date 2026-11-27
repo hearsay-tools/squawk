@@ -33,6 +33,26 @@ describe('DiffStatLabel', () => {
     expect(renderStat({ adds: 1, dels: 0, files: 1 }).title).toBe('+1 −0 across 1 file')
   })
 
+  it('omits a zero half instead of rendering it', () => {
+    const el = renderStat({ adds: 12, dels: 0, files: 1 })
+    expect(el.textContent).toBe('+12')
+    expect(el.querySelector('.text-success')?.textContent).toBe('+12')
+    expect(el.querySelector('.text-danger')).toBeNull()
+    expect(el.title).toBe('+12 −0 across 1 file')
+    cleanup()
+    const removed = renderStat({ adds: 0, dels: 7, files: 1 })
+    expect(removed.textContent).toBe('−7')
+    expect(removed.querySelector('.text-danger')?.textContent).toBe('−7')
+    expect(removed.querySelector('.text-success')).toBeNull()
+  })
+
+  it('shows a muted dash when both halves are zero', () => {
+    const el = renderStat({ adds: 0, dels: 0, files: 0 })
+    expect(el.textContent).toBe('—')
+    expect(el.querySelector('[data-zero]')?.className).toContain('text-muted-foreground')
+    expect(el.title).toBe('+0 −0 across 0 files')
+  })
+
   it('bounds large table counts while retaining their exact accessible value', () => {
     const el = renderStat({ adds: 12_345, dels: 1_234, files: 37 }, true)
     expect(el.textContent).toBe('+12k −1k')
@@ -42,7 +62,7 @@ describe('DiffStatLabel', () => {
 
   it('keeps counts beyond the named suffixes bounded', () => {
     const el = renderStat({ adds: Number.MAX_SAFE_INTEGER, dels: 0, files: 1 }, true)
-    expect(el.textContent).toBe('+9e15 −0')
+    expect(el.textContent).toBe('+9e15')
     expect(el.title).toBe('+9007199254740991 −0 across 1 file')
     expect(el.getAttribute('aria-label')).toBe(el.title)
   })
@@ -71,9 +91,9 @@ describe('DiffStatLabel', () => {
     expect(el.getAttribute('aria-label')).toBe(el.title)
   })
 
-  it('still renders the real numbers when they are all zero and repointed', () => {
+  it('still marks an all-zero repointed stat', () => {
     const el = renderStat({ adds: 0, dels: 0, files: 0, repointed: true })
-    expect(el.textContent).toBe('+0 −0')
+    expect(el.textContent).toBe('—')
     expect(el.getAttribute('data-repointed')).toBe('true')
   })
 })

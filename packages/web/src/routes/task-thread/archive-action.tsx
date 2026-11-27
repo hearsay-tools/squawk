@@ -23,10 +23,9 @@ import { cn } from '@/lib/utils'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 
 /**
- * THE archive action (`POST /api/runs/:id/archive`) — one implementation for the three surfaces
- * that now offer it (#281): the composer's secondary slot on the Session tab, the header's own
- * button on the three git tabs, and the kebab entry that still covers whichever of them is not
- * showing. The same rule `use-finish-run.ts` states for Finish applies here for the same reason:
+ * THE archive action (`POST /api/runs/:id/archive`) — one implementation for the surfaces that
+ * offer it (#281): the header's own button on all four tabs, the phone kebab entry and the
+ * archive-blocker note. The same rule `use-finish-run.ts` states for Finish applies here for the same reason:
  * archiving is one mutation, and three buttons that happen to agree today are three buttons that
  * can stop agreeing.
  */
@@ -84,13 +83,13 @@ export function ArchiveConfirmDialog({
 }
 
 /**
- * The standalone Archive control (#281) — the outline button the composer parks beside its gold
- * primary, and the one the header shows on the git tabs where no composer exists. Self-contained:
+ * The standalone Archive control (#281) — the outline button in the header's fixed slot on every
+ * tab, and beside an archive blocker's reason. Self-contained:
  * it owns its mutation and its confirm, so a host only has to decide WHERE it goes, never what it
  * does. `outline` rather than a CTA on purpose: filing a finished task away is housekeeping, and
  * the gold in this row belongs to the verb that moves the task forward.
  */
-export function ArchiveButton({ run, className, compactOnMobile = false }: { run: ApiRun; className?: string | undefined; compactOnMobile?: boolean }) {
+export function ArchiveButton({ run, className }: { run: ApiRun; className?: string | undefined }) {
   const [confirming, setConfirming] = useState(false)
   const archive = useArchiveRun(run.id)
   const label = archiveActionLabel(run)
@@ -103,11 +102,11 @@ export function ArchiveButton({ run, className, compactOnMobile = false }: { run
         aria-label={label}
         title={run.archived ? 'Put this task back in Active tasks' : 'Move this task out of Active tasks'}
         disabled={archive.isPending}
-        className={cn('h-11 gap-[7px] px-3', compactOnMobile && 'max-md:size-11 max-md:px-0', className)}
+        className={cn('h-11 gap-[7px] px-3', className)}
         onClick={() => (run.archived ? archive.mutate(false) : setConfirming(true))}
       >
         {run.archived ? <ArchiveRestoreIcon aria-hidden="true" /> : <ArchiveIcon aria-hidden="true" />}
-        <span className={cn(compactOnMobile && 'max-md:sr-only')}>{label}</span>
+        <span>{label}</span>
       </Button>
       <ArchiveConfirmDialog
         run={run}

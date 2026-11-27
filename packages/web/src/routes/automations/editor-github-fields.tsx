@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { ChipButton } from './chip-button'
+import { EVENT_CHIP_LABEL } from './event-phrases'
 import type { AutomationDraft } from './editor-draft'
 
 const EVENTS = automationEventSchema.options
@@ -60,9 +61,9 @@ export function GithubFields({ draft, onChange, disabledReason }: { draft: Autom
   return (
     <div className="grid gap-4">
       {disabledReason ? <p className="text-xs text-pending-strong">{`GitHub unavailable · ${disabledReason}`}</p> : null}
-      <div role="group" aria-label="GitHub events" className="flex flex-wrap gap-2">
+      <div role="group" aria-label="GitHub events" className="inline-flex w-fit max-w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/60 p-1">
         {EVENTS.map((event) => (
-          <ChipButton key={event} pressed={draft.events.includes(event)} onClick={() => toggleEvent(event)}>{event}</ChipButton>
+          <ChipButton key={event} pressed={draft.events.includes(event)} onClick={() => toggleEvent(event)}>{EVENT_CHIP_LABEL[event]}</ChipButton>
         ))}
       </div>
       <div className="grid gap-2">
@@ -93,17 +94,17 @@ export function GithubFields({ draft, onChange, disabledReason }: { draft: Autom
             {LIST_FILTERS.map((filter) => (
               <div key={filter.key} className="grid min-w-0 gap-2">
                 <Label htmlFor={`automation-filter-${filter.key}`}>{filter.label}</Label>
-                <Input id={`automation-filter-${filter.key}`} placeholder="comma separated" value={csv(draft.filters[filter.key])} onChange={(event) => setList(filter.key, event.target.value)} />
+                <Input id={`automation-filter-${filter.key}`} className="border-border" placeholder="comma separated" value={csv(draft.filters[filter.key])} onChange={(event) => setList(filter.key, event.target.value)} />
                 {filter.hint ? <p className="text-xs text-muted-foreground">{filter.hint}</p> : null}
               </div>
             ))}
             <div className="grid min-w-0 gap-2">
               <Label htmlFor="automation-filter-lookback">Look back (days)</Label>
-              <Input id="automation-filter-lookback" type="number" min={1} value={draft.filters.lookbackDays} onChange={(event) => setFilter({ lookbackDays: Math.max(1, Number(event.target.value) || 1) })} />
+              <Input id="automation-filter-lookback" className="border-border" type="number" min={1} value={draft.filters.lookbackDays} onChange={(event) => setFilter({ lookbackDays: Math.max(1, Number(event.target.value) || 1) })} />
             </div>
             <div className="grid min-w-0 gap-2">
               <Label htmlFor="automation-filter-max">Max records per check</Label>
-              <Input id="automation-filter-max" type="number" min={1} value={draft.filters.maxRecords} onChange={(event) => setFilter({ maxRecords: Math.max(1, Number(event.target.value) || 1) })} />
+              <Input id="automation-filter-max" className="border-border" type="number" min={1} value={draft.filters.maxRecords} onChange={(event) => setFilter({ maxRecords: Math.max(1, Number(event.target.value) || 1) })} />
             </div>
           </div>
         </CollapsibleContent>

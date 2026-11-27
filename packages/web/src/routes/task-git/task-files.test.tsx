@@ -408,6 +408,21 @@ describe('the Files tab route', () => {
     )
   })
 
+  it('the code viewer wraps long lines by default and its header toggle turns wrapping off', async () => {
+    stubFetch()
+    renderFilesRoute()
+    await openFile('hello.ts')
+
+    await waitFor(() => expect(document.querySelector('[data-slot="file-preview-code"]')).not.toBeNull())
+    const toggle = document.querySelector<HTMLButtonElement>('[data-slot="file-preview-head"] [data-slot="wrap-toggle"]')!
+    const line = () => document.querySelector('[data-slot="file-preview-code"] .flex > span:last-child')!
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    expect(line().className).toContain('whitespace-pre-wrap')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    expect(line().className).not.toContain('whitespace-pre-wrap')
+  })
+
   it('an image renders inline through the raw URL (binary flag notwithstanding)', async () => {
     stubFetch()
     renderFilesRoute()
@@ -509,4 +524,24 @@ it('explains a directory entered in the file-path control instead of blanking th
   fireEvent.change(input, { target: { value: 'src' } })
   fireEvent.click(screen.getByRole('button', { name: 'Open file' }))
   expect(await screen.findByText('Choose a file inside this directory.')).toBeTruthy()
+})
+
+it('strips absolute worktree prefixes in the file preview header', async () => {
+  stubFetch({
+    'GET /api/v1/runs/r1/file-link?path=src%2Fauth%2Ftokens.ts': () =>
+      jsonResponse({
+        type: 'file',
+        path: '/home/dev/repo/.ai/cezar/worktrees/r1/src/auth/tokens.ts',
+        source: 'worktree',
+        size: 18,
+        binary: false,
+        tooLarge: false,
+        content: 'export const x = 1\n',
+      }),
+  })
+  renderFilesRoute('?path=src/auth/tokens.ts')
+  await waitFor(() =>
+    expect(document.querySelector('[data-slot="file-preview-head"]')?.textContent).toContain('src/auth/tokens.ts'),
+  )
+  expect(document.querySelector('[data-slot="file-preview-head"]')?.textContent).not.toContain('.ai/cezar/worktrees')
 })

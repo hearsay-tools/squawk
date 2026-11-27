@@ -1,8 +1,9 @@
 /**
- * Compact age — `4s` / `26m` / `2h` / `3d`, the sidebar's and table's age column.
+ * Compact age, the one relative-time format every surface shows (hearsay-tools/squawk pass 5
+ * contract): `just now` under 10s, then `34s`, `26m`, `1h 6m` (minutes only under 6h), `23h`, `5d`.
  *
- * One unit, no rounding up, no "ago": at 7px-of-dot density the unit *is* the information. Ports
- * `shortAgo()` from the legacy UI (web/app.js) unchanged, so both cockpits read the same.
+ * No space before a unit and no "ago": the unit *is* the information. Callers that write prose
+ * around the age use `withAgo`, which leaves `just now` alone. Put the full date in a `title`.
  *
  * `now` is a parameter rather than a `Date.now()` call so the tests are not racing the clock.
  * Returns '' for a missing or unparseable timestamp — an empty slot is honest; `NaNm` is not.
@@ -12,11 +13,25 @@ export function shortAge(iso: string | undefined, now: number = Date.now()): str
   const then = new Date(iso).getTime()
   if (Number.isNaN(then)) return ''
   // Clamp: a clock skew between the server's timestamp and the browser must not print `-3s`.
-  const seconds = Math.max(0, (now - then) / 1000)
+  return compactDuration(Math.max(0, (now - then) / 1000))
+}
+
+/** A span of seconds in the `shortAge` format. Floors every unit: never rounds up to the next. */
+export function compactDuration(seconds: number): string {
+  if (seconds < 10) return 'just now'
   if (seconds < 60) return `${Math.floor(seconds)}s`
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  if (hours < 6 && minutes > 0) return `${hours}h ${minutes}m`
+  if (seconds < 86400) return `${hours}h`
   return `${Math.floor(seconds / 86400)}d`
+}
+
+/** A `shortAge` value inside prose: `6m ago`, but `just now` as it is. Empty stays empty. */
+export function withAgo(age: string): string {
+  if (!age || age === 'just now') return age
+  return `${age} ago`
 }
 
 /**

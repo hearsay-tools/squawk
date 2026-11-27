@@ -1,3 +1,4 @@
+import { SettingsSelect } from './settings-select'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { BotIcon } from '@/components/design-icons'
 
@@ -36,6 +37,7 @@ import { catalogQueryStatus, modelsForRunner } from '@/routes/new-task-form'
 import { ProviderSettings } from './provider-settings'
 
 import { SettingsAgentPicker } from './settings-agent-picker'
+import { SaveRow } from './save-cue'
 
 /**
  * Settings → Agent defaults (R6 Step 1.5, spec §"Settings"): today's scattered `PUT /api/config` knobs
@@ -143,7 +145,7 @@ function AgentsForm({
     return (
       <label key={runner.id} className="settings-option-row">
         <div>
-          <h3>{runner.pickerLabel}</h3>
+          <h3>{runner.displayName}</h3>
         </div>
         {config.modelsLocked ? (
           <output
@@ -156,7 +158,7 @@ function AgentsForm({
             {configuredModelLabel}
           </output>
         ) : (
-          <select
+          <SettingsSelect
             aria-label={`Default model for ${runner.pickerLabel}`}
             data-slot="agents-model"
             data-runner={runner.id}
@@ -178,7 +180,7 @@ function AgentsForm({
               </option>
             ))}
             {catalogStatus ? <option disabled>{catalogStatus}</option> : null}
-          </select>
+          </SettingsSelect>
         )}
       </label>
     )
@@ -204,7 +206,7 @@ function AgentsForm({
             : 'The model preselected in the composer for each runner. Auto lets the runner decide per task.'
         }
       >
-        <div className="flex flex-col gap-4">{runnerEntries(runners).map(renderModel)}</div>
+        <div data-slot="agents-model-rows" className="flex flex-col gap-2.5">{runnerEntries(runners).map(renderModel)}</div>
       </Field>
 
       <Field
@@ -220,28 +222,13 @@ function AgentsForm({
           placeholder="Extra rules for every agent run — conventions, tone, review requirements…"
           className="min-h-48 w-full"
         />
-        <div className="settings-form-actions">
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            data-action="agents-save-prompt"
-            disabled={promptSaved || promptOverLimit || save.isPending}
-            onClick={savePrompt}
-          >
-            Save prompt
-          </Button>
-          {promptOverLimit ? (
-            <p data-slot="agents-prompt-limit" className="text-[11px] text-danger">
-              {trimmedPrompt.length.toLocaleString()} characters — the limit is{' '}
-              {SYSTEM_PROMPT_MAX.toLocaleString()}.
-            </p>
-          ) : (
-            <p className="text-[11px] text-soft-foreground">
-              Leave empty and save to clear. Applied to new runs only.
-            </p>
-          )}
-        </div>
+        <SystemPromptActions
+          length={trimmedPrompt.length}
+          overLimit={promptOverLimit}
+          saved={promptSaved}
+          pending={save.isPending}
+          onSave={savePrompt}
+        />
       </Field>
 
       <section data-slot="agents-task-runs" className="settings-field flex flex-col gap-5">
@@ -297,7 +284,7 @@ function AgentsForm({
           hint="New task worktrees branch from this and draft PRs target it. Also settable from the Git view."
         >
           {repo.data?.info ? (
-            <select
+            <SettingsSelect
               aria-label="Base branch"
               data-slot="agents-base-branch"
               value={config.baseBranch ?? ''}
@@ -311,7 +298,7 @@ function AgentsForm({
                   {name}
                 </option>
               ))}
-            </select>
+            </SettingsSelect>
           ) : (
             <p data-slot="agents-base-branch-unavailable" className="text-[13px] text-soft-foreground">
               {repo.isPending ? 'Loading branches…' : 'Not a git repository — tasks run in place, no branching.'}
@@ -439,5 +426,43 @@ function OptionRow({ title, hint, children }: { title: string; hint: string; chi
       </div>
       {children}
     </section>
+  )
+}
+
+/** The system prompt's caption, then its action row. The caption sits above the row, so Save prompt
+ *  and its "No unsaved changes" cue share one line, as on every other settings page. */
+function SystemPromptActions({ length, overLimit, saved, pending, onSave }: {
+  length: number
+  overLimit: boolean
+  saved: boolean
+  pending: boolean
+  onSave: () => void
+}) {
+  return (
+    <>
+      {overLimit ? (
+        <p data-slot="agents-prompt-limit" className="text-xs text-danger">
+          {length.toLocaleString()} characters — the limit is {SYSTEM_PROMPT_MAX.toLocaleString()}.
+        </p>
+      ) : (
+        <p data-slot="agents-prompt-help" className="text-xs text-muted-foreground">
+          Leave empty and save to clear. Applied to new runs only.
+        </p>
+      )}
+      <div className="settings-form-actions">
+        <SaveRow show={saved && !overLimit && !pending}>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            data-action="agents-save-prompt"
+            disabled={saved || overLimit || pending}
+            onClick={onSave}
+          >
+            Save prompt
+          </Button>
+        </SaveRow>
+      </div>
+    </>
   )
 }

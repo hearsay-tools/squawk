@@ -68,7 +68,7 @@ export function OnceFields({ value, stored, onChange }: { value: NormalizedSched
             ref={dateRef}
             id="automation-once-date"
             type="date"
-            className="w-44 max-w-full"
+            className="w-44 max-w-full border-border"
             value={date}
             aria-invalid={past || undefined}
             aria-describedby={past ? pastId : undefined}
@@ -118,7 +118,7 @@ function ZoneField({ value, onCommit }: { value: string; onCommit: (next: string
         list={listId}
         autoComplete="off"
         spellCheck={false}
-        className="w-full sm:w-72"
+        className="w-full border-border sm:w-72"
         value={text}
         aria-invalid={invalid || undefined}
         aria-describedby={invalid ? messageId : undefined}

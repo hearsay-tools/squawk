@@ -752,13 +752,22 @@ describe('cross-state search preserves fork filters', () => {
   ]
   const hits = () => document.querySelector('[data-slot="gh-search-hits"]')
   const hitTitles = () => Array.from(hits()?.querySelectorAll('li') ?? []).map(row => row.textContent).join('|')
+  const pickBoard = async (title: string) => {
+    Element.prototype.scrollIntoView = vi.fn()
+    Element.prototype.hasPointerCapture = vi.fn(() => false)
+    const trigger = await screen.findByRole('combobox', { name: 'Project board' })
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    fireEvent.click(await screen.findByRole('option', { name: title }))
+    return trigger
+  }
+
   it('uses the full local narrow to trigger search, then ANDs labels and board with OR assignees', async () => {
     stubFetch({
       'GET /api/v1/github?limit=50': () => jsonResponse(listData),
       'GET /api/v1/github/search?kind=issue&q=payment': () => jsonResponse({ available: true, items: remote }),
     })
     renderAt('/github')
-    fireEvent.change(await screen.findByRole('combobox', { name: 'Project board' }), { target: { value: 'P2' } })
+    await pickBoard('Delivery')
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'payment' } })
     await waitFor(() => expect(hits()).not.toBeNull())
     expect(hitTitles()).not.toContain('payment first')
@@ -784,7 +793,7 @@ describe('cross-state search preserves fork filters', () => {
     await waitFor(() => expect(hits()).not.toBeNull())
     fireEvent.click(within(hits() as HTMLElement).getByRole('link'))
     expect(detail()?.textContent).toContain('payment first')
-    fireEvent.change(screen.getByRole('combobox', { name: 'Project board' }), { target: { value: 'P2' } })
+    await pickBoard('Delivery')
     expect(hits()).toBeNull()
     expect(detail()?.textContent).toContain('payment first')
   })
@@ -799,12 +808,12 @@ describe('cross-state search preserves fork filters', () => {
         : { available: true, items: [remote[2]] }),
     })
     renderAt('/github')
-    fireEvent.change(await screen.findByRole('combobox', { name: 'Project board' }), { target: { value: 'P2' } })
+    await pickBoard('Delivery')
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'remote' } })
     await screen.findByText(/Cannot apply the selected filters/)
     fireEvent.click(screen.getByTitle('Refresh from GitHub'))
     await waitFor(() => expect(hitTitles()).toContain('payment third'))
-    expect((screen.getByRole('combobox', { name: 'Project board' }) as HTMLSelectElement).value).toBe('P2')
+    expect(screen.getByRole('combobox', { name: 'Project board' }).getAttribute('data-value')).toBe('P2')
   })
 
   it('does not claim exhaustive absence when filters discard a truncated search window', async () => {
@@ -813,7 +822,7 @@ describe('cross-state search preserves fork filters', () => {
       'GET /api/v1/github/search?kind=issue&q=remote': () => jsonResponse({ available: true, items: [remote[0]], truncated: true }),
     })
     renderAt('/github')
-    fireEvent.change(await screen.findByRole('combobox', { name: 'Project board' }), { target: { value: 'P2' } })
+    await pickBoard('Delivery')
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'remote' } })
     await waitFor(() => expect(document.querySelector('[data-slot="gh-empty"]')?.textContent).toContain('first matches'))
     expect(document.querySelector('[data-slot="gh-empty"]')?.textContent).not.toContain('open, closed or merged')
@@ -826,11 +835,11 @@ describe('cross-state search preserves fork filters', () => {
         items: [{ ...remote[0], projectIds: undefined }], projectsReason: 'Project board lookup timed out.' }),
     })
     renderAt('/github')
-    fireEvent.change(await screen.findByRole('combobox', { name: 'Project board' }), { target: { value: 'P2' } })
+    await pickBoard('Delivery')
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'remote' } })
     await waitFor(() => expect(document.querySelector('[data-slot="gh-empty"]')?.textContent).toContain('Project board lookup timed out.'))
     expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('remote')
-    expect((screen.getByRole('combobox', { name: 'Project board' }) as HTMLSelectElement).value).toBe('P2')
+    expect(screen.getByRole('combobox', { name: 'Project board' }).getAttribute('data-value')).toBe('P2')
     expect(hits()).toBeNull()
     expect(document.querySelector('[data-slot="gh-empty"]')?.textContent).not.toContain('open, closed or merged')
   })

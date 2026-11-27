@@ -55,11 +55,16 @@ describe('Reports shelf', () => {
   })
 
   it('uses server titles and source-task links, and records the shelf as the reader source', async () => {
-    mocks.useReports.mockReturnValue(result({ data: { pages: [{ reports: [{ id: 'abc', runId: 'source', title: 'Income', name: 'budget.html', taskTitle: 'Prepare budget', createdAt: '2026-11-01T12:00:00Z' }] }] } }))
+    const createdAt = '2026-11-01T12:00:00Z'
+    mocks.useReports.mockReturnValue(result({ data: { pages: [{ reports: [{ id: 'abc', runId: 'source', title: 'Income', name: 'budget.html', taskTitle: 'Prepare budget', createdAt }] }] } }))
     mount('/p/shop/reports?q=income')
     expect(screen.getByRole('link', { name: 'Prepare budget' }).getAttribute('href')).toBe('/p/shop/tasks/source')
     const report = screen.getByRole('link', { name: 'Income' })
     expect(report.getAttribute('href')).toBe('/p/shop/tasks/source/report?artifact=abc')
+    const time = document.querySelector('[data-slot="report-row"] time')
+    expect(time?.textContent).toMatch(/^Published (?:just now|· (?:\d+[smd]|\d+h(?: \d+m)?))$/)
+    expect(time?.getAttribute('title')).toBeTruthy()
+    expect(time?.getAttribute('title')).not.toBe(createdAt)
     fireEvent.click(report)
     await waitFor(() => expect(screen.getAllByTestId('location')[0]!.textContent).toContain('/tasks/source/report?artifact=abc'))
   })

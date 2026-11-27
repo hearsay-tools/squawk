@@ -35,7 +35,7 @@ export function NoteLine({ note }: { note: ThreadNote }) {
       >
         <div className={cn('flex items-start gap-2', note.tone === 'danger' ? 'text-danger [.light_&]:text-red-700' : 'text-soft-foreground')}>
           <span className="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere">
-            {note.tone === 'danger' ? '✗ ' : '· '}
+            {note.tone === 'danger' ? '✗ ' : null}
             {note.text}
           </span>
           <CollapsibleTrigger
@@ -73,7 +73,7 @@ export function NoteLine({ note }: { note: ThreadNote }) {
       data-tone={note.tone}
       className={cn('px-0.5 text-xs', note.tone === 'danger' ? 'text-danger [.light_&]:text-red-700' : 'text-soft-foreground')}
     >
-      {note.tone === 'danger' ? '✗ ' : '· '}
+      {note.tone === 'danger' ? '✗ ' : null}
       {note.text}
     </div>
   )

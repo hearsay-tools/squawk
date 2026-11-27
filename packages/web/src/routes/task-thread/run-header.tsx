@@ -52,24 +52,22 @@ import { queuePositions, runTitle } from '@/lib/task-groups'
 import { taskItemTabs, type TaskItemTab } from '@/lib/tasks-table'
 import { cn } from '@/lib/utils'
 
-import { ArchiveButton } from './archive-action'
+import { ArchiveButton, ArchiveConfirmDialog, archiveActionLabel, useArchiveRun } from './archive-action'
 import { CompletionStatus } from './completion-status'
 import { runStatusLine, statusLineText } from './run-status'
 import { OpenInMenuForRun, copyToClipboard, useResumeInTerminal, useRunReferenceRequests } from './run-workspace'
 import { HandoffAction, useHandoffActionVisible } from './handoff-action'
 import { Markdown } from './markdown'
 import { TaskFileScope } from './task-file-scope'
-import { archiveInComposer, resumeHint, runActionFlags } from './run-actions'
-import { useWorkersLive } from './run-relationships'
+import { resumeHint, runActionFlags } from './run-actions'
 import { CompactParentTaskLink, ParentTaskLink } from './parent-task-link'
 import { ownsDirectory } from '@open-mercato/cezar-api-client/contract/delegation'
 
 /**
  * The run header (spec §"Task thread" → Header): editable title + status pill, the meta line,
  * the Session | Changes | Files tabs with the action bar — the header region above the thread.
- * Session activity controls live in the activity dock above the composer. The header scrolls away
- * on phones so the transcript owns the small viewport. On desktop Session it docks (`md:sticky md:top-0`) so Archive and sibling
- * actions stay on screen while the transcript scrolls. Git tabs stay in document flow — their own
+ * Session activity controls live in the activity dock above the composer. The Session header docks on every viewport so the facet tabs stay visible above pending
+ * questions. Desktop actions stay on screen while the transcript scrolls. Git tabs stay in document flow — their own
  * sticky chrome (`top-4` / `--diff-sticky-top`) already parks under the viewport top. Opaque
  * `bg-background` so thread text does not show through; `z-20` parks it below any shell top bar
  * and above the transcript.
@@ -179,17 +177,11 @@ function WorkerParentLink({ run, compact = false }: { run: ApiRun; compact?: boo
   return compact ? <CompactParentTaskLink id={id} /> : <ParentTaskLink id={id} />
 }
 
-/** #281: Archive out of the kebab row. The Session tab's composer carries it — within a
- *  thumb's reach, which this header is not on a phone, where it scrolls away by
- *  design. The three git tabs have no composer, so the header carries it there, and
- *  exactly one surface offers it on any given screen. Stop takes the composer's slot on a
- *  failed run holding wait results (hearsay-tools/cezarion#1233) or live workers
- *  (hearsay-tools/squawk#3360), so the header carries
- *  Archive on the Session tab too. */
-function headerArchiveButton(run: ApiRun, flags: ReturnType<typeof runActionFlags>, tab: RunTab, workersLive: boolean) {
-  return !run.archiveBlocker && flags.archive && (tab !== 'session' || !archiveInComposer(run, workersLive))
-    ? <ArchiveButton run={run} />
-    : null
+/** #281: Archive out of the kebab row, into one fixed header slot on all four tabs, so switching
+ *  between Session, Changes, Commits and Files never moves it. A blocker shows the same manual
+ *  Archive control beside its reason instead. Phones keep it in the kebab. */
+function headerArchiveButton(run: ApiRun, flags: ReturnType<typeof runActionFlags>) {
+  return !run.archiveBlocker && flags.archive ? <ArchiveButton run={run} /> : null
 }
 
 /** The auto-archive provenance line: shown only when the run is archived right now by the
@@ -203,16 +195,14 @@ function AutoArchiveNote({ run }: { run: ApiRun }) {
 /** Pushed phone screen: the controls the dropped title row used to carry, in a row of their
  *  own (hearsay-tools/cezarion#621) — rendered only when one of them applies, so an empty row never sits between
  *  the top bar and the tabs. */
-function MobileActionsRow({ shown, run, archiveButton, previewToggle }: {
+function MobileActionsRow({ shown, run, previewToggle }: {
   shown: boolean
   run: ApiRun
-  archiveButton: ReactNode
   previewToggle: ReactNode
 }) {
   const handoffVisible = useHandoffActionVisible(run)
-  return shown && (archiveButton || previewToggle || handoffVisible) ? (
+  return shown && (previewToggle || handoffVisible) ? (
     <div data-slot="run-mobile-actions" className="flex flex-wrap items-center gap-2 pt-2">
-      {archiveButton}
       {previewToggle}
       <HandoffAction run={run} />
     </div>
@@ -319,7 +309,6 @@ export function RunHeader({
 }) {
   const attention = deriveAttention(run)
   const flags = runActionFlags(run)
-  const workersLive = useWorkersLive(run)
   const [notesOpen, setNotesOpen] = useState(false)
   const [openChooser, setOpenChooser] = useState(false)
   const actions = useRunActions(run, onMarkedUnread)
@@ -364,30 +353,34 @@ export function RunHeader({
     />
   )
 
-  const archiveButton = headerArchiveButton(run, flags, tab, workersLive)
+  const archiveButton = headerArchiveButton(run, flags)
 
   return (
     <ReferenceStatusProvider projectId={referenceProjectId} repoBase={repoBase} requests={referenceRequests}>
     <header
       data-slot="run-header"
+      data-sticky={tab === 'session' || undefined}
       className={cn(
         // Pushed phone screen: the facet tabs sit directly under the shell's top bar (#621), so
         // the header has no top padding of its own there.
-        'relative z-20 bg-background px-[18px] md:px-9 md:pt-7',
+        'relative z-20 bg-background px-4 md:px-9 md:pt-7',
         phoneBar ? 'pt-0' : 'pt-[18px]',
-        tab === 'session' && 'md:sticky md:top-0',
+        tab === 'session' && 'sticky [inset-block-start:0]',
       )}
     >
       <AutoArchiveNote run={run} />
       <CompletionStatus run={run} />
       <div className="w-full">
         <WorkerParentLink run={run} />
-        {/* Pushed phone screen (#621): the shell's top bar carries back, the title and the run
-            actions. hearsay-tools/cezarion#1333 took the state line out of it: the run's status
-            lives in Session activity, the one card both viewports read. */}
+        {/* Pushed phone screen (#621): the shell's top bar carries back, the title with the
+            run's compact status pill under it, and the run actions. The full status line, with
+            its next check, stays in Session activity (hearsay-tools/cezarion#1333). */}
         {barSlot ? (
           <MobileRunBarPortal slot={barSlot}>
-            <MobileRunTitle run={run} />
+            <MobileRunTitle
+              run={run}
+              status={<Pill data-slot="mobile-run-status" dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="max-w-full self-start truncate px-2 py-px text-[11px] leading-4">{statusLine.label}</Pill>}
+            />
             <WorkerParentLink run={run} compact />
             {actionsKebab}
           </MobileRunBarPortal>
@@ -402,7 +395,7 @@ export function RunHeader({
               {statusLineText(statusLine)}
             </Pill>
             <span className="ml-auto flex shrink-0 items-center gap-1 md:gap-2.5">
-              {archiveButton}
+              {isDesktop ? archiveButton : null}
               {previewToggle}
               <HandoffAction run={run} />
               {actionsKebab}
@@ -413,7 +406,6 @@ export function RunHeader({
         <MobileActionsRow
           shown={barSlot !== null}
           run={run}
-          archiveButton={archiveButton}
           previewToggle={previewToggle}
         />
 
@@ -534,9 +526,9 @@ function EditableTitle({ run }: { run: ApiRun }) {
 
 /** The phone top bar's title (#621, #737): the 15px/600 title and, as its SIBLING, the 44px rename
  *  button. The bar shows no status (hearsay-tools/cezarion#1333): the Session activity card does.
- *  The 44px input cannot sit in the 56px bar, so renaming opens it in a popover anchored under the
+ *  The 44px input cannot sit in the bar, so renaming opens it in a popover anchored under the
  *  pencil; the same `useTitleEditor` machine (Enter/blur commit, Escape cancel). */
-function MobileRunTitle({ run }: { run: ApiRun }) {
+function MobileRunTitle({ run, status }: { run: ApiRun; status: ReactNode }) {
   const { title, editor } = useRunTitleEditor(run)
   return (
     <Popover
@@ -546,8 +538,11 @@ function MobileRunTitle({ run }: { run: ApiRun }) {
         else editor.commit()
       }}
     >
-      <div data-slot="mobile-run-title" className="flex min-w-0 flex-1 flex-col gap-px">
-        <h1 className="truncate text-[15px] leading-tight font-semibold text-foreground" title={run.task}>{title}</h1>
+      <div data-slot="mobile-run-title" className="flex min-w-0 flex-1 flex-col gap-1">
+        {/* Two lines tell apart tasks that share a prefix; the shell's top bar grows past 56px
+            to hold both lines, the gap and the status pill with room above and below. */}
+        <h1 className="line-clamp-2 break-words text-[15px] leading-[18px] font-semibold text-foreground" title={run.task}>{title}</h1>
+        {status}
       </div>
       <PopoverTrigger asChild>
         <button
@@ -588,9 +583,14 @@ function ActionsKebab({
 }) {
   const flags = runActionFlags(run)
   const command = resumeHint(run)
+  const desktop = useIsDesktopViewport()
+  const archive = useArchiveRun(run.id)
+  const [archiveConfirm, setArchiveConfirm] = useState(false)
   const completionPatch = usePatchRun(run.id)
   const completionHelpId = useId()
   return (
+    <>
+    <ArchiveConfirmDialog run={run} open={archiveConfirm} onOpenChange={setArchiveConfirm} onConfirm={() => { archive.mutate(true); setArchiveConfirm(false) }} />
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-sm" className="size-11" aria-label="Run actions">
@@ -599,6 +599,7 @@ function ActionsKebab({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" data-slot="run-actions-menu" className="w-[270px] max-w-[calc(100vw-2rem)] p-3">
         <DropdownMenuLabel className="px-2 py-3 text-[12px] font-normal text-muted-foreground">TASK ACTIONS</DropdownMenuLabel>
+        {!desktop && flags.archive && !run.archiveBlocker ? <DropdownMenuItem disabled={archive.isPending} onSelect={() => run.archived ? archive.mutate(false) : setArchiveConfirm(true)}>{archiveActionLabel(run)}</DropdownMenuItem> : null}
         <DropdownMenuItem onSelect={onToggleNotes}>
           <FileTextIcon aria-hidden="true" /> Notes / handoff
         </DropdownMenuItem>
@@ -649,6 +650,7 @@ function ActionsKebab({
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
+    </>
   )
 }
 

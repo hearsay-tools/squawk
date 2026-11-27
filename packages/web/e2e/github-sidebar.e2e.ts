@@ -10,6 +10,7 @@ import { seedRuns } from './seed-runs'
 import { waitForSettledSample } from './visual-ready'
 import { AgentBrowser, bootProjectId, squawkCli, fixtureServeEnv } from './agent-browser'
 import { focusWithKeyboard } from './contrast'
+import { revealControl } from './control-ready'
 import { artifactsDir } from './github-fixture'
 import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './fixture-server'
 // fixture-server starts: 1
@@ -558,6 +559,9 @@ describe('GitHub phone filter index at 360x640 (#622)', () => {
     browser.waitForFunction(`document.querySelector('[data-slot="gh-detail-inner"]') !== null`)
     expect(waitForSettledSample(browser, `document.documentElement.scrollWidth <= innerWidth`)).toBe(true)
     expect(browser.waitForValue(`document.querySelector('[data-slot="gh-back"]')?.getAttribute('href')`)).toBe(listUrl)
+    // On a phone the PR detail stacks under the list, so Back can sit under the tab bar: scroll
+    // it into main's visible area and wait until its centre takes the tap.
+    revealControl(browser, '[data-slot="gh-back"]')
     browser.click('[data-slot="gh-back"]')
     expect(browser.waitForValue(locationJs, (value) => value === listUrl)).toBe(listUrl)
     expect(browser.waitForValue(rowNumbersJs, sameJson([203, 210]))).toEqual([203, 210])

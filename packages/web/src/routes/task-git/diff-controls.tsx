@@ -1,4 +1,4 @@
-import { CircleHelpIcon, EyeIcon, WrapTextIcon } from 'lucide-react'
+import { FileTextIcon, Rows2Icon, WrapTextIcon } from 'lucide-react'
 import { GitBranchIcon, Columns2Icon } from '@/components/design-icons'
 
 import type { DiffMode } from '@/components/diff'
@@ -8,8 +8,9 @@ import { cn } from '@/lib/utils'
 /**
  * The diff view's local controls, extracted from the Changes toolbar (R5 1.7) so the repo
  * view renders the SAME unified/split + wrap toggles and branch chip rather than a fork.
- * Layout preferences, not git actions — no policy involvement. Callers own the "hidden
- * below md" wrapper, because phones force unified+wrap and hide these entirely.
+ * Layout preferences, not git actions — no policy involvement. Below `md` the unified/split
+ * group hides itself (phones force unified: a 390px screen has no room for two columns), but
+ * the wrap switch stays, so a phone reader can still trade wrapped rows for a side scroll.
  */
 export function DiffViewToggles({
   mode,
@@ -28,34 +29,50 @@ export function DiffViewToggles({
         data-slot="diff-mode-toggle"
         role="group"
         aria-label="Diff layout"
-        className="flex items-center gap-2"
+        className="inline-flex items-center rounded-lg border border-border bg-card p-0.5 max-md:hidden"
       >
         <ModeButton current={mode} value="unified" onModeChange={onModeChange} />
         <ModeButton current={mode} value="split" onModeChange={onModeChange} />
       </span>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        data-slot="wrap-toggle"
-        aria-pressed={wrap}
-        aria-label="Wrap long lines"
-        title="Wrap long lines"
-        className={cn('size-11', wrap && 'bg-muted text-foreground')}
-        onClick={() => onWrapChange(!wrap)}
-      >
-        <WrapTextIcon aria-hidden="true" />
-      </Button>
+      <WrapToggle wrap={wrap} onWrapChange={onWrapChange} />
     </>
+  )
+}
+
+/** The wrap switch on its own: the diff toolbars and the Files viewer header share one button.
+ *  `className` sizes it; the default is the toolbar's 44px square. */
+export function WrapToggle({ wrap, onWrapChange, className = 'size-11 rounded-lg' }: {
+  wrap: boolean
+  onWrapChange: (wrap: boolean) => void
+  className?: string
+}) {
+  return (
+    <Button
+      variant="outline"
+      size="icon-sm"
+      data-slot="wrap-toggle"
+      aria-pressed={wrap}
+      aria-label="Wrap long lines"
+      title="Wrap long lines"
+      className={cn(
+        className,
+        wrap ? 'border-accent-text/40 bg-muted text-accent-text' : 'text-muted-foreground hover:text-foreground',
+      )}
+      onClick={() => onWrapChange(!wrap)}
+    >
+      <WrapTextIcon aria-hidden="true" />
+    </Button>
   )
 }
 
 /**
  * The Markdown preview switch (hearsay-tools/cezarion#1012): every previewable Markdown file in
- * the diff at once, and pressing it clears the per-file choices made in the cards. NOT one of
- * the ≥md-only toggles above: phones force unified+wrap because a 360px screen has no room for
- * split, but a rendered document reads better there than anywhere, so callers render this one
- * at every width. Callers render it only when the diff holds a file `canPreviewMarkdown`
- * accepts, so the button never sits there doing nothing.
+ * the diff at once, and pressing it clears the per-file choices made in the cards. Like the
+ * wrap switch it shows at every width: a rendered document reads better on a phone than
+ * anywhere. Callers render it only when the diff holds a file `canPreviewMarkdown`
+ * accepts, so the button never sits there doing nothing. It carries a document icon and, from
+ * `sm` up, a visible "Preview MD" label, so it never reads as a twin of the per-file eye
+ * `Preview` switch inside each Markdown card below it.
  */
 export function MarkdownPreviewToggle({
   preview,
@@ -67,16 +84,20 @@ export function MarkdownPreviewToggle({
   const label = preview ? 'Show Markdown as a diff' : 'Preview Markdown'
   return (
     <Button
-      variant="ghost"
-      size="icon-sm"
+      variant="outline"
+      size="sm"
       data-slot="markdown-preview-toggle"
       aria-pressed={preview}
       aria-label="Preview Markdown"
       title={label}
-      className={cn('size-11', preview && 'bg-muted text-foreground')}
+      className={cn(
+        'h-11 min-w-11 gap-1.5 rounded-lg px-0 text-xs font-medium sm:px-3',
+        preview ? 'border-accent-text/40 bg-muted text-accent-text' : 'text-muted-foreground hover:text-foreground',
+      )}
       onClick={() => onPreviewChange(!preview)}
     >
-      <EyeIcon aria-hidden="true" />
+      <FileTextIcon aria-hidden="true" className="size-4" />
+      <span aria-hidden="true" className="max-sm:hidden">Preview MD</span>
     </Button>
   )
 }
@@ -98,11 +119,17 @@ function ModeButton({
       aria-pressed={active}
       onClick={() => onModeChange(value)}
       className={cn(
-        'inline-flex items-center gap-2 min-h-11 rounded-lg border border-border bg-card px-3 text-xs font-medium capitalize',
-        active ? 'border-accent-text/40 text-accent-text' : 'text-muted-foreground hover:text-foreground',
+        'inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-xs font-medium capitalize transition-colors outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50',
+        active
+          ? 'bg-muted text-foreground'
+          : 'text-muted-foreground pointer-hover:text-foreground',
       )}
     >
-      {value === 'unified' ? <CircleHelpIcon aria-hidden="true" className="size-4" /> : <Columns2Icon size={16} aria-hidden="true" className="size-4" />}
+      {value === 'unified' ? (
+        <Rows2Icon aria-hidden="true" className="size-4" />
+      ) : (
+        <Columns2Icon size={16} aria-hidden="true" className="size-4" />
+      )}
       {value}
     </button>
   )

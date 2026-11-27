@@ -37,7 +37,7 @@ export function ChangesTree({
 /** ±12/−3 in miniature — the tree's per-row counts (the aggregate label lives in the toolbar). */
 function Counts({ adds, dels }: { adds: number; dels: number }) {
   return (
-    <span className="ml-auto shrink-0 pl-2 font-mono text-[11px] font-medium tabular-nums">
+    <span className="ml-auto shrink-0 pl-2 font-mono text-xs font-medium tabular-nums">
       {adds > 0 ? <span className="text-success">+{adds}</span> : null}
       {adds > 0 && dels > 0 ? ' ' : null}
       {dels > 0 ? <span className="text-danger">−{dels}</span> : null}
@@ -66,7 +66,7 @@ function DirNode({
         data-state={open ? 'open' : 'closed'}
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex min-h-11 w-full min-w-0 items-center gap-1.5 rounded-sm px-1.5 py-1 text-left text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="flex min-h-11 md:min-h-8 w-full min-w-0 items-center gap-1.5 rounded-sm px-1.5 py-1 text-left text-muted-foreground hover:bg-muted hover:text-foreground"
         style={{ paddingLeft: `${6 + depth * 14}px` }}
       >
         <ChevronRightIcon size={16}
@@ -118,7 +118,7 @@ function FileNode({
         aria-current={active ? 'true' : undefined}
         onClick={() => onSelect(file.path)}
         className={cn(
-          'flex min-h-11 w-full min-w-0 items-center gap-1.5 rounded-sm px-1.5 py-1 text-left hover:bg-muted',
+          'flex min-h-11 md:min-h-8 w-full min-w-0 items-center gap-1.5 rounded-sm px-1.5 py-1 text-left hover:bg-muted',
           active ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
         )}
         style={{ paddingLeft: `${24 + depth * 14}px` }}

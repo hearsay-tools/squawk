@@ -4,7 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import type { Runner } from '@open-mercato/cezar-api-client'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { createQueryClient } from '@/api/query-client'
-import { seedRunners } from '@/test/runners.testkit'
+import { RUNNERS_WITH_UNFAMILIAR, seedRunners } from '@/test/runners.testkit'
 import { PickerPill, PickerPillGroup, RunnerPill } from './picker-pill'
 
 afterEach(cleanup)
@@ -202,6 +202,50 @@ describe('PickerPillGroup (#541)', () => {
     expect(labels()).toEqual(['opencode', LONG, 'medium'])
   })
 
+  // The engine row's Model takes the flexible track. `Runner · Claude Code` (205px),
+  // `Model · Default` (175px) and `Effort · auto` (138px) sum to 518px plus two 10px gaps, so
+  // they fit a 563px row, yet Model would get only 563 - 205 - 138 - 20 = 200px, less than Runner.
+  const engineRow = (fill?: string) => (
+    <PickerPillGroup fill={fill}>
+      <div style={{ display: 'grid', columnGap: '10px' }}>
+        {pillFor('runner-pill', 'Runner', 'Claude Code')}
+        {pillFor('model-pill', 'Model', 'Default')}
+        {pillFor('effort-pill', 'Effort', 'auto')}
+      </div>
+    </PickerPillGroup>
+  )
+
+  it('keeps the flexible pill at least as wide as its widest sibling before showing prefixes', () => {
+    Object.assign(full, { 'runner-pill': 205, 'model-pill': 175, 'effort-pill': 138 })
+    available = 563
+    const view = render(engineRow())
+    expect(labels()).toEqual(['Runner · Claude Code', 'Model · Default', 'Effort · auto'])
+    view.rerender(engineRow('model-pill'))
+    expect(labels()).toEqual(['Claude Code', 'Default', 'auto'])
+    // Three equal shares of the widest prefixed pill, plus the gaps: 3 × 205 + 20.
+    available = 635
+    resize()
+    expect(labels()).toEqual(['Runner · Claude Code', 'Model · Default', 'Effort · auto'])
+    available = 634
+    resize()
+    expect(labels()).toEqual(['Claude Code', 'Default', 'auto'])
+  })
+
+  it('fits a line without the flexible pill by the sum of its pills', () => {
+    Object.assign(full, { 'runner-pill': 205, 'model-pill': 175, 'effort-pill': 138 })
+    available = 353
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const slot = this.closest('[data-slot$="pill"]')?.getAttribute('data-slot') ?? ''
+      // The compact row: Runner and Effort share the top line, Model sits alone below them.
+      return { width: this.classList.contains('invisible') ? full[slot] : 0, top: slot === 'model-pill' ? 54 : 0 } as DOMRect
+    })
+    render(engineRow('model-pill'))
+    expect(labels()).toEqual(['Runner · Claude Code', 'Model · Default', 'Effort · auto'])
+    available = 352
+    resize()
+    expect(labels()).toEqual(['Claude Code', 'Default', 'auto'])
+  })
+
   it('stops counting a pill once it unmounts', () => {
     full['model-pill'] = 350
     const view = render(row(LONG))
@@ -310,10 +354,10 @@ describe('RunnerPill: runners that are not installed (hearsay-tools/squawk#4094)
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Runner' }))
     const choices = await screen.findAllByRole('menuitemradio')
     expect(choices.map((item) => item.textContent)).toEqual([
-      expect.stringContaining('claude'),
-      expect.stringContaining('codex'),
+      expect.stringContaining('Claude Code'),
+      expect.stringContaining('Codex'),
     ])
-    const link = screen.getByRole('menuitem', { name: /opencode/ })
+    const link = screen.getByRole('menuitem', { name: /OpenCode/ })
     expect(link.textContent).toContain('Not installed')
     expect(link.textContent).toContain('Install in Settings')
     // Global settings live outside every project: no `/p/<id>` prefix.
@@ -323,7 +367,7 @@ describe('RunnerPill: runners that are not installed (hearsay-tools/squawk#4094)
   it('navigates to the card and picks nothing when the missing runner is chosen', async () => {
     const onPick = renderRunnerPill()
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Runner' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /opencode/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /OpenCode/ }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/settings/global/agents#agent-opencode'))
     expect(onPick).not.toHaveBeenCalled()
   })
@@ -335,12 +379,41 @@ describe('RunnerPill: runners that are not installed (hearsay-tools/squawk#4094)
     expect(choices.every((item) => item.getAttribute('aria-disabled') === 'true')).toBe(true)
     fireEvent.click(choices[1]!)
     expect(onPick).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('menuitem', { name: /opencode/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /OpenCode/ }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/settings/global/agents#agent-opencode'))
   })
 
   it('stays closed when disabled with no missing runner to link to', () => {
     renderRunnerPill(vi.fn(), true, [])
     expect((screen.getByRole('button', { name: 'Runner' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('RunnerPill: a registered runner the cockpit has no built-in name for', () => {
+  function renderPill(value: Runner, uninstalled: Runner[] = []) {
+    render(
+      <QueryClientProvider client={seedRunners(createQueryClient(), RUNNERS_WITH_UNFAMILIAR)}>
+        <MemoryRouter>
+          <RunnerPill runners={['claude', 'zed-agent']} uninstalled={uninstalled} value={value} onPick={vi.fn()} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+  }
+
+  it('names the runner by the display name the runners list sends, not its id or picker label', async () => {
+    renderPill('zed-agent')
+    const pill = screen.getByRole('button', { name: 'Runner' })
+    expect(pill.textContent).toContain('Zed Agent')
+    fireEvent.pointerDown(pill)
+    const choices = await screen.findAllByRole('menuitemradio')
+    expect(choices.map((item) => item.textContent)).toEqual([expect.stringContaining('Claude Code'), expect.stringContaining('Zed Agent')])
+    expect(choices[1]!.textContent).not.toMatch(/zed-agent|\bzed\b/)
+  })
+
+  it('names a missing unfamiliar runner by its display name in the install links', async () => {
+    renderPill('claude', ['zed-agent'])
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Runner' }))
+    const link = await screen.findByRole('menuitem', { name: /Zed Agent/ })
+    expect(link.textContent).toContain('Not installed')
   })
 })

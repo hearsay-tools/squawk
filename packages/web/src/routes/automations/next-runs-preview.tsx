@@ -13,16 +13,17 @@ export function NextRunsPreview({ schedule, timeZone, now = Date.now() }: { sche
   // `+ 1`: the range is half-open at the start, and "next" is strictly after `now`.
   const runs = occurrencesBetween(schedule, now + 1, now + PREVIEW_WINDOW_MS, timeZone, PREVIEW_COUNT)
   return (
-    <section aria-labelledby="next-runs-heading" className="rounded-xl border bg-card p-4">
-      <h2 id="next-runs-heading" className="mb-3 text-[15px] font-medium">Next 5 runs</h2>
+    <section aria-labelledby="next-runs-heading" data-slot="next-runs" className="min-w-0 rounded-xl border bg-card p-5">
+      <h2 id="next-runs-heading" className="mb-2 text-base font-semibold">Next 5 runs</h2>
       {runs.length === 0 ? (
         <p className="text-sm text-muted-foreground">No runs in the next 40 days.</p>
       ) : (
-        <ol aria-label="Next 5 runs" className="grid gap-1.5 text-sm">
-          {runs.map((at) => (
-            <li key={at} className="flex items-baseline justify-between gap-3">
-              <span className="font-medium tabular-nums">{dayTime(new Date(at).toISOString(), timeZone)}</span>
-              <span className="text-muted-foreground">{relativeIn(now, at)}</span>
+        // The first run leads: it is the answer to "when does this run?"; the rest confirm the rhythm.
+        <ol aria-label="Next 5 runs" className="grid divide-y divide-border text-sm">
+          {runs.map((at, index) => (
+            <li key={at} className="flex min-h-10 items-center justify-between gap-3 py-1.5">
+              <span className={index === 0 ? 'font-semibold tabular-nums text-foreground' : 'font-medium tabular-nums'}>{dayTime(new Date(at).toISOString(), timeZone)}</span>
+              <span className={index === 0 ? 'font-medium text-accent-text' : 'text-muted-foreground'}>{relativeIn(now, at)}</span>
             </li>
           ))}
         </ol>
@@ -38,8 +39,8 @@ function OnceRun({ schedule, now }: { schedule: NormalizedSchedule; now: number 
   // The time the task really starts at, which a DST change can move away from the typed one.
   const wall = onceResolved(schedule)
   return (
-    <section aria-labelledby="next-runs-heading" className="rounded-xl border bg-card p-4">
-      <h2 id="next-runs-heading" className="mb-3 text-[15px] font-medium">Runs once</h2>
+    <section aria-labelledby="next-runs-heading" data-slot="next-runs" className="min-w-0 rounded-xl border bg-card p-5">
+      <h2 id="next-runs-heading" className="mb-3 text-base font-semibold">Runs once</h2>
       {instant === null || !wall ? (
         <p className="text-sm text-muted-foreground">Pick a date, a time and a time zone.</p>
       ) : (

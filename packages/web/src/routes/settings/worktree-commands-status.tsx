@@ -21,7 +21,7 @@ export function WorktreeCommandsStatus({
   return (
     <>
       {savedCommandCount === 0 && issue === null ? (
-        <p data-slot={`${slot}-empty`} className="text-sm text-foreground">
+        <p data-slot={`${slot}-empty`} className="text-xs text-muted-foreground">
           {copy.empty}
         </p>
       ) : null}
@@ -39,12 +39,12 @@ export function WorktreeCommandsStatus({
         </p>
       ) : null}
       {issue !== null ? (
-        <p data-slot={`${slot}-issue`} className="text-[11px] text-danger">
+        <p data-slot={`${slot}-issue`} className="text-xs text-danger">
           config.json has an invalid {copy.key} ({issue}) — saving replaces it.
         </p>
       ) : null}
       {invalid !== null ? (
-        <p data-slot={`${slot}-invalid`} className="text-[11px] text-danger">
+        <p data-slot={`${slot}-invalid`} className="text-xs text-danger">
           {invalid}
         </p>
       ) : null}

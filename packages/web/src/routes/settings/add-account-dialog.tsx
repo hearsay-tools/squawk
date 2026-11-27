@@ -1,7 +1,8 @@
+import { SettingsSelect } from './settings-select'
 import { useState } from 'react'
 
 import { useCreateAgentProfile } from '@/api/queries'
-import { runnerEntry, useRunners } from '@/api/runners'
+import { runnerDisplayName, runnerEntry, useRunners } from '@/api/runners'
 import type { FsBrowseDir, ProviderId } from '@open-mercato/cezar-api-client'
 import { FolderBrowser } from '@/components/folder-browser'
 import { Button } from '@/components/ui/button'
@@ -109,7 +110,7 @@ export function AddAccountDialog({
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-[13px]">
             <span className="text-muted-foreground">Agent</span>
-            <select
+            <SettingsSelect
               aria-label="Agent"
               data-slot="add-account-provider"
               value={provider}
@@ -118,10 +119,10 @@ export function AddAccountDialog({
             >
               {providers.map((id) => (
                 <option key={id} value={id}>
-                  {id}
+                  {runnerDisplayName(runners, id)}
                 </option>
               ))}
-            </select>
+            </SettingsSelect>
           </label>
           <label className="flex min-w-0 flex-1 items-center gap-2 text-[13px]">
             <span className="shrink-0 text-muted-foreground">Name</span>
@@ -166,7 +167,7 @@ export function AddAccountDialog({
               {browsing ? 'Hide folders' : 'Browse…'}
             </Button>
           </label>
-          <p className="text-[11px] text-soft-foreground">
+          <p className="text-xs text-soft-foreground">
             A <code>~</code> is kept as written and expanded when the agent runs.
           </p>
         </div>

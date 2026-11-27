@@ -1,7 +1,7 @@
 import { SkillOptionLabel } from '@/components/skill-option-label'
 import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckIcon, ChevronDownIcon, NotebookPenIcon, PlusIcon, SparklesIcon, XIcon } from '@/components/design-icons'
+import { CheckIcon, ChevronDownIcon, NotebookPenIcon, PlusIcon, SparklesIcon, Trash2Icon, XIcon } from '@/components/design-icons'
 
 import { useRef, useState, type ReactNode } from 'react'
 
@@ -31,6 +31,8 @@ import { isProjectSkill, searchSkillsForDisplay, skillKeywords, skillKey } from 
 import { cn } from '@/lib/utils'
 import { useUnsentDraft } from '@/lib/version-reload'
 import { sameJson, useSavedDraft } from '@/lib/saved-draft'
+import { SaveRow } from './save-cue'
+import { SETTINGS_LABEL_CLASS } from './settings-field'
 
 /**
  * Settings → Prompt templates (#413): "add the settings pane for editing these prompt templates
@@ -155,7 +157,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                 className="flex flex-col gap-1.5 rounded-md border border-border bg-card p-3"
               >
                 <div className="flex flex-col gap-2">
-                  <label htmlFor={`template-label-${template.id}`} className="text-sm">Template label</label>
+                  <label htmlFor={`template-label-${template.id}`} className={SETTINGS_LABEL_CLASS}>Template label</label>
                   <Input
                     id={`template-label-${template.id}`}
                     aria-label={`Label for ${template.label || 'this template'}`}
@@ -163,11 +165,12 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                     value={template.label}
                     maxLength={80}
                     onChange={(event) => updateTemplate(template.id, { label: event.target.value })}
-                    className="flex-1"
+                    // The label and the instructions share one border and fill, so they read as one form pair.
+                    className="flex-1 border-border bg-background"
                   />
 
                 </div>
-                <label htmlFor={`template-text-${template.id}`} className="text-sm">Instructions</label>
+                <label htmlFor={`template-text-${template.id}`} className={SETTINGS_LABEL_CLASS}>Instructions</label>
                 <Textarea
                   id={`template-text-${template.id}`}
                   aria-label={`Text for ${template.label || 'this template'}`}
@@ -175,9 +178,9 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                   value={template.text}
                   maxLength={2000}
                   onChange={(event) => updateTemplate(template.id, { text: event.target.value })}
-                  className="min-h-14 text-[13px]"
+                  className="min-h-14 rounded-md border border-border bg-background text-[13px]"
                 />
-                <p className="mt-3 text-sm">Apply automatically with skills</p>
+                <p className={SETTINGS_LABEL_CLASS}>Apply automatically with skills</p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                   <TemplateSkillsPicker
                     label={template.label}
@@ -196,7 +199,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                       data-skill={name}
                       title={`Stop applying “${template.label}” automatically with ${name}`}
                       onClick={() => toggleTemplateSkill(template.id, name)}
-                      className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-px font-mono text-[11px] font-medium text-foreground transition-colors hover:bg-danger/10 hover:text-danger"
+                      className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-xs font-medium text-foreground transition-colors hover:bg-danger/10 hover:text-danger"
                     >
                       {name}
                       <XIcon aria-hidden="true" className="size-3" />
@@ -206,12 +209,13 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                   <Button
                     type="button"
                     className="self-start"
-                    variant="outline"
+                    variant="danger-ghost"
                     size="sm"
                     data-action="prompt-template-remove"
                     title="Remove this template"
                     onClick={() => removeTemplate(template.id)}
                   >
+                    <Trash2Icon aria-hidden="true" className="size-3" />
                     Delete template
                   </Button>
               </div>
@@ -224,7 +228,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
           className="flex flex-col gap-1.5 rounded-md border border-dashed border-border p-3"
         >
           <h3 className="text-lg">New template</h3>
-          <label htmlFor="new-template-label" className="text-sm">Label</label>
+          <label htmlFor="new-template-label" className={SETTINGS_LABEL_CLASS}>Label</label>
           <Input
             id="new-template-label"
             aria-label="New template label"
@@ -233,8 +237,9 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
             value={newLabel}
             maxLength={80}
             onChange={(event) => setNewLabel(event.target.value)}
+            className="border-border bg-background"
           />
-          <label htmlFor="new-template-text" className="text-sm">Instructions to insert</label>
+          <label htmlFor="new-template-text" className={SETTINGS_LABEL_CLASS}>Instructions to insert</label>
           <Textarea
             id="new-template-text"
             aria-label="New template text"
@@ -243,7 +248,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
             value={newText}
             maxLength={2000}
             onChange={(event) => setNewText(event.target.value)}
-            className="min-h-14 text-[13px]"
+            className="min-h-14 rounded-md border border-border bg-background text-[13px]"
           />
           <Button
             type="button"
@@ -260,16 +265,18 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            data-action="prompt-templates-save"
-            disabled={!dirty || invalid || save.isPending}
-            onClick={() => save.mutate(templates)}
-          >
-            Save
-          </Button>
+          <SaveRow show={!dirty && !invalid && !save.isPending}>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              data-action="prompt-templates-save"
+              disabled={!dirty || invalid || save.isPending}
+              onClick={() => save.mutate(templates)}
+            >
+              Save
+            </Button>
+          </SaveRow>
           <Button
             type="button"
             variant="ghost"
@@ -281,7 +288,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
             Reset to defaults
           </Button>
           {invalid ? (
-            <p data-slot="prompt-templates-invalid" className="text-[11px] text-danger">
+            <p data-slot="prompt-templates-invalid" className="text-xs text-danger">
               Every template needs both a label and text.
             </p>
           ) : null}
@@ -353,12 +360,12 @@ function TemplateSkillsPicker({
           aria-label={`Apply ${label || 'this template'} automatically with a skill`}
           title="Pick the skills this template applies itself to"
           className={cn(
-            'inline-flex h-[26px] items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
-            selected.length > 0 && 'border-foreground/60 font-semibold text-foreground',
+            'inline-flex h-[26px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
+            selected.length > 0 && 'text-foreground',
           )}
         >
           <SparklesIcon aria-hidden="true" className="size-3 shrink-0 text-accent-icon" />
-          apply with…
+          Add skill
           <ChevronDownIcon aria-hidden="true" className="size-2.5 shrink-0 text-soft-foreground" />
         </button>
       </PopoverTrigger>

@@ -766,7 +766,7 @@ describe('disabled state', () => {
 
   it('the mic is hidden entirely when the Web Speech API is absent — no fake button', () => {
     renderComposer()
-    expect(screen.queryByText('Dictation')).toBeNull()
+    expect(screen.queryByLabelText('Start dictation')).toBeNull()
   })
 })
 
@@ -1117,6 +1117,15 @@ describe('unified execution actions (#201)', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(false))
     fireEvent.click(screen.getByRole('button', { name: /remove shot.png/i }))
     expect(screen.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('keeps an empty review continuation outlined until a follow-up is entered', () => {
+    const { textarea } = renderComposer({ allowEmptySubmit: true, emptySubmitLabel: 'Continue', emptySubmitVariant: 'outline' })
+    expect(screen.getByRole('button', { name: 'Continue' }).getAttribute('data-variant')).toBe('outline')
+    type(textarea, 'Please update the tests')
+    expect(screen.getByRole('button', { name: 'Send' }).getAttribute('data-variant')).toBe('primary')
+    type(textarea, '   ')
+    expect(screen.getByRole('button', { name: 'Continue' }).getAttribute('data-variant')).toBe('outline')
   })
 
   it('preserves attachments and text through failed Stop and locks competing submissions', async () => {

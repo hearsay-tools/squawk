@@ -1,6 +1,6 @@
 import * as React from 'react'
 
-import { EllipsisIcon, PlusIcon } from '@/components/design-icons'
+import { EllipsisIcon } from '@/components/design-icons'
 import { MoreSheet } from '@/components/more-sheet'
 import { MORE_SHEET_PATHS, TAB_BAR_PATHS, type NavItem } from '@/components/nav-items'
 import { SignalPill, signalPillSegments } from '@/components/signal-pill'
@@ -16,7 +16,7 @@ const DESKTOP_MEDIA_QUERY = '(min-width: 768px)'
  * The phone's view switcher (#621), mirroring the desktop view tabs: Tasks, Activity, GitHub (only
  * while the forge is available) and More, in the slot the shell reserves as grid row 4. It is
  * for LIST screens; the shell does not render it on a pushed screen (an opened task) or while
- * the keyboard is up, and the floating New task button rides along with it for the same reasons.
+ * the keyboard is up. Nothing floats over the page: New task is in each task list's header.
  *
  * `items` is `visibleNavItems(...)`, so the forge gate is decided once, for every surface. The
  * bar restricts it to `TAB_BAR_PATHS`; the rest are the More sheet's.
@@ -29,15 +29,12 @@ export function MobileTabBar({
   activeTo,
   signal,
   projectName,
-  showNewTask = true,
 }: {
   items: readonly NavItem[]
   activeTo: string | null
   /** The current project's signal; undefined while unknown or outside a project. */
   signal?: ProjectSignal | undefined
   projectName?: string | null | undefined
-  /** The floating New task button. Off on `/new`, where it would point at the page it is on. */
-  showNewTask?: boolean
 }) {
   const [moreOpen, setMoreOpen] = React.useState(false)
   const moreButton = React.useRef<HTMLButtonElement | null>(null)
@@ -71,20 +68,6 @@ export function MobileTabBar({
 
   return (
     <>
-      {showNewTask ? (
-        // Above the bar rather than inside it: `bottom-full` measures from the row's top edge, so
-        // the 16px gap holds whatever safe-area inset the row is padding itself with. Hidden while
-        // the page shows its own New task action (`data-new-task-action`, the empty Tasks state):
-        // two buttons for one action, and this one would cover that page's text.
-        <Link
-          to="/new"
-          data-slot="mobile-new-task"
-          className="group-has-[[data-new-task-action]]/shell:hidden absolute right-4 bottom-full z-30 mb-4 flex h-12 items-center gap-2 rounded-[24px] bg-foreground px-[18px] text-[14px] font-semibold text-background shadow-[0_8px_24px_#00000055] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          <PlusIcon aria-hidden="true" className="size-[18px]" />
-          New task
-        </Link>
-      ) : null}
       <nav aria-label="Views" data-slot="mobile-tab-bar" className="flex h-[54px] items-stretch">
         {tabs.map((item) => {
           const active = item.to === activeTo

@@ -11,6 +11,7 @@ import { DiffStatLabel } from '@/components/diff-stat'
 import { Button } from '@/components/ui/button'
 import { Link } from '@/lib/project-router'
 import { useIsDesktop } from '@/lib/use-desktop'
+import { gitAge } from '@/routes/repo-git/git-sections'
 import { DiffViewToggles } from '@/routes/task-git/diff-controls'
 
 type CommitDiffPanelProps = {
@@ -26,31 +27,32 @@ type CommitDiffPanelProps = {
 export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, className, diffClassName }: CommitDiffPanelProps) {
   const desktop = useIsDesktop()
   const [mode, setMode] = useState<DiffMode>('unified')
-  const [wrap, setWrap] = useState(false)
+  // Wrap on by default, like the Changes views, so the toggle reads the same on every diff.
+  const [wrap, setWrap] = useState(true)
 
   // 409 = the server's answer (unknown sha, not a hash) — a dead link, not an outage.
   const refused = commit.isError && commit.error instanceof ApiError && commit.error.status === 409
 
   const effectiveMode: DiffMode = desktop ? mode : 'unified'
-  const effectiveWrap = desktop ? wrap : true
 
   return (
     <section data-slot={slot} data-sha={sha} className={className}>
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-border px-4 py-2 md:px-6">
+      {/* Both dividers sit inside the content gutter (a margin, not padding), so they line up
+          with the diff cards below instead of running to the window edge. */}
+      <div className="mx-4 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-border py-2 md:mx-9">
         <Button asChild variant="ghost" size="sm" data-slot="commit-back">
           <Link to={backTo}>
             <ArrowLeftIcon size={16} aria-hidden="true" />
             {backLabel}
           </Link>
         </Button>
-        {commit.data ? <DiffStatLabel stat={commit.data.stat} /> : null}
-        <span className="ml-auto hidden items-center gap-1 md:flex">
+        <span className="ml-auto flex items-center gap-1">
           <DiffViewToggles mode={mode} wrap={wrap} onModeChange={setMode} onWrapChange={setWrap} />
         </span>
       </div>
 
       {commit.isPending ? (
-        <p data-slot="commit-loading" className="px-4 py-6 text-center text-xs text-soft-foreground md:px-6">
+        <p data-slot="commit-loading" className="px-4 py-6 text-center text-xs text-muted-foreground md:px-9">
           Loading commit…
         </p>
       ) : commit.isError ? (
@@ -63,11 +65,18 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
         />
       ) : (
         <>
-          <div data-slot="commit-meta" className="border-b border-border px-4 py-3 md:px-6">
+          <div data-slot="commit-meta" className="mx-4 border-b border-border py-3 md:mx-9">
             <h2 className="text-sm font-semibold">{commit.data.subject}</h2>
-            <p className="mt-0.5 text-[11px] text-soft-foreground">
-              {commit.data.author} · {commit.data.when} ·{' '}
-              <span className="font-mono select-all">{commit.data.sha}</span>
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+              <span>{commit.data.author}</span>
+              <span aria-hidden="true">·</span>
+              <span title={commit.data.when}>{gitAge(commit.data.when)}</span>
+              <span aria-hidden="true">·</span>
+              <span className="font-mono select-all" title={commit.data.sha}>{commit.data.sha.slice(0, 8)}</span>
+              {/* The stat belongs to the commit, so it ends the commit's own line (as in the task's
+                  Commits tab), not the back link's. */}
+              <span aria-hidden="true">·</span>
+              <span data-slot="commit-stat"><DiffStatLabel stat={commit.data.stat} /></span>
             </p>
           </div>
           {commit.data.files.length === 0 ? (
@@ -80,7 +89,7 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
             />
           ) : (
             <div className={diffClassName}>
-              <Diff files={commit.data.files} mode={effectiveMode} wrap={effectiveWrap} className="min-w-0" />
+              <Diff files={commit.data.files} mode={effectiveMode} wrap={wrap} totals={false} className="min-w-0" />
             </div>
           )}
         </>

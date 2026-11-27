@@ -1,17 +1,19 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckIcon, ChevronDownIcon, CpuIcon, GaugeIcon, SlidersHorizontalIcon, TerminalIcon } from '@/components/design-icons'
-import type { RefObject } from 'react'
+import { ChevronDownIcon, CpuIcon, GaugeIcon, SlidersHorizontalIcon, TerminalIcon } from '@/components/design-icons'
+import { useState, type RefObject } from 'react'
+import { useIsDesktop } from '@/lib/use-desktop'
 
 import { Link } from '@/lib/project-router'
 
 import { putConfig } from '@/api/client'
 import { hasAccountChoice } from '@/api/agent-accounts'
-import { runnerPickerLabel, useRunners } from '@/api/runners'
+import { runnerDisplayName, useRunners } from '@/api/runners'
 import { queryKeys } from '@/api/queries'
 import type { RepoResponse } from '@open-mercato/cezar-api-client'
 import { CompletionControls } from '@/components/completion-controls'
 import { TaskAccessControls } from '@/components/task-access-controls'
 import { PickerPill, PickerPillGroup, RunnerPill } from '@/components/picker-pill'
+import { SWITCH_THUMB_COLORS, SWITCH_TRACK_COLORS } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toaster'
 import { submitShortcutHint } from '@/lib/use-submit-shortcut'
 import { webhookLabel, webhookNames, type TaskWebhookTarget } from '@/lib/webhook'
@@ -28,16 +30,14 @@ type Accounts = ReturnType<typeof useAccountSelection>
 type DraftUpdate = (patch: Partial<NewTaskDraft>) => void
 
 export function NewTaskHeader() {
+  // The shared page header anatomy (Tasks, All tasks, Activity): the title, then one muted line.
   return (
-    <header className="mb-7 max-md:mb-5">
-      <p data-slot="page-eyebrow" className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-[var(--accent-text)] uppercase">
-        NEW TASK
-      </p>
-      <h1 className="text-[30px] leading-[normal] font-semibold tracking-[-0.9px] max-md:text-[22px] max-md:leading-[29px] max-md:tracking-[-0.6px]">
+    <header data-slot="page-header" className="mb-6 flex flex-col gap-1 max-md:mb-4">
+      <h1 className="text-[24px] leading-[1.2] font-semibold tracking-tight text-foreground md:text-[28px]">
         What should the agent work on?
       </h1>
-      <p data-slot="page-description" className="mt-2 hidden text-[13px] text-muted-foreground md:block">
-        Describe the outcome. Configure the run. Review everything before it lands.
+      <p data-slot="page-description" className="text-[13px] text-muted-foreground max-md:hidden">
+        Describe the outcome, then configure the run.
       </p>
     </header>
   )
@@ -174,13 +174,18 @@ export function ExecutionSettings({
 }) {
   const { displayRunner } = engine
   const registered = useRunners().data
+  const desktop = useIsDesktop()
+  const [expanded, setExpanded] = useState<boolean | undefined>()
+  const open = expanded ?? desktop
+  // The browser also fires `toggle` when React sets `open` itself: on mount and on a
+  // viewport switch. Only a change away from the rendered state is the reader's choice.
   return (
-    <details data-slot="execution-options" open className="group rounded-xl border border-border bg-card xl:self-start">
+    <details data-slot="execution-options" open={open} onToggle={(event) => { if (event.currentTarget.open !== open) setExpanded(event.currentTarget.open) }} className="group rounded-xl border border-border bg-card xl:self-start">
       <summary className="flex min-h-[44px] cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-xs text-muted-foreground pointer-hover:bg-muted/50 active:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground [&::-webkit-details-marker]:hidden">
         <SlidersHorizontalIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />
         <span className="font-medium text-foreground">Execution settings</span>
         <span data-slot="execution-summary" hidden className="min-w-0 basis-full truncate pl-5 xl:ml-auto xl:basis-auto xl:pl-0">
-          {runnerPickerLabel(registered, displayRunner)}
+          {runnerDisplayName(registered, displayRunner)}
           {' · '}{engine.models.find((item) => item.id === engine.model)?.label ?? 'auto'}
         </span>
         <ChevronDownIcon aria-hidden="true" className="new-task-settings-chevron size-4 shrink-0" />
@@ -206,7 +211,7 @@ export function ExecutionSettings({
             <NotifyWebhookToggle on={webhook.on} targets={webhook.targets} onChange={webhook.onChange} />
           ) : null}
         </div>
-        <CompletionControls embedded archiveWhenDone={draft.archiveWhenDone} autoMergePr={draft.autoMergePr} onChange={update} disabled={completionDisabled} />
+        <CompletionControls embedded archiveWhenDone={draft.archiveWhenDone} autoMergePr={draft.autoMergePr} onChange={update} disabled={completionDisabled} disabledReason="Unavailable while starting the task or preparing its plan." />
         <TaskAccessControls embedded allowWorkers={draft.allowWorkers} allowMessaging={draft.allowMessaging} onChange={update} disabled={completionDisabled} />
       </div>
     </details>
@@ -245,6 +250,22 @@ export function ComposerFooterEnd({
   )
 }
 
+/** The track of a settings toggle, drawn with the shared Switch's own colour strings: the same
+ *  `data-state` keys pick the same track and thumb in both themes. */
+function ToggleTrack({ on }: { on: boolean }) {
+  const state = on ? 'checked' : 'unchecked'
+  return (
+    <span
+      aria-hidden="true"
+      data-slot="toggle-track"
+      data-state={state}
+      className={cn('flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5', SWITCH_TRACK_COLORS)}
+    >
+      <span data-state={state} className={cn('size-[18px] rounded-full', on && 'ml-auto', SWITCH_THUMB_COLORS)} />
+    </span>
+  )
+}
+
 /** Worktree opt-out toggle (#worktree-toggle): a checkbox-style chip for ordinary runs.
  *  Checked = isolated worktree (the default); unchecked = run in the repo working tree. */
 function WorktreeToggle({
@@ -277,7 +298,7 @@ function WorktreeToggle({
       className="flex items-center justify-between gap-3 px-0 py-3 text-left"
     >
       <span><span className="block text-[13px] font-medium">Worktree</span><span className="block text-[12px] text-muted-foreground">{on ? 'Changes stay in a separate working copy.' : 'Changes are made in the current working directory.'}</span></span>
-      <span aria-hidden="true" className={cn('flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5', on ? 'border-accent-strong bg-accent-strong' : 'border-muted-foreground bg-muted')}><span className={cn('size-[18px] rounded-full', on ? 'ml-auto bg-accent-strong-foreground' : 'bg-foreground')} /></span>
+      <ToggleTrack on={on} />
     </button>
   )
 }
@@ -312,7 +333,7 @@ function AutonomousToggle({
       className="flex items-center justify-between gap-3 px-0 py-3 text-left disabled:opacity-50"
     >
       <span><span className="block text-[13px] font-medium">Autonomous</span><span className="block text-[12px] text-muted-foreground">Let the agent proceed without prompts</span></span>
-      <span aria-hidden="true" className={cn('flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5', on ? 'border-accent-strong bg-accent-strong' : 'border-muted-foreground bg-muted')}><span className={cn('size-[18px] rounded-full', on ? 'ml-auto bg-accent-strong-foreground' : 'bg-foreground')} /></span>
+      <ToggleTrack on={on} />
     </button>
   )
 }
@@ -341,7 +362,7 @@ function NotifyWebhookToggle({
       className="flex min-h-11 items-center justify-between gap-3 px-0 py-3 text-left"
     >
       <span className="min-w-0"><span className="block text-[13px] font-medium">Notify webhook</span><span data-slot="notify-webhook-subtitle" className="block truncate text-[12px] text-muted-foreground">Send status changes</span></span>
-      <span aria-hidden="true" className={cn('flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5', on ? 'border-accent-strong bg-accent-strong' : 'border-muted-foreground bg-muted')}><span className={cn('size-[18px] rounded-full', on ? 'ml-auto bg-accent-strong-foreground' : 'bg-foreground')} /></span>
+      <ToggleTrack on={on} />
     </button>
   )
 }
@@ -393,10 +414,14 @@ function BaseBranchPill({ repo }: { repo: RepoResponse }) {
   )
 }
 
-/** The `Start | Plan first` segment (#383): a real toggle with an UNMISTAKABLE selected state.
- *  "Start" selected keeps the quiet card fill; "Plan first" selected takes the mockup's
- *  contrast fill + focus ring (`.seg .plan-active`) — plan mode must never be ambient. The
- *  active plan segment doubles as the busy indicator while `POST /api/plan` is in flight. */
+/** The `Run now | Plan first` segment (#383): a real toggle with one neutral selected fill, the
+ *  same surface, border and active treatment as the diff view's Unified | Split toggle, so the
+ *  gold Start task button stays the only loud control. The active plan segment doubles as the
+ *  busy indicator while `POST /api/plan` is in flight. */
+const modeSegmentClass = 'h-6 rounded-md px-3 text-xs font-medium transition-colors outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50'
+const modeSegmentActive = 'bg-muted text-foreground'
+const modeSegmentIdle = 'text-muted-foreground pointer-hover:text-foreground'
+
 function ModeSegment({
   planFirst,
   planning,
@@ -411,22 +436,16 @@ function ModeSegment({
       data-slot="mode-seg"
       role="radiogroup"
       aria-label="Run mode"
-      className="inline-flex items-center gap-0.5 rounded-lg bg-muted p-[3px]"
+      className="inline-flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5"
     >
       <button
         type="button"
         role="radio"
         aria-checked={!planFirst}
         onClick={() => onModeChange(false)}
-        className={cn(
-          'h-6 rounded-md px-2 text-xs transition-colors',
-          !planFirst
-            ? 'bg-card font-semibold text-foreground shadow-xs'
-            : 'font-medium text-muted-foreground hover:text-foreground',
-        )}
+        className={cn(modeSegmentClass, !planFirst ? modeSegmentActive : modeSegmentIdle)}
       >
-        {!planFirst ? <CheckIcon aria-hidden="true" className="size-3.5" /> : null}
-        Start
+        Run now
       </button>
       <button
         type="button"
@@ -435,13 +454,7 @@ function ModeSegment({
         aria-busy={planning || undefined}
         data-slot="mode-plan"
         onClick={() => onModeChange(true)}
-        className={cn(
-          'h-6 rounded-md px-2 text-xs transition-colors',
-          planFirst
-            ? 'bg-contrast font-semibold text-contrast-foreground ring-2 ring-ring/55'
-            : 'font-medium text-muted-foreground hover:text-foreground',
-          planning && 'animate-pulse',
-        )}
+        className={cn(modeSegmentClass, planFirst ? modeSegmentActive : modeSegmentIdle, planning && 'animate-pulse')}
       >
         {planning ? 'Planning…' : 'Plan first'}
       </button>

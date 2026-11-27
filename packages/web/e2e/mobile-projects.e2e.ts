@@ -180,11 +180,15 @@ describe('mobile top bar and project drawer', () => {
   }
 })
 
+/** A tool hint as the page shows it: a leading "install" capitalised, and each backticked
+ *  command as a code chip whose text has no backticks. */
+const shownHint = (hint: string | undefined) => !hint ? null : hint.replace(/^install\b/, 'Install').replace(/`([^`]+)`/g, '$1')
+
 describe('phone Tools page (#621 follow-up)', () => {
   for (const variant of phoneVariants.filter((v) => v.density !== 'ultra')) {
     it(`reaches /tools from the drawer with status dots and the settings link, ${variant.theme}`, async () => {
       // One real probe answer with the last tool turned into a missing one, so the hint and
-      // "Set up ›" have something to render whatever this machine has installed.
+      // "Set up" have something to render whatever this machine has installed.
       const health = (await fetch(`${baseUrl}/api/v1/health`).then((r) => r.json())) as { checks: Array<Record<string, unknown>>; capabilities: Record<string, unknown> }
       // The live SharedWorker would push the real health snapshot over its socket and replace this
       // fixture in the query cache; `withFiniteLive` keeps every health read on the routed fixture.
@@ -201,7 +205,7 @@ describe('phone Tools page (#621 follow-up)', () => {
           browser.waitForFunction(`document.querySelector(${JSON.stringify(DRAWER)})?.getBoundingClientRect().left === 0`)
           browser.click(`${DRAWER} [data-slot="drawer-tools"]`)
           browser.waitForFunction(`document.querySelector(${JSON.stringify(DRAWER)}) === null && document.querySelector('[data-route="workspace-tools"] [data-slot="tool-row"]') !== null`)
-          // Bring the section under the top bar: the floating New task button sits over the lower-right otherwise.
+          // Bring the section under the top bar.
           browser.evaluate(`document.querySelector('#tools-heading').scrollIntoView({ block: 'start' })`)
           browser.waitForFunction(`document.querySelector('[data-slot="tools-settings"]').getBoundingClientRect().top < 200`)
 
@@ -218,7 +222,7 @@ describe('phone Tools page (#621 follow-up)', () => {
           page.rows.forEach((row, index) => {
             const check = health.checks[index]!
             if (row.available === 'true') expect([row.tone, row.state?.startsWith('Installed'), row.setup]).toEqual(['success', true, null])
-            else expect([row.tone, row.state, row.hint]).toEqual(['danger', 'Not installed', (check.hint as string | undefined) ?? null])
+            else expect([row.tone, row.state, row.hint]).toEqual(['danger', 'Not installed', shownHint(check.hint as string | undefined)])
           })
           expect(page.rows[missing]!.hint).toBe('Install it and reload the cockpit.')
           expect(page.rows.filter((row) => row.setup !== null)).toHaveLength(health.checks.filter((check) => check.available !== true).length)

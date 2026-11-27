@@ -230,15 +230,19 @@ describe('AgentBrowser auto-wait (#405)', () => {
     const calls = action === 'fill' ? commands().filter(([command]) => command !== 'eval') : commands()
     expect(calls).toEqual([
       ['wait', selector],
-      ['wait', '--fn', interactableExpression(selector)],
+      ['wait', '--fn', interactableExpression(selector, {}, action === 'click')],
       value === undefined ? [action, selector] : [action, selector, value],
     ])
   })
 
-  it('hover waits for the selector only, so a disabled control can still show its tooltip', () => {
+  it('hover waits for an uncovered target but not an enabled one, so a disabled control can still show its tooltip', () => {
     const { browser, commands } = open()
     browser.hover('[data-slot="row"]')
-    expect(commands()).toEqual([['wait', '[data-slot="row"]'], ['hover', '[data-slot="row"]']])
+    expect(commands()).toEqual([
+      ['wait', '[data-slot="row"]'],
+      ['wait', '--fn', interactableExpression('[data-slot="row"]', { allowDisabled: true })],
+      ['hover', '[data-slot="row"]'],
+    ])
   })
 
   it('allowDisabled drops the enabled check and keeps the scroll', () => {
@@ -248,7 +252,7 @@ describe('AgentBrowser auto-wait (#405)', () => {
     const waits = commands().filter(([command, flag]) => command === 'wait' && flag === '--fn')
     expect(waits).toEqual([
       ['wait', '--fn', interactableExpression('[data-slot="send"]', { allowDisabled: true })],
-      ['wait', '--fn', interactableExpression('#name', { allowDisabled: true })],
+      ['wait', '--fn', interactableExpression('#name', { allowDisabled: true }, false)],
     ])
     expect(waits[0]![2]).not.toBe(interactableExpression('[data-slot="send"]'))
   })

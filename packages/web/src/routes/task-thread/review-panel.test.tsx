@@ -246,10 +246,9 @@ describe('the review gate on the thread', () => {
     const sent = stubFetch()
     renderWithProviders(<ReviewPanel run={run('review')} />)
 
-    const notes = screen.getByLabelText('Notes for the agent') as HTMLTextAreaElement
+    const { notes, sendBack } = await openNotes()
+    expect(sendBack.textContent).toBe('Send back with notes')
     fireEvent.change(notes, { target: { value: 'fix the port handling' } })
-    const sendBack = screen.getByRole<HTMLButtonElement>('button', { name: /Send back/ })
-    await waitFor(() => expect(sendBack.disabled).toBe(false))
     fireEvent.click(sendBack)
 
     await waitFor(() => {
@@ -269,9 +268,8 @@ describe('the review gate on the thread', () => {
       : base(input, init))
     const { client } = renderWithProviders(<ReviewPanel run={run('review')} />)
     client.setQueryData(['default', 'runs', 'list'], [])
-    fireEvent.change(screen.getByLabelText('Notes for the agent'), { target: { value: 'again' } })
-    const sendBack = screen.getByRole<HTMLButtonElement>('button', { name: /Send back/ })
-    await waitFor(() => expect(sendBack.disabled).toBe(false))
+    const { notes, sendBack } = await openNotes()
+    fireEvent.change(notes, { target: { value: 'again' } })
     fireEvent.click(sendBack)
     await waitFor(() => expect(release).toBeDefined())
     setApiScope('next')
@@ -287,9 +285,7 @@ describe('the review gate on the thread', () => {
     const sent = stubFetch()
     renderWithProviders(<ReviewPanel run={run('review')} />)
 
-    const notes = screen.getByLabelText('Notes for the agent') as HTMLTextAreaElement
-    const sendBack = screen.getByRole<HTMLButtonElement>('button', { name: /Send back/ })
-    await waitFor(() => expect(sendBack.disabled).toBe(false))
+    const { notes } = await openNotes()
     fireEvent.change(notes, { target: { value: 'more tests' } })
     fireEvent.keyDown(notes, { key: 'Enter' })
     expect(sent.filter((r) => r.path === '/api/v1/runs/r1/continue')).toHaveLength(0)
@@ -300,7 +296,7 @@ describe('the review gate on the thread', () => {
     })
   })
 
-  it('provider loss disables Send back and blocks forced click and keyboard submissions', async () => {
+  it('provider loss disables Send back, keeps the notes folded and blocks a forced click', async () => {
     const sent = stubFetch({
       'GET /api/v1/providers/status': () =>
         jsonResponse({
@@ -313,16 +309,17 @@ describe('the review gate on the thread', () => {
     })
     renderWithProviders(<ReviewPanel run={run('review', { runner: 'claude' })} />)
 
-    const notes = screen.getByLabelText('Notes for the agent') as HTMLTextAreaElement
-    fireEvent.change(notes, { target: { value: 'more tests' } })
     const sendBack = screen.getByRole<HTMLButtonElement>('button', { name: /Send back/ })
     await waitFor(() => expect(sendBack.disabled).toBe(true))
     expect(await screen.findByRole('link', { name: 'Configure providers' })).toBeTruthy()
+    expect(screen.queryByLabelText('Notes for the agent')).toBeNull()
 
+    // React drops a click on a disabled button even with the attribute stripped, so the notes
+    // box (and with it the ⌘↵ path) never opens while no provider can continue the session.
     sendBack.removeAttribute('disabled')
     fireEvent.click(sendBack)
-    fireEvent.keyDown(notes, { key: 'Enter', ctrlKey: true })
     await act(() => Promise.resolve())
+    expect(screen.queryByLabelText('Notes for the agent')).toBeNull()
     expect(sent.filter((request) => request.path === '/api/v1/runs/r1/continue')).toHaveLength(0)
   })
 
@@ -339,10 +336,8 @@ describe('the review gate on the thread', () => {
     })
     renderWithProviders(<ReviewPanel run={run('review', { runner: 'claude' })} />)
 
-    const notes = screen.getByLabelText('Notes for the agent')
+    const { notes, sendBack } = await openNotes()
     fireEvent.change(notes, { target: { value: 'use the available provider' } })
-    const sendBack = screen.getByRole<HTMLButtonElement>('button', { name: /Send back/ })
-    await waitFor(() => expect(sendBack.disabled).toBe(false))
     fireEvent.click(sendBack)
 
     await waitFor(() =>
@@ -353,16 +348,31 @@ describe('the review gate on the thread', () => {
     )
   })
 
+  it('the notes box stays folded until Send back unfolds and focuses it', async () => {
+    const sent = stubFetch()
+    renderWithProviders(<ReviewPanel run={run('review')} />)
+
+    expect(screen.queryByLabelText('Notes for the agent')).toBeNull()
+    const sendBack = screen.getByRole<HTMLButtonElement>('button', { name: /Send back/ })
+    expect(sendBack.getAttribute('aria-expanded')).toBe('false')
+    const { notes } = await openNotes()
+    expect(sendBack.getAttribute('aria-expanded')).toBe('true')
+    expect(sendBack.getAttribute('aria-controls')).toBe(notes.id)
+    await waitFor(() => expect(document.activeElement).toBe(notes))
+    expect(sent.filter((r) => r.method === 'POST')).toHaveLength(0)
+    expect(document.querySelector('[data-slot="toast"]')).toBeNull()
+  })
+
   it('empty notes: no POST, the legacy nudge as a toast, focus back on the box', async () => {
     const sent = stubFetch()
     renderWithProviders(<ReviewPanel run={run('review')} />)
 
-    const sendBack = screen.getByRole<HTMLButtonElement>('button', { name: /Send back/ })
-    await waitFor(() => expect(sendBack.disabled).toBe(false))
+    const { notes, sendBack } = await openNotes()
+    notes.blur()
     fireEvent.click(sendBack)
     expect(sent.filter((r) => r.method === 'POST')).toHaveLength(0)
     expect(document.querySelector('[data-slot="toast"]')?.textContent).toBe('Write what to change first.')
-    expect(document.activeElement).toBe(screen.getByLabelText('Notes for the agent'))
+    expect(document.activeElement).toBe(notes)
   })
 
   it('Draft PR success: POSTs /pr and the toast carries the returned URL', async () => {
@@ -460,4 +470,22 @@ describe('the accept celebration', () => {
     rerenderWithProviders(<AcceptCelebration status="done" />)
     expect(document.querySelector('[data-slot="accept-celebration"]')).toBeNull()
   })
+})
+
+/** Send back unfolds the notes box first; it is not in the DOM until then. */
+async function openNotes(): Promise<{ notes: HTMLTextAreaElement; sendBack: HTMLButtonElement }> {
+  const sendBack = screen.getByRole<HTMLButtonElement>('button', { name: /Send back/ })
+  await waitFor(() => expect(sendBack.disabled).toBe(false))
+  fireEvent.click(sendBack)
+  const notes = screen.getByLabelText<HTMLTextAreaElement>('Notes for the agent')
+  return { notes, sendBack }
+}
+
+it('keeps review actions in the banner before the diff', async () => {
+  stubFetch()
+  renderWithProviders(<ReviewPanel run={run('review')} />)
+  const banner = document.querySelector('[data-slot="review-banner"]')!
+  expect(banner.querySelector('[data-slot="review-accept"]')).not.toBeNull()
+  expect(banner.querySelector('[data-slot="review-send-back"]')).not.toBeNull()
+  expect(banner.querySelector('[data-slot="review-draft-pr"]')).not.toBeNull()
 })

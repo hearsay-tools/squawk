@@ -1,5 +1,5 @@
 /* All composer geometry belongs here; available content width decides the split. */
-[data-slot='new-task-layout'] { container: new-task-layout / inline-size; padding-inline: var(--page-gutter); }
+[data-slot='new-task-layout'] { container: new-task-layout / inline-size; padding-inline: 16px; }
 .new-task-composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -7,17 +7,13 @@
 }
 .new-task-editor { grid-row: 1; }
 .new-task-composer [data-slot='composer-agent-options'] { grid-row: 3; }
-.new-task-composer [data-slot='composer-execution-panel'] { grid-row: 4; }
+.new-task-composer [data-slot='composer-execution-panel'] { grid-row: 6; }
 .new-task-submission { display: contents; }
 .new-task-submission [data-slot='composer-footer-end'] { grid-row: 2; width: 100%; }
-.new-task-submission [data-slot='composer-actions'] { grid-row: 5; width: 100%; }
+.new-task-submission [data-slot='composer-actions'] { grid-row: 4; width: 100%; }
 .new-task-submission kbd { display: none; }
 .new-task-submission [data-slot='mode-seg'] { display: flex; width: 100%; height: 48px; }
 .new-task-submission [data-slot='mode-seg'] button { flex: 1; height: 42px; }
-.new-task-submission [data-slot='mode-seg'] [aria-checked='true'] {
-  background: var(--task-brand-selected); color: var(--accent-text);
-  border: 1px solid var(--composer-border); box-shadow: none;
-}
 .new-task-agent-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .new-task-agent-options > * { min-width: 0; }
 .new-task-agent-options [data-slot='model-pill'] { grid-column: 1 / -1; grid-row: 1; min-height: 60px; }
@@ -30,6 +26,8 @@
 .new-task-editor [data-slot='composer-footer-start'] button { min-height: 44px; }
 @container new-task-layout (min-width: 60rem) {
   /* The sidebar may grow without adding space between the editor and its controls. */
+  /* The last row takes the settings card's extra height, so the left column stays packed and the
+     notes under Start stay right below it. */
   .new-task-composer { grid-template-columns: minmax(0, 1fr) 330px; grid-template-rows: max-content max-content max-content minmax(0, 1fr); column-gap: 24px; }
   .new-task-editor { grid-column: 1; grid-row: 1; }
   .new-task-composer [data-slot='composer-agent-options'] { grid-column: 1; grid-row: 2; }
@@ -43,7 +41,7 @@
   .new-task-editor [data-slot='composer-footer-start'] { padding-inline: 0; }
   .new-task-editor > p { padding-inline: 0; }
 }
-.new-task-agent-options button { border-radius: 10px; padding: 10px; background: var(--card); }
+.new-task-agent-options button { border-radius: 9px; padding: 10px; background: var(--card); }
 .new-task-agent-options button > svg:last-child { margin-inline-start: auto; }
 .new-task-editor [data-slot='prompt-template-trigger'], .new-task-editor [data-slot='source-pill'] { border-radius: 9px; padding-inline: 14px; font-family: inherit; }
 .new-task-submission [data-slot='composer-footer-end'] { flex: 1; margin-inline-end: 0; }
@@ -55,7 +53,8 @@
 @media (max-width: 767px) {
   .new-task-editor:focus-within { box-shadow: none; }
 }
-.new-task-composer [data-slot='composer-feedback'] { grid-row: 6; }
+/* One column: the notes follow the Start button, above the folded execution settings. */
+.new-task-composer [data-slot='composer-feedback'] { grid-row: 5; }
 @container new-task-layout (min-width: 60rem) {
   .new-task-composer [data-slot='composer-feedback'] { grid-row: 4; grid-column: 1; }
 }
@@ -80,7 +79,6 @@
   [data-route='new'] .new-task-agent-options [data-slot='model-pill'] { grid-column: 1 / -1; grid-row: 2; }
   [data-route='new'] .new-task-agent-options [data-slot='effort-pill'] { grid-column: 2; grid-row: 1; }
   [data-route='new'] .new-task-agent-options:not(:has([data-slot='runner-pill'])) [data-slot='effort-pill'] { grid-column: 1 / -1; }
-  [data-route='new'] .new-task-agent-options :is([data-slot='runner-pill'], [data-slot='effort-pill']) > svg:first-child { display: none; }
 }
 [data-route='new'] .new-task-agent-options [data-slot$='pill'] { border-color: var(--border); border-radius: 9px; min-height: 44px; }
 [data-route='new'] .new-task-agent-options [data-slot='model-pill'] { height: 44px; min-height: 44px; padding-block: 0; padding-inline: 12px; }
@@ -97,16 +95,15 @@
 .new-task-settings-description { display: none; color: var(--muted-foreground); font-size: 11px; line-height: 1.6; }
 .new-task-base-branch { border-block-start: 1px solid var(--border); }
 [data-route='new'] [data-slot='execution-options'] summary { padding-inline: 16px; }
-[data-route='new'] .new-task-run-settings > button { min-block-size: 60px; padding-block: 13px; }
+[data-route='new'] .new-task-run-settings > button { min-block-size: 48px; padding-block: 8px; }
 [data-route='new'] .new-task-run-settings > div { min-block-size: 52px; }
 [data-route='new'] .new-task-run-settings > button > span:first-child > span:last-child { line-height: 1.6; }
-[data-route='new'] .new-task-run-settings > button[aria-checked='false'] > span:last-child > span { background: var(--muted-foreground); }
 @container new-task-layout (min-width: 60rem) {
-  [data-route='new'] [data-slot='execution-options'][open] { padding: 20px; }
+  [data-route='new'] [data-slot='execution-options'][open] { padding: 16px; }
   [data-route='new'] [data-slot='execution-options'][open] > summary { margin-block-end: 8px; padding: 0; }
   [data-route='new'] [data-slot='execution-options'] > div { padding: 0; }
   [data-route='new'] [data-slot='execution-options'] > div > * { margin-block: 0; }
-  [data-route='new'] .new-task-settings-description { display: block; padding-block-end: 16px; }
+  [data-route='new'] .new-task-settings-description { display: block; padding-block-end: 8px; }
   [data-route='new'] .new-task-run-settings > button > span:first-child { display: flex; flex-direction: column; gap: 3px; }
 }
 @media (min-width: 768px) {
@@ -118,7 +115,7 @@
   [data-route='new'] .new-task-editor > div:has([data-slot='composer-footer-start']) { padding: 0; }
   [data-route='new'] .new-task-editor [data-slot='composer-footer-start'] { padding: 0; gap: 10px; }
   [data-route='new'] .new-task-composer { row-gap: 20px; }
-  [data-route='new'] [data-slot='execution-options'] summary { padding: 20px; }
+  [data-route='new'] [data-slot='execution-options'] summary { padding: 16px; }
 }
 @media (max-width: 767px) {
   [data-route='new'] .new-task-agent-options { grid-template-columns: max-content minmax(0, 1fr); }
@@ -139,4 +136,21 @@
 .new-task-editor textarea { min-block-size: 96px; padding-block: 0; padding-inline: 0; color: var(--muted-foreground); }
 @media (min-width: 768px) {
   [data-route='new'] .new-task-editor textarea { min-block-size: 180px; padding-block: 18px 0; line-height: 1.6; }
+}
+
+@media (min-width: 768px) {
+  [data-slot='new-task-layout'] { padding-inline: 36px; }
+}
+
+[data-route='new'] [data-slot='run-mode-note'] { margin-block-start: 2px; }
+
+/* One radius for every chip in the composer toolbar row. */
+.new-task-editor [data-slot='composer-footer-start'] :is(button, [data-slot$='pill']) { border-radius: 9px; }
+/* Start task (the send button, last in the composer's action group) uses the 13px call-to-action
+ * label. Its disabled look is Button's shared dimmed-gold primary token; no local override. */
+[data-route='new'] [data-slot='composer-actions'] > button:last-child { font-size: 13px; }
+@media (max-width: 767px) {
+  /* Phones: a slightly tighter stack keeps Execution settings above the bottom tab bar. */
+  [data-route='new'] .new-task-composer { gap: 8px; }
+  [data-route='new'] .new-task-editor textarea { min-block-size: 80px; }
 }

@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Link as RouterLink } from 'react-router'
 import { agentCardPath } from '@/lib/agents-settings-path'
-import { runnerEntries, useRunners } from '@/api/runners'
+import { runnerDisplayName, runnerEntries, useRunners } from '@/api/runners'
 
 /**
  * The composer's single-choice pill, factored out of new-task.tsx (#401) so the follow-up
@@ -71,8 +71,10 @@ function rowContainer(pill: HTMLElement): HTMLElement {
   return pill.parentElement!
 }
 
-/** Pills sharing a visual line must fit it together; separate lines fit independently. */
-function allRowsFit(members: GroupMember[]): boolean {
+/** Pills sharing a visual line must fit it together; separate lines fit independently. A line
+ * that holds the `fill` pill (the row's flexible track) beside siblings must fit every prefixed
+ * pill in an equal share of it, so the flexible pill stays at least as wide as its widest sibling. */
+function allRowsFit(members: GroupMember[], fill: string | undefined): boolean {
   const lines = new Map<HTMLElement, Map<number, GroupMember[]>>()
   for (const member of members) {
     const container = rowContainer(member.pill)
@@ -85,8 +87,10 @@ function allRowsFit(members: GroupMember[]): boolean {
     const style = getComputedStyle(container)
     const available = container.clientWidth - px(style.paddingLeft) - px(style.paddingRight)
     for (const line of byTop.values()) {
-      const needed = line.reduce((sum, member) => sum + naturalWidth(member), 0) + px(style.columnGap) * (line.length - 1)
-      if (needed > available + 0.5) return false
+      const widths = line.map(naturalWidth)
+      const shared = line.length > 1 && line.some((member) => member.pill.dataset.slot === fill)
+      const pills = shared ? Math.max(...widths) * line.length : widths.reduce((sum, width) => sum + width, 0)
+      if (pills + px(style.columnGap) * (line.length - 1) > available + 0.5) return false
     }
   }
   return true
@@ -96,13 +100,20 @@ function allRowsFit(members: GroupMember[]): boolean {
  * Coordinates the prefixes of sibling pills (#541). Wrap a runner/model/effort row in it: every
  * prefix drops as soon as the row cannot hold all of them, so no value truncates while a sibling
  * still spends width on a prefix, and they return together once everything fits. Outside a group
- * each pill decides for itself (#522). Renders no DOM, so the row's own layout is untouched.
+ * each pill decides for itself (#522). With `fill`, a line that holds that pill beside siblings
+ * keeps the prefixes only while each prefixed pill fits an equal share of the line.
+ * Renders no DOM, so the row's own layout is untouched.
  */
-export function PickerPillGroup({ children }: { children: ReactNode }) {
+export function PickerPillGroup({ children, fill }: {
+  children: ReactNode
+  /** The slot of the pill that takes the row's flexible track (the engine row's Model). */
+  fill?: string | undefined
+}) {
   const members = useRef(new Map<string, GroupMember>())
   const observer = useRef<ResizeObserver | null>(null)
   const [showPrefixes, setShowPrefixes] = useState(true)
-  const evaluate = useCallback(() => setShowPrefixes(allRowsFit([...members.current.values()])), [])
+  const fillSlot = useRef(fill)
+  const evaluate = useCallback(() => setShowPrefixes(allRowsFit([...members.current.values()], fillSlot.current)), [])
   const register = useCallback((id: string, member: GroupMember) => {
     members.current.set(id, member)
     if (typeof ResizeObserver !== 'undefined') {
@@ -118,6 +129,11 @@ export function PickerPillGroup({ children }: { children: ReactNode }) {
       evaluate()
     }
   }, [evaluate])
+  useLayoutEffect(() => {
+    if (fillSlot.current === fill) return
+    fillSlot.current = fill
+    evaluate()
+  }, [fill, evaluate])
   useLayoutEffect(() => () => observer.current?.disconnect(), [])
   const value = useMemo(() => ({ register, showPrefixes }), [register, showPrefixes])
   return <PrefixGroupContext.Provider value={value}>{children}</PrefixGroupContext.Provider>
@@ -477,10 +493,11 @@ export function RunnerPill({
   const options = available.flatMap((runner) => {
     const logins = accounts.filter((entry) => entry.provider === runner.id)
     // One login is not a choice, so it does not become a row of its own — the agent is the row.
-    if (logins.length < 2) return [{ value: choiceValue(runner.id, null), label: runner.id, desc: runner.pickerDescription }]
+    const name = runner.displayName
+    if (logins.length < 2) return [{ value: choiceValue(runner.id, null), label: name, desc: runner.pickerDescription }]
     return logins.map((login) => ({
       value: choiceValue(runner.id, login.id),
-      label: `${runner.id} · ${login.label}`,
+      label: `${name} · ${login.label}`,
       // The folder when available (omitted on a non-admin remote cockpit).
       ...(login.configDir ? { desc: login.configDir } : {}),
     }))
@@ -504,7 +521,7 @@ export function RunnerPill({
       fieldLabel={fieldLabel}
       slot="runner-pill"
       ariaLabel="Runner"
-      label={options.find((option) => option.value === value_)?.label ?? value}
+      label={options.find((option) => option.value === value_)?.label ?? runnerDisplayName(registered, value)}
       value={value_}
       disabled={disabled && !linksOnly}
       choicesDisabled={linksOnly}
@@ -524,8 +541,9 @@ export function RunnerPill({
 export function UnavailableRunnerLinks({ uninstalled, signedOut }: { uninstalled: readonly Runner[]; signedOut: readonly Runner[] }) {
   const registered = useRunners().data
   const entries = runnerEntries(registered).flatMap((entry) => {
-    if (uninstalled.includes(entry.id)) return [{ id: entry.id, state: 'Not installed', action: 'Install in Settings' }]
-    if (signedOut.includes(entry.id)) return [{ id: entry.id, state: 'Not signed in', action: 'Sign in in Settings' }]
+    const name = entry.displayName
+    if (uninstalled.includes(entry.id)) return [{ id: entry.id, name, state: 'Not installed', action: 'Install in Settings' }]
+    if (signedOut.includes(entry.id)) return [{ id: entry.id, name, state: 'Not signed in', action: 'Sign in in Settings' }]
     return []
   })
   if (entries.length === 0) return null
@@ -536,7 +554,7 @@ export function UnavailableRunnerLinks({ uninstalled, signedOut }: { uninstalled
         <DropdownMenuItem key={entry.id} asChild className="gap-2.5 ps-8">
           <RouterLink to={agentCardPath(entry.id)} data-slot="runner-install-link" data-runner={entry.id}>
             <span className="flex min-w-0 flex-col">
-              <span className="text-[13px] font-medium text-muted-foreground">{entry.id}</span>
+              <span className="text-[13px] font-medium text-muted-foreground">{entry.name}</span>
               <span className="text-[11px] text-muted-foreground">
                 {entry.state} · <span className="font-medium text-accent-text">{entry.action}</span>
               </span>

@@ -1,3 +1,4 @@
+import { SettingsSelect } from './settings-select'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { GaugeIcon } from '@/components/design-icons'
 
@@ -12,7 +13,8 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { useUnsentDraft } from '@/lib/version-reload'
 import { useSavedDraft } from '@/lib/saved-draft'
-import { SettingsField } from './settings-field'
+import { SETTINGS_LABEL_CLASS, SettingsField } from './settings-field'
+import { SaveRow } from './save-cue'
 
 /**
  * Global settings → Resources: how hard the MACHINE works. `maxParallel` caps concurrent tasks
@@ -161,7 +163,7 @@ function ResourcesForm({ config }: { config: WorkspaceConfigResponse }) {
 
       <SettingsField
         title="Auto-resume after a usage limit"
-        hint="Resume eligible tasks once the provider usage limit resets."
+        hint="Resumes eligible tasks at the reset time the provider reports. Saves automatically."
       >
         <Switch
           aria-label="Auto-resume after a usage limit"
@@ -170,9 +172,6 @@ function ResourcesForm({ config }: { config: WorkspaceConfigResponse }) {
           disabled={save.isPending}
           onCheckedChange={saveAutoResume}
         />
-        <p className="text-[11px] text-soft-foreground">
-          Applies to Claude, Codex and OpenCode — whenever the provider says when the limit lifts.
-        </p>
       </SettingsField>
 
       <MemoryField
@@ -206,9 +205,9 @@ function MaxParallelField({
   return (
     <SettingsField
       title="Max parallel tasks"
-      hint="Limit simultaneously running tasks."
+      hint="Limits how many tasks run at once. Saves automatically."
     >
-      <select
+      <SettingsSelect
         aria-label="Max parallel tasks"
         data-slot="resources-max-parallel"
         value={maxParallel}
@@ -223,13 +222,13 @@ function MaxParallelField({
             </option>
           ),
         )}
-      </select>
-      <p className="text-[11px] text-soft-foreground">
+      </SettingsSelect>
+      <p className="text-xs text-muted-foreground">
         Need a different limit for one project?{' '}
         <Link
           to="/settings/global/projects"
           data-slot="resources-project-limits-link"
-          className="font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+          className="font-medium text-link-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
         >
           Configure per-project limits
         </Link>
@@ -254,9 +253,9 @@ function MaxMonitoringField({
   return (
     <SettingsField
       title="Extra monitoring sessions"
-      hint="Additional capacity reserved for monitoring."
+      hint="Extra slots reserved for monitoring sessions. Saves automatically."
     >
-      <select
+      <SettingsSelect
         aria-label="Extra monitoring sessions"
         data-slot="resources-max-monitoring"
         value={maxMonitoringSessions ?? 2}
@@ -267,9 +266,9 @@ function MaxMonitoringField({
         {Array.from({ length: MAX_MONITORING_MAX + 1 }, (_, n) => (
           <option key={n} value={n}>{n}</option>
         ))}
-      </select>
-      <p className="text-[11px] text-soft-foreground">
-        Capacity: {maxParallel} active + {maxMonitoringSessions ?? 2} monitoring. Set 0 to make monitoring share active slots.
+      </SettingsSelect>
+      <p className="text-xs text-muted-foreground">
+        Capacity: {maxParallel} active + {maxMonitoringSessions ?? 2} monitoring. 0 shares the active slots.
       </p>
     </SettingsField>
   )
@@ -312,7 +311,7 @@ function WakeField({
         />
         {wakeMode === 'interval' ? (
           <>
-            <label htmlFor="monitoring-wake-interval" className="w-full text-sm">Wake interval</label>
+            <label htmlFor="monitoring-wake-interval" className={`w-full ${SETTINGS_LABEL_CLASS}`}>Wake interval</label>
             <input
               id="monitoring-wake-interval"
               type="number"
@@ -323,18 +322,18 @@ function WakeField({
               value={wakeInterval}
               disabled={saveIsPending}
               onChange={(event) => setWakeInterval(event.target.value)}
-              className="block w-24 rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+              className="block rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
             />
-            <span className="text-xs text-soft-foreground">minutes</span>
+            <span className="text-xs text-muted-foreground">minutes</span>
           </>
         ) : null}
-        <Button type="button" variant="outline" size="sm" data-action="resources-save-monitoring-wake" disabled={wakeSaved || showInvalid || saveIsPending} onClick={saveWake}>Save</Button>
+        <SaveRow show={wakeSaved && !showInvalid && !saveIsPending}>
+          <Button type="button" variant="primary" size="sm" data-action="resources-save-monitoring-wake" disabled={wakeSaved || showInvalid || saveIsPending} onClick={saveWake}>Save</Button>
+        </SaveRow>
       </div>
       {showInvalid ? (
-        <p data-slot="resources-monitoring-wake-invalid" className="text-[11px] text-danger">Enter a whole number from 1 to 60 minutes.</p>
-      ) : (
-        <p className="text-[11px] text-soft-foreground">Applied consistently to Claude, Codex and OpenCode.</p>
-      )}
+        <p data-slot="resources-monitoring-wake-invalid" className="text-xs text-danger">Enter a whole number from 1 to 60 minutes.</p>
+      ) : null}
     </SettingsField>
   )
 }
@@ -359,7 +358,7 @@ function MemoryField({
   return (
     <SettingsField
       title="Per-task memory limit"
-      hint="Leave blank for no limit."
+      hint="Applies to newly started tasks. Leave blank for no limit."
     >
       <div data-reports-dirty="" className="settings-resource-controls flex flex-wrap items-center gap-2">
         <input
@@ -373,27 +372,27 @@ function MemoryField({
           disabled={saveIsPending}
           placeholder="no limit"
           onChange={(event) => setMemory(event.target.value)}
-          className="block w-32 rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+          className="block rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
         />
-        <span className="text-xs text-soft-foreground">MiB</span>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          data-action="resources-save-memory"
-          disabled={memorySaved || memoryInvalid || saveIsPending}
-          onClick={saveMemory}
-        >
-          Save
-        </Button>
+        <span className="text-xs text-muted-foreground">MiB</span>
+        <SaveRow show={memorySaved && !memoryInvalid && !saveIsPending}>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            data-action="resources-save-memory"
+            disabled={memorySaved || memoryInvalid || saveIsPending}
+            onClick={saveMemory}
+          >
+            Save
+          </Button>
+        </SaveRow>
       </div>
       {memoryInvalid ? (
-        <p data-slot="resources-memory-invalid" className="text-[11px] text-danger">
+        <p data-slot="resources-memory-invalid" className="text-xs text-danger">
           Enter a whole number of at least {MEMORY_MIN_MB} MiB, or leave empty for no limit.
         </p>
-      ) : (
-        <p className="text-[11px] text-soft-foreground">Applies to newly started tasks.</p>
-      )}
+      ) : null}
     </SettingsField>
   )
 }
@@ -420,9 +419,9 @@ function ComposerDefaultsField({
       hint="Apply to new tasks unless overridden."
     >
       <div className="grid gap-4 sm:grid-cols-2" data-slot="resources-composer-defaults">
-        <label className="grid gap-1.5 text-sm">
-          <span className="font-medium">Autonomous by default</span>
-          <select
+        <label className="grid gap-1.5 text-sm sm:grid-cols-1">
+          <span className={SETTINGS_LABEL_CLASS}>Autonomous by default</span>
+          <SettingsSelect
             aria-label="Autonomous by default"
             value={triStateValue(composerDefaults.autonomous)}
             disabled={saveIsPending}
@@ -432,16 +431,16 @@ function ComposerDefaultsField({
             <option value="inherit">Inherit environment</option>
             <option value="on">On</option>
             <option value="off">Off</option>
-          </select>
-          <span className="text-[11px] text-soft-foreground">
+          </SettingsSelect>
+          <span className="text-xs text-muted-foreground">
             Inherited: {composerDefaults.inheritedAutonomous === 'source-dependent'
               ? 'Source-dependent — skills on, workflows off'
               : composerDefaults.inheritedAutonomous ? 'On' : 'Off'}
           </span>
         </label>
-        <label className="grid gap-1.5 text-sm">
-          <span className="font-medium">Use a worktree by default</span>
-          <select
+        <label className="grid gap-1.5 text-sm sm:grid-cols-1">
+          <span className={SETTINGS_LABEL_CLASS}>Use a worktree by default</span>
+          <SettingsSelect
             aria-label="Use a worktree by default"
             value={triStateValue(composerDefaults.worktree)}
             disabled={saveIsPending}
@@ -451,14 +450,14 @@ function ComposerDefaultsField({
             <option value="inherit">Inherit environment</option>
             <option value="on">On</option>
             <option value="off">Off</option>
-          </select>
-          <span className="text-[11px] text-soft-foreground">
+          </SettingsSelect>
+          <span className="text-xs text-muted-foreground">
             Inherited: {composerDefaults.inheritedWorktree ? 'On' : 'Off'}
           </span>
         </label>
       </div>
-      <p className="text-[11px] text-soft-foreground">
-        Interactive skills may recommend both off. Multi-step and parallel runs remain isolated.
+      <p className="text-xs text-muted-foreground">
+        Interactive skills may recommend both off. Multi-step and parallel runs remain isolated. Saves automatically.
       </p>
     </SettingsField>
   )

@@ -447,7 +447,30 @@ describe('ThreadView', () => {
     expect(document.querySelector('[data-slot="follow-up-engine"]')).not.toBeNull()
   })
 
-  it('closed but resumable → the action row holds exactly Archive and Continue (#281)', async () => {
+  it('at the review gate the engine pills fold into one summary line that opens them', async () => {
+    renderView(
+      <ThreadView
+        run={run('review', {
+          runner: 'claude',
+          steps: [
+            { id: 'task', name: 'Do the task', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0, sessionId: 's-1' },
+          ],
+        })}
+        thread={reduceThread(EVENTS)}
+      />,
+    )
+    const summary = await screen.findByRole('button', { name: /^Agent settings: Claude Code · / })
+    expect(summary.getAttribute('aria-expanded')).toBe('false')
+    expect(document.querySelector('[data-slot="follow-up-model-pill"]')).toBeNull()
+    fireEvent.click(summary)
+    const model = document.querySelector<HTMLElement>('[data-slot="follow-up-model-pill"]')
+    expect(model).not.toBeNull()
+    expect(document.querySelector('[data-slot="follow-up-engine-summary"]')).toBeNull()
+    // Focus follows into the pickers, so the keyboard user does not land on <body>.
+    expect(document.querySelector('[data-slot="follow-up-engine"]')?.contains(document.activeElement)).toBe(true)
+  })
+
+  it('closed but resumable → the action row holds exactly Continue; Archive stays in the header (#281)', async () => {
     const steps = [
       { id: 'task', name: 'Do the task', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0, sessionId: 's-1' },
     ]
@@ -456,7 +479,7 @@ describe('ThreadView', () => {
     // Continue replaces Send only once the provider query makes the run continuable.
     await waitFor(() => expect(actions()?.querySelector('[aria-label="Continue"]')).not.toBeNull())
     const labels = [...actions()!.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'))
-    expect([...labels].sort()).toEqual(['Archive task', 'Continue'])
+    expect(labels).toEqual(['Continue'])
   })
 
   /** #472 — stacked messages render as their own bubbles, after the task. */
@@ -1541,6 +1564,16 @@ describe('composer execution actions (#201)', () => {
     expect(screen.getByRole('button', { name: 'Stop' }).hasAttribute('disabled')).toBe(false)
   })
 
+  it('keeps Stop reachable while a pending ask waits for a reply', async () => {
+    const thread = reduceThread([line(1, 'ask.requested', {
+      requestId: 'pending-choice',
+      questions: [{ header: 'Checks', question: 'Where should checks run?', options: [{ label: 'Main' }, { label: 'Every branch' }] }],
+    })])
+    renderView(<ThreadView run={run('waiting', { waits: [openHumanWait(1)] } as unknown as Partial<ApiRun>)} thread={thread} />)
+    await screen.findByRole('textbox', { name: 'Reply to the agent' })
+    expect(screen.getByRole('button', { name: 'Stop' }).hasAttribute('disabled')).toBe(false)
+  })
+
   it('requeues a stopped unstarted task through the same composer Continue action', async () => {
     renderView(<ThreadView run={run('cancelled', { workflowDef: { name: 'quick-task', source: 'built-in' as const, steps: [{ id: 'task', name: 'Task', prompt: '{{task}}' }] } })} thread={reduceThread([])} />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(false))
@@ -1841,38 +1874,12 @@ describe('the composer action row (#281)', () => {
     expect(finishButton()).toBeNull()
   })
 
-  it('a finished task offers Archive where Stop used to sit', () => {
-    renderThread(run('done'))
-    const archive = archiveButton()
-    expect(archive?.textContent).toContain('Archive task')
+  // The header carries Archive on all four tabs (run-header.test.tsx), so the composer never
+  // holds a second copy and the header never shifts when the tab changes.
+  it.each([run('done'), run('done', { archived: true }), run('failed')])('a settled task keeps Archive out of the composer', (record) => {
+    renderThread(record)
+    expect(archiveButton()).toBeNull()
     expect(composerActions().querySelector('[aria-label="Stop"]')).toBeNull()
-  })
-
-  it('keeps Archive named when its composer label hides on mobile', () => {
-    renderThread(run('done'))
-    const archive = archiveButton() as HTMLButtonElement
-    expect(archive.getAttribute('aria-label')).toBe('Archive task')
-  })
-
-  it('Archive confirms first, then posts the flipped flag', async () => {
-    const sent = renderThread(run('done'))
-    fireEvent.click(archiveButton() as HTMLElement)
-    expect(sent.some((r) => r.path.endsWith('/archive'))).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: 'Archive task' }))
-    await waitFor(() =>
-      expect(sent.find((r) => r.method === 'POST' && r.path === '/api/v1/runs/r1/archive')?.body).toEqual({
-        archived: true,
-      }),
-    )
-  })
-
-  it('an archived task offers Unarchive, and restoring needs no confirmation', async () => {
-    const sent = renderThread(run('done', { archived: true }))
-    fireEvent.click(archiveButton() as HTMLElement)
-    await waitFor(() =>
-      expect(sent.find((r) => r.path === '/api/v1/runs/r1/archive')?.body).toEqual({ archived: false }),
-    )
-    expect(document.querySelector('[data-slot="task-confirmation"]')).toBeNull()
   })
 
   it.each(['running', 'queued', 'waiting'] as const)('%s keeps Stop in the slot, not Archive', (status) => {
@@ -1882,7 +1889,7 @@ describe('the composer action row (#281)', () => {
   })
 
   // hearsay-tools/cezarion#1233: a failed run holding wait results offers Stop to discard them. Stop
-  // takes the slot, and the header carries Archive on this tab instead (run-header.test.tsx).
+  // takes the slot; the header carries Archive as on every tab (run-header.test.tsx).
   it('a failed run holding wait results offers Stop in the slot, and Stop posts the cancel', async () => {
     const sent = renderThread(run('failed', {
       waits: [{
@@ -1902,11 +1909,6 @@ describe('the composer action row (#281)', () => {
     )
   })
 
-  it('an ordinary failed run keeps Archive in the slot and offers no Stop', () => {
-    renderThread(run('failed'))
-    expect(archiveButton()?.textContent).toContain('Archive task')
-    expect(composerActions().querySelector('[aria-label="Stop"]')).toBeNull()
-  })
 })
 
 

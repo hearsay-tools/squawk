@@ -40,7 +40,7 @@ function effectLabel(file: AgentConfigFile): string {
 
 export function AgentConfigSection() {
   const listing = useAgentConfig()
-  useSettingsAdminRefresh()
+  const refreshSettingsAdmin = useSettingsAdminRefresh()
   const health = useHealth()
   const runnersQuery = useRunners()
   const registered = runnersQuery.data
@@ -80,24 +80,33 @@ export function AgentConfigSection() {
       </p>
     )
   }
-  return <AgentConfigView listing={listing.data} descriptors={descriptors} installed={installed} />
+  return <AgentConfigView listing={listing.data} descriptors={descriptors} installed={installed} onOpenFile={refreshSettingsAdmin} />
 }
 
 function AgentConfigView({
   listing,
   descriptors,
   installed,
+  onOpenFile,
 }: {
   listing: AgentConfigListing
   descriptors: readonly AgentDescriptor[]
   installed: Runner[]
+  /** Re-reads the host's edit grant: the first file opens on load, so a click no longer mounts the
+   *  editor that used to re-read it. */
+  onOpenFile: () => Promise<void>
 }) {
   const [agentId, setAgentId] = useState<Runner>('claude')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // A saved or default agent id that no runner registered falls back to the first pane.
   const agent = descriptors.find((d) => d.id === agentId) ?? descriptors[0]
   if (agent === undefined) return null
-  const selected = listing.files.find((f) => f.id === selectedId) ?? null
+  // With nothing picked yet, the agent's first project file opens, so the editor column always
+  // shows a file pane and a first look never lands on a file that applies to every session on the
+  // machine. An agent with no project file opens its first file. A pick that left the agent's files
+  // falls back the same way.
+  const agentFiles = agentFileList(agent, listing)
+  const selected = agentFiles.find((f) => f.id === selectedId) ?? defaultFile(agentFiles)
 
   const pickAgent = (id: Runner) => {
     setAgentId(id)
@@ -106,11 +115,11 @@ function AgentConfigView({
 
   return (
     <div data-slot="agent-config" className="flex flex-col gap-5 p-4 md:p-6">
-      <p className="text-[13px] text-muted-foreground">Edit agent instructions and MCP configuration for this project.</p>
+      <p className="text-[13px] text-muted-foreground">Edit project, local, and user-wide config files for each coding agent.</p>
       {!listing.editable && (
         <div
           data-slot="agent-config-readonly"
-          className="rounded-md border border-border bg-muted/40 px-3 py-2 text-[13px] text-soft-foreground"
+          className="rounded-md border border-border bg-muted/40 px-3 py-2 text-[13px] text-muted-foreground"
         >
           Read-only: this remote cockpit cannot edit agent config. You can still see every file and which one wins.
           To edit here, the host operator runs <code>{REMOTE_SETTINGS_ENABLE_COMMAND}</code>.
@@ -147,27 +156,61 @@ function AgentConfigView({
       </div>
 
       {agent.note && (
-        <p data-slot="agent-config-agent-note" className="text-[12px] text-soft-foreground">
+        <p data-slot="agent-config-agent-note" className="text-xs text-muted-foreground">
           {agent.note}
         </p>
       )}
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(17rem,24rem)_minmax(0,1fr)]">
         <nav data-slot="agent-config-nav" className="flex min-w-0 flex-col gap-5">
-          <AgentPane agent={agent} listing={listing} selectedId={selectedId} onSelect={setSelectedId} />
+          <AgentPane agent={agent} listing={listing} selectedId={selected?.id ?? null} onSelect={(id) => {
+            setSelectedId(id)
+            void onOpenFile()
+          }} />
         </nav>
         <div data-slot="agent-config-editor-pane" className="min-w-0">
           {selected ? (
             <FileEditor key={selected.id} file={selected} />
           ) : (
-            <div className="flex h-full min-h-40 items-center justify-center rounded-md border border-dashed border-border text-[13px] text-soft-foreground">
-              Select a config file to view or edit it.
-            </div>
+            // Only an agent with no files at all gets here: a short note, not a full-height empty frame.
+            <p data-slot="agent-config-editor-empty" className="rounded-md border border-border bg-muted/40 px-4 py-3 text-[13px] text-soft-foreground">
+              This agent has no config files to show.
+            </p>
           )}
         </div>
       </div>
     </div>
   )
+}
+
+/** The agent's files in pane order. A file two groups list appears twice; only the first counts. */
+function agentFileList(agent: AgentDescriptor, listing: AgentConfigListing): AgentConfigFile[] {
+  return agent.groups.flatMap((g) => listing.files.filter(g.files))
+}
+
+/** The file that opens before any pick: the first project-scope file, else the first file. */
+function defaultFile(files: readonly AgentConfigFile[]): AgentConfigFile | null {
+  return files.find((f) => f.scope === 'project') ?? files[0] ?? null
+}
+
+const SCOPE_LABEL: Record<AgentConfigFile['scope'], string> = {
+  project: 'Project scope',
+  local: 'Local scope',
+  user: 'User scope',
+}
+
+/** The home folder as `~`. The server sends Claude's state file as an absolute path, while the file
+ *  labels already use `~/`: a user-scope file whose label starts with `~/` gives the home folder,
+ *  so both read the same way even when the server's home is not under /home or /Users. */
+function homeShortPath(path: string, files: readonly AgentConfigFile[]): string {
+  for (const file of files) {
+    if (!file.label.startsWith('~/')) continue
+    const rest = file.label.slice(1)
+    if (!file.path.endsWith(rest)) continue
+    const home = file.path.slice(0, file.path.length - rest.length)
+    if (home && (path === home || path.startsWith(`${home}/`))) return `~${path.slice(home.length)}`
+  }
+  return path.replace(/^\/(?:home|Users)\/[^/]+(?=\/|$)/, '~')
 }
 
 function AgentPane({
@@ -194,11 +237,11 @@ function AgentPane({
             <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-soft-foreground">
               {g.label}
             </p>
-            {g.note && <p className="mb-2 text-[12px] text-soft-foreground">{g.note}</p>}
+            {g.note && <p className="mb-2 text-xs text-muted-foreground">{g.note}</p>}
             {files.length === 0 && g.empty && (
               <p
                 data-slot="agent-config-group-empty"
-                className="rounded-md border border-dashed border-border px-3 py-2 text-[12px] text-soft-foreground"
+                className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground"
               >
                 {g.empty}
               </p>
@@ -211,23 +254,30 @@ function AgentPane({
                     data-slot="agent-config-file"
                     data-selected={file.id === selectedId}
                     onClick={() => onSelect(file.id)}
+                    title={file.label}
                     className={cn(
-                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors',
+                      'flex w-full flex-col items-start gap-1 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors',
                       file.id === selectedId ? 'bg-accent-strong/15 text-foreground' : 'hover:bg-muted/60',
                     )}
                   >
-                    <span className="min-w-0 flex-1 truncate font-mono text-[12px]">{file.label}</span>
-                    {file.seeded && (
-                      <Badge variant="outline" className="shrink-0 text-[12px]">
-                        seeded
-                      </Badge>
-                    )}
-                    {!file.exists && <span className="shrink-0 text-[11px] text-soft-foreground">absent</span>}
+                    {/* The full filename on its own line — it wraps, never truncates — and the
+                        status badges on a compact subline below it. */}
+                    <span data-slot="agent-config-file-name" className="min-w-0 max-w-full break-all font-mono text-[12px]">{file.label}</span>
+                    {file.seeded || !file.exists ? (
+                      <span data-slot="agent-config-file-meta" className="flex flex-wrap items-center gap-1.5">
+                        {file.seeded && (
+                          <Badge variant="outline" className="text-[11px]">
+                            Default template
+                          </Badge>
+                        )}
+                        {!file.exists && <span className="text-xs text-muted-foreground">Not created</span>}
+                      </span>
+                    ) : null}
                   </button>
                 </li>
               ))}
             </ul>
-            {userMcp && <UserMcpBlock userMcp={userMcp} />}
+            {userMcp && <UserMcpBlock userMcp={userMcp} path={homeShortPath(userMcp.path, listing.files)} />}
           </section>
         )
       })}
@@ -237,13 +287,15 @@ function AgentPane({
 
 /** Claude's user/local MCP scopes live in ~/.claude.json (Claude's own state
  *  file) — listed read-only; Squawk never edits it. */
-function UserMcpBlock({ userMcp }: { userMcp: NonNullable<AgentConfigListing['userMcp']> }) {
+function UserMcpBlock({ userMcp, path }: { userMcp: NonNullable<AgentConfigListing['userMcp']>; path: string }) {
   return (
     <div data-slot="agent-config-user-mcp" className="mt-3">
       <h4 className="mb-1 text-[12px] font-semibold">User &amp; local scopes</h4>
-      <p className="mb-2 text-[12px] text-soft-foreground">
-        Managed by <code className="font-mono">claude mcp add</code> in {userMcp.path} — Squawk does not edit
-        Claude’s state file.
+      <p className="mb-2 text-xs text-muted-foreground">
+        {/* One unbroken code span: a wrap inside the command split it into a code half and a prose half. */}
+        Managed by <code data-slot="agent-config-user-mcp-command" className="whitespace-nowrap font-mono">claude mcp add</code> in{' '}
+        <code data-slot="agent-config-user-mcp-path" title={userMcp.path} className="break-all font-mono text-foreground/80">{path}</code> — Squawk
+        does not edit Claude’s state file.
       </p>
       {userMcp.readable ? (
         userMcp.servers.length > 0 ? (
@@ -257,10 +309,10 @@ function UserMcpBlock({ userMcp }: { userMcp: NonNullable<AgentConfigListing['us
             ))}
           </ul>
         ) : (
-          <p className="text-[12px] text-soft-foreground">No user-scoped MCP servers.</p>
+          <p className="text-xs text-muted-foreground">No user-scoped MCP servers.</p>
         )
       ) : (
-        <p className="text-[12px] text-soft-foreground">Could not read the file.</p>
+        <p className="text-xs text-muted-foreground">Could not read the file.</p>
       )}
     </div>
   )
@@ -299,8 +351,14 @@ export function FileEditor({ file }: { file: AgentConfigFile }) {
 
   return (
     <div data-slot="settings-config-editor" data-reports-dirty="" className="flex flex-col gap-3">
-      <h3 className="text-sm">Configuration file</h3>
-      <p data-slot="agent-config-scope" title={file.path} className="text-[12px] text-muted-foreground break-words">{file.scope.charAt(0).toUpperCase() + file.scope.slice(1)} scope · {file.path}</p>
+      {/* The scope sits beside the heading, so the file's reach shows before its contents. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-sm">Configuration file</h3>
+        <Badge variant="outline" data-slot="agent-config-scope" data-scope={file.scope} className="text-[12px]">
+          {SCOPE_LABEL[file.scope]}
+        </Badge>
+      </div>
+      <p data-slot="agent-config-path" title={file.path} className="font-mono text-xs text-foreground/80">{homeShortPath(file.path, [file])}</p>
       <div className="settings-readout flex flex-wrap items-center gap-2">
         <span className="font-mono text-[13px]">{file.label}</span>
         <Badge variant="outline" className="text-[12px] uppercase">
@@ -326,39 +384,19 @@ export function FileEditor({ file }: { file: AgentConfigFile }) {
       ) : fileQuery.isError ? (
         <p className="text-[13px] text-destructive">{fileQuery.error.message}</p>
       ) : (
-        <CodeEditor
-          value={content}
-          language={file.format}
-          readOnly={!canWrite}
-          onChange={setDraft}
-          aria-label={`${file.label} contents`}
-          className="h-[210px]"
-        />
+        <EditorFrame file={file} content={content} isMcp={isMcp} onChange={setDraft} />
       )}
 
       <SaveStateMessages formatError={formatError} conflict={conflict} onReload={() => void fileQuery.refetch()} />
 
       {canWrite && (
-        <div className="settings-form-actions">
-          <Button size="sm" onClick={save} disabled={!dirty || isSaving}>
-            {file.exists ? 'Save file' : 'Create file'}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setDraft(null)}
-            disabled={!dirty || isSaving}
-          >
-            Reset
-          </Button>
-          {dirty && <span className="text-[12px] text-soft-foreground">Unsaved changes</span>}
-        </div>
+        <FileActions exists={file.exists} dirty={dirty} isSaving={isSaving} onSave={save} onReset={() => setDraft(null)} />
       )}
       <div className="settings-config-save-help">
-      <p data-slot="agent-config-precedence" className="text-[12px] text-soft-foreground">
+      <p data-slot="agent-config-precedence" className="text-xs text-muted-foreground">
         {file.precedence}
       </p>
-      <p data-slot="agent-config-effect" className="text-[12px] text-foreground/80">
+      <p data-slot="agent-config-effect" className="text-xs text-foreground/80">
         {effectLabel(file)}
         {file.hotReload ? ` ${file.hotReload}` : ''}
       </p>
@@ -367,6 +405,92 @@ export function FileEditor({ file }: { file: AgentConfigFile }) {
       </div>
     </div>
   )
+}
+
+/** The editor, with a faint example over it while a file that does not exist yet is still empty. */
+function EditorFrame({
+  file,
+  content,
+  isMcp,
+  onChange,
+}: {
+  file: AgentConfigFile
+  content: string
+  isMcp: boolean
+  onChange: (next: string) => void
+}) {
+  return (
+    <div data-slot="agent-config-editor-frame" className="relative">
+      <CodeEditor
+        value={content}
+        language={file.format}
+        readOnly={!file.writable}
+        onChange={onChange}
+        aria-label={`${file.label} contents`}
+        className="h-[210px]"
+      />
+      {/* The editor has no placeholder, so this overlay sits on its surface, inset by its 1px
+          border and with its padding and font, and vanishes on the first keystroke. */}
+      {!file.exists && content === '' && (
+        <pre
+          data-slot="agent-config-placeholder"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-px m-0 overflow-hidden whitespace-pre px-3 py-2 font-mono text-xs leading-[1.7] text-muted-foreground/80"
+        >
+          {placeholderFor(file, isMcp)}
+        </pre>
+      )}
+    </div>
+  )
+}
+
+/** Save/Create and Reset, with a quiet cue that says why they are disabled — the same voice as
+ *  "No unsaved changes" on every other settings page. */
+function FileActions({
+  exists,
+  dirty,
+  isSaving,
+  onSave,
+  onReset,
+}: {
+  exists: boolean
+  dirty: boolean
+  isSaving: boolean
+  onSave: () => void
+  onReset: () => void
+}) {
+  const cue = dirty ? 'Unsaved changes' : exists ? 'No unsaved changes' : 'Enter content above to create this file'
+  return (
+    <div className="settings-form-actions">
+      <Button size="sm" onClick={onSave} disabled={!dirty || isSaving}>
+        {exists ? 'Save file' : 'Create file'}
+      </Button>
+      <Button size="sm" variant="outline" onClick={onReset} disabled={!dirty || isSaving}>
+        Reset
+      </Button>
+      {!isSaving && (
+        <span data-slot="agent-config-save-cue" className="self-center text-xs text-muted-foreground">
+          {cue}
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** An example for a file that does not exist yet, in the file's own format. Its first line says the
+ *  file is not created yet, so the faint text never reads as contents already on disk. */
+function placeholderFor(file: AgentConfigFile, isMcp: boolean): string {
+  switch (file.format) {
+    case 'json':
+    case 'jsonc':
+      return `// File not created yet — example:\n${isMcp ? '{\n  "mcpServers": {}\n}' : '{\n  "permissions": {}\n}'}`
+    case 'markdown':
+      return '<!-- File not created yet — write instructions here -->'
+    case 'toml':
+      return '# File not created yet — example:\n# key = "value"'
+    case 'yaml':
+      return '# File not created yet — example:\n# key: value'
+  }
 }
 
 function SaveStateMessages({

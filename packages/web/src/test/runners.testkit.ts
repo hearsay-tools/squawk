@@ -32,7 +32,7 @@ export const RUNNERS_RESPONSE: RunnersResponse = {
         retired: ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5'],
       },
       agentConfig: {
-        label: 'Claude',
+        label: 'Claude Code',
         groups: [
           GROUPS[0],
           { ...GROUPS[1], note: 'A dedicated .mcp.json (key: mcpServers), shared via version control.', showsUserMcp: true },
@@ -62,7 +62,7 @@ export const RUNNERS_RESPONSE: RunnersResponse = {
       },
     },
     {
-      id: 'pi', displayName: 'pi', modelListName: 'Pi', modelIdScope: 'provider-spanning',
+      id: 'pi', displayName: 'Pi', modelListName: 'Pi', modelIdScope: 'provider-spanning',
       pickerLabel: 'pi', pickerDescription: 'pi CLI (provider/model)', icon: 'bot',
       installHint: 'https://github.com/badlogic/pi-mono', loginCommand: 'pi /login',
       accountFolderExample: '~/.pi-second/agent',
@@ -92,6 +92,19 @@ export const RUNNERS_RESPONSE: RunnersResponse = {
     },
   ],
 }
+
+/** A registered runner the cockpit has no built-in knowledge of: an id no table names and a display
+ *  name that is not the id. A surface that shows it must read the name from the runners list. */
+export const UNFAMILIAR_RUNNER: RunnersResponse['runners'][number] = {
+  id: 'zed-agent', displayName: 'Zed Agent', modelListName: 'Zed', modelIdScope: 'own',
+  pickerLabel: 'zed', pickerDescription: 'Zed agent CLI', icon: 'bot',
+  installHint: 'https://zed.example', loginCommand: 'zed login',
+  models: auto('Use your Zed default model'),
+  agentConfig: { label: 'Zed Agent', groups: [GROUPS[0], { ...GROUPS[1], note: 'Zed keeps no MCP file.' }, GROUPS[2]] },
+}
+
+/** The runners list with `UNFAMILIAR_RUNNER` registered after the built-in runners. */
+export const RUNNERS_WITH_UNFAMILIAR: RunnersResponse = { runners: [...RUNNERS_RESPONSE.runners, UNFAMILIAR_RUNNER] }
 
 /** The fixture's runner ids, in display order. */
 export const RUNNER_IDS: readonly string[] = RUNNERS_RESPONSE.runners.map((entry) => entry.id)

@@ -41,7 +41,7 @@ const ACCENT_OPTIONS: Array<{ value: Accent; label: string; swatch: string }> = 
 const DENSITY_OPTIONS: Array<{ value: Density; label: string }> = [
   { value: 'comfortable', label: 'Comfortable' },
   { value: 'compact', label: 'Compact' },
-  { value: 'ultra', label: 'Compact for real' },
+  { value: 'ultra', label: 'Ultra-compact' },
 ]
 
 const WIDTH_OPTIONS: Array<{ value: Width; label: string }> = [
@@ -68,7 +68,7 @@ function Segmented<V extends string>({
       role="radiogroup"
       aria-label={label}
       data-slot={slot}
-      className="inline-flex w-fit gap-0.5 rounded-md border border-border bg-card p-0.5 max-md:max-w-full max-md:flex-wrap"
+      className="inline-flex w-fit gap-0.5 rounded-lg border border-border bg-muted/60 p-1 max-md:max-w-full max-md:flex-wrap"
     >
       {options.map((option) => {
         const checked = option.value === value
@@ -81,9 +81,9 @@ function Segmented<V extends string>({
             data-value={option.value}
             onClick={() => onChange(option.value)}
             className={cn(
-              'flex min-h-11 items-center gap-2 rounded-sm px-3 py-1.5 text-[13px] font-medium transition-colors',
+              'flex min-h-11 items-center gap-2 whitespace-nowrap rounded-md border border-transparent px-3 py-1.5 text-[13px] font-medium transition-colors',
               checked
-                ? 'bg-muted text-foreground'
+                ? 'border border-border bg-card text-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
@@ -187,7 +187,7 @@ export function AppearanceSection() {
         <span className="text-[12px] text-soft-foreground">PREVIEW</span>
         <p className="mt-3 text-base">Review finalization retries</p>
         <p className="mt-3 text-xs text-muted-foreground">Needs you · Squawk · Task {'#'}227</p>
-        <span className="mt-3 inline-flex rounded-md border border-accent-strong/30 bg-accent-strong/10 px-4 py-3 text-xs text-accent-text">Open task</span>
+        <span className="mt-3 inline-flex rounded-md border border-border bg-card px-4 py-3 text-xs text-foreground shadow-xs">Open task</span>
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground">Changes apply immediately. Theme is browser-local; density and reading width are saved with your workspace.</p>
     </div>

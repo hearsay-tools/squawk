@@ -17,6 +17,7 @@ import { parseWorktreeSetupInput } from './worktree-setup-input'
 import { SettingsField } from './settings-field'
 import { useActiveProjectRoot } from './project-location'
 import { RemoteSettingsNotice, useSettingsAdminRefresh } from './remote-settings-notice'
+import { SaveRow } from './save-cue'
 
 type WorktreeCommandsKey = 'worktreeSetup' | 'worktreeTeardown'
 
@@ -42,7 +43,7 @@ export const WORKTREE_COMMANDS_COPY: Record<'setup' | 'teardown', WorktreeComman
     issueKey: 'worktreeSetupIssue',
     slot: 'worktree-setup',
     title: 'Prepare new worktrees',
-    hint: 'Runs in every new task and worker worktree before the agent starts, in order, stopping at the first failure. Leave commands empty to skip setup.',
+    hint: 'Runs in order in every new task and worker worktree before the agent starts. The first failure stops setup.',
     empty: 'No setup commands configured. No commands will run in new worktrees.',
     label: 'Worktree setup commands, one per line',
     example: 'npm ci',
@@ -56,7 +57,7 @@ export const WORKTREE_COMMANDS_COPY: Record<'setup' | 'teardown', WorktreeComman
     issueKey: 'worktreeTeardownIssue',
     slot: 'worktree-teardown',
     title: 'Stop worker services before destroy',
-    hint: 'Runs in a worker’s worktree when the worker is destroyed, before destroy stops the worker’s processes, in order, stopping at the first failure. A failure is recorded on the worker and destroy goes on. Leave commands empty to skip teardown.',
+    hint: 'Runs in order in a worker’s worktree when the worker is destroyed, before its processes stop. The first failure stops teardown; destroy goes on and records it on the worker.',
     empty: 'No teardown commands configured. Destroy runs no commands in worker worktrees.',
     label: 'Worktree teardown commands, one per line',
     example: 'docker compose down',
@@ -65,6 +66,13 @@ export const WORKTREE_COMMANDS_COPY: Record<'setup' | 'teardown', WorktreeComman
     cleared: 'Worktree teardown cleared',
     save: 'Save teardown',
   },
+}
+
+/** Guidance inside the empty box, so it reads as a command list and not a blank panel. The example
+ *  is labelled as one, and only an editable box shows it: a bare greyed `npm ci` read as a saved
+ *  command (hearsay-tools/cezarion#926). */
+function commandsPlaceholder(copy: WorktreeCommandsCopy, editable: boolean): string | undefined {
+  return editable ? `One command per line, for example: ${copy.example}` : undefined
 }
 
 /**
@@ -156,16 +164,14 @@ export function WorktreeCommandsField({ config, copy }: { config: ConfigResponse
           autoCapitalize="off"
           autoCorrect="off"
           value={text}
+          placeholder={commandsPlaceholder(copy, editable)}
           readOnly={!editable}
           disabled={save.isPending}
           onChange={(event) => setText(event.target.value)}
-          className={`${control} min-h-24 w-full resize-y font-mono text-[13px] leading-relaxed`}
+          className={`${control} field-sizing-content min-h-24 max-h-[min(24rem,60dvh)] w-full resize-none overflow-y-auto font-mono text-[13px] leading-relaxed`}
         />
-        <p className="text-xs text-soft-foreground">
-          Example only: <code>{copy.example}</code>. Commands run only after they are saved.
-        </p>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-xs text-soft-foreground">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Timeout per command</span>
             <input
               type="number"
@@ -183,17 +189,19 @@ export function WorktreeCommandsField({ config, copy }: { config: ConfigResponse
             />
             <span>seconds</span>
           </label>
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            className="min-h-11 self-start md:min-h-0"
-            data-action={`${copy.slot}-save`}
-            disabled={!editable || unchanged || invalid !== null || save.isPending}
-            onClick={submit}
-          >
-            {copy.save}
-          </Button>
+          <SaveRow show={editable && unchanged && !save.isPending}>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              className="min-h-11 md:min-h-0"
+              data-action={`${copy.slot}-save`}
+              disabled={!editable || unchanged || invalid !== null || save.isPending}
+              onClick={submit}
+            >
+              {copy.save}
+            </Button>
+          </SaveRow>
         </div>
       </WorktreeCommandsStatus>
     </SettingsField>

@@ -1,5 +1,5 @@
 import { LoaderCircleIcon } from 'lucide-react'
-import { CircleCheckIcon, CircleIcon, CircleXIcon } from '@/components/design-icons'
+import { CircleCheckIcon, CircleDotIcon, CircleIcon, CircleXIcon } from '@/components/design-icons'
 
 import type { ApiRun, RunStatus, StepState, StepStatus } from '@open-mercato/cezar-api-client'
 import { cn } from '@/lib/utils'
@@ -32,6 +32,21 @@ export function railVisual(status: StepStatus): RailVisual {
   }
 }
 
+/** What a step's glyph draws: its rail visual, except that the live step of a run that waits
+ *  (for a reply, an approval, a check or a timer) is `paused`. The agent is not moving then, so a
+ *  spinner beside "waiting for your reply" would say the opposite. */
+export type StepGlyph = RailVisual | 'paused'
+
+export function stepGlyph(status: StepStatus, runStatus: RunStatus): StepGlyph {
+  const visual = railVisual(status)
+  return visual === 'active' && runStatus === 'waiting' ? 'paused' : visual
+}
+
+/** The words for a step glyph in an accessible name. */
+export function stepGlyphWord(glyph: StepGlyph): string {
+  return glyph === 'active' ? 'running' : glyph
+}
+
 /** Mercato's bar formula, `(done + 0.5·running) / total`, generalized over the real status
  *  set: any TERMINAL step counts 1 (the bar measures progress through the workflow, not
  *  success), any ACTIVE one ½, pending 0. */
@@ -47,7 +62,8 @@ export function railProgress(steps: ReadonlyArray<Pick<StepState, 'status'>>): n
   return score / steps.length
 }
 
-export function StepRail({ steps }: { steps: StepState[] }) {
+/** `runStatus` makes the live step of a waiting run read `paused`; the bare rail reads steps alone. */
+export function StepRail({ steps, runStatus = 'running' }: { steps: StepState[]; runStatus?: RunStatus }) {
   if (steps.length === 0) return null
   const pct = railProgress(steps) * 100
   return (
@@ -56,10 +72,10 @@ export function StepRail({ steps }: { steps: StepState[] }) {
         <div
           key={step.id}
           data-slot="step-row"
-          data-visual={railVisual(step.status)}
+          data-visual={stepGlyph(step.status, runStatus)}
           className="flex min-h-[22px] min-w-0 items-center gap-2 text-[13px] text-muted-foreground"
         >
-          <RailIcon visual={railVisual(step.status)} />
+          <RailIcon visual={stepGlyph(step.status, runStatus)} />
           <span className="min-w-0 truncate font-medium text-foreground">{step.name}</span>
           {step.iterations > 1 ? (
             <span data-slot="step-iterations" className="shrink-0 text-xs text-soft-foreground tabular-nums">
@@ -78,7 +94,7 @@ export function StepRail({ steps }: { steps: StepState[] }) {
   )
 }
 
-function RailIcon({ visual }: { visual: RailVisual }) {
+function RailIcon({ visual }: { visual: StepGlyph }) {
   const base = 'size-[13px] shrink-0'
   switch (visual) {
     case 'done':
@@ -89,15 +105,21 @@ function RailIcon({ visual }: { visual: RailVisual }) {
           role="status"
           aria-label="Step running"
           // stroke-pending, not text-*: amber is a dot & spinner color only (guardian rule).
-          className={cn(base, 'animate-spin stroke-pending motion-reduce:animate-none')}
+          className={cn(base, 'animate-spin stroke-pending motion-reduce:animate-none [html.light_&]:stroke-pending-strong')}
         />
       )
+    case 'paused':
+      return <CircleDotIcon role="img" aria-label="Step paused" className={cn(base, PAUSED_INK)} />
     case 'failed':
       return <CircleXIcon aria-hidden className={cn(base, 'text-danger')} />
     case 'pending':
       return <CircleIcon aria-hidden className={cn(base, 'text-soft-foreground')} />
   }
 }
+
+/** The paused step's still amber dot: the spinner's ink without its motion (stroke-pending, not
+ *  text-*: amber is a dot & spinner color only). */
+export const PAUSED_INK = 'stroke-pending [html.light_&]:stroke-pending-strong'
 
 /** A run the rail reads: its steps, its status and the step it runs. */
 export type RailRun = Pick<ApiRun, 'status' | 'currentStepId' | 'steps'>

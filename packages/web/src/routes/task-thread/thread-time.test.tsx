@@ -37,9 +37,10 @@ const localIso = (
 const GARBAGE = ['', 'not a date', undefined]
 
 describe('thread-time formatters', () => {
-  it('formats a short local time and a full instant for the tooltip', () => {
+  it('formats a short local 24-hour time and a full instant for the tooltip', () => {
     const ts = localIso(2026, 8, 30, 14, 32)
-    expect(clockLabel(ts)).toMatch(/\b\d{1,2}:32\b/)
+    expect(clockLabel(ts)).toMatch(/\b14[:.]32\b/)
+    expect(clockLabel(localIso(2026, 8, 30, 1, 7))).toMatch(/\b01[:.]07\b/)
     // The tooltip carries the date too — that is the whole reason it exists.
     expect(exactLabel(ts)).toContain('2026')
     expect(exactLabel(ts)).not.toBe(clockLabel(ts))

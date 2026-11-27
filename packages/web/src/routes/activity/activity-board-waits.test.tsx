@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, within } from '@testing-library/react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActivityProject, ActivityRun } from '@open-mercato/cezar-api-client/contract/activity'
@@ -9,6 +10,10 @@ import { EMPTY_MOTION, applyMotion, planMotion, type MotionState } from './activ
 import type { Box } from './line-geometry'
 import { PEER_LABEL } from './line-measure'
 import { placeBoxes, samplePath } from './line-layout.testkit'
+import { createQueryClient } from '@/api/query-client'
+import { seedRunners } from '@/test/runners.testkit'
+
+const runnersClient = seedRunners(createQueryClient())
 
 /**
  * Peer-wait lines on the project view (spec 2026-11-05-live-activity-view, "Lines between
@@ -41,9 +46,9 @@ function renderBoard(value: ActivityProject, boxes: Record<string, Box>, width =
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width)
   placeBoxes('data-activity-card', boxes)
   return render(
-    <MemoryRouter initialEntries={['/p/cezarion/activity']}>
+    <QueryClientProvider client={runnersClient}><MemoryRouter initialEntries={['/p/cezarion/activity']}>
       <ActivityBoard project={value} now={NOW} watchingSince={iso(-60_000)} motion={motion} />
-    </MemoryRouter>,
+    </MemoryRouter></QueryClientProvider>,
   )
 }
 

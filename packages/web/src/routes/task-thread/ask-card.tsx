@@ -75,14 +75,14 @@ export function AskCard({ ask, run, onShowOrigin }: {
 }
 
 /** The pinned copy's link to the question's original place in the transcript. */
-function ShowOriginLink({ onShowOrigin }: { onShowOrigin: () => void }) {
+function ShowOriginLink({ onShowOrigin, className }: { onShowOrigin: () => void; className?: string }) {
   return (
     <Button
       type="button"
       variant="ghost"
       size="sm"
       data-slot="ask-show-origin"
-      className="mbs-2 min-h-11 min-w-11 px-2 text-xs font-medium text-muted-foreground underline underline-offset-4"
+      className={cn('mbs-2 min-h-11 min-w-11 px-2 text-xs font-medium text-muted-foreground underline underline-offset-4', className)}
       onClick={onShowOrigin}
     >
       Show where it was asked
@@ -118,7 +118,7 @@ function RoutedAsk({ ask, onShowOrigin }: { ask: ThreadAsk; onShowOrigin: (() =>
       data-resolved="false"
       data-pinned={ask.placement === 'pinned' ? 'true' : undefined}
       data-routed="parent"
-      className="rounded-lg border border-border bg-card px-4 pt-3.5 pb-3.5"
+      className="rounded-lg border border-border bg-card px-3 py-2"
     >
       <div className="mb-2.5 flex items-center gap-2">
         <span className="text-xs font-medium text-link-foreground">The agent is asking its parent</span>
@@ -215,12 +215,14 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
       data-resolved="false"
       data-pinned={ask.placement === 'pinned' ? 'true' : undefined}
       data-delivery={delivery.mode}
-      className="rounded-lg border border-accent-strong/25 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card px-4 pt-3.5 pb-3.5"
+      className="rounded-lg border border-accent-strong/25 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card px-3 pt-4 pb-2.5 max-sm:pt-3 max-sm:pb-1"
     >
-      <div className="mb-2.5 flex items-center gap-2">
+      {/* Tight rhythm: a two-question card with its Send row fits above the dock at 1440×900. The
+          top padding keeps the heading clear of the border. */}
+      <div className="mb-1.5 flex items-center gap-2">
         <span className="text-xs font-medium text-link-foreground">The agent is asking</span>
       </div>
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
         {questions.map((question, index) => (
           <AskQuestionBlock
             key={question.id ?? index}
@@ -246,10 +248,14 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
           />
         ))}
       </div>
+      {/* On a phone the footer is one wrapping row: Send and "Show where it was asked" share the
+          first line, the hint and any notice take full lines below, so the card wastes no 44px
+          row on a lone link. Wider, the footer stacks as before. */}
+      <div data-slot="ask-footer" className="max-sm:mbs-2 max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:gap-x-2.5">
       <AskSubmit oneTap={oneTap} hasOtherAnswer={hasOtherAnswer} resuming={resuming}
         disabled={delivery.isPending || blocked || !allAnswered} questionCount={questions.length} onSend={sendAll} />
       {delivery.blockedBy === 'provider' ? (
-        <div data-slot="ask-provider-gate" className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <div data-slot="ask-provider-gate" className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground max-sm:order-4 max-sm:basis-full">
           <span>{delivery.reason}</span>
           <Link to="/settings/agent-defaults#providers" className="font-medium text-foreground underline underline-offset-4">
             Configure providers
@@ -257,44 +263,83 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
         </div>
       ) : null}
       {delivery.blockedBy === 'no-session' ? (
-        <p data-slot="ask-no-session" className="mt-3 text-xs text-muted-foreground">
+        <p data-slot="ask-no-session" className="mt-3 text-xs text-muted-foreground max-sm:order-4 max-sm:basis-full">
           {delivery.reason}
         </p>
       ) : null}
       {/* A dropped answer used to be silent — the tap did nothing and said nothing. */}
       {delivery.error ? (
-        <p data-slot="ask-error" role="alert" className="mt-3 text-xs text-danger">
+        <p data-slot="ask-error" role="alert" className="mt-3 text-xs text-danger max-sm:order-4 max-sm:basis-full">
           {delivery.error}
         </p>
       ) : null}
-      {onShowOrigin ? <ShowOriginLink onShowOrigin={onShowOrigin} /> : null}
+      {onShowOrigin ? <ShowOriginLink onShowOrigin={onShowOrigin} className={cn('max-sm:order-2 max-sm:mbs-0', hasSendRow(oneTap, hasOtherAnswer) && 'max-sm:ms-auto')} /> : null}
+      </div>
     </div>
   )
 }
+
+/** Whether the footer has a Send button: every shape but a one-tap question answered by a tap. */
+const hasSendRow = (oneTap: boolean, hasOtherAnswer: boolean) => !oneTap || hasOtherAnswer
 
 /** Submission controls have no question-selection state of their own. */
 function AskSubmit({ oneTap, hasOtherAnswer, resuming, disabled, questionCount, onSend }: {
   oneTap: boolean; hasOtherAnswer: boolean; resuming: boolean; disabled: boolean
   questionCount: number; onSend: () => void
 }) {
-  if (oneTap && !hasOtherAnswer) return resuming ? (
-    <p data-slot="ask-resume-hint" className="mbs-3 text-[11px] text-soft-foreground">
+  if (!hasSendRow(oneTap, hasOtherAnswer)) return resuming ? (
+    <p data-slot="ask-resume-hint" className="mbs-3 text-[11px] text-soft-foreground max-sm:order-3 max-sm:basis-full">
       The session has ended — your answer reopens it and goes to the agent.
     </p>
   ) : null
   return (
-    <div className="mbs-3 flex items-center gap-2.5">
-      <Button size="sm" className="min-h-11" disabled={disabled} onClick={onSend}>
+    // On a phone the row dissolves into the footer's row, which orders its parts.
+    <div className="mbs-2 flex flex-wrap items-center gap-x-2.5 max-sm:contents">
+      <Button size="sm" className="min-h-11 max-sm:order-1" disabled={disabled} onClick={onSend}>
         {resuming ? 'Send answer & reopen' : 'Send answer'}
       </Button>
-      <span data-slot={resuming ? 'ask-resume-hint' : 'ask-hint'} className="text-[11px] text-soft-foreground">
-        {resuming
-          ? 'the session has ended — sending reopens it'
-          : hasOtherAnswer
-            ? `${questionCount > 1 ? 'answer each question above' : 'enter your answer above'} — or type a reply below`
-            : `${questionCount > 1 ? 'answer each question' : 'pick one or more'} — or type a reply below`}
-      </span>
+      {resuming ? (
+        <span data-slot="ask-resume-hint" className="text-[11px] text-soft-foreground max-sm:order-3 max-sm:basis-full">
+          the session has ended — sending reopens it
+        </span>
+      ) : (
+        <span data-slot="ask-hint" className="inline-flex flex-wrap items-center gap-x-1 text-[11px] text-soft-foreground max-sm:order-3 max-sm:basis-full">
+          <span>
+            {hasOtherAnswer
+              ? `${questionCount > 1 ? 'answer each question above' : 'enter your answer above'} — or`
+              : `${questionCount > 1 ? 'answer each question' : 'pick one or more'} — or`}
+          </span>
+          <ReplyJump />
+        </span>
+      )}
     </div>
+  )
+}
+
+/** The thread composer's text box, from inside the same task thread. */
+function threadComposerInput(from: HTMLElement): HTMLTextAreaElement | null {
+  const route = from.closest('[data-route="task-thread"]') ?? document
+  return route.querySelector<HTMLTextAreaElement>('[data-slot="thread-dock"] [data-slot="composer-editor"] textarea')
+}
+
+/** "type a reply below" as a control: on a phone the composer sits under the fold, so the hint
+ *  carries the reader there and puts the caret in it. */
+function ReplyJump() {
+  return (
+    <button
+      type="button"
+      data-slot="ask-reply-jump"
+      className="min-h-11 rounded-sm font-medium text-foreground underline underline-offset-4 hover:text-link-foreground focus-visible:outline-2 focus-visible:outline-ring"
+      onClick={(event) => {
+        const input = threadComposerInput(event.currentTarget)
+        if (!input) return
+        const still = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        input.scrollIntoView?.({ behavior: still ? 'auto' : 'smooth', block: 'center' })
+        input.focus({ preventScroll: true })
+      }}
+    >
+      type a reply below
+    </button>
   )
 }
 
@@ -333,18 +378,21 @@ function AskQuestionBlock({
 
   return (
     <div data-slot="ask-question" role="group" aria-label={question.question}>
-      <div className="mb-0.5 flex items-center gap-2">
-        <span className="rounded-md bg-accent-strong px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-accent-strong-foreground">
+      {/* The header chip and the question share one line, so each question costs one row less. */}
+      <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className="shrink-0 rounded-md bg-accent-strong px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent-strong-foreground">
           {question.header}
         </span>
+        <p className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground">{question.question}</p>
         {multiSelect ? (
           <span className="ml-auto text-[11px] text-soft-foreground">select all that apply</span>
         ) : null}
       </div>
-      <p className="mb-2.5 break-words text-sm font-semibold text-foreground">{question.question}</p>
       {options ? (
         <>
-          <div className="flex flex-col gap-2">
+          {/* Choices sit in two columns from the small breakpoint; Other is the grid's last cell,
+              and spans both columns when it would sit alone in its row. */}
+          <div data-slot="ask-options" className="grid grid-cols-1 gap-1 sm:grid-cols-2 sm:gap-2">
             {options.map((option) => {
               const isSelected = selected.includes(option.label)
               return (
@@ -355,12 +403,12 @@ function AskQuestionBlock({
                   aria-pressed={isSelected}
                   onClick={() => pick(option.label)}
                   className={cn(
-                    'flex min-h-11 w-full flex-col gap-0.5 rounded-md border px-3.5 py-2.5 text-left transition-colors',
+                    'flex min-h-11 w-full flex-col items-start justify-start content-start gap-0.5 rounded-md border px-2.5 py-1 text-left transition-colors sm:py-1.5',
                     'hover:border-accent-strong/50 hover:bg-accent-strong/[0.06] [html:not(.light)_&]:hover:bg-card disabled:pointer-events-none disabled:opacity-50',
                     isSelected ? 'border-accent-strong/60 bg-accent-strong/[0.06] [html:not(.light)_&]:bg-card' : 'border-border bg-card',
                   )}
                 >
-                  <span className="flex min-w-0 items-start gap-2 text-[14px] font-semibold text-foreground">
+                  <span className="flex min-w-0 items-start gap-2 text-[13px] font-semibold text-foreground">
                     {multiSelect ? (
                       <span
                         aria-hidden
@@ -384,39 +432,40 @@ function AskQuestionBlock({
                 </button>
               )
             })}
-          </div>
-          {question.allowFreeText !== false ? <div className="mt-2">
-            <Button
-              type="button"
-              variant="outline"
-              aria-pressed={isOther}
-              aria-expanded={isOther}
-              aria-controls={isOther ? answerId : undefined}
-              disabled={disabled}
-              onClick={onOtherToggle}
-              className={cn(
-                'w-full justify-start text-left',
-                isOther && 'border-accent-strong/60 bg-accent-strong/[0.06] [html:not(.light)_&]:bg-card',
-              )}
-            >
-              Other
-            </Button>
-            {isOther ? (
-              <div className="mt-2.5">
-                <label htmlFor={answerId} className="mb-1.5 block text-xs font-medium text-foreground">
-                  Your answer
-                </label>
-                <Textarea
-                  id={answerId}
-                  rows={2}
-                  value={otherAnswer}
-                  disabled={disabled}
-                  onChange={(event) => onOtherChange(event.target.value)}
-                  className="bg-card"
-                />
-              </div>
+            {question.allowFreeText !== false ? (
+              <Button
+                type="button"
+                variant="outline"
+                aria-pressed={isOther}
+                aria-expanded={isOther}
+                aria-controls={isOther ? answerId : undefined}
+                disabled={disabled}
+                onClick={onOtherToggle}
+                className={cn(
+                  'h-auto min-h-11 w-full justify-start px-2.5 py-1 text-left sm:py-1.5',
+                  options.length % 2 === 0 && 'sm:col-span-2',
+                  isOther && 'border-accent-strong/60 bg-accent-strong/[0.06] [html:not(.light)_&]:bg-card',
+                )}
+              >
+                Other
+              </Button>
             ) : null}
-          </div> : null}
+          </div>
+          {question.allowFreeText !== false && isOther ? (
+            <div className="mt-2">
+              <label htmlFor={answerId} className="mb-1.5 block text-xs font-medium text-foreground">
+                Your answer
+              </label>
+              <Textarea
+                id={answerId}
+                rows={2}
+                value={otherAnswer}
+                disabled={disabled}
+                onChange={(event) => onOtherChange(event.target.value)}
+                className="bg-card"
+              />
+            </div>
+          ) : null}
         </>
       ) : (
         <div>

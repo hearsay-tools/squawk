@@ -55,16 +55,23 @@ function navComponents(scope: SettingsScope) {
  * One h1 carries both so the page keeps a single heading; `display:none` drops the other
  * from the accessible name.
  */
-function SettingsMainHeader({ scope, title, mobileTitle }: { scope: SettingsScope; title: string; mobileTitle: string }) {
+function SettingsMainHeader({ scope, title, mobileTitle, description }: { scope: SettingsScope; title: string; mobileTitle: string; description?: string }) {
   // The same name the sidebar header shows; an unregistered boot project falls back to its root.
   const projectName = useActiveProjectIdentity().name
   const where = scope === 'global' ? 'every project' : (projectName ?? 'this project')
+  // Title and subtitle keep the same 4px (`mt-1`) rhythm as Tasks, Automations and Skills.
   return (
-    <header data-slot="settings-main-header" className="settings-route-header flex shrink-0 flex-col gap-2">
-      <h1 className="text-[15px] font-semibold tracking-normal max-md:text-[24px] max-md:font-normal">
+    <header data-slot="settings-main-header" className="settings-route-header flex shrink-0 flex-col md:px-9 px-4 pt-7 pb-5">
+      <h1 className="font-semibold tracking-tight leading-[1.2] text-foreground">
         <span className="md:hidden">{mobileTitle}</span>
-        <span className="max-md:hidden">{title} · {where}</span>
+        <span className="max-md:hidden">{title} <span className="font-normal text-soft-foreground">· {where}</span></span>
       </h1>
+      {/* Small screens: the section picker below names the section, so the title names the area
+          and this line keeps the scope cue the desktop title carries after its "·". */}
+      <span data-slot="settings-mobile-scope" className="mt-1 text-[13px] text-muted-foreground md:hidden">
+        {scope === 'global' ? 'Applies to every project' : where}
+      </span>
+      {description ? <p className="mt-1 max-md:hidden text-[13px] text-muted-foreground">{description}</p> : null}
       {scope === 'global' ? (
         <span data-slot="settings-scope-chip" className="sr-only">
           Global settings
@@ -111,17 +118,27 @@ export function SettingsSectionRoute({
   return (
     <div
       data-route={scope === 'global' ? `settings-global-${section.id}` : `settings-${section.id}`}
-      className="settings-route mx-auto flex min-h-full w-full flex-col"
+      className="settings-route flex min-h-full w-full flex-col"
     >
       <SettingsMainHeader
         scope={scope}
         title={section.title}
+        description={section.description}
         mobileTitle={scope === 'global' ? 'Global settings' : 'Project settings'}
       />
       <div className="settings-route-body flex min-w-0 flex-1 flex-col md:flex-row">
-        <SectionPills scope={scope} activeId={section.id} />
+        {/* Small screens: the picker names the section and the section's subtitle sits right under
+            it, so the phone states what the page holds as plainly as the desktop header does. */}
+        <div data-slot="settings-mobile-section" className="flex flex-col gap-2 md:hidden">
+          <SectionPills scope={scope} activeId={section.id} />
+          {section.description ? (
+            <p data-slot="settings-mobile-section-subtitle" className="px-1 text-[13px] leading-normal text-muted-foreground">
+              {section.description}
+            </p>
+          ) : null}
+        </div>
         <section className="settings-panel min-w-0 self-start md:flex-1" aria-label={section.title}>
-          <h2 className="settings-panel-title">{section.title}</h2>
+          <h2 className="settings-panel-title sr-only">{section.title}</h2>
           <Body />
         </section>
       </div>
@@ -134,7 +151,7 @@ export function SettingsSectionRoute({
  *  sidebar). The global area has none — see the header comment. */
 export function SettingsIndexRoute() {
   return (
-    <div data-route="settings" className="settings-route mx-auto flex min-h-full w-full flex-col">
+    <div data-route="settings" className="settings-route flex min-h-full w-full flex-col">
       <SettingsMainHeader scope="project" title="General" mobileTitle="Project settings" />
       <div className="settings-route-body flex min-w-0 flex-1 flex-col md:flex-row">
         <SectionPills scope="project" activeId={null} />

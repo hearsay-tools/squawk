@@ -862,17 +862,10 @@ describe('the promoted actions, per tab (#281)', () => {
 
   const headerArchive = () => document.querySelector('[data-slot="archive-action"]')
 
-  it.each(['changes', 'commits', 'files'] as const)('%s — the header carries Archive, the kebab drops it', (tab) => {
+  it.each(['session', 'changes', 'commits', 'files'] as const)('%s — the header carries Archive in one fixed slot, the kebab drops it', (tab) => {
     stubFetch()
     renderTab(run('done'), tab)
     expect(headerArchive()?.textContent).toContain('Archive task')
-    expect(actionBar().queryByRole('menuitem', { name: 'Archive task' })).toBeNull()
-  })
-
-  it('Session — the composer carries Archive, so the header shows none', () => {
-    stubFetch()
-    renderTab(run('done'), 'session')
-    expect(headerArchive()).toBeNull()
     expect(actionBar().queryByRole('menuitem', { name: 'Archive task' })).toBeNull()
   })
 
@@ -889,8 +882,8 @@ describe('the promoted actions, per tab (#281)', () => {
     expect(headerArchive()?.textContent).toContain('Unarchive')
   })
 
-  // hearsay-tools/cezarion#1233: Stop takes the composer slot on a failed run holding wait results,
-  // so the header carries Archive on the Session tab too, and the kebab still offers Delete.
+  // hearsay-tools/cezarion#1233: a failed run holding wait results offers Stop in the composer,
+  // the header still carries Archive, and the kebab still offers Delete.
   const heldFailed = (extra: Partial<ApiRun> = {}) => run('failed', {
     waits: [{
       id: '00000000-0000-4000-8000-0000000000e2', kind: WAIT_KIND.timer, source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_wait,

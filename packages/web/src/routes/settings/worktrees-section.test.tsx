@@ -159,6 +159,8 @@ describe('Project settings → Worktrees: keep-last-N-worktrees (#483)', () => {
     await waitFor(() => expect(retentionInput()).not.toBeNull())
     expect(retentionInput()!.value).toBe('7')
     expect(saveButton()!.disabled).toBe(true)
+    // A quiet cue says why Save is greyed: nothing changed, not "not allowed".
+    expect(saveButton()!.parentElement?.querySelector('[data-slot="settings-save-cue"]')?.textContent).toBe('No unsaved changes')
   })
 
   it('saves the entered count through PUT /api/v1/config', async () => {
@@ -168,6 +170,7 @@ describe('Project settings → Worktrees: keep-last-N-worktrees (#483)', () => {
 
     fireEvent.change(retentionInput()!, { target: { value: '3' } })
     expect(saveButton()!.disabled).toBe(false)
+    expect(saveButton()!.parentElement?.querySelector('[data-slot="settings-save-cue"]')).toBeNull()
     fireEvent.click(saveButton()!)
 
     await waitFor(() => expect(puts()).toHaveLength(1))
@@ -223,7 +226,9 @@ describe('Project settings → Worktrees: worktree setup commands (#917)', () =>
     renderAt('/settings/worktrees', { localHandoff })
     await waitFor(() => expect(commandsBox()).not.toBeNull())
     expect(commandsBox()!.value).toBe('')
-    expect(commandsBox()!.placeholder).toBe('')
+    // An editable box carries labelled guidance; a read-only one stays empty so it never looks configured.
+    expect(commandsBox()!.placeholder).toBe(localHandoff ? 'One command per line, for example: npm ci' : '')
+    expect(commandsBox()!.placeholder).not.toBe('npm ci')
     expect(screen.getByText('No setup commands configured. No commands will run in new worktrees.')).toBeTruthy()
     expect(saveSetup()!.disabled).toBe(true)
   })

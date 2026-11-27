@@ -8,6 +8,7 @@ import { AgentBrowser, squawkCli, fixtureServeEnv } from './agent-browser'
 import { contrastSampleExpression, dismissWithEscape, type ContrastSample } from './contrast'
 import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './fixture-server'
 import { settleVisual, waitForSettledSample } from './visual-ready'
+import { revealControl } from './control-ready'
 // fixture-server starts: 1
 
 let browser: AgentBrowser
@@ -49,6 +50,13 @@ for (const picker of [
       it(`${picker.name}: one complete search focus frame at ${width}px in ${theme}`, async () => {
         browser.setViewport(width, width === 360 ? 640 : 900)
         browser.goto(`${baseUrl}/new`)
+        if (picker.name === 'branch' && width === 360) {
+          // A phone opens New Task with Execution settings, which hold the Base branch pill, folded.
+          const settings = '[data-slot="execution-options"]'
+          browser.waitForFunction(`document.querySelector('${settings}')?.open === false`)
+          revealControl(browser, `${settings} > summary`)
+          browser.click(`${settings} > summary`)
+        }
         browser.waitForFunction(`document.querySelector('${picker.trigger}')?.checkVisibility() === true`)
         browser.evaluate(`document.documentElement.classList.toggle('light', ${theme === 'light'})`)
         const url = browser.url()

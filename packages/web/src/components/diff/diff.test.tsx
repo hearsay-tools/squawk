@@ -103,6 +103,25 @@ describe('Diff facade', () => {
     expect(body.getAttribute('data-wrap')).toBe('true')
   })
 
+  // A long hunk header (`@@ … @@ section context`) never runs past the card edge on a phone:
+  // it wraps with the body when wrap is on, and ends in an ellipsis with a tooltip when it is off.
+  it('wraps the hunk header with wrap on and truncates it with wrap off', async () => {
+    const header = '@@ -3,3 +3,3 @@ Core authentication and billing HTTP API for Acme'
+    const file = { ...MODIFIED, patch: MODIFIED.patch.replace('@@ -3,3 +3,3 @@', header) }
+    await renderDiff(<Diff files={[file]} wrap />)
+    const wrapped = document.querySelector('[data-slot="diff-hunk"]')!
+    expect(wrapped.textContent).toBe(header)
+    expect(wrapped.className).toContain('whitespace-pre-wrap')
+    expect(wrapped.className).not.toContain('truncate')
+    expect(wrapped.getAttribute('title')).toBeNull()
+    cleanup()
+
+    await renderDiff(<Diff files={[file]} />)
+    const truncated = document.querySelector('[data-slot="diff-hunk"]')!
+    expect(truncated.className).toContain('truncate')
+    expect(truncated.getAttribute('title')).toBe(header)
+  })
+
   it('expands a context gap through the loadFileText seam', async () => {
     const fileText = Array.from({ length: 6 }, (_, i) => `line ${i + 1}`).join('\n')
     const loadFileText = vi.fn().mockResolvedValue(fileText)

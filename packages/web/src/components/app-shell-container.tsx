@@ -22,7 +22,7 @@ import { useDocumentTitle } from '@/lib/use-document-title'
 import { GitSidebar } from '@/routes/repo-git/git-sidebar'
 import { GithubSidebar } from '@/routes/github/github-sidebar'
 import { SettingsSidebar } from '@/routes/settings/settings-sidebar'
-import { useActiveProjectId, stripProjectPrefix } from '@/lib/project-router'
+import { pathnameProjectId, useActiveProjectId, stripProjectPrefix } from '@/lib/project-router'
 import { listCounts, runTitle } from '@/lib/task-groups'
 import { pageTitleContext, type PageTitleContext } from '@/lib/page-title'
 import { repoChipOf, type RepoChip } from '@/lib/repo-chip'
@@ -108,13 +108,20 @@ function shellRepoChip(
   return pathname === '/tools' ? repoChipOf(health) : globalSettings ? null : activeProject ? { name: activeProject.name, branch: activeProject.id === bootProjectId ? health?.repo?.branch ?? '' : '' } : repoChipOf(health)
 }
 
+/** A global route names the workspace, never a project. A task that is still loading has no
+ *  title yet; any other route without a label is one the route map does not know. */
 function shellBreadcrumb(
   pathname: string,
   projectName: string | null,
   titleRun: ShellTitleRun | undefined,
+  titleContext: PageTitleContext,
   pageLabel: string | null,
 ) {
-  return { project: pathname === '/tools' ? 'Workspace' : projectName, page: titleRun ? `Tasks / ${pageLabel}` : pageLabel ?? 'Squawk', branch: titleRun?.worktreePath ? 'Isolated worktree' : undefined }
+  const global = pathnameProjectId(pathname) === null
+  const page = titleRun ? `Tasks / ${pageLabel}`
+    : pathname === '/tools' ? 'Tools'
+    : pageLabel ?? (titleContext.taskId !== null ? 'Tasks' : 'Not found')
+  return { project: global ? 'Workspace' : projectName, page, branch: titleRun?.worktreePath ? 'Isolated worktree' : undefined }
 }
 
 function shellProjectRail(
@@ -201,7 +208,7 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
     <ListViewProvider>
       <AppShell
         repo={shellRepoChip(pathname, globalSettings, activeProject, bootProjectId, health.data)}
-        breadcrumb={shellBreadcrumb(pathname, projectName, titleRun, pageLabel)}
+        breadcrumb={shellBreadcrumb(pathname, projectName, titleRun, titleContext, pageLabel)}
         version={version}
         latestVersion={shellHealth?.latestVersion ?? null}
         // Hidden until health confirms the forge driver (R6 Step 1.1) — same honesty rule as

@@ -164,7 +164,7 @@ export function NewTaskRoute() {
       className="relative isolate flex min-h-full flex-col overflow-x-clip pb-16"
     >
 
-      <div data-slot="new-task-layout" data-persisted-draft={persisted || undefined} ref={draftPanelRef} style={plan !== null ? { display: 'none' } : undefined} className="relative z-[1] mx-auto w-full max-w-none px-11 pt-12 max-md:px-[18px] max-md:pt-[22px]">
+      <div data-slot="new-task-layout" data-persisted-draft={persisted || undefined} ref={draftPanelRef} style={plan !== null ? { display: 'none' } : undefined} className="relative z-[1] mx-auto w-full max-w-none px-4 md:px-9 pt-7">
         <NewTaskHeader />
 
 
@@ -173,9 +173,21 @@ export function NewTaskRoute() {
           onSubmit={submit}
           retainDraftUntilSuccess
           idleFeedback={
-            <div data-slot="new-task-mode-note" className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
-              <span>{mode.note}</span>
-              <kbd className="hidden font-sans md:inline">{submitShortcutHint()}</kbd>
+            // Inside the composer grid, so the notes sit right under the Start button on every
+            // width instead of after the tallest card.
+            // Two lines at most: what Start does (or what it still needs), then where the run lands.
+            <div data-slot="new-task-idle-feedback" className="flex flex-col gap-1">
+              <div data-slot="new-task-mode-note" className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                {providersReady && !starting && draft.text.trim() === '' ? (
+                  <span data-slot="new-task-start-hint">Describe a task above to start.</span>
+                ) : (
+                  <span>{mode.note}</span>
+                )}
+                <kbd className="hidden font-sans md:inline">{submitShortcutHint()}</kbd>
+              </div>
+              <p data-slot="run-mode-note" className="text-xs text-muted-foreground">
+                {composerRunModeNote({ worktree: runMode.worktree, hasGit })}
+              </p>
             </div>
           }
           pendingLabel={mode.pendingLabel}
@@ -235,10 +247,6 @@ export function NewTaskRoute() {
             />
           }
         />
-        <p data-slot="run-mode-note" className="mt-2.5 text-[13px] text-muted-foreground">
-          {composerRunModeNote({ worktree: runMode.worktree, hasGit })}
-        </p>
-
       </div>
 
       {plan !== null ? (
@@ -498,7 +506,6 @@ function triggerFor({ source, ready, offersWorkflows, onPick, skillLabel }: {
       }}
       className={cn(
         chipClass,
-        'font-mono text-[11px]',
         source === null
           ? 'text-muted-foreground'
           : 'rounded-r-none border-r-0 border-foreground/60 pr-1.5 font-semibold text-foreground',

@@ -291,7 +291,7 @@ it('does not let an existing automation change its kind', () => {
 it('shows the GitHub fields and how it polls, instead of a preview, for a GitHub automation', () => {
   stubFetch(() => json({}))
   mount({ automation: { ...stored, kind: 'github', schedule: undefined, events: ['issue.opened'], intervalSeconds: 600, filters: { lookbackDays: 7, maxRecords: 25 } } as AutomationDefinition })
-  expect(screen.getByRole('button', { name: 'issue.opened' }).getAttribute('aria-pressed')).toBe('true')
+  expect(screen.getByRole('button', { name: 'Issue opened' }).getAttribute('aria-pressed')).toBe('true')
   expect(screen.queryByRole('list', { name: 'Next 5 runs' })).toBeNull()
   expect(screen.getByText(/every 10 minutes/)).not.toBeNull()
 })
@@ -340,6 +340,22 @@ it('offers no Delete on a new automation', () => {
   stubFetch(() => json({}))
   mount()
   expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
+})
+
+it('names the missing required fields under a disabled Save, and drops the cue once both hold text', () => {
+  stubFetch(() => json({}))
+  mount()
+  const save = screen.getByRole('button', { name: 'Save paused' }) as HTMLButtonElement
+  const hint = () => document.querySelector('[data-slot="automation-save-hint"]')
+  expect(save.disabled).toBe(true)
+  expect(hint()?.textContent).toBe('Add a name and a prompt to save.')
+  expect(save.getAttribute('aria-describedby')).toBe(hint()?.id)
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Weekly digest' } })
+  expect(hint()?.textContent).toBe('Add a prompt to save.')
+  fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'Summarise the week' } })
+  expect(hint()).toBeNull()
+  expect(save.disabled).toBe(false)
+  expect(save.hasAttribute('aria-describedby')).toBe(false)
 })
 
 it('shows Copy as CLI beside both kinds, following the draft', () => {

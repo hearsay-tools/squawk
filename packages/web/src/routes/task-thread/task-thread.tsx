@@ -42,9 +42,8 @@ import { useContinueAction } from './follow-up-engine'
 import { findSubagent, subagentEntries } from './subagent-dock'
 import { SubagentSheet } from './subagent-sheet'
 import { AcceptCelebration, ReviewPanel } from './review-panel'
-import { archiveInComposer, hasLiveSession, offersComposerFinish, queuePosition, runActionFlags } from './run-actions'
+import { hasLiveSession, offersComposerFinish, queuePosition, runActionFlags } from './run-actions'
 import { useWorkersLive } from './run-relationships'
-import { ArchiveButton } from './archive-action'
 import { useFinishRun } from './use-finish-run'
 import { useStopAction } from './stop-action'
 import { RunHeader } from './run-header'
@@ -57,7 +56,7 @@ import { useActiveProviderAvailability } from './active-provider'
 import { ThreadLoading } from './thread-loading'
 import { threadRenderMode } from './thread-scroll'
 import { JumpToLatestPill, useThreadScroll, type ThreadScrollControls } from './thread-scroller'
-import { AskOriginMarker, PENDING_ASK_SECTION_ID, pinnedAnswerControl, pinnedAskFocus } from './pending-ask-navigation'
+import { AskOriginMarker, PENDING_ASK_SECTION_ID, pinnedAnswerControl, pinnedAskFocus, usePinnedAskInView } from './pending-ask-navigation'
 import { useRevealAskOrigin } from './use-reveal-ask-origin'
 import { useSessionViewport } from './session-viewport'
 import {
@@ -508,7 +507,7 @@ function ThreadTranscript({
   /* Row spacing lives on each thread row (pb-2.5, both render modes measure alike);
       this gap only separates the sections — rows, empty state, footer, review panel. */
   return (
-    <div data-slot="session-conversation" className="mx-auto flex w-full max-w-[var(--measure)] flex-1 flex-col gap-2.5 px-[18px] py-3 md:gap-3.5 md:px-16 md:py-5">
+    <div data-slot="session-conversation" className="mx-auto flex w-full max-w-[var(--measure)] flex-1 flex-col gap-2.5 px-[18px] py-3 [padding-block-end:12px] md:gap-3.5 md:px-16 md:py-5 md:[padding-block-end:24px]">
       {history ? (
         <HistoryBoundary
           hasOlder={history.hasOlder}
@@ -628,14 +627,18 @@ function ThreadFooterDock({
   stopAction, finishAction, needsAnswer, sendMessage, reply,
   providerBlocked, providerReason,
 }: ThreadFooterDockProps) {
+  // The pinned ask card already is the latest thing to act on: while it shows, a floating
+  // jump pill would only cover its options.
+  const askInView = usePinnedAskInView(needsAnswer && pendingQuestions > 0, scroll.scrollElRef)
   /* The footer follows the transcript; desktop keeps it visible while reading history. */
   return (
     <div
       data-slot="thread-dock"
+      data-pending-ask={needsAnswer || undefined}
       className="relative z-10 bg-background pt-1 pb-2 md:pt-1.5 md:pb-4"
     >
       {/* Desktop places Jump above the sticky footer; phones keep it in the viewport. */}
-      {scroll.pillVisible ? (
+      {scroll.pillVisible && !askInView ? (
         <div data-slot="thread-jump" className="pointer-events-none z-30 flex justify-center">
           <JumpToLatestPill
             pendingQuestions={pendingQuestions}
@@ -644,10 +647,11 @@ function ThreadFooterDock({
         </div>
       ) : null}
       <div data-slot="thread-footer-content" className="mx-auto flex w-full max-w-[var(--measure)] flex-col gap-1.5 px-[14px] md:gap-2.5 md:px-16">
-        {/* Keyed by run id, like the docks it replaced: the route survives a task change, so
+        {/* Keyed by run and pending-answer state so each ask starts folded. The route survives
+            a task change: the route survives a task change, so
             an unkeyed dock would carry the previous run's collapse state — its own and every
             nested section's — into the next one. */}
-        <RunActivityDock key={run.id} run={run} thread={thread} currentThread={currentThread} currentComplete={currentComplete} onOpenWorker={onOpenWorker} readerScroll={scroll.subscribeReaderScroll} />
+        <RunActivityDock key={`${run.id}:${needsAnswer}`} pendingAsk={needsAnswer} run={run} thread={thread} currentThread={currentThread} currentComplete={currentComplete} onOpenWorker={onOpenWorker} readerScroll={scroll.subscribeReaderScroll} />
 
         {/* A usage-limit hold is a `waiting` run with a resume booked — the dock says when,
             before the composer offers a Continue nobody needs to press. */}
@@ -733,9 +737,6 @@ function ThreadComposer({
           : undefined
       }
       finishing={finishAction.isPending}
-      // Stop's own slot, once Stop is not offered. A failed run holding wait results offers
-      // both, so the header carries its Archive and the composer is handed one control.
-      secondaryAction={archiveInComposer(run, workersLive) ? <ArchiveButton run={run} compactOnMobile /> : undefined}
       stopOnEmpty={composerStopsOnEmpty(run, attention, needsAnswer)}
       stopping={stopAction.stopping}
       retainDraftUntilSuccess
@@ -770,6 +771,7 @@ function ThreadComposer({
       }
       // Continuing with nothing typed is the legacy one-click Continue.
       allowEmptySubmit={continuable && !needsAnswer}
+      emptySubmitVariant={run.status === 'review' ? 'outline' : 'primary'}
       emptySubmitLabel={continuable && !needsAnswer ? 'Continue' : undefined}
       placeholder={threadComposerPlaceholder(run, queued, continuable)}
       autocompleteSkills

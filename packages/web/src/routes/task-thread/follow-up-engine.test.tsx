@@ -403,7 +403,7 @@ describe('follow-up ContinueAction runner/model selection (#401)', () => {
     // Two backends detected → the runner pill appears; pick codex.
     fireEvent.pointerDown(await screen.findByRole('button', { name: /^Runner · / }))
     let options = await screen.findAllByRole('menuitemradio')
-    fireEvent.click(options.find((o) => o.textContent?.includes('codex')) as HTMLElement)
+    fireEvent.click(options.find((o) => o.textContent?.includes('Codex')) as HTMLElement)
 
     // The model pill now lists codex's discovered models; pin one once the catalog lands (#794).
     fireEvent.pointerDown(screen.getByRole('button', { name: /^Model · / }))
@@ -430,7 +430,7 @@ describe('follow-up ContinueAction runner/model selection (#401)', () => {
 
     fireEvent.pointerDown(await screen.findByRole('button', { name: /^Runner · / }))
     const options = await screen.findAllByRole('menuitemradio')
-    fireEvent.click(options.find((o) => o.textContent?.includes('claude')) as HTMLElement)
+    fireEvent.click(options.find((o) => o.textContent?.includes('Claude Code')) as HTMLElement)
 
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /^Model · / }).textContent).toContain('opus'))
@@ -468,7 +468,7 @@ describe('follow-up ContinueAction runner/model selection (#401)', () => {
     serve({ ...HEALTH_MULTI, defaultRunner: 'codex' })
     renderAction(makeRun({ runner: undefined }))
     const pill = await screen.findByRole('button', { name: /^Runner · / })
-    expect(pill.textContent).toContain('claude')
+    expect(pill.textContent).toContain('Claude Code')
   })
 
   it('a model-only pick on a legacy run can only send a claude model — never a codex one', async () => {
@@ -553,7 +553,7 @@ describe('follow-up ContinueAction runner/model selection (#401)', () => {
 
     const button = await screen.findByRole('button', { name: /continue/i })
     // Signed-out claude stays visible as a sign-in link, so the pill shows (hearsay-tools/squawk#4116).
-    expect(await screen.findByRole('button', { name: /^Runner · codex/ })).not.toBeNull()
+    expect(await screen.findByRole('button', { name: /^Runner · Codex/ })).not.toBeNull()
     fireEvent.click(button)
 
     await waitFor(() => expect(continueBody()).toBeDefined())
@@ -631,9 +631,9 @@ describe('follow-up ContinueAction runner/model selection (#401)', () => {
     fireEvent.pointerDown(await screen.findByRole('button', { name: /^Runner · / }))
     const options = await screen.findAllByRole('menuitemradio')
     expect(options.map((option) => option.textContent)).toEqual(
-      expect.arrayContaining([expect.stringContaining('claude'), expect.stringContaining('opencode')]),
+      expect.arrayContaining([expect.stringContaining('Claude Code'), expect.stringContaining('OpenCode')]),
     )
-    expect(options.some((option) => option.textContent?.includes('codex'))).toBe(false)
+    expect(options.some((option) => option.textContent?.includes('Codex'))).toBe(false)
   })
 })
 
@@ -733,7 +733,7 @@ describe('continuation conversation hint (#201)', () => {
     renderAction(makeRun())
     expect(screen.queryByText('Starts a new agent conversation.')).toBeNull()
     fireEvent.pointerDown(await screen.findByRole('button', { name: /^Runner · / }))
-    fireEvent.click(await screen.findByRole('menuitemradio', { name: /codex/ }))
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: /Codex/ }))
     expect(screen.getByText('Starts a new agent conversation.')).toBeTruthy()
     expect(continueBody()).toBeUndefined()
   })
@@ -754,7 +754,7 @@ describe('continuation conversation hint (#201)', () => {
     expect(await screen.findByRole('button', { name: /^Runner · / })).toBeTruthy()
     expect(screen.queryByText('Starts a new agent conversation.')).toBeNull()
     fireEvent.pointerDown(screen.getByRole('button', { name: /^Runner · / }))
-    fireEvent.click(await screen.findByRole('menuitemradio', { name: /claude/ }))
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: /Claude Code/ }))
     expect(screen.getByText('Starts a new agent conversation.')).toBeTruthy()
   })
 })
@@ -793,7 +793,7 @@ describe('untouched workflow provider requirements', () => {
   it('keeps the configured fallback for a never-started task with no recorded runner', async () => {
     serve({ ...HEALTH_MULTI, defaultRunner: 'codex' })
     renderAction({ ...untouched([{ id: 'task', prompt: 'work' }]), runner: undefined })
-    expect((await screen.findByRole('button', { name: /^Runner · / })).textContent).toContain('codex')
+    expect((await screen.findByRole('button', { name: /^Runner · / })).textContent).toContain('Codex')
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await waitFor(() => expect(requests.some(request => request.method === 'POST')).toBe(true))
     expect(requests.find(request => request.url.endsWith('/continue'))?.body).not.toHaveProperty('runner')

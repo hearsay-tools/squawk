@@ -291,7 +291,7 @@ describe('the Git view Recently on main section', () => {
     renderAt(entry)
     await waitFor(() => expect(document.querySelector('[data-slot="repo-commits"]')).not.toBeNull())
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Recently on main')
-    expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('latest 2 commits in the main checkout')
+    expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('Latest 2 commits in the main checkout')
   })
 
   it('groups the log by the commit’s own day, each row reading subject then sha · author · age', async () => {
@@ -314,7 +314,7 @@ describe('the Git view Recently on main section', () => {
     }
     const row = document.querySelector('[data-slot="commit-row"][data-sha="def5678"]')!
     expect(row.querySelector('[data-slot="commit-row-subject"]')?.textContent).toBe('fix: stop the bug')
-    expect(row.querySelector('[data-slot="commit-row-meta"]')?.textContent).toBe('def5678· Linus · 3d')
+    expect(row.querySelector('[data-slot="commit-row-meta"]')?.textContent).toBe('def5678·Linus · 3d')
     // `commit-meta` is the opened commit's header; a list row must not answer to it, or a wait for
     // the commit view passes on the list it is leaving (repo-git.e2e.ts, 2026-09-30 local run).
     expect(document.querySelector('[data-slot="commit-meta"]')).toBeNull()
@@ -343,7 +343,7 @@ describe('the Git view Recently on main section', () => {
     renderAt('/git')
     await waitFor(() => expect(document.querySelector('[data-slot="git-incoming"]')).not.toBeNull())
     expect(document.querySelector('[data-slot="git-incoming"]')?.textContent).toBe('2 commits on origin/main are not in your checkout yetPull')
-    expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('latest 2 commits in the main checkout · never fetched')
+    expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('Latest 2 commits in the main checkout · never fetched')
     fireEvent.click(document.querySelector('[data-action="repo-pull-incoming"]')!)
     await waitFor(() => expect(document.body.textContent).toContain('Fast-forwarded by 2 commits.'))
     expect(sent.find((request) => request.method === 'POST')).toMatchObject({ path: '/api/v1/repo/pull', body: { branch: 'main' } })
@@ -391,11 +391,14 @@ describe('the Git view Recently on main section', () => {
     fireEvent.click(document.querySelector('[data-slot="commit-row"][data-sha="abc1234"]')!)
     await waitFor(() => expect(document.querySelector('[data-slot="commit-meta"]')).not.toBeNull())
 
-    // The commit's metadata and its full sha, from ?structured=1.
+    // The commit's metadata from ?structured=1: the short sha, the full one in its tooltip.
     const meta = document.querySelector('[data-slot="commit-meta"]')
     expect(meta?.textContent).toContain('feat: add the thing')
     expect(meta?.textContent).toContain('Ada')
-    expect(meta?.textContent).toContain(COMMIT.sha)
+    expect(meta?.querySelector(`[title="${COMMIT.sha}"]`)?.textContent).toBe(COMMIT.sha.slice(0, 8))
+    // Its ± stat ends that metadata line, not the back link's row.
+    expect(meta?.querySelector('[data-slot="commit-stat"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="commit-back"]')?.parentElement?.querySelector('[data-slot="commit-stat"]')).toBeNull()
     // The same <Diff> facade renders the commit's file.
     await waitFor(() =>
       expect(document.querySelector('[data-slot="diff-file"][data-path="notes.md"]')).not.toBeNull(),
@@ -450,7 +453,7 @@ describe('the Git view All branches section', () => {
   it('lists every local branch, task branches included, labelled with its class and linked to its task', async () => {
     stubFetch()
     renderAt('/git/branches')
-    await waitFor(() => expect(document.querySelectorAll('[data-slot="branch-class"]')).toHaveLength(8))
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="branch-class"]')).toHaveLength(7))
     expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('8 branches · on main')
     const labels = [...document.querySelectorAll<HTMLElement>('[data-slot="branch-row"]')].map((row) => [
       row.dataset.branch,
@@ -464,8 +467,10 @@ describe('the Git view All branches section', () => {
       ['cez/bbbbbbbb', 'merged'],
       ['cez/cccccccc', 'empty'],
       ['feature', 'yours'],
-      ['main', 'in use'],
+      // The checkout is in use by definition; its Current badge says so once.
+      ['main', undefined],
     ])
+    expect(document.querySelector('[data-slot="branch-create-base"]')?.textContent).toBe('Create from main.')
     // A task branch opens through its task, never through Switch.
     expect(document.querySelector('[data-branch="cez/51ab2d7e"] [data-action="switch-branch"]')).toBeNull()
     expect(document.querySelector('[data-branch="feature"] [data-action="switch-branch"]')).not.toBeNull()
@@ -656,7 +661,7 @@ describe('the Git view Cleanup section', () => {
     renderAt('/git/cleanup')
     await waitFor(() => expect(document.querySelectorAll('[data-slot="worktree-row"]')).toHaveLength(2))
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Cleanup')
-    expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('nothing here can delete work that is not on main')
+    expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('Nothing here can delete work that is not on main')
     expect(screen.getByRole('heading', { level: 2, name: 'Worktrees on disk · 1.2 GB' })).toBeTruthy()
     expect(document.querySelector('[data-action="worktrees-reclaim-now"]')?.textContent).toBe('Reclaim 640 MB now')
     expect(document.querySelector('[data-slot="worktrees-retention-link"]')?.getAttribute('href')).toBe('/settings/worktrees')
@@ -744,13 +749,13 @@ describe('the Git view Not landed section', () => {
     renderAt('/git/not-landed')
     await waitFor(() => expect(document.querySelectorAll('[data-slot="not-landed-group"]')).toHaveLength(3))
     expect(groups()).toEqual([
-      { title: 'No pull request1· nobody sees this work until you act', rows: ['cez/51ab2d7e'] },
+      { title: 'No pull request1·nobody sees this work until you act', rows: ['cez/51ab2d7e'] },
       { title: 'Pull request open1', rows: ['cez/7c1e09aa'] },
-      { title: 'Task deleted1· this branch is the only copy of the work', rows: ['cez/9d04c1f2'] },
+      { title: 'Task deleted1·this branch is the only copy of the work', rows: ['cez/9d04c1f2'] },
     ])
     const noPr = document.querySelector<HTMLElement>('[data-slot="not-landed-row"][data-branch="cez/51ab2d7e"]')!
     expect(noPr.querySelector('[data-slot="not-landed-title"]')?.textContent).toBe('Retention sweep for archived runs')
-    expect(noPr.querySelector('[data-slot="not-landed-meta"]')?.textContent).toMatch(/^cez\/51ab2d7e· 4 commits\+212−40· done \d+d ago$/)
+    expect(noPr.querySelector('[data-slot="not-landed-meta"]')?.textContent).toMatch(/^cez\/51ab2d7e·4 commits·\+212 −40·done \d+d$/)
     expect(noPr.querySelector('[data-slot="status-dot"]')?.getAttribute('data-tone')).toBe('success')
     expect(noPr.querySelector('[data-action="not-landed-open"]')?.getAttribute('href')).toBe('/tasks/run-51')
     expect(noPr.querySelector('[data-action="not-landed-create-pr"]')).not.toBeNull()
@@ -781,7 +786,7 @@ describe('the Git view Not landed section', () => {
     expect(chip.getAttribute('data-status')).toBe('merged')
   })
 
-  it('Create draft PR posts the task\'s own /runs/:id/pr', async () => {
+  it('Draft PR posts the task\'s own /runs/:id/pr', async () => {
     const sent = stubFetch({ 'POST /api/v1/runs/run-51/pr': () => jsonResponse({ url: 'https://github.com/acme/demo/pull/710' }) })
     renderAt('/git/not-landed')
     await waitFor(() => expect(document.querySelector('[data-action="not-landed-create-pr"]')).not.toBeNull())
@@ -801,7 +806,7 @@ describe('the Git view Not landed section', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete branch…' }))
     const dialog = await screen.findByRole('alertdialog')
     expect(dialog.textContent).toContain('this branch is the only copy of the work')
-    expect(document.querySelector('[data-slot="delete-branch-dropped"]')?.textContent).toBe('3 commits will be dropped (+140 −22), the latest “feat(git): worktree sizes in the panel” (9d04c1f).')
+    expect(document.querySelector('[data-slot="delete-branch-dropped"]')?.textContent).toBe('3 commits will be dropped (+140 −22), the latest “feat(git): worktree sizes in the panel” (9d04c1f2).')
     const confirm = document.querySelector<HTMLButtonElement>('[data-action="delete-branch-confirm"]')!
     expect(confirm.disabled).toBe(true)
     const input = document.querySelector<HTMLInputElement>('[data-slot="delete-branch-confirm"]')!

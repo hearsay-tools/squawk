@@ -11,7 +11,7 @@ import { gitActionPolicy, type GitActionState } from './git-actions'
  * The git action policy, pinned row by row. The toolbar renders whatever this function
  * returns, so these tables ARE the toolbar's behavior spec: every disabled entry must carry
  * its human reason, hosted mode must HIDE the terminal handoff (not disable it), and the
- * Create PR → View PR flip must follow the PR URL exactly.
+ * Draft PR → View PR flip must follow the PR URL exactly.
  */
 
 /** A healthy local-mode baseline: worktree + changes + github forge + remote + session. */
@@ -37,14 +37,14 @@ const find = (state: GitActionState, id: string) => {
 }
 
 describe('gitActionPolicy — slots', () => {
-  it('without a PR: Commit is primary, Push + Create PR secondary, terminal in the menu', () => {
+  it('without a PR: Commit is primary, Push + Draft PR secondary, terminal in the menu', () => {
     const bar = gitActionPolicy(base)
     expect(bar.primary).toEqual({ id: 'commit', label: 'Commit', enabled: true })
     expect(bar.secondary.map((a) => a.id)).toEqual(['push', 'create-pr'])
     expect(bar.menu.map((a) => a.id)).toEqual(['open-terminal'])
   })
 
-  it('with a PR URL: View PR takes primary (with the href) and Create PR disappears', () => {
+  it('with a PR URL: View PR takes primary (with the href) and Draft PR disappears', () => {
     const bar = gitActionPolicy(withState({ prUrl: 'https://github.com/acme/demo/pull/7' }))
     expect(bar.primary).toEqual({
       id: 'view-pr',
@@ -124,7 +124,7 @@ describe('gitActionPolicy — push', () => {
 
 describe('gitActionPolicy — create PR', () => {
   it('enabled when parked with a worktree, branch and an available forge', () => {
-    expect(find(base, 'create-pr')).toEqual({ id: 'create-pr', label: 'Create PR', enabled: true })
+    expect(find(base, 'create-pr')).toEqual({ id: 'create-pr', label: 'Draft PR', enabled: true })
   })
 
   it.each<[Partial<GitActionState>, string]>([

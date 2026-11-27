@@ -2,7 +2,7 @@ import type { ActivityCheckBucket } from '@open-mercato/cezar-api-client/contrac
 
 import { cn } from '@/lib/utils'
 
-import { counter, since } from './activity-format'
+import { since, span } from './activity-format'
 import { NOW_ICON, TONE_INK, ToneWord } from './activity-tone'
 import type { NowBox } from './now-box'
 
@@ -58,7 +58,7 @@ export interface NowMotion {
 
 const NO_CHECKS: ReadonlySet<string> = new Set()
 
-/** The now box: a verb, a main line, a detail line and a live age counter. */
+/** The now box: a verb, a main line, a detail line and a live age in the cockpit's compact format. */
 export function NowBoxView({ box, now, dense, motion = {} }: { box: NowBox; now: number; dense: boolean; motion?: NowMotion }) {
   const Icon = NOW_ICON[box.icon]
   const ink = TONE_INK[box.tone]
@@ -66,11 +66,12 @@ export function NowBoxView({ box, now, dense, motion = {} }: { box: NowBox; now:
     <div data-slot="activity-now" data-verb={box.verb} className="relative grid grid-cols-[16px_minmax(0,1fr)] gap-x-2 gap-y-px overflow-hidden rounded-lg bg-card-2 px-2.5 py-2">
       {motion.sweep ? <span data-slot="activity-sweep" aria-hidden="true" className="activity-sweep" /> : null}
       <Icon aria-hidden="true" className={cn('mt-px size-[15px]', ink)} />
-      <ToneWord tone={box.tone} className="flex gap-2 text-[11px] font-semibold tracking-[0.04em] uppercase">
+      {/* Sentence case, like the status pills of Tasks and the global view: "Needs you", not "NEEDS YOU". */}
+      <ToneWord tone={box.tone} className="flex gap-2 text-[12px] font-semibold">
         <span data-slot="activity-verb">{box.verb}</span>
         {box.since ? (
-          <span data-slot="activity-age" className="ml-auto font-medium tracking-normal text-muted-foreground normal-case tabular-nums">
-            {counter(since(box.since, now))}
+          <span data-slot="activity-age" className="ml-auto font-medium text-muted-foreground tabular-nums">
+            {span(since(box.since, now))}
           </span>
         ) : null}
       </ToneWord>
@@ -106,7 +107,8 @@ export function Heartbeat({ rate, className }: { rate: readonly number[]; classN
       viewBox="0 0 62 16"
       className={cn('block h-4 w-[62px] shrink-0', className)}
     >
-      <path d="M0 15.5h62" className="stroke-border" />
+      {/* No baseline while idle: an empty trace would read as a stray rule across the card. */}
+      {calls > 0 ? <path d="M0 15.5h62" className="stroke-border" /> : null}
       {rate.map((n, i) => {
         if (n <= 0) return null
         const h = Math.max(1.5, (n / peak) * 14)

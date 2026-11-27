@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 /**
  * The `<Diff>` facade contract (spec §"Session git view — Changes & Files tabs (#390)",
  * R5 Step 1.4). These props are OURS — consumers (Changes tab, repo view, commit diff view)
@@ -86,5 +88,14 @@ export interface DiffProps {
    * their DOM-based scroll there).
    */
   viewRef?: { current: DiffHandle | null }
+  /**
+   * The `N files changed +A −D` line above the cards. Default `true`; a consumer whose own
+   * header already shows the total passes `false`, so one number is never printed twice (the
+   * line stays in the DOM, `hidden`).
+   */
+  totals?: boolean | undefined
+  /** Controls placed at the right end of the totals row (view toggles), so they share the
+   *  diff's header line instead of a row of their own. The row renders when either is set. */
+  actions?: ReactNode
   className?: string | undefined
 }

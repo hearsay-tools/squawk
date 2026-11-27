@@ -89,12 +89,21 @@ function revealReviewAction(slot: string): void {
   revealControl(browser, selector)
 }
 
+/** The notes box is folded until Send back's first click unfolds it. */
+function openReviewNotes(): void {
+  if (browser.count('[data-slot="review-notes"]') === 0) {
+    revealReviewAction('review-send-back')
+    browser.click('[data-slot="review-send-back"]')
+  }
+  revealControl(browser, '[data-slot="review-notes"]')
+}
+
 describe('the review gate against a live parked run', () => {
   it('keeps the notes and every exit reachable on an iPhone viewport, without sideways scroll', () => {
     browser.setViewport(390, 844)
     try {
       browser.waitForFunction(`document.querySelector('[data-slot="review-banner"]') !== null`)
-      revealControl(browser, '[data-slot="review-notes"]')
+      openReviewNotes()
       for (const slot of ['review-send-back', 'review-draft-pr', 'review-accept']) revealReviewAction(slot)
       browser.waitForFunction(`document.documentElement.scrollWidth <= innerWidth`)
       browser.evaluate(`document.querySelector('[data-slot="review-banner"]').scrollIntoView() ?? true`)
@@ -126,6 +135,7 @@ describe('the review gate against a live parked run', () => {
     browser.evaluate(`document.querySelector('[data-slot="review-banner"]').scrollIntoView() ?? true`)
     browser.screenshot(`${artifactsDir}/review-gate-desktop.png`)
 
+    openReviewNotes()
     browser.fill('[data-slot="review-notes"]', 'Please also mention the port in the notes.')
     revealReviewAction('review-send-back')
     browser.click('[data-slot="review-send-back"]')

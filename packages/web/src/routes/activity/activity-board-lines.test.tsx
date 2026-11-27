@@ -1,4 +1,5 @@
 import { act, cleanup, render } from '@testing-library/react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActivityProject } from '@open-mercato/cezar-api-client/contract/activity'
@@ -9,6 +10,10 @@ import { EMPTY_MOTION, type MotionState } from './activity-motion'
 import type { Box } from './line-geometry'
 import { PEER_LABEL } from './line-measure'
 import { labelBox, overlaps, placeBoxes, samplePath } from './line-layout.testkit'
+import { createQueryClient } from '@/api/query-client'
+import { seedRunners } from '@/test/runners.testkit'
+
+const runnersClient = seedRunners(createQueryClient())
 
 /**
  * The "Many lines" rule and the label fit (spec 2026-11-05-live-activity-view, "Size, motion and
@@ -28,9 +33,9 @@ function renderBoard(value: ActivityProject, boxes: Record<string, Box>, motion:
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(WIDTH)
   placeBoxes('data-activity-card', boxes)
   return render(
-    <MemoryRouter initialEntries={['/p/cezarion/activity']}>
+    <QueryClientProvider client={runnersClient}><MemoryRouter initialEntries={['/p/cezarion/activity']}>
       <ActivityBoard project={value} now={NOW} watchingSince={iso(-60_000)} motion={motion} />
-    </MemoryRouter>,
+    </MemoryRouter></QueryClientProvider>,
   )
 }
 

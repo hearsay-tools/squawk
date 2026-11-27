@@ -610,17 +610,22 @@ describe('tasks table overview', () => {
     expect(renamed?.titleSummary).toBe('Bump zod to v4 — second attempt')
   })
 
-  it('reflows to cards plus the shell New-task FAB at 360×640, with no horizontal overflow', () => {
+  it('reflows to cards with the header New task button at 360×640, with no horizontal overflow', () => {
     browser.setViewport(360, 640)
     browser.goto(`${baseUrl}${scoped('/')}`)
     browser.waitForFunction(`document.querySelectorAll('[data-slot="task-card"]').length > 0`)
 
     expect(browser.count('[data-slot="task-card"]')).toBe(5)
-    // One floating button, and it is the tab bar's (#621): the list's own round FAB is gone.
-    expect(browser.isVisible('[data-slot="mobile-new-task"]')).toBe(true)
-    expect(
-      browser.evaluate(`document.querySelector('[data-slot="mobile-new-task"]').getAttribute('href')`)
-    ).toBe(scoped('/new'))
+    // Nothing floats over the list: New task sits on the page header's title row, a full 44px
+    // target inside the phone's width.
+    expect(browser.count('[data-slot="mobile-new-task"]')).toBe(0)
+    const newTask = '[data-route="tasks"] [data-slot="page-header"] [data-slot="new-task-inline"]'
+    expect(waitForSettledSample(browser, `(() => {
+      const link = document.querySelector('${newTask}')
+      if (!link || !link.checkVisibility()) return null
+      const r = link.getBoundingClientRect()
+      return { href: link.getAttribute('href'), target: r.width >= 44 && r.height >= 44, inside: r.left >= 0 && r.right <= innerWidth }
+    })()`, (value) => value !== null)).toEqual({ href: scoped('/new'), target: true, inside: true })
     // The table is the desktop framing — at phone width the cards replace it, not join it.
     expect(
       browser.evaluate(`document.querySelector('[data-slot="tasks-table"]') === null`)
@@ -1289,7 +1294,8 @@ describe('a row under width contention, in a column the user can widen', () => {
     dragHandle(156)
     expect(sidebarWidth()).toBe(420)
     const wide = browser.waitForValue(`document.querySelector('${META_ROW} [data-slot="task-row-age"]')?.textContent ?? null`)
-    expect(String(wide)).toMatch(/^\d+[smhd]$/)
+    // shortAge's compact form: one unit, or hours and minutes under six hours ("1h 1m").
+    expect(String(wide)).toMatch(/^(\d+[smhd]|\d+h \d+m)$/)
     const restored = read()
     expect(restored.ageInside && restored.glyphInside && restored.glyphFirst).toBe(true)
     for (let i = 0; i < 8; i += 1) expect(read().age).not.toBeNull()

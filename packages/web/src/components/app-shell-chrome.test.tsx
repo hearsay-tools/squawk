@@ -70,6 +70,17 @@ describe('desktop breadcrumb', () => {
     for (const part of ['demo', 'Skills', 'main']) expect(breadcrumb).toContain(part)
   })
 
+  it.each(['/tasks', '/activity', '/tools', '/settings/global/projects'])('names no project and no branch from the repo on the global route %s', (entry) => {
+    renderShell(entry, { repo: { name: 'demo', branch: 'main' }, breadcrumb: { project: 'Workspace', page: 'All tasks' } })
+    expect(slot('desktop-breadcrumb')?.textContent).toBe('Workspace/All tasks')
+  })
+
+  it.each(['/p/demo/', '/p/demo/new'])('has one height and gutter on %s', (entry) => {
+    renderShell(entry)
+    expect(slot('desktop-breadcrumb')?.className).toContain('h-16')
+    expect(slot('desktop-breadcrumb')?.className).toContain('px-9')
+  })
+
   it('names the active view, and Cezarion where no view is active', () => {
     renderShell('/skills')
     expect(slot('desktop-breadcrumb')?.textContent).toBe('Skills')

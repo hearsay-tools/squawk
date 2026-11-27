@@ -69,12 +69,14 @@ function openEmptyWorkflow(): void {
 }
 
 function prepareWorkflow(skills: string[], saved = false): void {
+  // Remove the file before the page reads the catalog: a canvas that matches a listed file has
+  // nothing to save, so Save stays off.
+  if (saved) rmSync(savedFlowPath, { force: true })
   openEmptyWorkflow()
   for (const skill of skills) browser.click(addButton(skill))
   browser.waitForFunction(`${stepIdsJs} === '${skills.join(',')}'`)
   clickInView(browser, '[data-slot="wb-yaml-toggle"]')
   if (!saved) return
-  rmSync(savedFlowPath, { force: true })
   browser.fill('[data-slot="wb-name"]', FLOW)
   browser.click('[data-slot="wb-save"]')
   browser.waitForFunction(`document.querySelector('[data-slot="wb-delete"]') !== null`)
@@ -151,8 +153,8 @@ describe('workflow builder against the live dry-run server', () => {
   })
 
   it('Save writes a real portable workflow file the server round-trips', () => {
-    prepareWorkflow([BETA, ALPHA])
     rmSync(savedFlowPath, { force: true })
+    prepareWorkflow([BETA, ALPHA])
     browser.fill('[data-slot="wb-name"]', FLOW)
     browser.click('[data-slot="wb-save"]')
     browser.waitForFunction(
@@ -166,11 +168,16 @@ describe('workflow builder against the live dry-run server', () => {
     // The catalog refetched: the new chain is selectable, and Delete now exists for it.
     browser.waitForFunction(`document.querySelector('[data-slot="wb-load-option"][data-name="${FLOW}"]') !== null`)
     browser.waitForFunction(`document.querySelector('[data-slot="wb-delete"]') !== null`)
+    // The canvas now matches the saved file: Save is off and says why.
+    browser.waitForFunction(`document.querySelector('[data-slot="wb-save"]').disabled && document.querySelector('[data-slot="wb-save-cue"]')?.textContent === 'No unsaved changes'`)
     browser.screenshot(`${artifactsDir}/workflows-saved.png`)
   })
 
   it('keeps action hierarchy and readable summaries across viewport, theme, and density', () => {
     prepareWorkflow([BETA, ALPHA], true)
+    // An unsaved edit turns Save back on, so its primary look and focus ring are measured live.
+    browser.fill('[data-slot="wb-description"]', 'Measure the action hierarchy.')
+    browser.waitForFunction(`!document.querySelector('[data-slot="wb-save"]').disabled && document.querySelector('[data-slot="wb-save-cue"]') === null`)
     for (const [width, height] of [[360, 640], [1440, 900]] as const) {
       for (const density of ['comfortable', 'compact', 'ultra']) {
         for (const theme of ['light', 'dark']) {

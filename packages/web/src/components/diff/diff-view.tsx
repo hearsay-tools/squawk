@@ -14,6 +14,7 @@ import {
   fileKey,
   widestLineChars,
 } from './diff-scroll'
+import { DiffTotals } from './diff-totals'
 import { ImagePreview, shouldPreviewImage } from './image-preview'
 import { canPreviewMarkdown } from './markdown'
 import { MarkdownPreview } from './markdown-preview'
@@ -75,6 +76,8 @@ export function DiffView({
   imageSrc,
   onOpenInApp,
   viewRef,
+  totals = true,
+  actions,
   className,
 }: DiffProps) {
   const stat: DiffStat = useMemo(
@@ -187,12 +190,10 @@ export function DiffView({
       data-mode={mode}
       className={cn('flex min-w-0 flex-col', className)}
     >
-      <p data-slot="diff-totals" className="flex items-center gap-2 px-1 pb-3 text-xs text-muted-foreground">
-        <span>
-          {stat.files} {stat.files === 1 ? 'file' : 'files'} changed
-        </span>
-        <DiffStatLabel stat={stat} />
-      </p>
+      <div data-slot="diff-header" hidden={!totals && !actions} className="flex min-h-9 flex-wrap items-center gap-x-2 gap-y-1.5 px-1 pb-3">
+        <DiffTotals stat={stat} hidden={!totals} />
+        {actions ? <div data-slot="diff-actions" className="ms-auto flex items-center gap-1.5">{actions}</div> : null}
+      </div>
       {renderMode === 'virtual' ? (
         <VirtualFiles files={files} handleRef={virtualizerRef} scrollElRef={scrollElRef} card={card} />
       ) : (
@@ -344,7 +345,7 @@ function DiffFileCard({
           The offset is a consumer-set CSS var so the file header parks BELOW a sticky page
           header (Git / run header) rather than colliding with it; `z-10` keeps it beneath the
           page header's higher layer. Defaults to 0 for consumers without a sticky header. */}
-      <header className="sticky top-[var(--diff-sticky-top,0px)] z-10 flex items-center rounded-t-md border-b border-border/50 bg-card">
+      <header className="sticky top-[var(--diff-sticky-top,0px)] z-10 flex items-center rounded-t-md border-b border-border bg-card">
         <button
           type="button"
           data-slot="diff-file-header"
@@ -353,13 +354,13 @@ function DiffFileCard({
           className="flex min-w-0 flex-1 items-start gap-2 px-3 py-2 text-left hover:bg-muted/50"
         >
           <ChevronRightIcon
-            className={cn('mbs-[1px] size-3.5 shrink-0 text-soft-foreground motion-safe:transition-transform', open && 'rotate-90')}
+            className={cn('mbs-[1px] size-3.5 shrink-0 text-muted-foreground motion-safe:transition-transform', open && 'rotate-90')}
             aria-hidden="true"
           />
           <span data-slot="diff-file-path" title={fullPath} className="min-w-0 wrap-anywhere font-mono text-xs font-medium">
             {file.oldPath ? (
               <>
-                <span className="text-soft-foreground">{file.oldPath} → </span>
+                <span className="text-muted-foreground">{file.oldPath} → </span>
                 {file.path}
               </>
             ) : (
@@ -381,7 +382,7 @@ function DiffFileCard({
             </span>
           ) : null}
           <span className="ml-auto shrink-0">
-            <DiffStatLabel stat={{ adds: file.adds, dels: file.dels, files: 1 }} className="text-[11px]" />
+            <DiffStatLabel stat={{ adds: file.adds, dels: file.dels, files: 1 }} className="text-xs" />
           </span>
         </button>
         {/* A sibling of the collapse button, never inside it: one button cannot hold another.
@@ -398,7 +399,7 @@ function DiffFileCard({
             className={cn(
               'mr-1.5 inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] font-medium max-md:h-11 max-md:px-3 pointer-coarse:h-11 pointer-coarse:px-3',
               'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring',
-              preview ? 'bg-muted text-foreground' : 'text-soft-foreground hover:bg-muted/50 hover:text-foreground',
+              preview ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
             )}
           >
             <EyeIcon aria-hidden="true" className="size-3.5" />
@@ -562,7 +563,7 @@ function useFileTokens(path: string, lineList: HunkLine[]): SynToken[][] | null 
 }
 
 function Note({ children }: { children: React.ReactNode }) {
-  return <p className="px-4 py-2.5 text-xs text-soft-foreground">{children}</p>
+  return <p className="px-4 py-2.5 text-xs text-muted-foreground">{children}</p>
 }
 
 // ---- rows ---------------------------------------------------------------------------------
@@ -574,9 +575,20 @@ const LINE_BG: Record<HunkLine['kind'], string | undefined> = {
 }
 const MARKER: Record<HunkLine['kind'], string> = { add: '+', del: '−', context: ' ' }
 
-function HunkHeaderRow({ hunk }: { hunk: Hunk }) {
+/** The hunk's `@@ … @@` line: a band with a hairline above and below, legible in both themes.
+ *  Each row paints inside `content-visibility: auto`, which clips overflow, so the header
+ *  never runs past the card edge: it wraps with the body lines, or ends in an ellipsis
+ *  (full text in the tooltip) when wrap is off. */
+function HunkHeaderRow({ hunk, wrap }: { hunk: Hunk; wrap: boolean }) {
   return (
-    <div data-slot="diff-hunk" className="bg-muted/40 px-4 py-0.5 whitespace-pre text-soft-foreground">
+    <div
+      data-slot="diff-hunk"
+      title={wrap ? undefined : hunk.header}
+      className={cn(
+        'border-y border-border/70 bg-muted/60 px-4 py-0.5 text-muted-foreground max-sm:px-2',
+        wrap ? 'break-words whitespace-pre-wrap' : 'truncate',
+      )}
+    >
       {hunk.header}
     </div>
   )
@@ -587,7 +599,7 @@ function GapRow({ gap, onExpand }: { gap: ContextGap; onExpand?: ((gap: ContextG
   const label = gap.count === undefined ? '⋯ unchanged lines to end of file' : `⋯ ${gap.count} unchanged ${gap.count === 1 ? 'line' : 'lines'}`
   if (!onExpand) {
     return (
-      <div data-slot="diff-gap" className="border-y border-border/40 bg-muted/20 px-4 py-0.5 text-[11px] text-soft-foreground">
+      <div data-slot="diff-gap" className="border-y border-border/70 bg-muted/40 px-4 py-1 text-xs text-muted-foreground">
         {label}
       </div>
     )
@@ -597,7 +609,7 @@ function GapRow({ gap, onExpand }: { gap: ContextGap; onExpand?: ((gap: ContextG
       type="button"
       data-slot="diff-gap"
       onClick={() => onExpand(gap)}
-      className="block w-full border-y border-border/40 bg-muted/20 px-4 py-0.5 text-left text-[11px] text-soft-foreground hover:bg-muted/50 hover:text-foreground"
+      className="block w-full border-y border-border/70 bg-muted/40 px-4 py-1 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
     >
       {label} — expand
     </button>
@@ -609,7 +621,7 @@ function LineContent({ cell, tokens, wrap }: { cell: DiffCell; tokens: SynToken[
   const segments = overlaySegments(tokens, cell.spans, cell.line.text)
   const markClass = cell.line.kind === 'add' ? 'bg-diff-add-strong' : 'bg-diff-del-strong'
   return (
-    <span className={cn('min-w-0 flex-1 pr-4', wrap ? 'break-words whitespace-pre-wrap' : 'whitespace-pre')}>
+    <span className={cn('min-w-0 flex-1 pr-4 max-sm:pr-1 max-sm:pl-1.5', wrap ? 'break-words whitespace-pre-wrap' : 'whitespace-pre')}>
       {segments.map((segment, index) => (
         <span
           key={index}
@@ -625,50 +637,52 @@ function LineContent({ cell, tokens, wrap }: { cell: DiffCell; tokens: SynToken[
   )
 }
 
-function Gutter({ value }: { value: number | undefined }) {
+/** A line-number cell. Below `sm` (a phone held upright) it narrows to 28px with a 6px gap,
+ *  still room for a three-digit number at 12px mono, so the code column keeps the width a long
+ *  line needs to wrap in a few rows, not six. */
+function Gutter({ value, className }: { value: number | undefined; className?: string }) {
   return (
-    <span className="w-10 shrink-0 pr-2 text-right text-soft-foreground/70 tabular-nums select-none">
+    <span
+      data-slot="diff-gutter"
+      className={cn('w-10 shrink-0 pr-2 text-right text-muted-foreground tabular-nums select-none max-sm:w-7 max-sm:pr-1.5', className)}
+    >
       {value ?? ''}
     </span>
   )
 }
 
-function UnifiedRowView({
-  row,
-  wrap,
-  tokensFor,
-  onExpand,
-}: {
-  row: UnifiedRow
+/** The +/− marker column: 16px. Below `sm` it centres the sign, and the code cell adds a 6px
+ *  lead, so the number, the sign and the code never touch. */
+function Marker({ kind }: { kind: HunkLine['kind'] }) {
+  return <span data-slot="diff-marker" className="w-4 shrink-0 text-muted-foreground select-none max-sm:text-center">{MARKER[kind]}</span>
+}
+
+type DiffRowViewProps<R> = {
+  row: R
   wrap: boolean
   tokensFor: (line: HunkLine) => SynToken[] | null
   onExpand?: ((gap: ContextGap) => void) | undefined
-}) {
-  if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} />
+}
+
+function UnifiedRowView({ row, wrap, tokensFor, onExpand }: DiffRowViewProps<UnifiedRow>) {
+  if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} wrap={wrap} />
   if (row.type === 'gap') return <GapRow gap={row.gap} onExpand={onExpand} />
   const { line } = row.cell
   return (
     <div data-slot="diff-line" data-line={line.kind} className={cn('flex', LINE_BG[line.kind])}>
-      <Gutter value={line.oldLine} />
-      <Gutter value={line.newLine} />
-      <span className="w-4 shrink-0 text-soft-foreground select-none">{MARKER[line.kind]}</span>
+      {/* Below `sm` one number column, not two: the new line's number, or the old one on a
+          deleted line (the − marker says which). Two gutters ate a quarter of a 390px screen. */}
+      <Gutter value={line.oldLine} className="max-sm:hidden" />
+      <Gutter value={line.newLine} className="max-sm:hidden" />
+      <Gutter value={line.newLine ?? line.oldLine} className="sm:hidden" />
+      <Marker kind={line.kind} />
       <LineContent cell={row.cell} tokens={tokensFor(line)} wrap={wrap} />
     </div>
   )
 }
 
-function SplitRowView({
-  row,
-  wrap,
-  tokensFor,
-  onExpand,
-}: {
-  row: SplitRow
-  wrap: boolean
-  tokensFor: (line: HunkLine) => SynToken[] | null
-  onExpand?: ((gap: ContextGap) => void) | undefined
-}) {
-  if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} />
+function SplitRowView({ row, wrap, tokensFor, onExpand }: DiffRowViewProps<SplitRow>) {
+  if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} wrap={wrap} />
   if (row.type === 'gap') return <GapRow gap={row.gap} onExpand={onExpand} />
   return (
     <div data-slot="diff-pair" className="grid grid-cols-2">
@@ -691,17 +705,17 @@ function SplitCell({
 }) {
   if (!cell) {
     // The other side has no counterpart line — an honest hatch-free blank.
-    return <div data-slot="diff-cell-empty" className={cn('bg-muted/20', side === 'new' && 'border-l border-border/40')} />
+    return <div data-slot="diff-cell-empty" className={cn('bg-muted/20', side === 'new' && 'border-l border-border/70')} />
   }
   const { line } = cell
   return (
     <div
       data-slot="diff-cell"
       data-line={line.kind}
-      className={cn('flex min-w-0 overflow-x-auto', LINE_BG[line.kind], side === 'new' && 'border-l border-border/40')}
+      className={cn('flex min-w-0 overflow-x-auto', LINE_BG[line.kind], side === 'new' && 'border-l border-border/70')}
     >
       <Gutter value={side === 'old' ? line.oldLine : line.newLine} />
-      <span className="w-4 shrink-0 text-soft-foreground select-none">{MARKER[line.kind]}</span>
+      <Marker kind={line.kind} />
       <LineContent cell={cell} tokens={tokensFor(line)} wrap={wrap} />
     </div>
   )

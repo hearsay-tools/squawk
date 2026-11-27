@@ -13,6 +13,7 @@ import { SettingsField } from './settings-field'
 import { WORKTREE_COMMANDS_COPY, WorktreeCommandsField } from './worktree-commands-field'
 import { ChevronRightIcon } from '@/components/design-icons'
 import { Link } from '@/lib/project-router'
+import { SaveRow } from './save-cue'
 
 /**
  * Project settings → Worktrees: configuration only — the retention count (#483), the commands
@@ -97,7 +98,7 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
     >
       <SettingsField
         title="Keep N finished worktrees"
-        hint="Older finished worktrees are reclaimed to free disk; their branch is kept so the work stays recoverable. 0 = unlimited. In-review and running tasks are never reclaimed, so the count on disk can exceed this."
+        hint="Older finished worktrees are removed to free disk; their branch stays, so the work is recoverable. 0 keeps all. Running and in-review tasks are never removed."
       >
         <div data-reports-dirty="" className="flex items-center gap-2">
           <input
@@ -113,25 +114,26 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
             onChange={(event) => setRetention(event.target.value)}
             className="block w-32 rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
           />
-          <span className="text-xs text-soft-foreground">worktrees</span>
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            className="self-start"
-            data-action="resources-save-retention"
-            disabled={retentionSaved || retentionInvalid || save.isPending}
-            onClick={saveRetention}
-          >
-            Save retention
-          </Button>
+          <span className="text-xs text-muted-foreground">worktrees</span>
+          <SaveRow show={retentionSaved && !retentionInvalid && !save.isPending}>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              data-action="resources-save-retention"
+              disabled={retentionSaved || retentionInvalid || save.isPending}
+              onClick={saveRetention}
+            >
+              Save retention
+            </Button>
+          </SaveRow>
         </div>
         {retentionInvalid ? (
-          <p data-slot="resources-retention-invalid" className="text-[11px] text-danger">
+          <p data-slot="resources-retention-invalid" className="text-xs text-danger">
             Enter a whole number from {WORKTREE_RETENTION_MIN} to {WORKTREE_RETENTION_MAX} (0 = unlimited).
           </p>
         ) : (
-          <p className="text-[11px] text-soft-foreground">
+          <p className="text-xs text-muted-foreground">
             {retentionNum === 0 ? 'Keeping every finished worktree.' : `Keeping the last ${retentionNum} finished worktree${retentionNum === 1 ? '' : 's'} on disk.`}
           </p>
         )}

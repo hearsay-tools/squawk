@@ -1,4 +1,5 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActivityProject } from '@open-mercato/cezar-api-client/contract/activity'
@@ -7,6 +8,10 @@ import { ACTIVITY_WAIT_KIND, NOW, RUN_STATUS, TOOL_STATUS, iso, project, request
 import { ActivityBoard } from './activity-board'
 import { PEER_LABEL } from './line-measure'
 import { inside, labelBox, overlaps, placeBoxes, samplePath } from './line-layout.testkit'
+import { createQueryClient } from '@/api/query-client'
+import { seedRunners } from '@/test/runners.testkit'
+
+const runnersClient = seedRunners(createQueryClient())
 
 afterEach(() => {
   cleanup()
@@ -20,9 +25,9 @@ function setGraphWidth(width: number) {
 
 function renderBoard(value: ActivityProject) {
   return render(
-    <MemoryRouter initialEntries={['/p/cezarion/activity']}>
+    <QueryClientProvider client={runnersClient}><MemoryRouter initialEntries={['/p/cezarion/activity']}>
       <ActivityBoard project={value} now={NOW} watchingSince={iso(-60_000)} />
-    </MemoryRouter>,
+    </MemoryRouter></QueryClientProvider>,
   )
 }
 
@@ -70,7 +75,7 @@ describe('ActivityBoard', () => {
   it('draws a peer line with its label when the graph has several columns', () => {
     setGraphWidth(1200)
     renderBoard(project({ tasks: [A, B], requests: [PEER] }))
-    expect(document.querySelector('[data-slot="activity-graph"]')?.getAttribute('data-columns')).toBe('3')
+    expect(document.querySelector('[data-slot="activity-graph"]')?.getAttribute('data-columns')).toBe('2')
     expect(document.querySelector(`path[data-request="${PEER.requestId}"]`)?.getAttribute('data-kind')).toBe('peer')
     const label = document.querySelector(`[data-slot="activity-line-label"][data-request="${PEER.requestId}"]`)
     expect(label?.textContent).toMatch(/^Request4:10/)

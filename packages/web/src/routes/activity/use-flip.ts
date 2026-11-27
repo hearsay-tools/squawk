@@ -42,13 +42,19 @@ function places(host: HTMLElement, attribute: string): Map<string, { el: HTMLEle
 export const LAYOUT_SETTLED = 'activity-layout-settled'
 
 /** Play FLIP on the host's `[attribute]` elements whenever `layoutKey` changes; `enabled` false
- *  (reduced motion, a hidden tab) moves them at once and cancels the animations still running. */
-export function useFlip(hostRef: React.RefObject<HTMLElement | null>, attribute: string, layoutKey: string, enabled: boolean) {
+ *  (reduced motion, a hidden tab) moves them at once and cancels the animations still running.
+ *  `layoutKey` undefined means the host is not measured yet: nothing is recorded, so the first
+ *  measured layout paints in place instead of flying in from the unmeasured one. */
+export function useFlip(hostRef: React.RefObject<HTMLElement | null>, attribute: string, layoutKey: string | undefined, enabled: boolean) {
   const last = React.useRef<{ key: string; at: Map<string, Place> } | undefined>(undefined)
   const running = React.useRef(new Set<Animation>())
   React.useLayoutEffect(() => {
     const host = hostRef.current
     if (!host) return
+    if (layoutKey === undefined) {
+      last.current = undefined
+      return
+    }
     const now = places(host, attribute)
     const at = new Map([...now].map(([id, place]) => [id, place.at]))
     const before = last.current

@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronLeftIcon, ExternalLinkIcon, MessageSquareIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronLeftIcon, ExternalLinkIcon, MessageSquareIcon } from 'lucide-react'
 import { ArrowLeftIcon, ChevronRightIcon } from '@/components/design-icons'
 import { useMemo, useState, type ReactNode } from 'react'
 
@@ -14,6 +14,7 @@ import type {
   GithubTimelineEventKind,
 } from '@open-mercato/cezar-api-client'
 import { Diff, type DiffFileChange } from '@/components/diff'
+import { ChangeCounts } from '@/components/diff/change-counts'
 import { GithubMergeBox } from '@/components/github-merge-box'
 import { TabLink } from '@/components/tab-link'
 import { Button } from '@/components/ui/button'
@@ -33,7 +34,7 @@ export function LabelChip({ label, color, plain = false }: { label: string; colo
       data-slot="gh-label"
       data-label={label}
       style={plain ? undefined : labelChipStyle(color)}
-      className={plain ? "text-[11px] font-normal text-muted-foreground" : "rounded-full border px-1.5 py-px text-[12px] font-medium"}
+      className={plain ? "text-xs font-normal text-muted-foreground" : "rounded-full border px-1.5 py-px text-[12px] font-medium"}
     >
       {label}
     </span>
@@ -62,6 +63,28 @@ function GithubItemBackLink({ backLink }: { backLink: { to: string } | null }) {
   )
 }
 
+/** Compact single-box styling for Streamdown code fences inside GitHub bodies and comments:
+ *  removes the nested double border, collapses empty language headers, and floats the copy
+ *  action in the top-right corner so single-line fences have no blank vertical band above them. */
+const GH_MARKDOWN_CLASS = cn(
+  'text-sm',
+  '[&_[data-streamdown="code-block"]]:relative [&_[data-streamdown="code-block"]]:my-2.5 [&_[data-streamdown="code-block"]]:gap-0 [&_[data-streamdown="code-block"]]:overflow-hidden [&_[data-streamdown="code-block"]]:rounded-lg [&_[data-streamdown="code-block"]]:border [&_[data-streamdown="code-block"]]:border-border [&_[data-streamdown="code-block"]]:bg-background [&_[data-streamdown="code-block"]]:p-0 [&_[data-streamdown="code-block"]]:![content-visibility:visible] [&_[data-streamdown="code-block"]]:![contain-intrinsic-size:auto]',
+  '[&_[data-streamdown="code-block-header"]]:h-7 [&_[data-streamdown="code-block-header"]]:border-b [&_[data-streamdown="code-block-header"]]:border-border [&_[data-streamdown="code-block-header"]]:bg-muted/40 [&_[data-streamdown="code-block-header"]]:px-3 [&_[data-streamdown="code-block-header"]]:text-[11px]',
+  '[&_[data-streamdown="code-block-header"][data-language=""]]:hidden [&_[data-streamdown="code-block-header"]:not([data-language])]:hidden [&_[data-streamdown="code-block-header"]:has(>span:empty)]:hidden',
+  '[&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:absolute [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:top-1 [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:right-1.5 [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:mt-0 [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:h-auto',
+  '[&_[data-streamdown="code-block-actions"]]:border-0 [&_[data-streamdown="code-block-actions"]]:bg-transparent [&_[data-streamdown="code-block-actions"]]:p-0 [&_[data-streamdown="code-block-actions"]]:backdrop-blur-none',
+  // Streamdown's own failed-image line (private attachments need a GitHub session): a calm box
+  // that says where the picture can still be seen, instead of a bare italic "Image not available".
+  '[&_[data-streamdown="image-fallback"]]:inline-flex [&_[data-streamdown="image-fallback"]]:rounded-md [&_[data-streamdown="image-fallback"]]:border [&_[data-streamdown="image-fallback"]]:border-dashed [&_[data-streamdown="image-fallback"]]:border-border [&_[data-streamdown="image-fallback"]]:bg-muted/40 [&_[data-streamdown="image-fallback"]]:px-3 [&_[data-streamdown="image-fallback"]]:py-2 [&_[data-streamdown="image-fallback"]]:not-italic [&_[data-streamdown="image-fallback"]]:after:content-["_—_open_on_GitHub_to_view"]',
+  '[&_[data-streamdown="code-block-body"]]:rounded-none [&_[data-streamdown="code-block-body"]]:border-0 [&_[data-streamdown="code-block-body"]]:bg-transparent [&_[data-streamdown="code-block-body"]]:px-3.5 [&_[data-streamdown="code-block-body"]]:py-2.5 [&_[data-streamdown="code-block-body"]]:pr-10',
+)
+
+/** The full local date and time behind a compact age. */
+function fullDateTime(iso: string): string {
+  const time = Date.parse(iso)
+  return Number.isFinite(time) ? new Date(time).toLocaleString() : iso
+}
+
 function GithubItemMeta({
   item,
   kindWord,
@@ -78,9 +101,10 @@ function GithubItemMeta({
   deletions: number | undefined
 }) {
   return (
-    <p data-slot="gh-meta" className="flex flex-wrap items-center gap-x-1.5 font-mono text-[11px] text-soft-foreground">
-      <span>#{item.number}</span>·<span>{kindWord}</span>·<span>opened by {item.author}</span>·
-      <span>{shortAge(item.createdAt)} ago</span>
+    // One metadata voice with the list rows: sans at text-xs; only SHAs and code stay mono.
+    <p data-slot="gh-meta" className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+      <span className="tabular-nums">#{item.number}</span>·<span>{kindWord}</span>·<span>opened by {item.author}</span>·
+      <time dateTime={item.createdAt} title={fullDateTime(item.createdAt)}>{shortAge(item.createdAt)}</time>
       {commentCount ? (
         <>
           ·<CommentCount count={commentCount} />
@@ -89,10 +113,7 @@ function GithubItemMeta({
       {hasDiffStat ? (
         <>
           ·
-          <span data-slot="gh-diffstat">
-            <span className="text-success">+{additions ?? 0}</span>{' '}
-            <span className="text-danger">−{deletions ?? 0}</span>
-          </span>
+          <span data-slot="gh-diffstat"><ChangeCounts adds={additions ?? 0} dels={deletions ?? 0} /></span>
         </>
       ) : null}
       ·
@@ -177,11 +198,11 @@ function GithubItemConversation({
 }) {
   return (
     <>
-      <div data-slot="gh-body" className="mt-5 text-sm">
+      <div data-slot="gh-body" className={cn('mt-5', GH_MARKDOWN_CLASS)}>
         {body ? (
           <Markdown>{body}</Markdown>
         ) : (
-          <p className="text-soft-foreground">(no description)</p>
+          <p className="text-muted-foreground">(no description)</p>
         )}
       </div>
       <GithubThread item={item} colors={colors} />
@@ -204,6 +225,7 @@ export function GithubItemDetail({
   subNav,
   onRunAgent,
   afterHeading,
+  headerAction,
   children,
 }: {
   item: GithubItem
@@ -223,6 +245,9 @@ export function GithubItemDetail({
   onRunAgent?: (() => void) | undefined
   /** Optional context beneath the heading, supplied by the owning surface. */
   afterHeading?: ReactNode
+  /** The primary action, at the right end of the pane's first line (the PR title, the issue's
+   *  `#142 · issue …` line), so it is in view without scrolling. */
+  headerAction?: ReactNode
   children?: ReactNode
 }) {
   const changes = subNav?.changes ?? false
@@ -241,17 +266,23 @@ export function GithubItemDetail({
       <GithubItemBackLink backLink={backLink} />
 
       <div data-slot="gh-description-card" className={item.kind === 'pr' ? 'rounded-xl border border-border bg-card p-6' : undefined}>
-      {item.kind === 'pr' ? <h2 className="mb-4 text-[22px] leading-snug font-normal">#{item.number} {item.title}</h2> : null}
-      <GithubItemMeta
-        item={item}
-        kindWord={kindWord}
-        commentCount={commentCount}
-        hasDiffStat={hasDiffStat}
-        additions={additions}
-        deletions={deletions}
-      />
+      {item.kind === 'pr' ? (
+        <GithubItemHeaderRow action={headerAction} className="mb-4">
+          <h2 className="min-w-0 text-[22px] leading-snug font-semibold tracking-tight">#{item.number} {item.title}</h2>
+        </GithubItemHeaderRow>
+      ) : null}
+      <GithubItemHeaderRow action={item.kind === 'pr' ? undefined : headerAction}>
+        <GithubItemMeta
+          item={item}
+          kindWord={kindWord}
+          commentCount={commentCount}
+          hasDiffStat={hasDiffStat}
+          additions={additions}
+          deletions={deletions}
+        />
+      </GithubItemHeaderRow>
 
-      {item.kind !== 'pr' ? <h2 className="mt-2 text-[22px] leading-snug font-normal">{item.title}</h2> : null}
+      {item.kind !== 'pr' ? <h2 className="mt-2 text-[22px] leading-snug font-semibold tracking-tight">{item.title}</h2> : null}
 
       {afterHeading}
 
@@ -266,6 +297,17 @@ export function GithubItemDetail({
       {item.kind === 'pr' ? <GithubMergeBox number={item.number} onRunAgent={onRunAgent} /> : null}
       {children}
     </article>
+  )
+}
+
+/** A header line with the pane's primary action at its right end; just the line without one. */
+function GithubItemHeaderRow({ action, className, children }: { action: ReactNode; className?: string | undefined; children: ReactNode }) {
+  if (!action) return className ? <div className={className}>{children}</div> : <>{children}</>
+  return (
+    <div data-slot="gh-header-row" className={cn('flex flex-wrap items-center gap-x-3 gap-y-2', className)}>
+      <div className="min-w-0 flex-1">{children}</div>
+      <div data-slot="gh-header-action" className="flex shrink-0 items-center gap-2">{action}</div>
+    </div>
   )
 }
 
@@ -321,8 +363,7 @@ function GithubPrChanges({ item }: { item: GithubItem }) {
     <section data-slot="gh-pr-changes" className="mt-5 min-w-0">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <strong>{data.files.length} changed files</strong>
-        <span className="text-success">+{data.additions}</span>
-        <span className="text-danger">−{data.deletions}</span>
+        <ChangeCounts adds={data.additions} dels={data.deletions} />
         <span className="font-mono text-muted-foreground" title={data.headSha}>head {data.headSha.slice(0, 8)}</span>
         <Button type="button" variant="outline" size="sm" className="ml-auto min-h-11" onClick={() => void refresh()}>Refresh</Button>
       </div>
@@ -330,11 +371,14 @@ function GithubPrChanges({ item }: { item: GithubItem }) {
       <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="min-w-0">
           <input aria-label="Filter changed files" value={filter} onChange={(e) => changeFilter(e.target.value)} placeholder="Filter files…" className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm" />
-          <select aria-label="Select changed file" value={activePath ?? ''} onChange={(e) => setSelected(e.target.value)} className="mt-2 min-h-11 w-full rounded-md border border-input bg-background px-2 text-sm lg:hidden">
-            {files.map((file) => <option key={file.path}>{file.path}</option>)}
-          </select>
+          <div className="relative mt-2 lg:hidden">
+            <select aria-label="Select changed file" value={activePath ?? ''} onChange={(e) => setSelected(e.target.value)} className="min-h-11 w-full appearance-none rounded-md border border-input bg-background py-2 pr-8 pl-3 text-sm">
+              {files.map((file) => <option key={file.path}>{file.path}</option>)}
+            </select>
+            <ChevronDownIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          </div>
           <ul className="mt-2 hidden max-h-[60vh] overflow-auto lg:block">
-            {files.map((file) => <li key={file.path}><button type="button" onClick={() => setSelected(file.path)} className={cn('min-h-11 w-full truncate rounded px-2 text-left text-xs', activePath === file.path && 'bg-muted font-medium')} title={file.path}>{file.status} · {file.path} <span className="text-success">+{file.additions}</span> <span className="text-danger">−{file.deletions}</span></button></li>)}
+            {files.map((file) => <li key={file.path}><button type="button" onClick={() => setSelected(file.path)} className={cn('min-h-11 w-full truncate rounded px-2 text-left text-xs', activePath === file.path && 'bg-muted font-medium')} title={file.path}>{file.status} · {file.path} <ChangeCounts adds={file.additions} dels={file.deletions} /></button></li>)}
           </ul>
         </aside>
         <div className="min-w-0">
@@ -402,7 +446,7 @@ function GithubThread({ item, colors }: { item: GithubItem; colors: Record<strin
   if (!data || !data.available) {
     const reason = data?.reason ?? (thread.error instanceof Error ? thread.error.message : 'could not load comments')
     return (
-      <section data-slot="gh-thread-error" className="mt-6 border-t border-border pt-5 text-xs text-soft-foreground">
+      <section data-slot="gh-thread-error" className="mt-6 border-t border-border pt-5 text-xs text-muted-foreground">
         <span>Couldn’t load comments — {reason}. </span>
         <a
           href={item.url}
@@ -427,7 +471,7 @@ function GithubThread({ item, colors }: { item: GithubItem; colors: Record<strin
     <section data-slot="gh-thread" className="mt-6 border-t border-border pt-5">
       <h3
         data-slot="gh-thread-header"
-        className="mb-4 text-[11px] font-semibold tracking-wide text-soft-foreground uppercase"
+        className="mb-4 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
       >
         {/* "Activity", not "Comments": heading a twenty-row list `Comments · 2` would be
             incoherent once events render. The comment count stays as a secondary. This is a
@@ -454,7 +498,7 @@ function GithubThread({ item, colors }: { item: GithubItem; colors: Record<strin
           target="_blank"
           rel="noopener noreferrer"
           data-slot="gh-thread-truncated"
-          className="mt-4 inline-flex items-center gap-0.5 text-xs text-soft-foreground hover:text-foreground hover:underline"
+          className="mt-4 inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground hover:underline"
         >
           thread truncated — open on GitHub
           <ExternalLinkIcon aria-hidden="true" className="size-2.5" />
@@ -533,7 +577,7 @@ function CommitGroup({ commits, colors }: { commits: GithubTimelineEvent[]; colo
             type="button"
             aria-expanded={true}
             onClick={() => setOpen(false)}
-            className="flex items-center gap-1.5 font-mono text-[11px] text-soft-foreground hover:text-foreground"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             <span aria-hidden="true">{EVENT_GLYPH.committed}</span>
             <span className="font-sans font-medium text-foreground">{actor}</span>
@@ -553,7 +597,7 @@ function CommitGroup({ commits, colors }: { commits: GithubTimelineEvent[]; colo
         type="button"
         aria-expanded={false}
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 font-mono text-[11px] text-soft-foreground hover:text-foreground"
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
       >
         <span aria-hidden="true">{EVENT_GLYPH.committed}</span>
         <span className="font-sans font-medium text-foreground">{actor}</span>
@@ -592,7 +636,7 @@ function EventRow({ event, colors }: { event: GithubTimelineEvent; colors: Recor
       data-slot="gh-event-row"
       data-kind={event.kind}
       className={cn(
-        'flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-soft-foreground',
+        'flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground',
         event.kind === 'merged' && 'text-accent-foreground',
       )}
     >
@@ -621,7 +665,7 @@ function CommittedPhrase({ event }: { event: GithubTimelineEvent }) {
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       <span className="shrink-0">committed</span>
-      {event.sha ? <span className="shrink-0 text-muted-foreground">{event.sha.slice(0, 7)}</span> : null}
+      {event.sha ? <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{event.sha.slice(0, 7)}</span> : null}
       {event.message ? (
         <span className="truncate font-sans text-foreground">{event.message}</span>
       ) : null}
@@ -720,7 +764,7 @@ function ThreadEntry({ comment }: { comment: GithubComment }) {
   const chip = comment.reviewState ? REVIEW_CHIP[comment.reviewState] : null
   return (
     <li data-slot="gh-thread-entry" data-kind={comment.kind} className="min-w-0">
-      <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[11px] text-soft-foreground">
+      <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
         <Avatar url={comment.avatarUrl} login={comment.author} />
         <span className="font-sans font-medium text-foreground">{comment.author}</span>
         <span>{shortAge(comment.createdAt)}</span>
@@ -743,14 +787,14 @@ function ThreadEntry({ comment }: { comment: GithubComment }) {
           <ExternalLinkIcon aria-hidden="true" className="size-2.5" />
         </a>
       </div>
-      <div data-slot="gh-thread-body" className="text-sm">
-        {comment.body ? <Markdown>{comment.body}</Markdown> : <p className="text-soft-foreground">(no body)</p>}
+      <div data-slot="gh-thread-body" className={GH_MARKDOWN_CLASS}>
+        {comment.body ? <Markdown>{comment.body}</Markdown> : <p className="text-muted-foreground">(no body)</p>}
       </div>
     </li>
   )
 }
 
-/** A 16 px comment avatar. Falls back to a letter block when no URL is known or the image fails to
+/** A 20 px comment avatar. Falls back to a letter block when no URL is known or the image fails to
  *  load (private-repo attachments, deleted avatars) — never a broken-image glyph. */
 function Avatar({ url, login }: { url?: string | undefined; login: string }) {
   const [failed, setFailed] = useState(false)
@@ -759,12 +803,12 @@ function Avatar({ url, login }: { url?: string | undefined; login: string }) {
       <img
         src={url}
         alt=""
-        width={16}
-        height={16}
+        width={20}
+        height={20}
         loading="lazy"
         onError={() => setFailed(true)}
         data-slot="gh-avatar"
-        className="size-4 shrink-0 rounded-full"
+        className="size-5 shrink-0 rounded-full"
       />
     )
   }
@@ -772,7 +816,7 @@ function Avatar({ url, login }: { url?: string | undefined; login: string }) {
     <span
       data-slot="gh-avatar-fallback"
       aria-hidden="true"
-      className="flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-semibold text-muted-foreground uppercase"
+      className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground uppercase"
     >
       {login.slice(0, 1) || '?'}
     </span>

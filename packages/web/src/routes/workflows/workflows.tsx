@@ -20,7 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckIcon, PlusIcon, TriangleAlertIcon } from '@/components/design-icons'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 
 import { ApiError, createWorkflow, deleteWorkflow, parseWorkflow, postPlan } from '@/api/client'
@@ -122,6 +122,7 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
   const [autoText, setAutoText] = useState('')
   const [confirmOverwrite, setConfirmOverwrite] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const saveCueId = useId()
   const [dragging, setDragging] = useState<DragItem | null>(null)
   // The step id (or CANVAS_ID) the pointer is over mid-drag — drives the "drop to insert"
   // indicator between cards, the affordance the legacy `.wb-gap` slots gave (#wb-drop-line).
@@ -230,7 +231,7 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
     return (
       <div
         data-route="workflows"
-        className="@container mx-auto min-h-full w-full px-[18px] py-6 md:p-9"
+        className="@container min-h-full w-full px-4 pt-7 pb-9 md:px-9"
       >
         <CenteredState
           icon={<TriangleAlertIcon />}
@@ -247,6 +248,9 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
   const trimmedName = draft.name.trim()
   const savedFile = workflows.find((w) => w.name === trimmedName && w.source === 'file')
   const yaml = workflowYaml(draft.name, draft.description, steps)
+  // A saved file whose canvas still matches it has nothing to save; any edit, a new name or an
+  // unsaved canvas turns Save back on.
+  const unchanged = savedFile !== undefined && workflowYaml(savedFile.name, savedFile.description ?? '', savedFile.steps ?? []) === yaml
 
   /** Palette → canvas, at `at` (or the end). One rule for drop, click and keyboard: the
    *  server's 8-step limit answers a toast, never a silent no-op. */
@@ -324,24 +328,45 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
   return (
     <div
       data-route="workflows"
-      className="@container mx-auto min-h-full w-full px-[18px] py-6 md:p-9"
+      className="@container min-h-full w-full px-4 pt-7 pb-9 md:px-9"
     >
-      <header className="mb-[22px] flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-[25px] font-semibold md:text-[30px]">Workflows</h1>
-          <p className="mt-2 text-xs text-muted-foreground md:text-[13px]">
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-semibold tracking-tight leading-[1.2] text-foreground md:text-[28px]">Workflows</h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">
             Portable skill chains. Steps run from top to bottom.
           </p>
         </div>
-        <Button
-          variant="primary"
-          data-slot="wb-new"
-          className="min-h-11"
-          onClick={() => setDraft(emptyDraft())}
-        >
-          <PlusIcon aria-hidden="true" className="size-4" />
-          New workflow
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            data-slot="wb-new"
+            className="min-h-11"
+            onClick={() => setDraft(emptyDraft())}
+          >
+            <PlusIcon aria-hidden="true" className="size-4" />
+            New workflow
+          </Button>
+          {/* A greyed Save reads as "not allowed" without a reason; say it is already saved. */}
+          {unchanged ? (
+            <span id={saveCueId} data-slot="wb-save-cue" className="whitespace-nowrap text-xs text-muted-foreground">
+              No unsaved changes
+            </span>
+          ) : null}
+          <Button
+            type="button"
+            variant="primary"
+            data-slot="wb-save"
+            className="min-h-11"
+            disabled={save.isPending || unchanged}
+            aria-describedby={unchanged ? saveCueId : undefined}
+            onClick={runSave}
+          >
+            <CheckIcon aria-hidden="true" className="size-4" />
+            Save workflow
+          </Button>
+        </div>
       </header>
 
       <DndContext
@@ -355,7 +380,7 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
           setOverId(null)
         }}
       >
-        <div className="flex min-w-0 flex-col gap-[22px] pb-[calc(32px+env(safe-area-inset-bottom))]">
+        <div className="flex min-w-0 flex-col gap-4 pb-[calc(32px+env(safe-area-inset-bottom))]">
           <WbMetadata
             workflows={workflows}
             draft={draft}
@@ -409,8 +434,8 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
 
           <div className="grid min-w-0 items-start gap-[22px] @min-[700px]:grid-cols-[minmax(0,1fr)_300px]">
             <section data-slot="wb-main" className="min-w-0 rounded-xl border border-border bg-card p-5">
-              <p className="text-xs text-muted-foreground">
-                Steps · {steps.length} of {WB_MAX_STEPS}
+              <p className="text-xs text-muted-foreground" title={`A workflow holds at most ${WB_MAX_STEPS} steps`}>
+                Steps · {steps.length} of {WB_MAX_STEPS} max
                 <span data-slot="wb-count" className="sr-only">
                   {stepCountLabel(steps)}
                 </span>
@@ -437,23 +462,6 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
                 <span className="hidden @min-[900px]:inline">Drag to reorder. The agent follows this sequence from top to bottom.</span>
                 <span className="@min-[900px]:hidden">Use Move up / Move down to reorder without dragging.</span>
               </p>
-              <footer className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  Review the name and steps, then save to a workflow file.
-                </p>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  className="min-h-11 max-sm:w-full"
-                  data-slot="wb-save"
-                  disabled={save.isPending}
-                  onClick={runSave}
-                >
-                  <CheckIcon aria-hidden="true" className="size-3" />
-                  Save
-                </Button>
-              </footer>
             </section>
 
             {/* ---- palette + YAML preview ------------------------------------------------- */}
@@ -536,7 +544,7 @@ function Canvas({
       data-slot="wb-steps"
       data-dragging={dragging || undefined}
       className={cn(
-        'relative mt-4 rounded-lg transition-colors',
+        'relative mt-3 rounded-lg transition-colors',
         isOver ? 'border-accent-strong/60 bg-accent-strong/5' : 'border-muted-foreground/25',
       )}
     >
@@ -551,7 +559,7 @@ function Canvas({
         </p>
       ) : (
         <SortableContext items={steps.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <ol className="flex flex-col gap-4">
+          <ol className="flex flex-col gap-2.5">
             {steps.map((step, index) => (
               <StepCard
                 key={step.id}

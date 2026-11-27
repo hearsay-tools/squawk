@@ -163,9 +163,9 @@ describe('DeleteBranchDialog', () => {
   })
 
   it.each([
-    { entry: BRANCH, text: 'This drops the work of Useful work. It is not on the base branch and no pull request carries it.', detail: '2 commits will be dropped (+12 −3), the latest “Save useful work” (abcdef1).' },
-    { entry: { ...BRANCH, title: null, ahead: 1, diffStat: null, pr: { number: 1, url: 'https://github.com/acme/repo/pull/1', state: 'open' as const } }, text: `This drops the work of ${BRANCH.name}. It is not on the base branch.`, detail: '1 commit will be dropped, the latest “Save useful work” (abcdef1).' },
-    { entry: { ...BRANCH, class: 'orphan' as const }, text: 'Its task was deleted, so this branch is the only copy of the work.', detail: '2 commits will be dropped (+12 −3), the latest “Save useful work” (abcdef1).' },
+    { entry: BRANCH, text: 'This drops the work of Useful work. It is not on the base branch and no pull request carries it.', detail: '2 commits will be dropped (+12 −3), the latest “Save useful work” (abcdef12).' },
+    { entry: { ...BRANCH, title: null, ahead: 1, diffStat: null, pr: { number: 1, url: 'https://github.com/acme/repo/pull/1', state: 'open' as const } }, text: `This drops the work of ${BRANCH.name}. It is not on the base branch.`, detail: '1 commit will be dropped, the latest “Save useful work” (abcdef12).' },
+    { entry: { ...BRANCH, class: 'orphan' as const }, text: 'Its task was deleted, so this branch is the only copy of the work.', detail: '2 commits will be dropped (+12 −3), the latest “Save useful work” (abcdef12).' },
   ])('names the work at risk: $text', ({ entry, text, detail }) => {
     showDialog(entry)
     expect(screen.getByRole('heading', { name: `Delete ${BRANCH.name}?` })).toBeTruthy()
@@ -254,7 +254,7 @@ describe('not-landed branch decisions', () => {
     { manual: undefined, message: 'Cannot create PR' },
   ])('reports the PR refusal: $message', async ({ manual, message }) => {
     showSection([BRANCH], () => response({ error: 'Cannot create PR', manual }, 409))
-    fireEvent.click(screen.getByRole('button', { name: 'Create draft PR' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Draft PR' }))
     await screen.findByText(message, { exact: true })
     expect(document.querySelector('[data-slot="toast"]')?.getAttribute('data-tone')).toBe('danger')
   })
@@ -263,7 +263,7 @@ describe('not-landed branch decisions', () => {
     const copy = vi.fn(() => success ? Promise.resolve() : Promise.reject(new Error('Denied')))
     vi.stubGlobal('navigator', { clipboard: { writeText: copy } })
     showSection([{ ...BRANCH, class: 'orphan', runId: null }])
-    expect(screen.queryByRole('button', { name: 'Create draft PR' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Draft PR' })).toBeNull()
     expect(screen.queryByRole('link', { name: 'Open task' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Copy branch' }))
     await screen.findByText(success ? `Copied ${BRANCH.name}` : 'Could not copy the branch name', { exact: true })
@@ -275,7 +275,7 @@ describe('not-landed branch decisions', () => {
     expect(document.querySelector('[data-slot="not-landed-pr-state"]')?.textContent).toContain(state)
     expect(screen.getByRole('link', { name: BRANCH.name })).toBeTruthy()
     await openMenu()
-    expect(screen.queryByRole('menuitem', { name: 'Create draft PR' }) !== null).toBe(state === 'closed')
+    expect(screen.queryByRole('menuitem', { name: 'Draft PR' }) !== null).toBe(state === 'closed')
   })
 })
 
@@ -284,11 +284,11 @@ describe('not-landed asynchronous list actions', () => {
     let finish!: (value: Response) => void
     const reply = new Promise<Response>((resolve) => { finish = resolve })
     showSection([BRANCH], () => reply)
-    fireEvent.click(screen.getByRole('button', { name: 'Create draft PR' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Draft PR' }))
     const creating = await screen.findByRole('button', { name: 'Creating…' })
     expect((creating as HTMLButtonElement).disabled).toBe(true)
     await openMenu()
-    expect(screen.getByRole('menuitem', { name: 'Create draft PR' }).getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByRole('menuitem', { name: 'Draft PR' }).getAttribute('aria-disabled')).toBe('true')
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
     await act(async () => finish(response({ url: 'https://github.com/acme/repo/pull/21' })))
     await screen.findByText('Draft PR created — https://github.com/acme/repo/pull/21', { exact: true })
@@ -309,7 +309,7 @@ describe('not-landed asynchronous list actions', () => {
     await screen.findByText(`Copied ${BRANCH.name}`, { exact: true })
     expect(copy).toHaveBeenCalledExactlyOnceWith(BRANCH.name)
     await openMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Create draft PR' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Draft PR' }))
     await screen.findByText('Draft PR created — https://github.com/acme/repo/pull/22', { exact: true })
   })
 })

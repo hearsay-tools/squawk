@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import type { AutomationDefinition, AutomationKind, Runner } from '@open-mercato/cezar-api-client'
 
 import { ApiError, createAutomation, deleteAutomation, setAutomationEnabled, updateAutomation } from '@/api/client'
@@ -40,13 +40,30 @@ function sectionOf(message: string): Section {
   return 'form'
 }
 
-function Section({ title, failure, section, children }: { title: string; failure?: Failure | undefined; section: Section; children: ReactNode }) {
+function Section({
+  title,
+  hideLegend = false,
+  failure,
+  section,
+  children,
+}: {
+  title: string
+  hideLegend?: boolean
+  failure?: Failure | undefined
+  section: Section
+  children: ReactNode
+}) {
+  const headingId = useId()
   return (
-    <fieldset className="grid min-w-0 gap-4 rounded-xl border p-5 max-md:p-4!">
-      <legend className="px-0">{title}</legend>
+    <section
+      role={hideLegend ? undefined : 'group'}
+      aria-labelledby={hideLegend ? undefined : headingId}
+      className="grid min-w-0 gap-3.5 rounded-xl border border-border bg-card p-5"
+    >
+      {hideLegend ? null : <h2 id={headingId} className="text-sm font-semibold text-foreground">{title}</h2>}
       {children}
       {failure?.section === section && !failure.conflict ? <p role="alert" className="text-sm break-words text-destructive">{failure.message}</p> : null}
-    </fieldset>
+    </section>
   )
 }
 
@@ -103,9 +120,16 @@ function TaskFields({ draft, patch, saving, automation }: {
 }) {
   return (
     <>
-      <div className="grid gap-2">
+      <div className="grid gap-1.5">
         <Label htmlFor="automation-prompt">Prompt</Label>
-        <Textarea id="automation-prompt" value={draft.prompt} onChange={(event) => patch({ prompt: event.target.value })} rows={4} required />
+        <Textarea
+          id="automation-prompt"
+          value={draft.prompt}
+          onChange={(event) => patch({ prompt: event.target.value })}
+          rows={3}
+          className="[field-sizing:fixed] min-h-[88px] resize-none border-border bg-background"
+          required
+        />
         <p className="text-xs break-words text-muted-foreground">
           {draft.kind === 'schedule'
             ? <>Available: {'{{date}}'} {'{{time}}'} {'{{project}}'} {'{{automation}}'}. A run-context block is appended automatically.</>
@@ -218,19 +242,42 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
     }
   }
 
+  const formId = useId()
+  // Like Start task on New task: nothing to save until the two required fields hold text.
+  const missing = !draft.name.trim() ? 'Name' : !draft.prompt.trim() ? 'Prompt' : ''
+  const saveHint = saveHintOf(draft)
+  const saveHintId = useId()
   const saveLabel = automation ? 'Save changes' : draft.enabled ? 'Save and enable' : 'Save paused'
   const isSchedule = draft.kind === 'schedule'
   return (
     <PageFrame
       title={automation ? 'Edit automation' : 'New automation'}
       subtitle="Define when it runs and the ordinary task it launches."
+      action={
+        <div className="grid justify-items-start gap-1.5 sm:justify-items-end">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" asChild><Link to="/automations">Cancel</Link></Button>
+            <Button
+              type="submit"
+              form={formId}
+              variant="primary"
+              disabled={saving || missing !== ''}
+              title={missing ? `${missing} is required` : undefined}
+              aria-describedby={saveHint ? saveHintId : undefined}
+            >
+              {saving ? 'Saving…' : saveLabel}
+            </Button>
+          </div>
+          {saveHint ? <p id={saveHintId} data-slot="automation-save-hint" className="text-xs text-muted-foreground">{saveHint}</p> : null}
+        </div>
+      }
     >
-      <form className="automation-editor grid min-w-0 gap-5 md:grid-cols-[minmax(0,1fr)_320px] md:items-start" onSubmit={submit}>
-        <div className="grid min-w-0 gap-5">
-          <Section title="Name" section="name" failure={failure}>
-            <div className="grid gap-2">
-              <Label htmlFor="automation-name">Name</Label>
-              <Input id="automation-name" value={draft.name} onChange={(event) => patch({ name: event.target.value })} required />
+      <form id={formId} className="automation-editor grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_320px] md:items-start" onSubmit={submit}>
+        <div className="grid min-w-0 gap-3.5">
+          <Section title="Name" hideLegend section="name" failure={failure}>
+            <div className="grid gap-1.5">
+              <Label htmlFor="automation-name" className="text-sm font-semibold text-foreground">Name</Label>
+              <Input id="automation-name" className="border-border" value={draft.name} placeholder="Daily dependency audit" onChange={(event) => patch({ name: event.target.value })} required />
             </div>
           </Section>
 
@@ -253,10 +300,6 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
               {failure.conflict && onReload ? <Button type="button" variant="outline" onClick={onReload}>Reload</Button> : null}
             </div>
           ) : null}
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={saving}>{saving ? 'Saving…' : saveLabel}</Button>
-            <Button type="button" variant="outline" asChild><Link to="/automations">Cancel</Link></Button>
-          </div>
           {automation ? (
             <div className="grid justify-items-start gap-2 border-t pt-4">
               {confirmingDelete ? (
@@ -275,12 +318,12 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
           ) : null}
         </div>
 
-        <aside className="min-w-0 md:sticky md:top-4">
+        <aside className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4 md:sticky md:top-4">
           {isSchedule
             ? <NextRunsPreview schedule={draft.schedule} timeZone={timeZone} />
             : (
-              <section className="rounded-xl border bg-card p-4">
-                <h2 className="mb-2 text-[15px] font-medium">How it polls</h2>
+              <section className="min-w-0 rounded-xl border bg-card p-5">
+                <h2 className="mb-2 text-base font-semibold">How it polls</h2>
                 <p className="text-sm break-words text-muted-foreground">{pollSentence(draft)}</p>
               </section>
             )}
@@ -289,6 +332,12 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
       </form>
     </PageFrame>
   )
+}
+
+/** The cue under a disabled Save: which of the two required fields still need text. */
+function saveHintOf(draft: AutomationDraft): string {
+  const fields = [!draft.name.trim() && 'a name', !draft.prompt.trim() && 'a prompt'].filter(Boolean)
+  return fields.length ? `Add ${fields.join(' and ')} to save.` : ''
 }
 
 /** Workflow / runner / model, from the composer's own sources. An unset runner or model means
@@ -330,7 +379,7 @@ function EnginePills({ draft, patch }: { draft: AutomationDraft; patch: (next: P
           icon={icon(TerminalIcon)}
           fieldLabel
           ariaLabel="Runner"
-          label={draft.runner ?? 'default'}
+          label={draft.runner ? runnerPickerLabel(registered.data, draft.runner) : 'default'}
           value={draft.runner ?? ''}
           disabled={!registered.data}
           options={[{ value: '', label: 'default', desc: 'The project’s default runner' }, ...runners.map((id) => ({ value: id, label: runnerPickerLabel(registered.data, id) }))]}

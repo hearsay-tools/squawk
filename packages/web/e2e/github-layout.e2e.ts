@@ -643,6 +643,9 @@ it.each([1440, 402, 360].flatMap(width => ['light', 'dark'].map(theme => ({ widt
   )).toBe('Review this issue and keep this draft')
 }, 90_000)
 
+/** The issue board filter: a combobox trigger whose listbox mounts only while open. */
+const BOARD_PICKER = '[role="combobox"][aria-label="Project board"]'
+
 // #721: a metadata refresh used to insert a full-width status paragraph into the wrapping filter
 // controls, pushing the board picker and the list down and then back up. A DOM assertion cannot see
 // that, so a frame-by-frame sampler records the geometry across the whole delayed refresh.
@@ -670,7 +673,7 @@ it.each([{ width: 1440, height: 900 }, { width: 360, height: 640 }].flatMap(view
     };
     history.pushState(null, '', '${scoped('/github?filter=all')}'); dispatchEvent(new PopStateEvent('popstate'));
   })()`)
-  browser.waitForFunction(`document.querySelector('select[aria-label="Project board"]') !== null`)
+  browser.waitForFunction(`document.querySelector('${BOARD_PICKER}') !== null`)
   browser.evaluate(`document.documentElement.classList.toggle('light', ${theme === 'light'}); document.documentElement.dataset.width = 'wide'`)
   // One sample per animation frame of everything the refresh must not move.
   browser.evaluate(`(() => {
@@ -680,7 +683,7 @@ it.each([{ width: 1440, height: 900 }, { width: 360, height: 640 }].flatMap(view
     const box = el => { const r = el.getBoundingClientRect(); return [r.top, r.left, r.width, r.height].map(n => Math.round(n * 10) / 10).join(','); };
     const tick = () => {
       const toolbar = document.querySelector('[data-slot="gh-filter-toolbar"]');
-      const picker = document.querySelector('select[aria-label="Project board"]');
+      const picker = document.querySelector('${BOARD_PICKER}');
       const list = document.querySelector('[data-slot="gh-list"]');
       const search = document.querySelector('[data-slot="gh-search"]');
       if (toolbar && picker && list && search) seen.add(JSON.stringify({ toolbar: box(toolbar), picker: box(picker), list: box(list), search: box(search) }));
@@ -709,7 +712,7 @@ it.each([{ width: 1440, height: 900 }, { width: 360, height: 640 }].flatMap(view
   browser.waitForFunction(outcome === 'ready'
     ? `!(${status}).includes('Refreshing project boards')`
     : `(${status}).includes('rate limited')`)
-  if (outcome === 'ready') browser.waitForFunction(`document.activeElement?.matches('select[aria-label="Project board"]')`)
+  if (outcome === 'ready') browser.waitForFunction(`document.activeElement?.matches('${BOARD_PICKER}')`)
   settleVisual(browser, '[data-route="github"]', { theme, width: 'wide' })
   const facts = browser.evaluate(`(() => {
     cancelAnimationFrame(window.__geometryFrame);
@@ -721,9 +724,9 @@ it.each([{ width: 1440, height: 900 }, { width: 360, height: 640 }].flatMap(view
       list: new Set(samples.map(s => s.list)).size,
       search: new Set(samples.map(s => s.search)).size,
       pageOverflow: document.documentElement.scrollWidth > innerWidth,
-      pickerValue: document.querySelector('select[aria-label="Project board"]').value,
+      pickerValue: document.querySelector('${BOARD_PICKER}').textContent.trim(),
       rows: document.querySelectorAll('[data-slot="gh-row"]').length,
-      focusOnPicker: document.activeElement?.matches('select[aria-label="Project board"]') === true,
+      focusOnPicker: document.activeElement?.matches('${BOARD_PICKER}') === true,
     };
   })()`) as { distinct: number; toolbar: number; picker: number; list: number; search: number; pageOverflow: boolean; pickerValue: string; rows: number; focusOnPicker: boolean }
   browser.screenshot(`${artifactsDir}/github-refresh-geometry-${width}-${theme}-${outcome}.png`, { viewport: true })
@@ -769,7 +772,7 @@ it.each([{ width: 1440, height: 900 }, { width: 360, height: 640 }].flatMap(view
     };
     history.pushState(null, '', '${scoped('/github?filter=all')}'); dispatchEvent(new PopStateEvent('popstate'));
   })()`)
-  browser.waitForFunction(`document.querySelector('select[aria-label="Project board"]') !== null`)
+  browser.waitForFunction(`document.querySelector('${BOARD_PICKER}') !== null`)
   browser.evaluate(`document.documentElement.classList.toggle('light', ${theme === 'light'}); document.documentElement.dataset.width = 'wide'`)
   browser.evaluate(`(() => {
     const seen = new Set();
@@ -778,7 +781,7 @@ it.each([{ width: 1440, height: 900 }, { width: 360, height: 640 }].flatMap(view
     const box = el => { const r = el.getBoundingClientRect(); return [r.top, r.left, r.width, r.height].map(n => Math.round(n * 10) / 10).join(','); };
     const tick = () => {
       const toolbar = document.querySelector('[data-slot="gh-filter-toolbar"]');
-      const picker = document.querySelector('select[aria-label="Project board"]');
+      const picker = document.querySelector('${BOARD_PICKER}');
       const list = document.querySelector('[data-slot="gh-list"]');
       const search = document.querySelector('[data-slot="gh-search"]');
       if (toolbar && picker && list && search) seen.add(JSON.stringify({ toolbar: box(toolbar), picker: box(picker), list: box(list), search: box(search) }));
@@ -787,14 +790,16 @@ it.each([{ width: 1440, height: 900 }, { width: 360, height: 640 }].flatMap(view
     };
     tick();
   })()`)
-  browser.waitForFunction(`document.querySelector('select[aria-label="Project board"]')?.textContent.includes('Loading boards') && window.__geometrySamples >= 3`)
+  browser.waitForFunction(`document.querySelector('${BOARD_PICKER}')?.textContent.includes('Loading boards') && window.__geometrySamples >= 3`)
   settleVisual(browser, '[data-slot="gh-filter-toolbar"]', { theme, width: 'wide' })
   // The delayed /github/projects request must have reached the interceptor before it can be released.
   browser.waitForFunction("typeof window.__finishProjects === 'function'")
   browser.evaluate('window.__finishProjects()')
+  // The board picker lists its boards only while open, so the closed trigger says which state
+  // settled: enabled on "All boards" once boards arrived, disabled on "Boards unavailable".
   browser.waitForFunction(outcome === 'long names'
-    ? `[...document.querySelector('select[aria-label="Project board"]').options].some(option => option.textContent.includes('Delivery roadmap'))`
-    : `document.querySelector('select[aria-label="Project board"]').options[0].textContent === 'Boards unavailable'`)
+    ? `(() => { const picker = document.querySelector('${BOARD_PICKER}'); return picker && !picker.disabled && picker.textContent.trim() === 'All boards'; })()`
+    : `(() => { const picker = document.querySelector('${BOARD_PICKER}'); return picker && picker.disabled && picker.textContent.trim() === 'Boards unavailable'; })()`)
   settleVisual(browser, '[data-route="github"]', { theme, width: 'wide' })
   const facts = browser.evaluate(`(() => {
     cancelAnimationFrame(window.__geometryFrame);
@@ -806,6 +811,22 @@ it.each([{ width: 1440, height: 900 }, { width: 360, height: 640 }].flatMap(view
   })()`) as { distinct: number; pageOverflow: boolean }
   browser.screenshot(`${artifactsDir}/github-no-boards-geometry-${width}-${theme}-${outcome.replace(' ', '-')}.png`, { viewport: true })
   expect(facts).toEqual({ distinct: 1, pageOverflow: false })
+  if (outcome === 'long names') {
+    // The boards list only while the picker is open: the long name is offered there, and opening
+    // the list moves neither the picker nor the toolbar and search around it.
+    const boxes = `(() => {
+      const box = selector => { const r = document.querySelector(selector).getBoundingClientRect(); return [r.top, r.left, r.width, r.height].map(n => Math.round(n * 10) / 10).join(','); };
+      return { toolbar: box('[data-slot="gh-filter-toolbar"]'), picker: box('${BOARD_PICKER}'), search: box('[data-slot="gh-search"]') };
+    })()`
+    const before = browser.evaluate(boxes) as { toolbar: string; picker: string; search: string }
+    browser.click(BOARD_PICKER)
+    const open = browser.waitForStable<Record<string, unknown> | null>(`(() => {
+      if (!document.querySelector('[data-slot="select-item"][data-board="P1"]')?.textContent.includes('Delivery roadmap')) return null;
+      return { ...${boxes}, pageOverflow: document.documentElement.scrollWidth > innerWidth };
+    })()`, { holdMs: 200, matcher: (value) => value !== null })
+    expect(open).toEqual({ ...before, pageOverflow: false })
+    dismissWithEscape(browser, { content: '[data-slot="select-content"]', focus: BOARD_PICKER })
+  }
   browser.setViewport(DESKTOP.width, DESKTOP.height)
 }, 90_000)
 
@@ -832,7 +853,7 @@ it.each([1440, 360].flatMap(width => ['status button', 'search'].map(focus => ({
     };
     history.pushState(null, '', '${scoped('/github?filter=all')}'); dispatchEvent(new PopStateEvent('popstate'));
   })()`)
-  browser.waitForFunction(`document.querySelector('select[aria-label="Project board"]') !== null`)
+  browser.waitForFunction(`document.querySelector('${BOARD_PICKER}') !== null`)
   browser.click('[data-slot="gh-refresh"]')
   browser.waitForFunction(`document.querySelector('[data-slot="gh-filter-toolbar"] [role="status"]')?.textContent.includes('Refreshing project boards')`)
   const target = focus === 'search' ? '[data-slot="gh-search"]' : '[aria-label="Project board status"]'
@@ -841,8 +862,8 @@ it.each([1440, 360].flatMap(width => ['status button', 'search'].map(focus => ({
   // The delayed /github/projects request must have reached the interceptor before it can be released.
   browser.waitForFunction("typeof window.__finishProjects === 'function'")
   browser.evaluate('window.__finishProjects()')
-  browser.waitForFunction(`document.querySelector('select[aria-label="Project board"]') && !document.querySelector('[data-slot="gh-filter-toolbar"] [role="status"]').textContent.includes('Refreshing')`)
-  const active = browser.waitForValue(`(() => { const a = document.activeElement; return { body: a === document.body, picker: a?.matches('select[aria-label="Project board"]') === true, search: a?.matches('[data-slot="gh-search"]') === true }; })()`, (value: { body: boolean; picker: boolean; search: boolean }) => !value.body && (focus === 'search' ? value.search : value.picker))
+  browser.waitForFunction(`document.querySelector('${BOARD_PICKER}') && !document.querySelector('[data-slot="gh-filter-toolbar"] [role="status"]').textContent.includes('Refreshing')`)
+  const active = browser.waitForValue(`(() => { const a = document.activeElement; return { body: a === document.body, picker: a?.matches('${BOARD_PICKER}') === true, search: a?.matches('[data-slot="gh-search"]') === true }; })()`, (value: { body: boolean; picker: boolean; search: boolean }) => !value.body && (focus === 'search' ? value.search : value.picker))
   expect(active).toEqual(focus === 'search' ? { body: false, picker: false, search: true } : { body: false, picker: true, search: false })
   browser.setViewport(DESKTOP.width, DESKTOP.height)
 }, 90_000)

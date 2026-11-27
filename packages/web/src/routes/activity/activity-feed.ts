@@ -3,6 +3,7 @@ import type { ActivityRequest, ActivitySnapshot } from '@open-mercato/cezar-api-
 import { attentionOfRung, type AttentionTone } from '@/lib/attention'
 
 import type { ActivityTrigger } from './activity-diff'
+import { span } from './activity-format'
 import { nameOf, runIndex, type RunEntry } from './activity-model'
 import { rootNow } from './now-box'
 
@@ -87,10 +88,7 @@ export function pushFeed(feed: readonly FeedEntry[], lines: readonly Omit<FeedEn
   return [...added, ...feed].slice(0, FEED_SIZE)
 }
 
-/** A feed age: "now" for the first 5 s, then seconds, then minutes. */
+/** A feed age: "now" for the first 5 s, then the compact span: `34s`, `12m`, `1h 8m`. */
 export function feedAge(ms: number): string {
-  const seconds = Math.max(0, Math.floor(ms / 1000))
-  if (seconds < 5) return 'now'
-  if (seconds < 60) return `${seconds} s`
-  return `${Math.floor(seconds / 60)} min`
+  return Math.max(0, Math.floor(ms / 1000)) < 5 ? 'now' : span(ms)
 }

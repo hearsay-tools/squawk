@@ -65,6 +65,7 @@ command lands. The seam closes that gap in two places:
 | --- | --- | --- |
 | `click` / `hover` / `fill` | The selector is attached with a non-zero box (`wait <selector>`, #405) | nothing |
 | `click` / `fill` | Then the target is enabled: it does not match `:disabled` and has no `aria-disabled="true"`. Then a target not fully inside the viewport is scrolled to the centre. A target that stays disabled fails with a message that names its state. Pass `{ allowDisabled: true }` to act on a disabled control on purpose; the scroll still runs (hearsay-tools/squawk#3820) | nothing |
+| `click` / `hover` | Then the target's centre point hits the target, a part of it, an ancestor or its label. A box inside the window can still be clipped by its scroller or covered by docked chrome: the phone top bar, the docked Session tabs. Each poll scrolls a covered target to the centre again; a target that stays covered fails with a message that names the cover. `hover` skips the enabled check | nothing |
 | `setViewport` | An animation frame at the new size, so every native `matchMedia`/`resize` listener has run and its tree switch has committed (#794). `ResizeObserver`-driven state may still lag: wait on the DOM you read | nothing |
 | `waitForFunction(js)` | A predicate becomes truthy | nothing — **the read that follows is a second call** |
 | `waitForValue(js, matcher?)` | An expression yields a value the matcher accepts (#409) | **that sample** |

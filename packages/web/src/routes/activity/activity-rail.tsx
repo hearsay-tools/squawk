@@ -1,10 +1,10 @@
-import { ArrowRightIcon } from 'lucide-react'
+import { ArrowRightIcon, ChevronDownIcon, InfoIcon } from 'lucide-react'
 import type { ActivityRequest } from '@open-mercato/cezar-api-client/contract/activity'
 
 import { StatusDot } from '@/components/status-dot'
 import { cn } from '@/lib/utils'
 
-import { clockOf, counter, since } from './activity-format'
+import { clockOf, counter, fullTimeOf, since } from './activity-format'
 import { feedAge, type FeedEntry, type FeedTone } from './activity-feed'
 import { directionOf, recipientName, replyDueText, senderName, type RunEntry } from './activity-model'
 import { windowUsed } from './activity-lines'
@@ -13,9 +13,10 @@ import { TONE_FILL } from './activity-tone'
 import { Heartbeat } from './now-box-view'
 
 /**
- * The right rail (spec 2026-11-05-live-activity-view, "Right rail"): the open requests, the Just
- * now feed and the legend. A request entry slides in when the request opens and folds when it
- * closes; the feed lists the last changes the view saw.
+ * The activity details (spec 2026-11-05-live-activity-view, "Right rail"), below the graph so the
+ * cards have the page's full width: the open requests and the Just now feed side by side, and the
+ * legend as a closed disclosure under them. A request entry slides in when the request opens and
+ * folds when it closes; the feed lists the last changes the view saw.
  */
 
 const PANEL = 'rounded-xl border border-border bg-card px-3.5 py-3'
@@ -73,8 +74,13 @@ function LegendWait() {
 function Legend() {
   const row = 'flex items-center gap-2'
   return (
-    <div data-slot="activity-legend" className={cn(PANEL, 'grid gap-1.5 text-[11.5px] text-muted-foreground')}>
-      <h2 className="sr-only">Legend</h2>
+    <details data-slot="activity-legend" className="text-[11.5px] text-muted-foreground md:col-span-2">
+      <summary className="group inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 font-medium text-foreground shadow-xs hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11 [&::-webkit-details-marker]:hidden">
+        <InfoIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
+        Legend
+        <ChevronDownIcon aria-hidden="true" className="size-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5">
       <div className={row}><StatusDot tone="running" aria-hidden="true" />Filled: working now</div>
       <div className={row}><StatusDot tone="info" shape="ring" aria-hidden="true" />Ring: waiting for something outside</div>
       <div className={row}><StatusDot tone="running" shape="workers" aria-hidden="true" />Robot: waiting for its own workers</div>
@@ -83,7 +89,8 @@ function Legend() {
       <div className={row}><LegendWait />Waits for a peer to write</div>
       <div className={row}><LegendLine className="stroke-message-inbound-accent" />Open question, worker to parent</div>
       <div className={row}><svg aria-hidden="true" viewBox="0 0 34 10" className="h-2.5 w-[34px] shrink-0"><circle cx="17" cy="5" r="4" className="fill-foreground" /></svg>Comet: a message is travelling</div>
-    </div>
+      </div>
+    </details>
   )
 }
 
@@ -105,7 +112,7 @@ function JustNow({ feed, now, watchingSince }: { feed: readonly FeedEntry[]; now
           ))}
         </ul>
       ) : null}
-      <p className="py-1.5 text-[12px] text-muted-foreground">Watching since {clockOf(watchingSince)}</p>
+      <p className="py-1.5 text-[12px] text-muted-foreground">Watching since <span title={fullTimeOf(watchingSince)}>{clockOf(watchingSince)}</span></p>
     </section>
   )
 }
@@ -119,11 +126,13 @@ interface RailProps {
   watchingSince: string
   feed?: readonly FeedEntry[] | undefined
   motion?: MotionState
+  /** The graph's column gap when it shows two columns, so the panels line up under the cards. */
+  columnGap?: number | undefined
 }
 
-export function ActivityRail({ requests, closing = [], index, now, watchingSince, feed = [], motion = EMPTY_MOTION }: RailProps) {
+export function ActivityRail({ requests, closing = [], index, now, watchingSince, feed = [], motion = EMPTY_MOTION, columnGap }: RailProps) {
   return (
-    <aside data-slot="activity-rail" aria-label="Activity details" className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4">
+    <aside data-slot="activity-rail" aria-label="Activity details" style={columnGap === undefined ? undefined : { columnGap }} className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start items-start gap-4 md:grid-cols-2">
       <section data-slot="activity-open-requests" className={PANEL}>
         <h2 className={PANEL_TITLE}>Open requests <b className="text-foreground">{requests.length}</b></h2>
         {requests.length === 0 && closing.length === 0 ? (

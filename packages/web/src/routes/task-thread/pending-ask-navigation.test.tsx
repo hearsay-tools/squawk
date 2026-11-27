@@ -1,14 +1,15 @@
 import { RUN_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router'
+import { useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { createQueryClient } from '@/api/query-client'
 import { seedRunners } from '@/test/runners.testkit'
 import { AskCard } from './ask-card'
-import { AskOriginMarker, firstAnswerControl, jumpLabel, pinnedAnswerControl, pinnedAskFocus } from './pending-ask-navigation'
+import { AskOriginMarker, firstAnswerControl, jumpLabel, pinnedAnswerControl, pinnedAskFocus, usePinnedAskInView } from './pending-ask-navigation'
 import type { ThreadAsk } from './thread-state'
 import { JumpToLatestPill } from './thread-scroller'
 
@@ -163,5 +164,70 @@ describe('JumpToLatestPill pending label (#1495)', () => {
     render(<JumpToLatestPill onJump={onJump} />)
     fireEvent.click(screen.getByRole('button', { name: 'Jump to latest' }))
     expect(onJump).toHaveBeenCalledWith()
+  })
+})
+
+describe('usePinnedAskInView', () => {
+  /** A stand-in IntersectionObserver whose entries the test reports by hand. */
+  function stubIntersection() {
+    const observers: { callback: IntersectionObserverCallback; targets: Element[]; rootMargin: string | undefined }[] = []
+    class FakeObserver {
+      targets: Element[] = []
+      constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+        observers.push({ callback, targets: this.targets, rootMargin: options?.rootMargin })
+      }
+      observe(target: Element) { this.targets.push(target) }
+      disconnect() { this.targets.length = 0 }
+    }
+    vi.stubGlobal('IntersectionObserver', FakeObserver)
+    const report = (isIntersecting: boolean) => {
+      const live = observers.at(-1)!
+      act(() => live.callback(live.targets.map((target) => ({ target, isIntersecting }) as IntersectionObserverEntry), {} as IntersectionObserver))
+    }
+    return { observers, report }
+  }
+
+  function Probe({ active, withCard }: { active: boolean; withCard: boolean }) {
+    const ref = useRef<HTMLDivElement>(null)
+    const inView = usePinnedAskInView(active, ref)
+    return (
+      <div ref={ref}>
+        <span data-testid="in-view">{String(inView)}</span>
+        {withCard ? <div data-slot="ask-card" data-pinned="true" /> : null}
+      </div>
+    )
+  }
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('reports the pinned card while it intersects the part of the viewport above the dock', () => {
+    const { observers, report } = stubIntersection()
+    render(<><div data-slot="thread-dock" /><Probe active withCard /></>)
+    expect(observers).toHaveLength(1)
+    expect(observers[0]!.rootMargin).toBe('0px 0px -0px 0px')
+    expect(screen.getByTestId('in-view').textContent).toBe('false')
+    report(true)
+    expect(screen.getByTestId('in-view').textContent).toBe('true')
+    report(false)
+    expect(screen.getByTestId('in-view').textContent).toBe('false')
+  })
+
+  it('finds a card that mounts later, and drops it when it unmounts', async () => {
+    const { observers, report } = stubIntersection()
+    const { rerender } = render(<Probe active withCard={false} />)
+    expect(observers).toHaveLength(0)
+    rerender(<Probe active withCard />)
+    await waitFor(() => expect(observers).toHaveLength(1))
+    report(true)
+    expect(screen.getByTestId('in-view').textContent).toBe('true')
+    rerender(<Probe active withCard={false} />)
+    await waitFor(() => expect(screen.getByTestId('in-view').textContent).toBe('false'))
+  })
+
+  it('answers false while no question is pending, even with the card in view', () => {
+    const { observers } = stubIntersection()
+    render(<Probe active={false} withCard />)
+    expect(observers).toHaveLength(0)
+    expect(screen.getByTestId('in-view').textContent).toBe('false')
   })
 })

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 
 import { StatusDot, type StatusDotTone } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
-import { shortAge } from '@/lib/format'
+import { shortAge, withAgo } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import type { ThreadPreviewServer } from '../thread-state'
@@ -77,7 +77,7 @@ export function PreviewServerCard({
           <ServerIcon className="size-3.5 shrink-0" aria-hidden="true" />
           <span className="truncate">cezar_preview_serve</span>
         </span>
-        {unavailable ? <span>worktree removed</span> : registered ? <span>{registered} ago</span> : null}
+        {unavailable ? <span>worktree removed</span> : registered ? <span>{withAgo(registered)}</span> : null}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">

@@ -1,0 +1,38 @@
+/* Automations route overrides: guarantee unified PageHeader typography, gold --action primary
+ * buttons, and flush nested section headings (After Done / Task access) with no fieldset notch. */
+[data-route='automations'] > header h1 {
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* Enabled only: a disabled primary keeps the Button's shared dimmed-gold disabled look (as Start
+ * task on New task does), so an empty form never shows a live gold submit. */
+[data-route='automations'] [data-slot='button'][data-variant='primary']:not(:disabled) {
+  background: var(--action);
+  color: var(--action-foreground);
+  font-weight: 600;
+}
+
+[data-route='automations'] .automation-editor fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  display: grid;
+  gap: 10px;
+}
+
+[data-route='automations'] .automation-editor fieldset > legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  margin-block-end: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+[data-route='automations'] .automation-editor fieldset > legend + * {
+  clear: both;
+}

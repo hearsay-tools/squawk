@@ -63,9 +63,11 @@ const openThread = (id: string) => {
 }
 
 /** Screenshots are evidence of the settled UI, so they wait out Radix's open/close animations.
- *  `viewport: true` for an open desktop dialog: see the hand-off dialog test below. */
+ *  Only time-driven animations can still be moving: a scroll-driven one (the sticky Session
+ *  header's fade) reports `running` for as long as its scroll timeline exists, and stands still
+ *  while nothing scrolls. `viewport: true` for an open desktop dialog: see the hand-off dialog test below. */
 const settledShot = (name: string, { viewport = false } = {}) => {
-  browser.waitForFunction(`document.getAnimations().every(a => a.playState !== 'running' || a.effect?.getComputedTiming().iterations === Infinity)`)
+  browser.waitForFunction(`document.getAnimations().every(a => a.playState !== 'running' || a.timeline !== document.timeline || a.effect?.getComputedTiming().iterations === Infinity)`)
   browser.screenshot(join(artifacts, name), { viewport })
 }
 

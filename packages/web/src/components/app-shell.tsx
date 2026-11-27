@@ -150,7 +150,7 @@ export function AppShell({
   // source `--kb` is published from. A pinch-zoom also leaves the visual viewport shorter than
   // the layout one, so a real keyboard is the bottom inset that is both large and seen at scale ~1.
   const keyboardOpen = useKeyboardOpen()
-  const { activeTo, current, currentProjectId, newTask, pushed, showTabBar, gitRepositoryView } = shellRoute(pathname, search, keyboardOpen)
+  const { activeTo, current, currentProjectId, pushed, showTabBar, gitRepositoryView } = shellRoute(pathname, search, keyboardOpen)
   const [menuOpen, setMenuOpen] = React.useState(false)
   // On the pushed task screen the routed `RunHeader` fills the top bar's slot through
   // `MobileRunBarSlotContext`.
@@ -246,7 +246,7 @@ export function AppShell({
 
         <div className="group/shell grid min-w-0 flex-1 grid-rows-[auto_auto_1fr_auto] overflow-hidden">
           <MobileTopBar title={current?.label ?? 'Squawk'} pushed={pushed ? { onSlot: setRunBarSlot } : null} repo={repo} elsewhere={elsewhereSignal(mobileProjects, currentProjectId)} onTrigger={(button) => { mobileNavTrigger.current = button }} />
-          <DesktopBreadcrumb breadcrumb={breadcrumb} repo={repo} label={current?.label} newTask={newTask} />
+          <DesktopBreadcrumb breadcrumb={breadcrumb} repo={currentProjectId === null ? null : repo} label={current?.label} />
 
           {banner ? (
             <div data-slot="banner-slot" className="row-start-2">
@@ -257,16 +257,14 @@ export function AppShell({
           <main
             ref={mainRef}
             data-slot="main"
-            // The New task button floats over the bottom of main, so leave its height (48px + 16px
-            // gap) plus air clear while it is shown, or the last row sits under it at full scroll.
-            className={cn('row-start-3 min-h-0 overflow-y-auto overscroll-contain', showTabBar && !newTask && 'max-md:pb-20')}
+            className="row-start-3 min-h-0 overflow-y-auto overscroll-contain"
           >
             <MobileRunBarSlotContext.Provider value={pushed ? runBarSlot : null}>
               {children}
             </MobileRunBarSlotContext.Provider>
           </main>
 
-          <ShellComposerRow showTabBar={showTabBar} items={items} activeTo={activeTo} mobileProjects={mobileProjects} currentProjectId={currentProjectId} repo={repo} newTask={newTask} />
+          <ShellComposerRow showTabBar={showTabBar} items={items} activeTo={activeTo} mobileProjects={mobileProjects} currentProjectId={currentProjectId} repo={repo} />
         </div>
       </div>
     </Sheet>
@@ -274,17 +272,17 @@ export function AppShell({
 }
 
 /** The desktop page header (`md` up): project / page, and the branch at the right. */
-function DesktopBreadcrumb({ breadcrumb, repo, label, newTask }: {
+function DesktopBreadcrumb({ breadcrumb, repo, label }: {
   breadcrumb: AppShellProps['breadcrumb']
+  /** The project fallback. Null on a global route, which names no project and no branch. */
   repo: RepoChip | null
   /** The active nav item's label: the page when the route names none. */
   label: string | undefined
-  newTask: boolean
 }) {
   const project = breadcrumb?.project ?? repo?.name
   const branch = breadcrumb?.branch ?? repo?.branch
   return (
-    <header data-slot="desktop-breadcrumb" className={cn("row-start-1 hidden min-w-0 items-center gap-3 border-b border-border text-[13px] text-muted-foreground md:flex", newTask ? 'h-[72px] px-11' : 'h-16 px-9')}>
+    <header data-slot="desktop-breadcrumb" className="row-start-1 hidden h-16 min-w-0 items-center gap-3 border-b border-border px-9 text-[13px] text-muted-foreground md:flex">
       <FolderIcon aria-hidden="true" className="size-4 shrink-0" />
       {project ? <><span className="truncate font-medium text-foreground">{project}</span><span aria-hidden="true">/</span></> : null}
       <span className="min-w-0 truncate">{breadcrumb?.page ?? label ?? 'Squawk'}</span>
@@ -300,22 +298,21 @@ function DesktopBreadcrumb({ breadcrumb, repo, label, newTask }: {
  * inside main; shrinking that viewport keeps it reachable without an overlay. On a list screen
  * below `md` it also carries the tab bar.
  */
-function ShellComposerRow({ showTabBar, items, activeTo, mobileProjects, currentProjectId, repo, newTask }: {
+function ShellComposerRow({ showTabBar, items, activeTo, mobileProjects, currentProjectId, repo }: {
   showTabBar: boolean
   items: NavItem[]
   activeTo: string | null
   mobileProjects?: MobileProjectNav | null | undefined
   currentProjectId: string | null
   repo: RepoChip | null
-  newTask: boolean
 }) {
   const signal = currentProjectId !== null ? mobileProjects?.signals?.get(currentProjectId) : undefined
   return (
     <div
       data-slot="composer"
       // On a list screen below `md` the row IS the tab bar's surface, so the inset padding
-      // sits under the bar on the bar's own fill, and it is the anchor the New task button
-      // floats from. `md:` sheds all of it: the desktop row stays the empty gutter it was.
+      // sits under the bar on the bar's own fill. `md:` sheds all of it: the desktop row stays
+      // the empty gutter it was.
       className={cn(
         'row-start-4 pb-[max(env(safe-area-inset-bottom),var(--kb,0px))]',
         showTabBar && 'relative max-md:border-t max-md:border-border max-md:bg-sidebar',
@@ -328,7 +325,6 @@ function ShellComposerRow({ showTabBar, items, activeTo, mobileProjects, current
             activeTo={activeTo}
             signal={signal}
             projectName={mobileProjects?.projects.find((project) => project.id === currentProjectId)?.name ?? repo?.name ?? null}
-            showNewTask={!newTask}
           />
         </div>
       ) : null}
@@ -820,7 +816,8 @@ function PushedTopBar({ onSlot }: { onSlot: (slot: HTMLElement | null) => void }
       data-mode="task"
       className="row-start-1 min-w-0 border-b border-border bg-card pt-[env(safe-area-inset-top)] md:hidden"
     >
-      <div className="flex h-[56px] min-w-0 items-center gap-[4px] px-[8px]">
+      {/* At least 56px: a two-line title and its status pill grow the bar and keep 8px above and below. */}
+      <div className="flex min-h-[56px] min-w-0 items-center gap-[4px] px-[8px] py-2">
         <Button
           variant="ghost"
           aria-label="Back"

@@ -1,4 +1,5 @@
 import { act, cleanup, render } from '@testing-library/react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActivityProject, ActivitySnapshot } from '@open-mercato/cezar-api-client/contract/activity'
@@ -10,6 +11,10 @@ import type { Box } from './line-geometry'
 import { placeBoxes, samplePath } from './line-layout.testkit'
 import { useActivityMotion } from './use-activity-motion'
 import { REDUCED_MOTION_QUERY } from './use-reduced-motion'
+import { createQueryClient } from '@/api/query-client'
+import { seedRunners } from '@/test/runners.testkit'
+
+const runnersClient = seedRunners(createQueryClient())
 
 /**
  * The board driven by the real motion hook, snapshot after snapshot: the transitions the pure
@@ -69,8 +74,8 @@ function LiveBoard({ snapshot }: { snapshot: ActivitySnapshot }) {
 
 function renderLive(first: ActivitySnapshot, width: number) {
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width)
-  const view = render(<MemoryRouter><LiveBoard snapshot={first} /></MemoryRouter>)
-  return { rerender: (next: ActivitySnapshot) => view.rerender(<MemoryRouter><LiveBoard snapshot={next} /></MemoryRouter>) }
+  const view = render(<QueryClientProvider client={runnersClient}><MemoryRouter><LiveBoard snapshot={first} /></MemoryRouter></QueryClientProvider>)
+  return { rerender: (next: ActivitySnapshot) => view.rerender(<QueryClientProvider client={runnersClient}><MemoryRouter><LiveBoard snapshot={next} /></MemoryRouter></QueryClientProvider>) }
 }
 
 const A = run({ runId: 'a', title: 'Porting upstream SSE' })
@@ -87,6 +92,24 @@ describe('the live board', () => {
     expect(column()).toEqual(['a', 'ghost:b', 'c'])
   })
 
+  it('paints the first measured layout in place: no FLIP from the unmeasured one-column layout', () => {
+    // Before the width is measured the graph has one column and B sits under A; measured, B
+    // stands beside A. The move between the two is no live change and plays no animation.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const columns = this.closest('[data-columns]')?.getAttribute('data-columns')
+      const x = this.getAttribute('data-flip') === 'b' && columns === '2' ? 396 : 0
+      const y = this.getAttribute('data-flip') === 'b' && columns === '1' ? 200 : 0
+      return { x, y, left: x, top: y, width: 300, height: 120, right: x + 300, bottom: y + 120, toJSON: () => ({}) } as DOMRect
+    })
+    const live = renderLive(at(0, { tasks: [A, B] }), 1092)
+    expect(document.querySelector('[data-slot="activity-graph"]')?.getAttribute('data-columns')).toBe('2')
+    expect(animations).toHaveLength(0)
+
+    // A live change after the first measure still plays FLIP.
+    live.rerender(at(1_000, { tasks: [A, B, C] }))
+    expect(animations.length).toBeGreaterThan(0)
+  })
+
   it('measures the lines again when FLIP settles, so a line never stays where a card was mid-flight', () => {
     const boxes: Record<string, Box> = { a: { x: 0, y: 0, w: 300, h: 120 }, b: { x: 396, y: 0, w: 300, h: 120 }, c: { x: 792, y: 0, w: 300, h: 120 }, d: { x: 0, y: 200, w: 300, h: 120 } }
     placeBoxes('data-activity-card', boxes)
@@ -96,13 +119,13 @@ describe('the live board', () => {
     })
     const peer = request({ senderRunId: 'd', recipientRunId: 'b' })
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1092)
-    const view = render(<MemoryRouter><ActivityBoard project={project({ tasks: [A, B, C, D], requests: [peer] })} now={NOW} watchingSince={iso(-60_000)} motion={EMPTY_MOTION} /></MemoryRouter>)
+    const view = render(<QueryClientProvider client={runnersClient}><MemoryRouter><ActivityBoard project={project({ tasks: [A, B, C, D], requests: [peer] })} now={NOW} watchingSince={iso(-60_000)} motion={EMPTY_MOTION} /></MemoryRouter></QueryClientProvider>)
     const start = () => samplePath(document.querySelector(`path[data-request="${peer.requestId}"]`)?.getAttribute('d') ?? '')[0]
     expect(start()).toEqual({ x: 300, y: 222 })
 
     // A leaves: D moves up into its place, and FLIP plays it from where it was.
     boxes.d!.y = 0
-    view.rerender(<MemoryRouter><ActivityBoard project={project({ tasks: [B, C, D], requests: [peer] })} now={NOW} watchingSince={iso(-60_000)} motion={EMPTY_MOTION} /></MemoryRouter>)
+    view.rerender(<QueryClientProvider client={runnersClient}><MemoryRouter><ActivityBoard project={project({ tasks: [B, C, D], requests: [peer] })} now={NOW} watchingSince={iso(-60_000)} motion={EMPTY_MOTION} /></MemoryRouter></QueryClientProvider>)
     expect(animations).toHaveLength(1)
     // A measure taken mid-flight reads the transformed card.
     boxes.d!.y = 120

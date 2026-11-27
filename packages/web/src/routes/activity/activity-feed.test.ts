@@ -46,6 +46,6 @@ describe('pushFeed and feedAge', () => {
   })
 
   it('reads an age as now, then seconds, then minutes', () => {
-    expect([feedAge(0), feedAge(4_999), feedAge(12_000), feedAge(125_000)]).toEqual(['now', 'now', '12 s', '2 min'])
+    expect([feedAge(0), feedAge(4_999), feedAge(12_000), feedAge(125_000)]).toEqual(['now', 'now', '12s', '2m'])
   })
 })

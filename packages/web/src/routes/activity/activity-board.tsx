@@ -1,21 +1,23 @@
 import * as React from 'react'
 import type { ActivityProject, ActivityRequest, ActivityRun } from '@open-mercato/cezar-api-client/contract/activity'
 
+import { cn } from '@/lib/utils'
 import type { FeedEntry } from './activity-feed'
 import { ActivityCard } from './activity-card'
 import { ActivityLines } from './activity-lines'
 import { nameOf, peerWaits, runIndex, type PeerWait } from './activity-model'
 import { EMPTY_MOTION, waitGhosts, type MotionState } from './activity-motion'
 import { ActivityRail } from './activity-rail'
-import { COLUMN_GAP, DENSE_AFTER, columnCount, placeCards, samePlacement, type Columns } from './layout'
+import { COLUMN_GAP, COMPACT_COLUMN_GAP, DENSE_AFTER, columnCount, placeCards, samePlacement, type Columns } from './layout'
 import type { NowContext } from './now-box'
 import { useFlip } from './use-flip'
 import { useWaitHighlight } from './use-wait-highlight'
 
 /**
  * The project graph and its rail (spec 2026-11-05-live-activity-view, "Project view"): task cards
- * in stable columns (D9), the lines between them, and the right rail, with their motion. The
- * column count follows the graph's width; one column is the narrow layout.
+ * in stable columns (D9) across the full width, the lines between them, and the details below
+ * (open requests, the feed and the legend), with their motion. The column count follows the
+ * graph's width and the number of cards; one column is the narrow layout.
  */
 
 /** The graph's width, measured now and again on every resize. */
@@ -79,7 +81,7 @@ export interface BoardProps {
 
 export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTION, feed, still = false, paused = false }: BoardProps) {
   const hostRef = React.useRef<HTMLDivElement>(null)
-  const count = columnCount(useWidth(hostRef))
+  const width = useWidth(hostRef)
   const index = React.useMemo(() => runIndex(project), [project])
   const waits = React.useMemo(() => peerWaits(project.tasks), [project.tasks])
   const ghosts = React.useMemo(() => ghostsOf(project, motion, waits), [project, motion, waits])
@@ -88,19 +90,28 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
   const highlight = useWaitHighlight(waits)
   const tasks = new Map([...ghosts.cards, ...project.tasks].map((task) => [task.runId, task]))
   const ghostIds = new Set(ghosts.cards.map((task) => task.runId))
+  // Never more columns than cards: a column without a card is an empty strip beside narrow cards.
+  const fit = columnCount(width)
+  const count = Math.min(fit, Math.max(1, tasks.size))
   // A card with workers is taller; the weight keeps the columns near the same height.
   const weight = (id: string) => 1 + 0.35 * (tasks.get(id)?.workers.length ?? 0)
   const columns = useStablePlacement([...tasks.keys()], count, weight)
-  const narrow = count === 1
+  // Narrow is about the width, not the count: one card on a wide graph still draws its lines.
+  const narrow = fit === 1
+  // One card per column is one visual row: those cards stretch to one height and share a bottom
+  // edge. Taller columns keep their packed, top-aligned stacks.
+  const oneRow = count > 1 && columns.every((column) => column.length <= 1)
   const dense = project.tasks.length > DENSE_AFTER
   const ctx: NowContext = { now, titleOf: (runId) => nameOf(index, runId) }
   const placement = columns.map((column) => column.join(',')).join('|')
+  const columnGap = narrow ? 0 : drawnRequests.length + drawnWaits.length > 0 ? COLUMN_GAP : COMPACT_COLUMN_GAP
   const layoutKey = `${project.tasks.length}:${count}:${dense}:${placement}:${drawnRequests.map((request) => request.requestId).join(',')}:${drawnWaits.map((wait) => wait.id).join(',')}`
-  useFlip(hostRef, 'data-flip', placement, !still && !paused)
+  // Before the first measure the graph has one column; FLIP from that layout would fly the cards in.
+  useFlip(hostRef, 'data-flip', width > 0 ? placement : undefined, !still && !paused)
 
   return (
-    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
-      <div className="min-w-0 pl-5">
+    <div className="flex min-w-0 flex-col gap-5">
+      <div className="min-w-0">
         {project.tasks.length === 0 ? (
           <p data-slot="activity-empty" className="py-6 text-[13px] text-muted-foreground">No active work in this project.</p>
         ) : null}
@@ -109,11 +120,12 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
           data-slot="activity-graph"
           data-columns={count}
           data-dense={dense ? 'true' : undefined}
-          className="relative grid items-start"
-          style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, columnGap: narrow ? 0 : COLUMN_GAP }}
+          data-one-row={oneRow ? 'true' : undefined}
+          className={cn('relative grid', oneRow ? 'items-stretch' : 'items-start')}
+          style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, columnGap }}
         >
           {columns.map((column, i) => (
-            <div key={i} data-slot="activity-column" className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-[30px] max-md:gap-4">
+            <div key={i} data-slot="activity-column" className={cn('grid min-w-0 grid-cols-[minmax(0,1fr)] gap-[30px] max-md:gap-4', oneRow ? 'content-stretch' : 'content-start')}>
               {column.map((id) => {
                 const task = tasks.get(id)
                 if (!task) return null
@@ -139,7 +151,8 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
           <ActivityLines requests={drawnRequests} waits={drawnWaits} active={highlight.active} index={index} peers={!narrow} layoutKey={layoutKey} now={now} motion={motion} paused={paused || still} />
         </div>
       </div>
-      <ActivityRail requests={project.requests} closing={ghosts.folding} index={index} now={now} watchingSince={watchingSince} feed={feed} motion={motion} />
+      {/* Two card columns share the rail's column gap, so card and panel edges line up. */}
+      <ActivityRail columnGap={count === 2 ? columnGap : undefined} requests={project.requests} closing={ghosts.folding} index={index} now={now} watchingSince={watchingSince} feed={feed} motion={motion} />
     </div>
   )
 }

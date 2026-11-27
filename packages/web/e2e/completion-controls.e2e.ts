@@ -104,6 +104,13 @@ function open(view: string, theme = 'dark') {
   browser.goto(`${url}?view=${view}`)
   browser.evaluate(`document.documentElement.classList.toggle('light', ${theme === 'light'})`)
 }
+const settings = '[data-slot="execution-options"]'
+/** A phone opens New Task with Execution settings folded under Start; open it from the keyboard. */
+function expandExecutionSettings() {
+  focusWithKeyboard(browser, `${settings} > summary`)
+  browser.press('Enter')
+  browser.waitForFunction(`document.querySelector('${settings}').open && [...document.querySelectorAll('${switches}')].every(control => control.checkVisibility())`)
+}
 function keyboardSwitches() {
   focusWithKeyboard(browser, `${switches}:first-of-type`)
   expect(waitForSettledSample(browser, `getComputedStyle(document.activeElement).outlineStyle !== 'none'`)).toBe(true)
@@ -124,24 +131,31 @@ function assertLayout() {
 }
 
 it.each([360, 1440])('keeps all settings inside one disclosure at %s px', width => {
+  // Desktop shows the settings beside the editor; a phone folds them under Start.
+  const startsOpen = width !== 360
   browser.setViewport(width, width === 360 ? 640 : 900)
   open('new')
   browser.waitForFunction(`document.querySelectorAll('${switches}').length === 2`)
   const layout = waitForSettledSample(browser, `(() => {
-    const details = document.querySelector('[data-slot="execution-options"]');
+    const details = document.querySelector('${settings}');
     return {
+      open: details.open,
       containsCompletion: [...document.querySelectorAll('${switches}')].every(control => details.contains(control)),
+      visible: [...document.querySelectorAll('${switches}')].map(control => control.checkVisibility()),
     };
-  })()`) as { containsCompletion: boolean }
+  })()`) as { open: boolean; containsCompletion: boolean; visible: boolean[] }
+  expect(layout.open).toBe(startsOpen)
   expect(layout.containsCompletion).toBe(true)
-  browser.screenshot(resolve(artifacts, `combined-settings-${width}.png`), { full: true })
-  browser.evaluate(`document.querySelector('[data-slot="execution-options"] summary').focus()`)
+  expect(layout.visible).toEqual([startsOpen, startsOpen])
+  browser.evaluate(`document.querySelector('${settings} summary').focus()`)
   browser.press('Space')
-  browser.waitForFunction(`!document.querySelector('[data-slot="execution-options"]').open`)
-  expect(browser.evaluate(`[...document.querySelectorAll('${switches}')].every(control => !control.checkVisibility())`)).toBe(true)
+  browser.waitForFunction(`document.querySelector('${settings}').open === ${!startsOpen}`)
+  expect(browser.evaluate(`[...document.querySelectorAll('${switches}')].every(control => control.checkVisibility() === ${!startsOpen})`)).toBe(true)
+  if (!startsOpen) browser.screenshot(resolve(artifacts, `combined-settings-${width}.png`), { full: true })
   browser.press('Enter')
-  browser.waitForFunction(`document.querySelector('[data-slot="execution-options"]').open`)
-  expect(browser.evaluate(`[...document.querySelectorAll('${switches}')].every(control => control.checkVisibility())`)).toBe(true)
+  browser.waitForFunction(`document.querySelector('${settings}').open === ${startsOpen}`)
+  expect(browser.evaluate(`[...document.querySelectorAll('${switches}')].every(control => control.checkVisibility() === ${startsOpen})`)).toBe(true)
+  if (startsOpen) browser.screenshot(resolve(artifacts, `combined-settings-${width}.png`), { full: true })
 })
 
 it.each([{ width: 360, theme: 'dark' }, { width: 360, theme: 'light' }, { width: 1440, theme: 'light' }])('persists a new-task draft and submits keyboard choices at $width px in $theme', ({ width, theme }) => {
@@ -151,6 +165,7 @@ it.each([{ width: 360, theme: 'dark' }, { width: 360, theme: 'light' }, { width:
   open('new', theme)
   browser.waitForFunction(`document.querySelectorAll('${switches}').length === 2`)
   expect(checked()).toEqual(['false', 'false'])
+  if (width === 360) expandExecutionSettings()
   keyboardSwitches()
   expect(checked()).toEqual(['true', 'true'])
   assertLayout()
@@ -214,6 +229,7 @@ it.each(['light', 'dark'])('creates a task with workers off, then turns workers 
   const accessChecked = () => browser.evaluate(`[...document.querySelectorAll('${access}')].map(el => el.getAttribute('aria-checked'))`)
   browser.waitForFunction(`document.querySelectorAll('${access}').length === 2`)
   expect(accessChecked()).toEqual(['true', 'true'])
+  expandExecutionSettings()
   focusWithKeyboard(browser, '[data-slot="task-access-workers"] [role="switch"]')
   expect(waitForSettledSample(browser, `getComputedStyle(document.activeElement).outlineStyle !== 'none'`)).toBe(true)
   browser.press('Space')

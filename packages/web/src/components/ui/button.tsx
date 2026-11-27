@@ -13,7 +13,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-action text-action-foreground pointer-hover:brightness-[0.96]",
+        // Gold means "ready to trigger". A disabled primary drops to a neutral bordered surface,
+        // so it never reads as a muddy tint; full opacity keeps its label readable in both themes.
+        primary: "bg-action text-action-foreground pointer-hover:brightness-[0.96] disabled:border disabled:border-border disabled:bg-muted/80 disabled:text-muted-foreground disabled:opacity-100",
         contrast: "bg-contrast text-contrast-foreground pointer-hover:brightness-[0.96]",
         outline: "border border-border bg-card text-foreground pointer-hover:bg-muted",
         ghost: "text-muted-foreground pointer-hover:bg-muted pointer-hover:text-foreground",
@@ -22,8 +24,10 @@ const buttonVariants = cva(
       size: {
         default: "h-11 px-3.5 text-[13px]",
         sm: "h-[30px] rounded-sm px-2.5 text-[13px]",
-        icon: "size-9",
-        "icon-sm": "size-[30px] rounded-sm",
+        // Icon sizes still set the label size: a labelled icon button (the composer's Continue)
+        // must match its text siblings instead of inheriting the larger body size.
+        icon: "size-9 text-[13px]",
+        "icon-sm": "size-[30px] rounded-sm text-[13px]",
       },
     },
     defaultVariants: {

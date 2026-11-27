@@ -86,14 +86,16 @@ function RepoView({ repo, info, section }: { repo: RepoResponse; info: RepoInfo;
       <RepoBackLink />
       <header
         data-slot="repo-header"
-        className="flex flex-col gap-1 px-[18px] pt-[18px] md:min-h-[61px] md:flex-row md:items-center md:gap-[10px] md:border-b md:border-border md:px-7 md:py-4"
+        className="flex flex-wrap items-start justify-between gap-4 px-4 pt-7 pb-5 md:px-9"
       >
-        <h1 className="min-w-0 flex-1 truncate text-2xl font-semibold tracking-tight md:text-[15px] md:tracking-normal">
-          {gitSectionLabel(section, info.branch)}
-        </h1>
-        <p data-slot="repo-meta" className="min-w-0 truncate text-[12px] text-soft-foreground md:text-[11.5px]">
-          <SectionMeta repo={repo} info={info} section={section} />
-        </p>
+        <div className="min-w-0">
+          <h1 className="text-[26px] leading-[1.2] font-semibold tracking-tight text-foreground md:text-[28px]">
+            {gitSectionLabel(section, info.branch)}
+          </h1>
+          <p data-slot="repo-meta" className="mt-1 text-[13px] text-muted-foreground">
+            <SectionMeta repo={repo} info={info} section={section} />
+          </p>
+        </div>
       </header>
 
       {section === 'main' ? (
@@ -101,7 +103,7 @@ function RepoView({ repo, info, section }: { repo: RepoResponse; info: RepoInfo;
       ) : section === 'not-landed' ? (
         <RepoNotLandedSection />
       ) : section === 'cleanup' ? (
-        <div data-slot="repo-cleanup" className="flex flex-col gap-[16px] px-[18px] pt-[12px] pb-[calc(90px+env(safe-area-inset-bottom))] md:px-[20px] md:pb-[20px]">
+        <div data-slot="repo-cleanup" className="flex flex-col gap-4 px-4 pt-0 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pb-9">
           <WorktreesPanel />
           <CleanupBranchesCard base={repo.baseBranch ?? info.branch} />
         </div>
@@ -119,18 +121,18 @@ function SectionMeta({ repo, info, section }: { repo: RepoResponse; info: RepoIn
   const base = repo.baseBranch ?? info.branch
   switch (section) {
     case 'main': {
-      const count = repo.log.length === 0 ? 'no commits yet' : `latest ${repo.log.length} commit${repo.log.length === 1 ? '' : 's'} in the main checkout`
+      const count = repo.log.length === 0 ? 'No commits yet' : `Latest ${repo.log.length} commit${repo.log.length === 1 ? '' : 's'} in the main checkout`
       return <>{count}{repo.tracking ? ` · ${fetchedAgo(repo.tracking)}` : ''}</>
     }
     case 'not-landed':
-      return <>finished tasks whose commits are not on {base}</>
+      return <>Finished tasks whose commits are not on {base}</>
     case 'branches':
       return <BranchesMeta repo={repo} info={info} />
     case 'changes':
       return <>{repo.status.length} uncommitted file{repo.status.length === 1 ? '' : 's'} in the main checkout</>
     case 'cleanup':
       // The section's invariant, stated where it applies; the server enforces it (issue 08 §C).
-      return <>nothing here can delete work that is not on {base}</>
+      return <>Nothing here can delete work that is not on {base}</>
   }
 }
 

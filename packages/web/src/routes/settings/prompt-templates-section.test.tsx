@@ -437,6 +437,8 @@ it('keeps same-name pathless template skills distinct for keyboard selection', a
   renderSection()
   await waitFor(() => expect(rows()).toHaveLength(DEFAULT_PROMPT_TEMPLATES.length))
   const trigger = rows()[0]!.querySelector<HTMLButtonElement>('[data-slot="prompt-template-skills-trigger"]')!
+  // A short, whole label: no truncated "Apply with…".
+  expect(trigger.textContent).toBe('Add skill')
   await waitFor(() => expect(trigger.disabled).toBe(false))
   fireEvent.click(trigger)
   const input = await screen.findByPlaceholderText('search skills…')

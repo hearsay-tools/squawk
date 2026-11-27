@@ -1,3 +1,4 @@
+import { SettingsSelect } from './settings-select'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { FoldersIcon, XIcon } from '@/components/design-icons'
 
@@ -28,7 +29,8 @@ import { toast } from '@/components/ui/toaster'
 import { allProjectTags, suggestTags } from '@/lib/project-tags'
 import { cn } from '@/lib/utils'
 import { RemoveProjectDialog, useProjectRemoval } from './remove-project'
-import { SettingsField } from './settings-field'
+import { SETTINGS_LABEL_CLASS, SettingsField } from './settings-field'
+import { SaveRow } from './save-cue'
 
 /**
  * Global settings → Projects (multi-project spec, step 4.4; mockup
@@ -224,27 +226,29 @@ function WorkspaceRootField({
           }}
           className="block w-full max-w-sm rounded-md border border-input bg-card px-3 py-1.5 font-mono text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-danger disabled:opacity-50"
         />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          data-action={`projects-save-${slot}-root`}
-          disabled={unchanged || trimmed === '' || save.isPending}
-          onClick={() =>
-            save.mutate(trimmed, { onSuccess: () => toast(`${savedLabel} set to ${trimmed}`) })
-          }
-        >
-          Save
-        </Button>
+        <SaveRow show={unchanged && trimmed !== '' && !save.isPending}>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            data-action={`projects-save-${slot}-root`}
+            disabled={unchanged || trimmed === '' || save.isPending}
+            onClick={() =>
+              save.mutate(trimmed, { onSuccess: () => toast(`${savedLabel} set to ${trimmed}`) })
+            }
+          >
+            Save
+          </Button>
+        </SaveRow>
       </div>
       {serverError !== null ? (
         // The mockup's error line: the reason, then what did NOT happen — a failed probe
         // persists nothing, and saying so stops the reader wondering which value is live.
-        <p data-slot={`projects-${slot}-root-error`} role="alert" className="text-[11px] text-danger">
+        <p data-slot={`projects-${slot}-root-error`} role="alert" className="text-xs text-danger">
           {serverError} — setting unchanged
         </p>
       ) : (
-        <p className="text-[11px] text-soft-foreground">
+        <p className="text-xs text-soft-foreground">
           {footer}
         </p>
       )}
@@ -351,26 +355,34 @@ function ProjectRow({
     <tr data-slot="project-row" data-project={project.id} className="border-b border-border last:border-0">
       <th scope="row" className="max-w-0 px-3 py-2 text-left font-normal">
         <span className="block truncate text-foreground">{project.name}</span>
-        <span className="block truncate font-mono text-[11px] text-soft-foreground" title={project.root}>
+        <span className="block truncate font-mono text-xs text-soft-foreground" title={project.root}>
           {project.root}
         </span>
       </th>
       <td className="px-3 py-2">
-        <span
-          data-slot="project-status"
-          className={project.status === 'missing' ? 'text-[12px] text-danger' : 'text-[12px] text-soft-foreground'}
-        >
-          {STATUS_LABEL[project.status]}
+        {/* A compact pill, not a bordered box: a full-width frame around "ok · local" read as a text field. */}
+        <span data-slot="project-status-pill" className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-0.5 text-[12px] leading-5">
+          <span data-slot="project-status" className={project.status === 'missing' ? 'text-danger' : 'text-foreground'}>
+            {STATUS_LABEL[project.status]}
+          </span>
+          {project.status !== 'missing' ? (
+            <>
+              <span aria-hidden="true" className="text-soft-foreground">·</span>
+              <span className="text-soft-foreground">{project.source}</span>
+            </>
+          ) : null}
         </span>
-        {project.status !== 'missing' ? (
-          <span className="ml-1 text-[11px] text-soft-foreground">· {project.source}</span>
-        ) : null}
       </td>
       <td className="px-3 py-2">
         <ProjectTagsEditor project={project} vocabulary={vocabulary} />
       </td>
       <td className="px-3 py-2">
-        <MaxParallelSelect project={project} workspaceMax={workspaceMax} />
+        {/* The row is a vertical card with its column headers hidden, so the control carries its
+            own visible label. The select's accessible name starts with the same words. */}
+        <label data-slot="project-max-parallel-field" className="flex flex-col gap-1.5">
+          <span className={SETTINGS_LABEL_CLASS}>Max parallel tasks</span>
+          <MaxParallelSelect project={project} workspaceMax={workspaceMax} />
+        </label>
       </td>
       <td className="px-3 py-2 tabular-nums text-soft-foreground">{shortDate(project.addedAt)}</td>
       <td className="px-3 py-2 text-right">
@@ -610,7 +622,7 @@ export function ProjectTagsEditor({
           // and picking a suggestion for the happy path.
           onInteractOutside={(event) => event.preventDefault()}
         >
-          <p className="px-2 pt-1 pb-1.5 text-[11px] text-soft-foreground">
+          <p className="px-2 pt-1 pb-1.5 text-xs text-soft-foreground">
             Tags used in this workspace
           </p>
           {suggestions.map((tag, index) => (
@@ -663,7 +675,7 @@ export function MaxParallelSelect({
   // `''` is the inherit sentinel; a number is an explicit per-project ceiling.
   const value = project.maxParallel === undefined ? '' : String(project.maxParallel)
   return (
-    <select
+    <SettingsSelect
       aria-label={`Max parallel tasks for ${project.name}`}
       data-slot="project-max-parallel"
       value={value}
@@ -684,7 +696,7 @@ export function MaxParallelSelect({
           },
         )
       }}
-      className="block w-44 rounded-md border border-input bg-card px-2 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+      className="block w-full rounded-md border border-input bg-card px-2 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
     >
       <option value="">Inherit workspace ({workspaceMax})</option>
       {Array.from(
@@ -695,6 +707,6 @@ export function MaxParallelSelect({
           {n}
         </option>
       ))}
-    </select>
+    </SettingsSelect>
   )
 }

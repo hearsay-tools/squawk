@@ -107,6 +107,15 @@ it('hides Other for native option-only questions and still delivers an offered a
   expect(JSON.stringify(mutateAsync.mock.calls)).toContain('Library: date-fns')
 })
 
+it('spans Other across both columns only when it would sit alone in its row', () => {
+  const { unmount } = renderAsk(singleAsk)
+  // Two options fill the first row, so Other takes the whole second row.
+  expect(screen.getByRole('button', { name: 'Other' }).className).toContain('sm:col-span-2')
+  unmount()
+  renderAsk({ ...singleAsk, questions: singleAsk.questions.map(question => ({ ...question, options: [...(question.options ?? []), { label: 'Temporal' }] })) })
+  expect(screen.getByRole('button', { name: 'Other' }).className).not.toContain('sm:col-span-2')
+})
+
 const multiAsk: ThreadAsk = {
   kind: 'ask',
   id: 'ask_2',
@@ -274,6 +283,51 @@ describe('AskCard', () => {
 // The question outlives its session: an idle timeout, a Squawk restart, Finish or a cancel
 // closes the session with the card still unanswered. Before this, every tap posted to
 // `POST /messages` and died on its `409 session closed` — silently.
+describe('AskCard — the reply jump', () => {
+  it('type a reply below scrolls to the thread composer and puts the caret in it', () => {
+    const scrolled = vi.fn()
+    render(withRunners(
+      <MemoryRouter>
+        <div data-route="task-thread">
+          <AskCard ask={twoQuestionAsk} run={activeRun} />
+          <div data-slot="thread-dock"><div data-slot="composer-editor"><textarea aria-label="Reply" /></div></div>
+        </div>
+      </MemoryRouter>,
+    ))
+    const composer = screen.getByLabelText<HTMLTextAreaElement>('Reply')
+    composer.scrollIntoView = scrolled
+    fireEvent.click(screen.getByRole('button', { name: 'type a reply below' }))
+    expect(scrolled).toHaveBeenCalledWith(expect.objectContaining({ block: 'center' }))
+    expect(document.activeElement).toBe(composer)
+  })
+})
+
+describe('AskCard — the phone footer', () => {
+  // jsdom applies no media queries; the classes are the proof of the max-sm layout.
+  it('puts "Show where it was asked" on the Send row and the reply hint on its own line below', () => {
+    render(withRunners(<MemoryRouter><AskCard ask={{ ...twoQuestionAsk, placement: 'pinned' }} run={activeRun} onShowOrigin={() => {}} /></MemoryRouter>))
+    const footer = document.querySelector('[data-slot="ask-footer"]') as HTMLElement
+    const send = screen.getByRole('button', { name: 'Send answer' })
+    const origin = screen.getByRole('button', { name: 'Show where it was asked' })
+    const hint = footer.querySelector('[data-slot="ask-hint"]') as HTMLElement
+    expect(footer.className).toContain('max-sm:flex')
+    // The Send row dissolves into the footer, so all three are ordered there.
+    expect(send.parentElement?.className).toContain('max-sm:contents')
+    expect(send.className).toContain('max-sm:order-1')
+    expect(origin.className).toContain('max-sm:order-2')
+    expect(origin.className).toContain('max-sm:ms-auto')
+    expect(origin.className).toContain('max-sm:mbs-0')
+    expect(hint.className).toContain('max-sm:order-3')
+    expect(hint.className).toContain('max-sm:basis-full')
+  })
+
+  it('keeps a lone "Show where it was asked" at the start when a tap sends the answer', () => {
+    render(withRunners(<MemoryRouter><AskCard ask={{ ...singleAsk, placement: 'pinned' }} run={activeRun} onShowOrigin={() => {}} /></MemoryRouter>))
+    expect(screen.queryByRole('button', { name: 'Send answer' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Show where it was asked' }).className).not.toContain('max-sm:ms-auto')
+  })
+})
+
 describe('AskCard — answering after the session has ended', () => {
   it('a closed run resumes instead of replying, with the same answer text', async () => {
     renderAsk(singleAsk, closedRun)

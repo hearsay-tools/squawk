@@ -219,6 +219,8 @@ describe('Global settings → Projects', () => {
     await waitFor(() => expect(rows()).toHaveLength(3))
     expect(row('shop-backend')?.textContent).toContain('/home/piotr/cezar/projects/shop-backend')
     expect(row('shop-backend')?.textContent).toContain('checkout')
+    // Status and source sit in one compact pill, not a bordered box that reads as a text field.
+    expect(row('shop-backend')?.querySelector('[data-slot="project-status-pill"]')?.textContent).toBe('ok·checkout')
     // The `missing` row (step 3.3 greys it out in the sidebar) is actionable HERE.
     expect(row('old-spike')?.textContent).toContain('folder not found')
     expect(removeButton('old-spike')?.disabled).toBe(false)
@@ -277,7 +279,9 @@ describe('Global settings → Projects', () => {
     renderProjects()
     await waitFor(() => expect(rootInput()).not.toBeNull())
     expect(saveRoot()!.disabled).toBe(true) // unchanged
+    expect(saveRoot()!.parentElement?.querySelector('[data-slot="settings-save-cue"]')?.textContent).toBe('No unsaved changes')
     fireEvent.change(rootInput()!, { target: { value: '~/code' } })
+    expect(saveRoot()!.parentElement?.querySelector('[data-slot="settings-save-cue"]')).toBeNull()
     fireEvent.click(saveRoot()!)
     await waitFor(() =>
       expect(requests.filter((r) => r.method === 'PUT' && r.url === '/api/v1/workspace/config')).toEqual([

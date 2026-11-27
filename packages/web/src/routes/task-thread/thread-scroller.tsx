@@ -13,6 +13,7 @@ import { flushSync } from 'react-dom'
 
 import { isCockpitE2e } from '@/lib/e2e-mode'
 import { jumpLabel } from './pending-ask-navigation'
+import { dockedHeaderHeight } from './session-viewport'
 import {
   NEAR_BOTTOM_SLACK_PX,
   isNearHistoryStart,
@@ -117,6 +118,8 @@ export function useThreadScroll(
   } = {},
 ): ThreadScrollControls {
   const { surface = 'document', onLoadOlder, onJumpToLatest, rowKeys = [] } = options
+  const rowKeysRef = useRef(rowKeys)
+  rowKeysRef.current = rowKeys
   const viewKeyRef = useRef(viewKey)
   viewKeyRef.current = viewKey
   const scrollElRef = useRef<HTMLElement | null>(null)
@@ -126,6 +129,10 @@ export function useThreadScroll(
   const [pillVisible, setPillVisible] = useState(false)
 
   const stuckRef = useRef(true)
+  /** Arrival and the pill land on an answerable ask's heading. A reader gesture ends that:
+   *  a reader who then scrolls to the tail follows the real bottom, so a later resize (the
+   *  Activity card opening, the pill leaving) never scrolls them back up to the question. */
+  const askTargetRef = useRef(true)
   const downIntentAtRef = useRef(0)
   /** Last reader gesture (wheel, touch, nav key); scroll movement after it is the reader's. */
   const readerGestureAtRef = useRef(0)
@@ -161,7 +168,23 @@ export function useThreadScroll(
 
   const toBottom = useCallback(() => {
     const scroller = scrollElRef.current
-    if (scroller) setOffset(scroller.scrollHeight - scroller.clientHeight)
+    if (!scroller) return
+    // An answerable ask owns the arrival target, including replay and later layout growth,
+    // until the reader's own gesture. Keep its heading below the sticky header instead of
+    // aligning the card's bottom.
+    const askIndex = askTargetRef.current ? rowKeysRef.current.findIndex(key => key.startsWith('pending-ask:')) : -1
+    const ask = askTargetRef.current
+      ? scroller.querySelector<HTMLElement>('[data-slot="ask-card"][data-pinned="true"][data-resolved="false"]')
+      : null
+    const header = scroller.querySelector<HTMLElement>('[data-slot="run-header"]')
+    const inset = header && getComputedStyle(header).position === 'sticky' ? dockedHeaderHeight(header) : 0
+    if (ask) {
+      setOffset(scroller.scrollTop + ask.getBoundingClientRect().top - scroller.getBoundingClientRect().top - inset - 12)
+    } else if (askIndex >= 0 && virtualizerRef.current) {
+      virtualizerRef.current.scrollToIndex(askIndex, { align: 'start', offset: -inset - 12 })
+    } else {
+      setOffset(scroller.scrollHeight - scroller.clientHeight)
+    }
   }, [setOffset])
 
   const applyArrival = useCallback(() => {
@@ -169,6 +192,7 @@ export function useThreadScroll(
     if (!scroller) return
     if (arrivedForRef.current !== viewKey) {
       arrivedForRef.current = viewKey
+      askTargetRef.current = true
       const memory = readThreadScroll(viewKey)
       if (memory && !memory.atBottom) {
         stuckRef.current = false
@@ -224,8 +248,6 @@ export function useThreadScroll(
   const wheelGestureTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const touchHistoryConsumedRef = useRef(false)
   const pointerHistoryConsumedRef = useRef(false)
-  const rowKeysRef = useRef(rowKeys)
-  rowKeysRef.current = rowKeys
 
   const measuredRows = useCallback((scroller: HTMLElement): ThreadRowPosition[] =>
     [...scroller.querySelectorAll<HTMLElement>('[data-slot="thread-row"][data-row-key]')].map((row) => {
@@ -249,6 +271,7 @@ export function useThreadScroll(
       historyRestoreGenerationRef.current += 1
       pendingHistoryRestoreRef.current = null
       stuckRef.current = false
+      askTargetRef.current = false
       setOffset(top)
     }
     window.__cezThreadScrollTo = scrollTo
@@ -349,7 +372,7 @@ export function useThreadScroll(
       return true
     }
     const header = scroller.querySelector<HTMLElement>('[data-slot="run-header"]')
-    const inset = header && getComputedStyle(header).position === 'sticky' ? header.getBoundingClientRect().height : 0
+    const inset = header && getComputedStyle(header).position === 'sticky' ? dockedHeaderHeight(header) : 0
     const handle = virtualizerRef.current
     if (savedTop !== undefined) setOffset(savedTop)
     else if (handle) handle.scrollToIndex(index, { align: 'start', ...(inset > 0 ? { offset: -inset } : {}) })
@@ -377,6 +400,7 @@ export function useThreadScroll(
     historyRestoreGenerationRef.current += 1
     pendingHistoryRestoreRef.current = null
     stuckRef.current = true
+    askTargetRef.current = true
     // The pin that follows is this hook's movement, not the reader's.
     readerGestureAtRef.current = 0
     emitReaderScroll({ direction: 'tail' })
@@ -476,8 +500,16 @@ export function useThreadScroll(
     let travelDirection: 'up' | 'down' | undefined
     let travel = 0
     let gestureDirection: 'up' | 'down' | undefined
+    /** A reader gesture ends the ask's ownership of the arrival target. The ask pin was the
+     *  only reason to stay stuck above the physical tail, so release it there too: a later
+     *  resize must not jump past the unread question. onScroll re-pins at the real tail. */
+    const releaseAskPin = () => {
+      if (askTargetRef.current && !isNearBottom(scroller, NEAR_BOTTOM_SLACK_PX)) stuckRef.current = false
+      askTargetRef.current = false
+    }
     const markGesture = (direction: 'up' | 'down') => {
       readerGestureAtRef.current = Date.now()
+      releaseAskPin()
       gestureDirection = direction
     }
     const unstick = () => {
@@ -542,6 +574,7 @@ export function useThreadScroll(
         (event.clientX >= rect.left + borderLeft && event.clientX < clientLeft) ||
         (event.clientX >= clientRight && event.clientX < rect.right - borderRight)
       if (!inScrollbar || event.clientY < rect.top + scroller.clientTop || event.clientY >= rect.top + scroller.clientTop + scroller.clientHeight) return
+      askTargetRef.current = false
       pendingRestoreRef.current = null
       measurementRestoreRef.current = null
       if (!isNearBottom(scroller, NEAR_BOTTOM_SLACK_PX)) {
@@ -597,6 +630,7 @@ export function useThreadScroll(
       // Overlay scrollbars occupy the client box, so a gutter hit cannot identify
       // their grab. Actual movement during a primary scroller press is reader intent.
       if (pointerScrolling && scroller.scrollTop !== previousScrollTop) {
+        releaseAskPin()
         if (scroller.scrollTop < previousScrollTop) unstick()
         else markDown()
       }
@@ -872,7 +906,7 @@ export function JumpToLatestPill({ onJump, pendingQuestions = 0 }: { onJump: () 
       data-pending-questions={pendingQuestions > 0 ? pendingQuestions : undefined}
       // Never forward the click event: the jump's optional argument is a focus target.
       onClick={() => onJump()}
-      className="pointer-events-auto inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-full border border-border bg-background px-3.5 text-xs font-medium text-muted-foreground shadow-modal hover:text-foreground"
+      className="pointer-events-auto inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-full border border-border bg-background px-3.5 text-xs font-medium text-muted-foreground shadow-sm hover:text-foreground"
     >
       <ArrowDownIcon aria-hidden className="size-3.5" />
       {jumpLabel(pendingQuestions)}

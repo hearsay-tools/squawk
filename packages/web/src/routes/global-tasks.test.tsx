@@ -448,6 +448,30 @@ it('mounts summary actions only while the row is expanded', async () => {
       expect(search()).toBe('?group=project')
     })
 
+    it('keeps the facet panel behind a closed Filters toggle until something narrows the list', async () => {
+      stubFetch()
+      renderPage(createQueryClient(), '/tasks')
+      await screen.findByText('Add checkout endpoint')
+      const toggle = screen.getByRole('button', { name: 'Filters' })
+      expect(toggle.getAttribute('aria-expanded')).toBe('false')
+      expect(toggle.getAttribute('data-active')).toBe('false')
+      expect(toggle.getAttribute('aria-controls')).toBe('global-tasks-filters')
+      expect(document.querySelector('[data-route="global-tasks"]')?.getAttribute('data-filter-details')).toBe('false')
+      expect(toggle.querySelector('[data-slot="filters-count"]')).toBeNull()
+    })
+
+    it('opens and highlights Filters, with a count, when the URL restores a facet', async () => {
+      stubFetch()
+      renderPage(createQueryClient(), '/tasks?status=running&group=project')
+      await screen.findByText('Filter across projects and act on each run without opening the session.')
+      const toggle = screen.getByRole('button', { name: 'Filters' })
+      expect(toggle.getAttribute('aria-expanded')).toBe('true')
+      fireEvent.click(toggle)
+      // Closed, it still says the list is narrowed: one status and the grouping.
+      expect(toggle.getAttribute('data-active')).toBe('true')
+      expect(toggle.querySelector('[data-slot="filters-count"]')?.textContent).toBe('2')
+    })
+
     it('restores a filtered, grouped view from the query string alone', async () => {
       // The refresh case: a reload re-enters the route with only the URL to go on.
       stubFetch()
@@ -556,11 +580,11 @@ it('mounts summary actions only while the row is expanded', async () => {
       // Active is the default, so a normal link carries no key for it.
       expect(search()).toBe('')
 
-      fireEvent.click(screen.getByRole('button', { name: 'Archived' }))
+      fireEvent.click(screen.getByRole('button', { name: /^Archived(·|$)/ }))
       await waitFor(() => expect(search()).toBe('?archived=1'))
       await waitFor(() => expect(rowIds()).toEqual(['i1']))
 
-      fireEvent.click(screen.getByRole('button', { name: 'Active' }))
+      fireEvent.click(screen.getByRole('button', { name: /^Active(·|$)/ }))
       await waitFor(() => expect(search()).toBe(''))
       await waitFor(() => expect(rowIds()).toEqual(['w1', 'a1']))
     })
@@ -577,7 +601,7 @@ it('mounts summary actions only while the row is expanded', async () => {
       fireEvent.click(storefront)
       await waitFor(() => expect(search()).toBe('?tag=storefront&archived=1'))
 
-      fireEvent.click(screen.getByRole('button', { name: 'Active' }))
+      fireEvent.click(screen.getByRole('button', { name: /^Active(·|$)/ }))
       await waitFor(() => expect(search()).toBe('?tag=storefront'))
     })
 
@@ -596,7 +620,7 @@ it('mounts summary actions only while the row is expanded', async () => {
 
       await screen.findByText('Bump the runner')
       expect(rowIds()).toEqual(['i1'])
-      expect(screen.getByRole('button', { name: 'Archived' }).getAttribute('aria-pressed')).toBe(
+      expect(screen.getByRole('button', { name: /^Archived(·|$)/ }).getAttribute('aria-pressed')).toBe(
         'true',
       )
       expect(screen.getByTestId('shared-view').textContent).toBe('active')
@@ -1068,7 +1092,7 @@ it('mounts summary actions only while the row is expanded', async () => {
     renderPage()
     await screen.findByText('Add checkout endpoint')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Archived' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Archived(·|$)/ }))
     await waitFor(() => expect(rowIds()).toEqual(['i1']))
 
     fireEvent.click(screen.getByRole('button', { name: 'Show resources for Bump the runner' }))
@@ -1262,7 +1286,7 @@ describe('global tasks — status groups and origin (hearsay-tools/cezarion#1616
     await waitFor(() => expect(search()).toBe('?origin=automations'))
     expect(rowIds()).toEqual(['nightly-run'])
     // Origin survives the archive switch.
-    fireEvent.click(screen.getByRole('button', { name: 'Archived' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Archived(·|$)/ }))
     await waitFor(() => expect(search()).toBe('?archived=1&origin=automations'))
   })
 

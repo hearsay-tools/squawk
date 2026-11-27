@@ -63,6 +63,18 @@ describe('composer action availability', () => {
     expect(onStart).toHaveBeenCalledOnce()
   })
 
+  it.each([
+    { name: 'a waiting thread', tools: {} },
+    { name: 'a review thread', tools: { sessionControls: true } },
+    { name: 'New task', tools: { executionOptions: true } },
+  ])('shows one icon-only mic square in $name', ({ tools }) => {
+    render(<ComposerDictationButton mode={mode(tools)} onStart={vi.fn()} />)
+    const button = screen.getByRole('button', { name: 'Start dictation' })
+    expect(button.textContent).toBe('')
+    expect(button.getAttribute('title')).toBe('Dictation')
+    expect(button.className).toContain('size-11')
+  })
+
   it.each(['busy', 'stopPending', 'finishing'] as const)('blocks Finish when %s', (flag) => {
     const onFinish = vi.fn()
     render(<ComposerFinishButton mode={mode({ [flag]: true })} onFinish={onFinish} />)

@@ -1,6 +1,6 @@
 import { productCommand } from '@/lib/product-name'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { queryKeys } from '@/api/queries'
@@ -124,6 +124,17 @@ function agentTab(agent: string): HTMLElement {
   return el as HTMLElement
 }
 
+/** The file list. A selected file's name shows in the editor too, so file lookups stay inside the list. */
+function nav() {
+  const el = document.querySelector('[data-slot="agent-config-nav"]')
+  expect(el).toBeTruthy()
+  return within(el as HTMLElement)
+}
+
+function findInNav(label: string): Promise<HTMLElement> {
+  return waitFor(() => nav().getByText(label))
+}
+
 afterEach(() => {
   act(() => resetToasts())
   cleanup()
@@ -141,12 +152,24 @@ describe('AgentConfigSection', () => {
     ] })
     renderSection()
     await waitFor(() => expect(agentTab('claude').getAttribute('role')).toBe('tab'))
-    expect(screen.getByText('~/.claude/settings.json')).toBeTruthy()
-    fireEvent.click(screen.getByText('.mcp.json'))
+    expect(nav().getByText('~/.claude/settings.json')).toBeTruthy()
+    fireEvent.click(nav().getByText('.mcp.json'))
     await waitFor(() => expect(screen.getByLabelText('.mcp.json contents')).toBeTruthy())
     fireEvent.click(agentTab('codex'))
-    await waitFor(() => expect(screen.getByText('AGENTS.md')).toBeTruthy())
-    expect(screen.queryByText('.claude/settings.json')).toBeNull()
+    await waitFor(() => expect(nav().getByText('AGENTS.md')).toBeTruthy())
+    expect(nav().queryByText('.claude/settings.json')).toBeNull()
+  })
+
+  it('shows the full filename on its own line, with status on a subline below it', async () => {
+    serve({ editable: true, userMcp: null, files: [
+      fileOf({ id: 'claude.settings', label: '.claude/settings.local.json', exists: false }),
+    ] })
+    renderSection()
+    const name = await findInNav('.claude/settings.local.json')
+    expect(name.getAttribute('data-slot')).toBe('agent-config-file-name')
+    expect(name.className).not.toContain('truncate')
+    const button = name.closest('[data-slot="agent-config-file"]')!
+    expect(button.querySelector('[data-slot="agent-config-file-meta"]')?.textContent).toContain('Not created')
   })
 
   it('renders the agent selector with a not-installed badge from health', async () => {
@@ -178,9 +201,9 @@ describe('AgentConfigSection', () => {
     renderSection()
     await waitFor(() => expect(agentTab('pi')).toBeTruthy())
     fireEvent.click(agentTab('pi'))
-    await waitFor(() => expect(screen.getByText('.pi/settings.json')).toBeTruthy())
-    expect(screen.getByText('~/.pi/agent/settings.json')).toBeTruthy()
-    expect(screen.getByText('AGENTS.md')).toBeTruthy()
+    await waitFor(() => expect(nav().getByText('.pi/settings.json')).toBeTruthy())
+    expect(nav().getByText('~/.pi/agent/settings.json')).toBeTruthy()
+    expect(nav().getByText('AGENTS.md')).toBeTruthy()
     const mcpGroup = document.querySelector('[data-slot="agent-config-group"][data-group="mcp"][data-agent="pi"]')!
     expect(mcpGroup).toBeTruthy()
     expect(mcpGroup.querySelector('[data-slot="agent-config-group-empty"]')).not.toBeNull()
@@ -202,9 +225,9 @@ describe('AgentConfigSection', () => {
     renderSection()
     await waitFor(() => expect(agentTab('omp')).toBeTruthy())
     fireEvent.click(agentTab('omp'))
-    await waitFor(() => expect(screen.getByText('~/.omp/agent/config.yml')).toBeTruthy())
-    expect(screen.getAllByText('.omp/mcp.json').length).toBeGreaterThan(0)
-    fireEvent.click(screen.getByText('~/.omp/agent/config.yml'))
+    await waitFor(() => expect(nav().getByText('~/.omp/agent/config.yml')).toBeTruthy())
+    expect(nav().getAllByText('.omp/mcp.json').length).toBeGreaterThan(0)
+    fireEvent.click(nav().getByText('~/.omp/agent/config.yml'))
     await waitFor(() => expect(screen.getByLabelText('~/.omp/agent/config.yml contents')).toBeTruthy())
     expect(screen.getByText('yaml')).toBeTruthy()
     expect(document.querySelector('[data-slot="agent-config-group-empty"]')).toBeNull()
@@ -217,7 +240,7 @@ describe('AgentConfigSection', () => {
       userMcp: null,
     })
     renderSection()
-    await waitFor(() => expect(screen.getByText('.claude/settings.json')).toBeTruthy())
+    await waitFor(() => expect(nav().getByText('.claude/settings.json')).toBeTruthy())
     expect(document.querySelector('[data-slot="agent-config-group"][data-group="mcp"][data-agent="claude"]')).toBeNull()
   })
 
@@ -231,19 +254,19 @@ describe('AgentConfigSection', () => {
       userMcp: null,
     })
     renderSection()
-    await waitFor(() => expect(screen.getByText('.claude/settings.json')).toBeTruthy())
-    expect(screen.queryByText('.codex/config.toml')).toBeNull()
+    await waitFor(() => expect(nav().getByText('.claude/settings.json')).toBeTruthy())
+    expect(nav().queryByText('.codex/config.toml')).toBeNull()
 
     fireEvent.click(agentTab('codex'))
-    await waitFor(() => expect(screen.getAllByText('.codex/config.toml').length).toBeGreaterThan(0))
-    expect(screen.queryByText('.claude/settings.json')).toBeNull()
+    await waitFor(() => expect(nav().getAllByText('.codex/config.toml').length).toBeGreaterThan(0))
+    expect(nav().queryByText('.claude/settings.json')).toBeNull()
     // the config.toml holds Codex's MCP servers — it must appear under Settings AND MCP
     const groups = [...document.querySelectorAll('[data-slot="agent-config-group"]')].map((el) =>
       el.getAttribute('data-group'),
     )
     expect(groups).toContain('settings')
     expect(groups).toContain('mcp')
-    expect(screen.getAllByText('.codex/config.toml').length).toBe(2)
+    expect(nav().getAllByText('.codex/config.toml').length).toBe(2)
   })
 
   it('a file read by several agents appears under every one of them (runners[], not runners[0])', async () => {
@@ -255,9 +278,9 @@ describe('AgentConfigSection', () => {
     renderSection()
     await waitFor(() => expect(agentTab('codex')).toBeTruthy())
     fireEvent.click(agentTab('codex'))
-    await waitFor(() => expect(screen.getAllByText('AGENTS.md')[0]).toBeTruthy())
+    await waitFor(() => expect(nav().getAllByText('AGENTS.md')[0]).toBeTruthy())
     fireEvent.click(agentTab('opencode'))
-    await waitFor(() => expect(screen.getAllByText('AGENTS.md')[0]).toBeTruthy())
+    await waitFor(() => expect(nav().getAllByText('AGENTS.md')[0]).toBeTruthy())
   })
 
   it('Claude’s MCP group lists the user/local scopes read-only', async () => {
@@ -267,7 +290,7 @@ describe('AgentConfigSection', () => {
       userMcp: { path: '~/.claude.json', servers: ['github', 'sentry'], readable: true },
     })
     renderSection()
-    await waitFor(() => expect(screen.getByText('.mcp.json')).toBeTruthy())
+    await waitFor(() => expect(nav().getByText('.mcp.json')).toBeTruthy())
     const block = document.querySelector('[data-slot="agent-config-user-mcp"]')!
     expect(block).toBeTruthy()
     expect(block.textContent).toContain('github')
@@ -287,24 +310,83 @@ describe('AgentConfigSection', () => {
       userMcp: null,
     })
     renderSection()
-    await waitFor(() => expect(screen.getByText('.claude/settings.json')).toBeTruthy())
-    fireEvent.click(screen.getByText('.claude/settings.json'))
+    await waitFor(() => expect(nav().getByText('.claude/settings.json')).toBeTruthy())
+    fireEvent.click(nav().getByText('.claude/settings.json'))
     await waitFor(() => expect(screen.getByLabelText('.claude/settings.json contents')).toBeTruthy())
     fireEvent.click(agentTab('opencode'))
     await waitFor(() => expect(screen.queryByLabelText('.claude/settings.json contents')).toBeNull())
   })
 
-  it('shows the vendor precedence when a file is selected', async () => {
+  it('opens the agent’s first project file on load, with its scope and vendor precedence, before any click', async () => {
     serve({
       editable: true,
-      files: [fileOf({ id: 'claude.project.settings', label: '.claude/settings.json' })],
+      files: [
+        fileOf({ id: 'claude.user.settings', label: '~/.claude/settings.json', scope: 'user', tracked: 'outside-repo' }),
+        fileOf({ id: 'claude.project.settings', label: '.claude/settings.json' }),
+        fileOf({ id: 'codex.user.config', label: '~/.codex/config.toml', runners: ['codex'], scope: 'user', format: 'toml', tracked: 'outside-repo' }),
+      ],
       userMcp: { path: '~/.claude.json', servers: [], readable: true },
     })
     renderSection()
-    await waitFor(() => expect(screen.getByText('.claude/settings.json')).toBeTruthy())
-    expect(document.querySelector('[data-slot="agent-config-precedence"]')).toBeNull()
-    fireEvent.click(screen.getByText('.claude/settings.json'))
-    await waitFor(() => expect(document.querySelector('[data-slot="agent-config-precedence"]')?.textContent).toBe('Overrides user settings key by key.'))
+    // The project file opens, not the user-wide file listed above it.
+    expect(await screen.findByLabelText('.claude/settings.json contents')).toBeTruthy()
+    expect(document.querySelector('[data-slot="agent-config-precedence"]')?.textContent).toBe('Overrides user settings key by key.')
+    expect(document.querySelector('[data-slot="agent-config-editor-empty"]')).toBeNull()
+    const selected = [...document.querySelectorAll('[data-slot="agent-config-file"][data-selected="true"]')]
+    expect(selected.map((el) => el.getAttribute('title'))).toEqual(['.claude/settings.json'])
+    const scope = document.querySelector('[data-slot="agent-config-scope"]')
+    expect(scope?.textContent).toBe('Project scope')
+    expect(scope?.getAttribute('data-scope')).toBe('project')
+    // A pick stays, and the scope tag follows it.
+    fireEvent.click(nav().getByText('~/.claude/settings.json'))
+    expect(await screen.findByLabelText('~/.claude/settings.json contents')).toBeTruthy()
+    expect(document.querySelector('[data-slot="agent-config-scope"]')?.textContent).toBe('User scope')
+    // An agent with no project file opens its first file.
+    fireEvent.click(agentTab('codex'))
+    expect(await screen.findByLabelText('~/.codex/config.toml contents')).toBeTruthy()
+    expect(document.querySelector('[data-slot="agent-config-scope"]')?.textContent).toBe('User scope')
+  })
+
+  it('says the page edits project, local and user-wide files', async () => {
+    serve({ editable: true, files: [fileOf({ id: 'claude.project.settings', label: '.claude/settings.json' })], userMcp: null })
+    renderSection()
+    expect(await screen.findByText('Edit project, local, and user-wide config files for each coding agent.')).toBeTruthy()
+  })
+
+  it('names Claude’s state file from the home folder, as ~/, with the whole command in one code span', async () => {
+    serve({
+      editable: true,
+      files: [fileOf({ id: 'claude.user.settings', label: '~/.claude/settings.json', scope: 'user',
+        path: '/tmp/run-1/server-home/.claude/settings.json', tracked: 'outside-repo' })],
+      userMcp: { path: '/tmp/run-1/server-home/.claude.json', servers: [], readable: true },
+    })
+    renderSection()
+    const path = await waitFor(() => {
+      const el = document.querySelector('[data-slot="agent-config-user-mcp-path"]')
+      expect(el).toBeTruthy()
+      return el!
+    })
+    expect(path.textContent).toBe('~/.claude.json')
+    expect(path.getAttribute('title')).toBe('/tmp/run-1/server-home/.claude.json')
+    expect(document.querySelector('[data-slot="agent-config-user-mcp-command"]')?.textContent).toBe('claude mcp add')
+  })
+
+  it('names a user-scope file in the path line from the home folder, as ~/, with the full path on hover', async () => {
+    serve({
+      editable: true,
+      files: [fileOf({ id: 'claude.user.settings', label: '~/.claude/settings.json', scope: 'user',
+        path: '/tmp/run-1/server-home/.claude/settings.json', tracked: 'outside-repo' })],
+      userMcp: null,
+    })
+    renderSection()
+    const path = await waitFor(() => {
+      const el = document.querySelector('[data-slot="agent-config-path"]')
+      expect(el).toBeTruthy()
+      return el!
+    })
+    expect(path.textContent).toBe('~/.claude/settings.json')
+    expect(path.getAttribute('title')).toBe('/tmp/run-1/server-home/.claude/settings.json')
+    expect(document.querySelector('[data-slot="agent-config-scope"]')?.textContent).toBe('User scope')
   })
 
   // hearsay-tools/squawk#3898: the panes come from the runners list, so its failure is shown, not a spinner.
@@ -329,7 +411,7 @@ describe('AgentConfigSection', () => {
     })
     renderSection()
     await waitFor(() => expect(screen.getByText(/Read-only/)).toBeTruthy())
-    fireEvent.click(screen.getByText('.claude/settings.json'))
+    fireEvent.click(nav().getByText('.claude/settings.json'))
     await waitFor(() => expect(screen.getByLabelText('.claude/settings.json contents')).toBeTruthy())
     expect(screen.queryByRole('button', { name: 'Save file' })).toBeNull()
     expect(document.querySelector('[data-slot="agent-config-readonly"]')?.textContent).toContain(`${productCommand()} remote-settings enable`)
@@ -349,7 +431,7 @@ describe('AgentConfigSection', () => {
     renderSection()
     await waitFor(() => expect(document.querySelector('[data-slot="remote-settings-notice"]')).toBeTruthy())
     expect(document.querySelector('[data-slot="agent-config-readonly"]')).toBeNull()
-    fireEvent.click(screen.getByText('.claude/settings.json'))
+    fireEvent.click(nav().getByText('.claude/settings.json'))
     const editor = (await screen.findByLabelText('.claude/settings.json contents')) as HTMLTextAreaElement
     fireEvent.change(editor, { target: { value: '{"a":2}' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save file' }))
@@ -373,7 +455,7 @@ describe('AgentConfigSection', () => {
     serveLive(server)
     renderSection()
     await waitFor(() => expect(document.querySelector('[data-slot="remote-settings-notice"]')).toBeTruthy())
-    fireEvent.click(screen.getByText('.claude/settings.json'))
+    fireEvent.click(nav().getByText('.claude/settings.json'))
     const editor = (await screen.findByLabelText('.claude/settings.json contents')) as HTMLTextAreaElement
     fireEvent.change(editor, { target: { value: '{"a":2}' } })
     // The host runs `cez remote-settings disable` while the editor is open.
@@ -392,7 +474,7 @@ describe('AgentConfigSection', () => {
     await waitFor(() => expect(document.querySelector('[data-slot="agent-config-readonly"]')).toBeTruthy())
     // The host runs `cez remote-settings enable` before the user picks a file.
     Object.assign(server, { capabilities: REMOTE_ADMIN, listing: { editable: true, files: [SETTINGS_FILE], userMcp: null } })
-    fireEvent.click(screen.getByText('.claude/settings.json'))
+    fireEvent.click(nav().getByText('.claude/settings.json'))
     expect(await screen.findByRole('button', { name: 'Save file' })).toBeTruthy()
   })
 
@@ -400,7 +482,7 @@ describe('AgentConfigSection', () => {
     const server: LiveServer = { capabilities: REMOTE_ADMIN, listing: { editable: true, files: [SETTINGS_FILE], userMcp: null }, putStatus: 409 }
     serveLive(server)
     renderSection()
-    fireEvent.click(await screen.findByText('.claude/settings.json'))
+    fireEvent.click(await findInNav('.claude/settings.json'))
     const editor = (await screen.findByLabelText('.claude/settings.json contents')) as HTMLTextAreaElement
     await waitFor(() => expect(editor.value).toBe('{"a":1}'))
     fireEvent.change(editor, { target: { value: '{"a":2}' } })
@@ -423,8 +505,8 @@ describe('AgentConfigSection', () => {
       userMcp: { path: '~/.claude.json', servers: [], readable: true },
     })
     renderSection()
-    await waitFor(() => expect(screen.getByText('.claude/settings.json')).toBeTruthy())
-    fireEvent.click(screen.getByText('.claude/settings.json'))
+    await waitFor(() => expect(nav().getByText('.claude/settings.json')).toBeTruthy())
+    fireEvent.click(nav().getByText('.claude/settings.json'))
     const editor = (await screen.findByLabelText('.claude/settings.json contents')) as HTMLTextAreaElement
     fireEvent.change(editor, { target: { value: '{"a":2}' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save file' }))
@@ -440,7 +522,7 @@ describe('AgentConfigSection', () => {
         userMcp: null,
       })
       renderSection()
-      fireEvent.click(await screen.findByText('.claude/settings.json'))
+      fireEvent.click(await findInNav('.claude/settings.json'))
       const editor = (await screen.findByLabelText('.claude/settings.json contents')) as HTMLTextAreaElement
       await waitFor(() => expect(editor.value).toBe('{"a":1}'))
       expect(hasUnsentInput()).toBe(false)
@@ -467,5 +549,51 @@ describe('AgentConfigSection', () => {
     } finally {
       stop()
     }
+  })
+})
+
+describe('a config file that does not exist yet', () => {
+  it('shows a faint example in its own format and says how to create the file', async () => {
+    serve(
+      { editable: true, files: [fileOf({ id: 'claude.settings', label: '.claude/settings.local.json', exists: false })], userMcp: null },
+      '',
+    )
+    renderSection()
+    const editor = (await screen.findByLabelText('.claude/settings.local.json contents')) as HTMLTextAreaElement
+    const placeholder = await waitFor(() => {
+      const found = document.querySelector('[data-slot="agent-config-placeholder"]')
+      expect(found).not.toBeNull()
+      return found!
+    })
+    expect(placeholder.textContent).toBe('// File not created yet — example:\n{\n  "permissions": {}\n}')
+    expect(placeholder.getAttribute('aria-hidden')).toBe('true')
+    expect((screen.getByRole('button', { name: 'Create file' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(document.querySelector('[data-slot="agent-config-save-cue"]')?.textContent).toBe('Enter content above to create this file')
+
+    // The first keystroke removes the example and the cue turns into the unsaved-changes note.
+    fireEvent.change(editor, { target: { value: '{}' } })
+    expect(document.querySelector('[data-slot="agent-config-placeholder"]')).toBeNull()
+    expect(document.querySelector('[data-slot="agent-config-save-cue"]')?.textContent).toBe('Unsaved changes')
+    expect((screen.getByRole('button', { name: 'Create file' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('says the instructions file is not created yet', async () => {
+    serve(
+      { editable: true, files: [fileOf({ id: 'claude.memory', label: 'CLAUDE.local.md', kind: 'memory', format: 'markdown', exists: false })], userMcp: null },
+      '',
+    )
+    renderSection()
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="agent-config-placeholder"]')?.textContent).toBe('<!-- File not created yet — write instructions here -->'),
+    )
+  })
+
+  it('says nothing changed, with no example, on a file that exists', async () => {
+    serve({ editable: true, files: [SETTINGS_FILE], userMcp: null })
+    renderSection()
+    const editor = (await screen.findByLabelText('.claude/settings.json contents')) as HTMLTextAreaElement
+    await waitFor(() => expect(editor.value).toBe('{"a":1}'))
+    expect(document.querySelector('[data-slot="agent-config-placeholder"]')).toBeNull()
+    expect(document.querySelector('[data-slot="agent-config-save-cue"]')?.textContent).toBe('No unsaved changes')
   })
 })

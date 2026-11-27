@@ -1,6 +1,6 @@
 import type { LogEntry, RepoInfo, RepoResponse, RepoTracking } from '@open-mercato/cezar-api-client'
 
-import { shortAge } from '@/lib/format'
+import { compactDuration, shortAge, withAgo } from '@/lib/format'
 
 import { stripProjectPrefix } from '@/lib/project-router'
 
@@ -37,14 +37,30 @@ export const GIT_SECTION_PATH: Record<GitSection, string> = {
 
 export const GIT_PHONE_MAIN_PATH = '/git?view=repo'
 
-const GIT_AGE_UNITS: Record<string, string> = {
-  second: 's', minute: 'm', hour: 'h', day: 'd', week: 'w', month: 'mo', year: 'y',
+const GIT_AGE_SECONDS: Record<string, number> = {
+  second: 1, minute: 60, hour: 3600, day: 86_400, week: 7 * 86_400, month: 30 * 86_400, year: 365 * 86_400,
 }
 
-/** git's relative `%cr` ("3 hours ago") as the board's compact age ("3h"); anything git words otherwise stays as it is. */
-export function shortGitAge(when: string): string {
-  const match = /^(\d+) (second|minute|hour|day|week|month|year)s? ago$/.exec(when.trim())
-  return match ? `${match[1]}${GIT_AGE_UNITS[match[2]!]}` : when
+/**
+ * A commit's compact age in the one `shortAge` format (`1h 6m`, `23h`, `5d`). The ISO `at` wins
+ * when the payload has it; otherwise git's relative `%cr` ("66 minutes ago", "1 year, 2 months
+ * ago") is read back into seconds, so git's raw `66m` never reaches the page. Anything git words
+ * otherwise stays as it is.
+ */
+export function gitAge(when: string, at?: string, now: number = Date.now()): string {
+  const fromIso = at ? shortAge(at, now) : ''
+  if (fromIso) return fromIso
+  const parts = /^(\d+) (second|minute|hour|day|week|month|year)s?(?:, (\d+) (second|minute|hour|day|week|month|year)s?)? ago$/.exec(when.trim())
+  if (!parts) return when
+  const seconds = Number(parts[1]) * GIT_AGE_SECONDS[parts[2]!]! + (parts[3] ? Number(parts[3]) * GIT_AGE_SECONDS[parts[4]!]! : 0)
+  return compactDuration(seconds)
+}
+
+/** The full local date and time for a compact age's tooltip; git's own relative words when the
+ *  ISO date is absent or does not parse. */
+export function gitAgeTitle(when: string, at?: string): string {
+  const time = at ? Date.parse(at) : Number.NaN
+  return Number.isFinite(time) ? new Date(time).toLocaleString() : when
 }
 
 export interface CommitDay {
@@ -108,5 +124,5 @@ export function checkoutTracking(repo: Pick<RepoResponse, 'baseBranch' | 'tracki
  *  `FETCH_HEAD`. Freshness is always as of the last fetch: nothing here fetches (issue 08 §B1). */
 export function fetchedAgo(tracking: RepoTracking, now = Date.now()): string {
   const age = tracking.fetchedAt ? shortAge(tracking.fetchedAt, now) : ''
-  return age ? `fetched ${age} ago` : 'never fetched'
+  return age ? `fetched ${withAgo(age)}` : 'never fetched'
 }

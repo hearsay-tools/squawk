@@ -2,23 +2,22 @@ import './github-layout.css'
 import { useQueryClient } from '@tanstack/react-query'
 import { LoaderCircleIcon } from 'lucide-react'
 import { Virtualizer } from 'virtua'
-import { ArrowLeftIcon, CheckIcon, CircleDotIcon, ChevronDownIcon, GitPullRequestIcon, RefreshCwIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
+import { CheckIcon, CircleDotIcon, ChevronDownIcon, GitPullRequestIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
 import {
   useEffect,
   useRef,
   useState,
   type CSSProperties,
   type Dispatch,
-  type DragEvent,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
   type SetStateAction,
 } from 'react'
 import { useParams } from 'react-router'
-import { Link, Navigate } from '@/lib/project-router'
+import { Navigate } from '@/lib/project-router'
 
-import { getGithubComments, putUiState } from '@/api/client'
+import { putUiState } from '@/api/client'
 import { queryKeys, useGithubPages, useUiState } from '@/api/queries'
 import type {
   GithubData,
@@ -28,13 +27,12 @@ import type {
 } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { GithubIcon } from '@/components/icons'
-import { ChecksGlyph, CommentCount, GithubItemDetail, LabelChip } from '@/components/github-item-detail'
+import { GithubItemDetail } from '@/components/github-item-detail'
 import { TabLink } from '@/components/tab-link'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { toast } from '@/components/ui/toaster'
-import { shortAge } from '@/lib/format'
 import {
   DEFAULT_GITHUB_LIST_WIDTH,
   GITHUB_LIST_WIDTH_STEP,
@@ -44,7 +42,6 @@ import {
   readStoredGithubListWidth,
   writeStoredGithubListWidth,
 } from '@/lib/github-list-width'
-import { githubTaskPrompt } from '@/lib/github-task'
 import { cn } from '@/lib/utils'
 import { useAutomationsAvailable } from '@/lib/capabilities'
 
@@ -53,12 +50,15 @@ import { IssueFilters } from './issue-filters'
 import { allLabels, labelChipStyle } from './github-filter'
 import { GithubFilterScreen } from './github-filter-screen'
 import { GithubLoading } from './github-loading'
+import { GithubMasthead } from './github-masthead'
+import { GithubRow } from './github-row'
 import { useGithubListPaging, type GithubListPaging, type GithubPagesQuery } from './github-paging'
 import {
-  githubFilterPath, GITHUB_PAGE_SIZE, ISSUE_ROWS, PR_ROWS, ACTIVE_FILTER_LABEL, type GithubFilter,
+  githubFilterPath, GITHUB_PAGE_SIZE, type GithubFilter,
 } from './github-sidebar-model'
 import { useIsDesktop } from '@/lib/use-desktop'
 import { HandToAgent } from './hand-to-agent'
+import { focusHandToAgentPrompt, HandoffHeaderAction } from './handoff-header-action'
 import { useHandToAgentState } from './use-hand-to-agent-state'
 import { useGithubBadges, type GithubBadges } from './use-github-badges'
 import {
@@ -290,22 +290,12 @@ export function GithubRoute({
     // The route ends with one scrollport-height workspace, with no bottom padding:
     // at maximum page scroll its tabs align with main's top without sticky overlap.
     // Phone stays stacked document-flow. (#523)
-    <div ref={layout.routeRef} data-route="github" className="flex min-h-full flex-col gap-3 px-[18px] pt-[18px] pb-[calc(90px+env(safe-area-inset-bottom))] md:gap-[22px] md:px-7 md:pt-4 md:pb-4">
-      <GithubMasthead view={view} activeFilter={activeFilter} isDesktop={isDesktop} rawFilterParam={rawFilterParam} n={n} gh={gh} />
-      <div ref={layout.workspaceRef} data-slot="gh-workspace" data-stacked={layout.panesStacked} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:h-[calc(var(--gh-workspace-height,calc(100dvh-4rem))-1rem)] md:flex-none md:gap-[22px]">
-        <header
-          data-slot="gh-header"
-          className="flex shrink-0 flex-col gap-3 bg-background md:gap-[22px]"
-        >
-          <GithubTabs
-            view={view}
-            isDesktop={isDesktop}
-            gh={gh}
-            automationsAvailable={automationsAvailable}
-            onSaveView={saveGithubView}
-            refreshing={refresh.isPending}
-            onRefresh={onRefresh}
-          />
+    <div ref={layout.routeRef} data-route="github" className="flex min-h-full flex-col gap-2.5 px-4 pt-7 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pt-7 md:pb-4">
+      <GithubMasthead view={view} activeFilter={activeFilter} isDesktop={isDesktop} rawFilterParam={rawFilterParam} n={n} gh={gh}
+        actions={{ automationsAvailable, refreshing: refresh.isPending, onRefresh }} />
+      <div ref={layout.workspaceRef} data-slot="gh-workspace" data-stacked={layout.panesStacked} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:h-[calc(var(--gh-workspace-height,calc(100dvh-4rem))-1rem)] md:flex-none md:gap-5">
+        <header data-slot="gh-header" className="flex shrink-0 flex-col gap-3 bg-background md:gap-4">
+          <GithubTabs view={view} isDesktop={isDesktop} gh={gh} onSaveView={saveGithubView} />
           <GithubFilterToolbar
             view={view}
             gh={gh}
@@ -580,7 +570,7 @@ function GithubUnavailable({ reason, refreshing, onRetry }: {
           </Button>
         }
       >
-        <p className="text-xs leading-relaxed text-soft-foreground">
+        <p className="text-xs leading-relaxed text-muted-foreground">
           The tab needs the <span className="font-mono">gh</span> CLI, logged in (
           <span className="font-mono">gh auth login</span>), and a repo with a GitHub remote.
           Everything else in Squawk works without it.
@@ -590,53 +580,12 @@ function GithubUnavailable({ reason, refreshing, onRetry }: {
   )
 }
 
-/** The title row: the list on screen, the phone's way back to its filters, and the repo line. */
-function GithubMasthead({ view, activeFilter, isDesktop, rawFilterParam, n, gh }: {
-  view: GithubView
-  activeFilter: GithubFilter
-  isDesktop: boolean
-  rawFilterParam: string | null
-  n: string | undefined
-  gh: GithubData
-}) {
-  return (
-    <div data-slot="gh-masthead" className="flex min-w-0 shrink-0 flex-col gap-1 md:flex-row md:items-baseline md:gap-3">
-      {/* The board's desktop title is the list on screen ("Issues · No task yet"), 15px; a phone keeps "GitHub". */}
-      <h1 className="text-2xl font-semibold tracking-tight md:text-[15px] md:tracking-normal">
-        {isDesktop ? `${view === 'issues' ? 'Issues' : 'Pull requests'} · ${ACTIVE_FILTER_LABEL[activeFilter]}` : 'GitHub'}
-      </h1>
-      {rawFilterParam !== null && n === undefined ? (
-        <div data-slot="gh-filter-context" className="flex min-w-0 items-center gap-3 md:hidden">
-          <Link to="/github" data-slot="gh-back-filters" className="inline-flex min-h-11 items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
-            <ArrowLeftIcon size={16} aria-hidden="true" className="size-3.5" />
-            Back to filters
-          </Link>
-          {activeFilter !== 'all' ? (
-            <span data-slot="gh-active-filter" className="truncate text-xs text-soft-foreground">
-              {[...ISSUE_ROWS, ...PR_ROWS].find((row) => row.id === activeFilter)?.label}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-      {gh.repo ? (
-        <span className="min-w-0 truncate text-[13px] text-muted-foreground md:text-[11px] md:text-soft-foreground">
-          <span data-slot="gh-repo">{gh.repo}</span>
-          <span data-slot="gh-synced"> · {gh.syncedAt ? `Synced ${shortAge(gh.syncedAt)} ago` : 'Not synced yet'}</span>
-        </span>
-      ) : null}
-    </div>
-  )
-}
-
-/** The Issues / Pull requests tabs with their open totals, and the tab's utilities. */
-function GithubTabs({ view, isDesktop, gh, automationsAvailable, onSaveView, refreshing, onRefresh }: {
+/** The Issues / Pull requests tabs with their open totals. */
+function GithubTabs({ view, isDesktop, gh, onSaveView }: {
   view: GithubView
   isDesktop: boolean
   gh: GithubData
-  automationsAvailable: boolean
   onSaveView: (next: GithubView) => void
-  refreshing: boolean
-  onRefresh: () => void
 }) {
   return (
     <div data-slot="gh-tabs" className="flex min-h-11 flex-wrap items-center gap-3">
@@ -647,28 +596,6 @@ function GithubTabs({ view, isDesktop, gh, automationsAvailable, onSaveView, ref
       <TabLink to="/github/prs" active={view === 'prs'} onClick={() => onSaveView('prs')}>
         Pull requests · {gh.prsTotal ?? gh.prs.length}
       </TabLink>
-      {automationsAvailable ? (
-        <Link
-          to="/automations/new"
-          className="gh-utility"
-        >
-          Set up automations
-        </Link>
-      ) : null}
-      <button
-        type="button"
-        data-slot="gh-refresh"
-        title="Refresh from GitHub"
-        disabled={refreshing}
-        onClick={onRefresh}
-        className="gh-utility"
-      >
-        <RefreshCwIcon size={16}
-          aria-hidden="true"
-          className={cn('size-3.5', refreshing && 'motion-safe:animate-spin')}
-        />
-        Refresh
-      </button>
     </div>
   )
 }
@@ -683,11 +610,11 @@ function GithubFilterToolbar({ view, gh, filters, labelOptions, labelColors, sea
   searchPayload: GithubSearchData | null
 }) {
   return (
-    <div data-slot="gh-filter-toolbar" className="flex flex-wrap items-center gap-2.5">
+    <div data-slot="gh-filter-toolbar" className="flex flex-wrap items-center gap-2">
       <div className="relative min-w-0 basis-full md:flex-1 md:basis-auto">
         <SearchIcon size={16}
           aria-hidden="true"
-          className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-soft-foreground"
+          className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
         />
         <input
           type="search"
@@ -696,7 +623,7 @@ function GithubFilterToolbar({ view, gh, filters, labelOptions, labelColors, sea
           placeholder={view === 'issues' ? 'Filter issues…' : 'Filter pull requests…'}
           value={filters.query}
           onChange={(event) => filters.setQuery(event.target.value)}
-          className="min-h-11 w-full rounded-md border border-input bg-card py-1 pr-2 pl-7 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="min-h-11 w-full rounded-lg border border-border bg-card py-1 pr-2.5 pl-8 text-[13px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         />
       </div>
       <LabelFilter
@@ -707,7 +634,15 @@ function GithubFilterToolbar({ view, gh, filters, labelOptions, labelColors, sea
       />
       {view === 'issues' ? <IssueFilters data={{ ...gh, issues: [...gh.issues, ...(searchPayload?.items ?? [])] }} assignees={filters.effectiveAssignees} projectId={filters.activeProject}
         onAssigneesChange={filters.changeAssignees} onProjectChange={filters.setProjectFilter} /> : null}
-      <button type="button" disabled={!filters.filtering} className="min-h-11 min-w-11 rounded-md border border-border bg-card px-4 text-xs disabled:opacity-50" onClick={filters.clearFilters}>Clear filters</button>
+      <button
+        type="button"
+        disabled={!filters.filtering}
+        data-slot="gh-clear-filters"
+        className="min-h-11 min-w-11 rounded-md border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:border-border disabled:bg-transparent disabled:text-muted-foreground"
+        onClick={filters.clearFilters}
+      >
+        Clear filters
+      </button>
     </div>
   )
 }
@@ -780,7 +715,7 @@ function GithubListPane({
         // search found, is finding, or could not do. No verdict to report (the hits below are
         // the answer) means no wrapper at all, so its padding cannot leave a gap.
         verdict && (
-          <div data-slot="gh-empty" className="px-4 py-4 text-sm text-soft-foreground">
+          <div data-slot="gh-empty" className="px-4 py-4 text-sm text-muted-foreground">
             {verdict}
           </div>
         )
@@ -795,7 +730,7 @@ function GithubListPane({
       <GithubExpandList view={view} n={n} count={items.length} expanded={expanded} onExpandedChange={onExpandedChange} />
 
       {items.length > 0 && search.searchWanted && verdict ? (
-        <div data-slot="gh-search-status" role="status" className="px-4 py-4 text-sm text-soft-foreground">
+        <div data-slot="gh-search-status" role="status" className="px-4 py-4 text-sm text-muted-foreground">
           {verdict}
         </div>
       ) : null}
@@ -848,7 +783,7 @@ function GithubLoadMore({ view, list, paging }: { view: GithubView; list: Github
     <div
       ref={paging.loadMoreRef}
       data-slot="gh-load-more"
-      className="flex min-h-6 items-center justify-center gap-1.5 px-4 pb-3 text-xs text-soft-foreground"
+      className="flex min-h-6 items-center justify-center gap-1.5 px-4 pb-3 text-xs text-muted-foreground"
     >
       {list.isFetchingNextPage ? (
         <>
@@ -887,7 +822,7 @@ function GithubLoadMore({ view, list, paging }: { view: GithubView; list: Github
 /** A qualifier search (Review requested / Checks failing) that filled the server's cap. */
 function GithubFilterNote({ backedQuery, filterSearch }: Pick<GithubSidebarFilter, 'backedQuery' | 'filterSearch'>) {
   return backedQuery !== null && filterSearch.data?.available && filterSearch.data.truncated ? (
-    <div data-slot="gh-filter-note" role="status" className="px-4 py-3 text-xs text-soft-foreground">
+    <div data-slot="gh-filter-note" role="status" className="px-4 py-3 text-xs text-muted-foreground">
       Showing the first {filterSearch.data.items.length} matches from GitHub search; more may exist.
     </div>
   ) : null
@@ -922,7 +857,7 @@ function GithubSearchHits({ hits, searchPayload, rows }: {
 }) {
   return (
     <div data-slot="gh-search-hits">
-      <p className="px-4 pt-2 pb-1 text-[11px] font-medium tracking-wide text-soft-foreground uppercase">
+      <p className="px-4 pt-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
         Found on GitHub{searchPayload?.truncated ? ' (first matches)' : ''}
       </p>
       <ul className="flex flex-col gap-0.5 px-2 pb-2">
@@ -1010,6 +945,7 @@ function GithubSelectedDetail({ item, n, repo, rows, listPath, changes, handToAg
       backLink={{ to: listPath }}
       subNav={{ filter: rows.filter, changes }}
       onRunAgent={focusHandToAgentPrompt}
+      headerAction={<HandoffHeaderAction item={item} queuedRunId={queued.get(item.url) ?? null} />}
       colors={rows.colors}
       checks={resolvedChecks(item, rows.checksMap)}
     >
@@ -1076,108 +1012,6 @@ function GithubNothingSelected({ view, number }: { view: GithubView; number: num
   )
 }
 
-/** The merge box's conflict action: bring the hand-to-agent prompt below it into view. */
-function focusHandToAgentPrompt() {
-  const prompt = document.querySelector<HTMLTextAreaElement>('[data-slot="gh-detail-inner"] [data-slot="gh-custom-prompt"]')
-  prompt?.scrollIntoView({ block: 'center' })
-  prompt?.focus({ preventScroll: true })
-}
-
-function GithubRow({
-  item,
-  view,
-  filter,
-  colors,
-  active,
-  queued,
-  checks,
-  comments,
-}: {
-  item: GithubItem
-  view: GithubView
-  /** The list's `?filter=`, carried into the detail URL so Back returns to the same list. */
-  filter: GithubFilter | null
-  colors: Record<string, string>
-  active: boolean
-  queued: boolean
-  /** Resolved checks glyph — the lazily-hydrated value overrides the list's `null` (#664). */
-  checks?: GithubItem['checks']
-  /** Resolved comment count; `undefined` while a deferred count has not landed (#1183). */
-  comments: number | undefined
-}) {
-  const Icon = item.kind === 'issue' ? CircleDotIcon : GitPullRequestIcon
-  const queryClient = useQueryClient()
-
-  // Warm the thread on hover/focus (#664) so opening the row is usually instant — best-effort,
-  // deduped by React Query, and it re-uses the mounted detail's exact query key/staleTime.
-  const prefetchThread = () => {
-    void queryClient.prefetchQuery({
-      queryKey: queryKeys.githubComments(item.kind, item.number),
-      queryFn: ({ signal }) => getGithubComments(item.kind, item.number, {}, { signal }),
-      staleTime: 60_000,
-    })
-  }
-
-  // Drag an issue/PR row into the composer — it prefills the same prompt "Run agent on this
-  // issue" uses (legacy parity); a textarea accepts the text/plain payload natively.
-  const onDragStart = (event: DragEvent) => {
-    try {
-      event.dataTransfer.setData('text/plain', githubTaskPrompt(item))
-      event.dataTransfer.effectAllowed = 'copy'
-    } catch {
-      // older engines — the drag just won't carry the prompt
-    }
-  }
-
-  return (
-    <Link
-      to={githubFilterPath(view, filter, item.number)}
-      draggable
-      onDragStart={onDragStart}
-      onMouseEnter={prefetchThread}
-      onFocus={prefetchThread}
-      data-slot="gh-row"
-      data-number={item.number}
-      data-kind={item.kind}
-      aria-current={active ? 'page' : undefined}
-      title="Drag into the composer to prefill a task"
-      className={cn(
-        'flex flex-col gap-2 rounded-md px-3 py-4 transition-colors hover:bg-muted',
-        active && 'bg-accent-strong/10 text-accent-text',
-      )}
-    >
-      <span className="flex min-w-0 items-start gap-2 md:items-center">
-        <Icon
-          aria-hidden="true" data-slot="gh-row-icon"
-          className={cn('mt-0.5 size-3.5 shrink-0 md:mt-0', item.kind === 'issue' ? 'text-success' : 'text-accent-icon')}
-        />
-        <span data-slot="gh-row-title" className={cn('line-clamp-2 min-w-0 text-[13px] font-medium md:block md:truncate', active && 'font-semibold')}>
-          {item.title}
-        </span>
-      </span>
-      <span data-slot="gh-row-meta" className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[22px] font-mono text-[11px] text-muted-foreground md:flex-nowrap md:gap-y-0">
-        <span>#{item.number}</span>
-        <span data-slot="gh-row-author" className="max-w-full shrink-0 truncate md:min-w-0 md:shrink">{item.author}</span>
-        <span>{shortAge(item.createdAt)}</span>
-        <CommentCount count={comments} />
-        {checks ? <ChecksGlyph checks={checks} /> : null}
-        {queued ? (
-          <span data-slot="gh-queued-flag" className="font-sans font-medium text-accent-text">
-            ↗ run queued
-          </span>
-        ) : null}
-      </span>
-      {item.labels.length > 0 ? (
-        <span data-slot="gh-row-labels" className="flex flex-wrap gap-1 pl-[22px]">
-          {item.labels.map((label) => (
-            <LabelChip key={label} label={label} color={colors[label]} plain />
-          ))}
-        </span>
-      ) : null}
-    </Link>
-  )
-}
-
 /** The label narrow: a searchable multi-select of the labels present in the current list. Selected
  *  labels AND together (GitHub semantics), handled by `filterGithubItems`. */
 function LabelFilter({
@@ -1202,12 +1036,12 @@ function LabelFilter({
           data-slot="gh-label-filter"
           disabled={options.length === 0}
           className={cn(
-            'flex min-h-11 min-w-11 shrink-0 items-center gap-1 rounded-md border border-input bg-card px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50',
+            'inline-flex min-h-11 min-w-11 shrink-0 items-center gap-1.5 rounded-md border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60',
             selected.length > 0 && 'border-accent-strong/60 text-foreground',
           )}
         >
           {selected.length > 0 ? `Labels · ${selected.length}` : 'Labels'}
-          <ChevronDownIcon size={12} aria-hidden="true" className="size-3 shrink-0 text-soft-foreground" />
+          <ChevronDownIcon size={12} aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={6} className="w-60 p-0">

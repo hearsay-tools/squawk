@@ -132,7 +132,7 @@ describe('the repo view against the live dry-run server', () => {
     }
   })
 
-  it('below md the repo view forces unified+wrap, hides the toggles, and never overflows', async () => {
+  it('below md the repo view forces unified, hides the layout toggle, wraps by default, and never overflows', async () => {
     browser.setViewport(IPHONE.width, IPHONE.height)
     try {
       const changes = await api<{ files: unknown[] }>('/api/v1/repo/changes')
@@ -142,8 +142,22 @@ describe('the repo view against the live dry-run server', () => {
 
       if (changes.files.length > 0) {
         browser.waitForFunction(`document.querySelector('[data-slot="diff"]') !== null`)
-        // Forced mobile combination, whatever the desktop toggles said.
+        // Forced unified, whatever the desktop toggle said; the unified/split group is hidden.
         expect(browser.evaluate(`document.querySelector('[data-slot="diff"]').dataset.mode`)).toBe('unified')
+        expect(
+          browser.evaluate(`getComputedStyle(document.querySelector('[data-slot="diff-mode-toggle"]')).display`),
+        ).toBe('none')
+        // Lines wrap by default, and the phone keeps one wrap switch: pressed, a 44px target, on screen.
+        expect(
+          browser.waitForValue(`(() => {
+            const toggles = [...document.querySelectorAll('[data-slot="wrap-toggle"]')].filter((el) => el.checkVisibility())
+            if (toggles.length !== 1) return null
+            const box = toggles[0].getBoundingClientRect()
+            return toggles[0].getAttribute('aria-pressed') === 'true' && box.width >= 44 && box.height >= 44
+              && box.left >= 0 && box.right <= innerWidth
+              && [...document.querySelectorAll('[data-slot="diff-file-body"]')].every((body) => body.dataset.wrap === 'true')
+          })()`, (value) => value !== null),
+        ).toBe(true)
         // The integrated mobile design stacks the selectable file tree above the diff.
         expect(
           waitForSettledSample(browser,
@@ -154,13 +168,9 @@ describe('the repo view against the live dry-run server', () => {
         browser.waitForFunction(
           `[...document.querySelectorAll('[data-slot="repo-changes"] h2')].some((h) => h.textContent === 'Working tree clean')`,
         )
+        // A clean tree has no diff, so it renders no diff toolbar at all.
+        expect(browser.count('[data-slot="repo-changes-toolbar"]')).toBe(0)
       }
-      // The mode/wrap toggles are hidden below md (`md:flex` wrapper).
-      expect(
-        browser.evaluate(
-          `getComputedStyle(document.querySelector('[data-slot="diff-mode-toggle"]').parentElement).display`,
-        ),
-      ).toBe('none')
       // A way back to the Git screen, and the page never scrolls sideways.
       expect(browser.count('[data-slot="git-back"]')).toBe(1)
       expect(waitForSettledSample(browser, `document.documentElement.scrollWidth <= window.innerWidth`)).toBe(true)
