@@ -70,9 +70,12 @@ describe('task status groups and origin filter', () => {
       browser.waitForFunction(`document.querySelector('${group('Finished')}') !== null`)
       browser.evaluate(`document.documentElement.classList.toggle('light', ${theme === 'light'}); document.documentElement.classList.toggle('dark', ${theme === 'dark'})`)
 
-      // Needs you is yellow; Finished turns red because it holds a failure.
+      // Needs you is yellow. Finished holds successes and failures alike, so its heading stays
+      // neutral, and the failed task's own status dot reports the failure in red.
       expect(browser.waitForValue(`[...document.querySelectorAll('[data-slot="task-status-group"]')].map(g => g.dataset.bucket + ':' + g.dataset.tone).join(',')`,
-        (value: string) => value === 'Needs you:pending,Finished:danger')).toBe('Needs you:pending,Finished:danger')
+        (value: string) => value === 'Needs you:pending,Finished:neutral')).toBe('Needs you:pending,Finished:neutral')
+      expect(browser.waitForValue(`document.querySelector('${group('Finished')} [data-run-id="failed"] [data-slot="pill"] [data-slot="status-dot"]')?.dataset.tone ?? null`,
+        (tone: string | null) => tone === 'danger')).toBe('danger')
       expect(browser.text(`${group('Finished')} [data-slot="status-group-toggle"]`)).toContain('3')
 
       // The origin line names the automation's recorded id when no definition exists.

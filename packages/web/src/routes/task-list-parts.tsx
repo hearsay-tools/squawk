@@ -30,10 +30,11 @@ export function headingTone(label: BucketLabel, members: readonly RunSummary[]):
   return label === 'Finished' ? 'neutral' : groupTone(label, members)
 }
 
-/** A task title link's type in a list row: one size, line height and weight rule on both lists. */
-export function taskTitleClass(unread: boolean, readDone: boolean): string {
+/** A task title link's type in a list row: one size, line height and weight rule on both lists.
+ *  One line ends in an ellipsis; two lines (the detailed table's tall rows) wrap, then clamp. */
+export function taskTitleClass(unread: boolean, readDone: boolean, lines: 1 | 2 = 1): string {
   return cn(
-    'min-w-0 truncate rounded-sm text-[13px] leading-[18px]',
+    lines === 2 ? 'line-clamp-2 min-w-0 whitespace-normal rounded-sm text-[13px] leading-[18px]' : 'min-w-0 truncate rounded-sm text-[13px] leading-[18px]',
     unread ? 'font-semibold text-foreground' : readDone ? 'font-normal text-foreground' : 'font-medium text-foreground',
   )
 }

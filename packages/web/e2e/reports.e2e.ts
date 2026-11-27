@@ -102,6 +102,15 @@ it.each(['light', 'dark'])('supports phone keyboard reading, contrast and 44 px 
   settleVisual(browser, ROW)
   const sizes = waitForSettledSample<number[]>(browser, `[...document.querySelectorAll('${ROW} a, input[aria-label="Search reports"]')].map(a => a.getBoundingClientRect().height)`)
   expect(sizes.every(height => height >= 44)).toBe(true)
+  // The title and source-task targets stack without overlap, so neither intercepts the other's tap.
+  const stack = waitForSettledSample<{ gap: number; titleHit: boolean; taskHit: boolean }>(browser, `(() => {
+    const title = document.querySelector('${ROW} [data-report-id]'), task = document.querySelector('${ROW} a.reports-task');
+    const a = title.getBoundingClientRect(), b = task.getBoundingClientRect();
+    const hit = (el, r) => el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + 1)) && el.contains(document.elementFromPoint(r.left + r.width / 2, r.bottom - 1));
+    return { gap: b.top - a.bottom, titleHit: hit(title, a), taskHit: hit(task, b) };
+  })()`)
+  expect(stack).toEqual({ gap: expect.any(Number), titleHit: true, taskHit: true })
+  expect(stack.gap).toBeGreaterThanOrEqual(0)
   const contrast = browser.waitForValue<{ ratio: number }>(contrastSampleExpression(`${ROW} h2`))
   expect(contrast.ratio).toBeGreaterThanOrEqual(4.5)
   focusWithKeyboard(browser, `[data-report-id="${ids[9]}"]`)

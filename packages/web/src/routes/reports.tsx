@@ -104,8 +104,8 @@ export function ReportsRoute() {
           <ul className="flex flex-col gap-1.5" aria-label="Reports">
             {reports.map(report => (
               <li key={report.id} data-slot="report-row" className="reports-row flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors">
-                <FileTextIcon aria-hidden="true" className="size-4 shrink-0 self-start mt-0.5 text-accent-text" />
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <FileTextIcon aria-hidden="true" className="reports-icon size-4 shrink-0 self-start mt-0.5 text-accent-text" />
+                <div className="reports-lines flex min-w-0 flex-1 flex-col gap-1">
                   <h2 className="flex min-w-0 text-[14px] leading-5 font-semibold text-foreground" title={reportTitle(report)}>
                     <Link
                       data-report-id={report.id}

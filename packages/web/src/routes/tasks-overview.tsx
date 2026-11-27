@@ -763,7 +763,7 @@ function GroupedTasks({
         </TooltipProvider>
       </div> : null}
       {/* Phones mount cards only, regardless of saved desktop columns. */}
-      {!desktop ? <div data-slot="task-cards" className="flex flex-col rounded-lg border border-border bg-card px-3 py-2.5">
+      {!desktop ? <div data-slot="task-cards" className="flex flex-col rounded-lg border border-border bg-card px-3">
         <TaskListItems itemSize={90} items={rows} itemKey={({ run }) => run.id}>{({ run, queuePosition }) => (
           <TaskCard key={run.id} resourcesOpen={expandedRuns.has(run.id)} onToggleResources={toggleExpandedRun} run={run} queuePosition={queuePosition} now={now} showTokens={showTokens} showCost={showCost} onTogglePin={onTogglePin} automationName={automationName} />
         )}</TaskListItems>
@@ -1041,7 +1041,7 @@ function TaskTableCell({
     case 'task':
       return (
         <div role="cell" data-column-id={column.id} className={cn(TD_BASE, 'min-w-[320px] max-w-0 whitespace-normal')}>
-          <TitleCell run={run} to={to} onRename={onRename} onTogglePin={onTogglePin} />
+          <TitleCell lines={2} run={run} to={to} onRename={onRename} onTogglePin={onTogglePin} />
           <div className="mt-1"><RunOriginLine run={run} automationName={automationName} /></div>
         </div>
       )
@@ -1129,13 +1129,11 @@ function FoldedTd({ column }: { column: TaskColumnId }) {
  * run header's title — one edit, one PATCH. The quick-list's rows stay read-only on purpose:
  * at 13px-in-a-260px-sidebar there is no room for an input worth typing into.
  */
-function TitleCell({
-  run,
-  to,
-  onTogglePin,
-}: {
+function TitleCell({ run, to, onTogglePin, lines = 1 }: {
   run: RunSummary
   to: string
+  /** The summary row has one 18px line; the detailed table's 88px row has room for two. */
+  lines?: 1 | 2
   onRename: (id: string, title: string) => void
   onTogglePin?: ((run: RunSummary, pinned: boolean) => void) | undefined
 }) {
@@ -1155,14 +1153,14 @@ function TitleCell({
   }
 
   return (
-    // One 18px line on every device: a touch-sized pin overflows it instead of growing the row.
-    <span className="flex h-[18px] min-w-0 items-center gap-1.5">
+    // Summary: one 18px line on every device; a touch-sized pin overflows it, the row keeps its height.
+    <span className={cn('flex min-w-0 items-center gap-1.5', lines === 1 ? 'h-[18px]' : 'min-h-[18px]')}>
       {run.delegation?.role === 'worker' ? <span className="shrink-0 text-xs text-muted-foreground">Worker</span> : null}
       <Link data-task-control="title"
         to={to}
         title={title}
         // No flex-1: the unread dot follows the title's last word, as on All tasks.
-        className={cn(taskTitleClass(unread, readDone), 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground')}
+        className={cn(taskTitleClass(unread, readDone, lines), 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground')}
       >
         {title}
       </Link>

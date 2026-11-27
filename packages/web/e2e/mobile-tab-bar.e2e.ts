@@ -25,7 +25,9 @@ const PHONE = { width: 360, height: 640 }
 const TAB_BAR = '[data-slot="mobile-tab-bar"]'
 const MORE_TAB = `${TAB_BAR} [data-tab="more"]`
 const SHEET = '[data-slot="more-sheet"]'
-const FAB = '[data-slot="mobile-new-task"]'
+// New task lives on the Tasks page header's title row; nothing floats over the page.
+const NEW_TASK = '[data-route="tasks"] [data-slot="page-header"] [data-slot="new-task-inline"]'
+const FLOATING_NEW_TASK = '[data-slot="mobile-new-task"]'
 const TOP_BAR = '[data-slot="mobile-top-bar"]'
 const BACK = `${TOP_BAR} [data-slot="mobile-back"]`
 const DRAWER = '[data-slot="mobile-nav-drawer"]'
@@ -160,7 +162,7 @@ describe('mobile tab bar, More sheet and pushed task screen', () => {
     }
   }, 120_000)
 
-  it('shows the Tasks badge and a New task button that opens /new', () => {
+  it('shows the Tasks badge and a header New task button that opens /new', () => {
     browser.setViewport(PHONE.width, PHONE.height)
     openList()
     // One run waits on the user, so the Tasks tab carries the current project's top pill.
@@ -169,20 +171,24 @@ describe('mobile tab bar, More sheet and pushed task screen', () => {
     expect(browser.count(`${TAB_BAR} a[data-tab="/activity"] [data-slot="rail-pill-top"]`)).toBe(0)
     // The in-motion pill is status, not a reason to tap: never on the bar.
     expect(browser.count(`${TAB_BAR} [data-slot="rail-pill-bottom"]`)).toBe(0)
-    // The list's own round FAB is gone: one floating button, the bar's.
-    browser.click(FAB)
+    // No button floats over the list: New task is the page header's own action.
+    expect(browser.waitForValue(`document.querySelector('${NEW_TASK}') !== null && document.querySelector('${FLOATING_NEW_TASK}') === null`)).toBe(true)
+    browser.click(NEW_TASK)
     browser.waitForFunction(`location.pathname === ${JSON.stringify(scoped('/new'))} && document.querySelector('[data-route="new"]') !== null`)
-    // It would point at the page it is on, so /new drops it (the bar stays).
-    expect(browser.waitForValue(`document.querySelector('${FAB}') === null && document.querySelector('${TAB_BAR}') !== null`)).toBe(true)
+    // /new has no New task button pointing at itself, and the bar stays.
+    expect(browser.waitForValue(`document.querySelector('${NEW_TASK}') === null && document.querySelector('${FLOATING_NEW_TASK}') === null && document.querySelector('${TAB_BAR}') !== null`)).toBe(true)
   })
 
   it('keeps every bar, sheet and button target at 44px', () => {
     browser.setViewport(PHONE.width, PHONE.height)
     openList()
     expect(undersized(`${TAB_BAR} a, ${TAB_BAR} button`)).toEqual([])
-    const fab = waitForSettledSample(browser, `(() => { const r = document.querySelector('${FAB}')?.getBoundingClientRect(); return r ? { w: Math.round(r.width), h: Math.round(r.height) } : null })()`) as { w: number; h: number }
-    expect(fab.h).toBeGreaterThanOrEqual(44)
-    expect(fab.w).toBeGreaterThanOrEqual(44)
+    // The header New task button: a 44px target that fits the phone, on a page that never scrolls sideways.
+    const newTask = waitForSettledSample(browser, `(() => { const r = document.querySelector('${NEW_TASK}')?.getBoundingClientRect(); return r ? { w: Math.round(r.width), h: Math.round(r.height), inside: r.left >= 0 && r.right <= innerWidth, overflow: document.documentElement.scrollWidth - innerWidth } : null })()`, (value) => value !== null) as { w: number; h: number; inside: boolean; overflow: number }
+    expect(newTask.h).toBeGreaterThanOrEqual(44)
+    expect(newTask.w).toBeGreaterThanOrEqual(44)
+    expect(newTask.inside).toBe(true)
+    expect(newTask.overflow).toBeLessThanOrEqual(0)
     openMore()
     expect(undersized(`${SHEET} [data-slot="more-row"]`)).toEqual([])
     browser.press('Escape')
@@ -209,7 +215,7 @@ describe('mobile tab bar, More sheet and pushed task screen', () => {
     const screen = waitForSettledSample(browser, `(() => {
       const top = document.querySelector('${TOP_BAR}')
       return {
-        tabBar: document.querySelector('${TAB_BAR}') !== null, fab: document.querySelector('${FAB}') !== null,
+        tabBar: document.querySelector('${TAB_BAR}') !== null, fab: document.querySelector('${FLOATING_NEW_TASK}, ${NEW_TASK}') !== null,
         menu: top.querySelector('button[aria-label^="Open projects"]') !== null,
         back: top.querySelector('[data-slot="mobile-back"]')?.getAttribute('aria-label'),
         title: top.querySelector('[data-slot="mobile-run-title"]')?.textContent,
@@ -278,7 +284,7 @@ describe('mobile tab bar, More sheet and pushed task screen', () => {
     // Rule: docs/areas/web-ui.md § Accessibility rules (contrast).
     it(`passes text contrast on the tab bar, the More sheet and the New task button, ${variant.theme}`, () => {
       browser.goto(`${base}${scoped('/')}`)
-      browser.waitForFunction(`document.querySelector('${FAB}') !== null`)
+      browser.waitForFunction(`document.querySelector('${NEW_TASK}') !== null`)
       applyContrastQaVariant(browser, variant)
       const check = (selector: string, label: string, min = 4.5) => {
         const sample = browser.evaluate(contrastSampleExpression(selector)) as ContrastSample
@@ -287,7 +293,7 @@ describe('mobile tab bar, More sheet and pushed task screen', () => {
       check(`${TAB_BAR} a[data-tab="/"]`, 'active tab label')
       check(`${TAB_BAR} a[data-tab="/activity"]`, 'inactive tab label')
       check(MORE_TAB, 'More tab label')
-      check(FAB, 'New task button')
+      check(NEW_TASK, 'New task button')
       // The bar's icons are graphics: 3:1.
       check(`${TAB_BAR} a[data-tab="/activity"] svg`, 'inactive tab icon', 3)
       openMore()
