@@ -115,6 +115,21 @@ description names it only as `hsq job start`, because the tool list also loads i
 the jobs feature, the launch prompt has no such part and `cezar_wait` names no job command. A result is one JSON object on stdout and an error is one on stderr; `--help` prints text. The rules are in
 [the unified waits spec](../../.ai/specs/2026-10-17-unified-waits.md#the-job-command-2026-11-10).
 
+## Orchestrator MCP server (`hsq mcp`)
+
+`hsq mcp [--url <origin>] [--repo <dir>]` is the bundled MCP feature (`features/mcp/`), registered
+through `SquawkPluginApi.registerCliCommand` (spec `2026-11-27-orchestrator-mcp-server`,
+hearsay-tools/squawk#4401). It exposes `project_list` and the 10 `task_*` tools (`task_start`,
+`task_send`, `task_status`, `task_log`, `task_diff`, `task_wait`, `task_stop`, `task_finish`,
+`task_archive`, `task_list`) over MCP stdio by reusing the shared operations in
+`task-cli/operations.ts`. Every `task_*` tool requires an explicit `project` (`task_list` also
+accepts `'all'`) with no `bootProject` fallback. `stdout` carries only JSON-RPC frames;
+diagnostics go to `stderr`. Starting `hsq mcp` inside a Squawk task (`HSQ_TASK_ID` /
+`CEZ_TASK_ID` set) is refused with exit 1. When launched outside a registered repo without
+`--url` or `--repo`, discovery falls back to a single running local cockpit and refuses if
+multiple local cockpits are running. Without `features/mcp/`, boot succeeds and `hsq mcp` exits
+1 with `unknown command: mcp`.
+
 ## Legacy home recovery
 
 The host operator can use `hsq backup import <file>` or
