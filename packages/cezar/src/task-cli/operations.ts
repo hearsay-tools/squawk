@@ -483,6 +483,25 @@ export async function listTasks(cockpit: Cockpit, input: ListTasksInput): Promis
   };
 }
 
+type IndexedSummary = RunSummary & { projectId: string };
+
+async function expandTruncatedProjects(
+  origin: string,
+  runs: readonly IndexedSummary[],
+  truncated: readonly string[],
+  options: TransportOptions,
+): Promise<IndexedSummary[]> {
+  if (truncated.length === 0) return [...runs];
+  const truncatedSet = new Set(truncated);
+  const expanded = await Promise.all(
+    truncated.map(async (projectId) => {
+      const summaries = await requestRunSummaries(cockpitForProject(origin, projectId, options.fetch), undefined, { signal: options.signal });
+      return summaries.map((summary): IndexedSummary => ({ projectId, ...summary }));
+    }),
+  );
+  return [...runs.filter((run) => !truncatedSet.has(run.projectId)), ...expanded.flat()];
+}
+
 export async function listAllProjectsTasks(
   origin: string,
   input: ListTasksInput & { fetch?: FetchFn | undefined },
@@ -495,11 +514,23 @@ export async function listAllProjectsTasks(
   if (result.status !== 200) refuse(result);
   const parsed = runsIndexResponseSchema.safeParse(result.data);
   if (!parsed.success) invalidResponse('runs-index');
-  const filtered = filterAndSortRuns(parsed.data.runs, input);
-  const runs = filtered.slice(0, input.limit).map((run) => (
-    input.full
-      ? { project: run.projectId, ...run }
-      : { project: run.projectId, ...projectListRow(run) }
-  ));
-  return { project: 'all', total: filtered.length, runs };
+  const allRows: IndexedSummary[] = input.all
+    ? await expandTruncatedProjects(origin, parsed.data.runs, parsed.data.truncated, { fetch: input.fetch, signal: input.signal })
+    : parsed.data.runs;
+  const filtered = filterAndSortRuns(allRows, input);
+  const sliced = filtered.slice(0, input.limit);
+  if (!input.full) {
+    return {
+      project: 'all',
+      total: filtered.length,
+      runs: sliced.map((run) => ({ project: run.projectId, ...projectListRow(run) })),
+    };
+  }
+  const hydrated = await Promise.all(
+    sliced.map(async (run) => {
+      const fullRun = await getRun(cockpitForProject(origin, run.projectId, input.fetch), run.id, input.signal);
+      return { project: run.projectId, ...fullRun };
+    }),
+  );
+  return { project: 'all', total: filtered.length, runs: hydrated };
 }

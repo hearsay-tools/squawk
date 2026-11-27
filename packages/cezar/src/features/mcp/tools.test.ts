@@ -8,7 +8,8 @@ import { dirname, join } from 'node:path';
 import { serve, type ServerType } from '@hono/node-server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { toRunSummary } from '@open-mercato/cezar-contract/runs';
+import { makeRunRecord, RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AutomationStore } from '../../automations/store.ts';
 import { createRunner } from '../../core/runner-registry.ts';
@@ -367,6 +368,66 @@ describe('orchestrator MCP tools (hearsay-tools/squawk#4401)', () => {
     expect((all.data.runs as Array<{ id: string; project: string }>)).toEqual([
       expect.objectContaining({ id: rootId, project }),
     ]);
+
+    const fullAll = await call('task_list', { project: 'all', full: true });
+    expect(fullAll.isError).toBe(false);
+    expect(fullAll.data).toMatchObject({ project: 'all', total: 1 });
+    expect((fullAll.data.runs as Array<Record<string, unknown>>)).toEqual([
+      expect.objectContaining({ id: rootId, project, task: 'root', steps: [] }),
+    ]);
+  });
+
+  it('task_list with project: all and all: true expands truncated projects from /workspace/runs-index', async () => {
+    const olderArchived = toRunSummary(makeRunRecord({
+      id: 'older-failed',
+      title: 'older failed',
+      status: RUN_STATUS.failed,
+      archived: true,
+      createdAt: '2026-01-01T00:00:00Z',
+    }));
+    const recentQueued = toRunSummary(makeRunRecord({
+      id: 'recent-queued',
+      title: 'recent queued',
+      status: RUN_STATUS.queued,
+      archived: false,
+      createdAt: '2026-01-02T00:00:00Z',
+    }));
+    const customFetch = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/api/v1/workspace/runs-index')) {
+        return new Response(JSON.stringify({
+          runs: [{ projectId: 'proj-a', ...recentQueued }],
+          referenceStatuses: {},
+          perProjectLimit: 1,
+          truncated: ['proj-a'],
+          generation: 'gen-1',
+          eventSeq: 1,
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      if (url.endsWith('/api/v1/p/proj-a/run-summaries')) {
+        return new Response(JSON.stringify([recentQueued, olderArchived]), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ error: `unexpected ${url}` }), { status: 404, headers: { 'content-type': 'application/json' } });
+    });
+
+    const server = createOrchestratorMcpServer({ origin: 'http://127.0.0.1:4321', fetch: customFetch });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const customClient = new Client({ name: 'truncated-test', version: '1.0.0' });
+    await Promise.all([server.connect(serverTransport), customClient.connect(clientTransport)]);
+    try {
+      const res = parseToolResult(await customClient.callTool({
+        name: 'task_list',
+        arguments: { project: 'all', all: true, status: RUN_STATUS.failed },
+      }));
+      expect(res.isError).toBe(false);
+      expect(res.data).toMatchObject({
+        project: 'all',
+        total: 1,
+        runs: [expect.objectContaining({ id: 'older-failed', project: 'proj-a', status: RUN_STATUS.failed })],
+      });
+    } finally {
+      await customClient.close();
+    }
   });
 
   it('routes requests through an injectable fetch transport when provided', async () => {
