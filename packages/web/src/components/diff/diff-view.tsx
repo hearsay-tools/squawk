@@ -657,17 +657,14 @@ function Marker({ kind }: { kind: HunkLine['kind'] }) {
   return <span data-slot="diff-marker" className="w-4 shrink-0 text-muted-foreground select-none max-sm:text-center">{MARKER[kind]}</span>
 }
 
-function UnifiedRowView({
-  row,
-  wrap,
-  tokensFor,
-  onExpand,
-}: {
-  row: UnifiedRow
+type DiffRowViewProps<R> = {
+  row: R
   wrap: boolean
   tokensFor: (line: HunkLine) => SynToken[] | null
   onExpand?: ((gap: ContextGap) => void) | undefined
-}) {
+}
+
+function UnifiedRowView({ row, wrap, tokensFor, onExpand }: DiffRowViewProps<UnifiedRow>) {
   if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} wrap={wrap} />
   if (row.type === 'gap') return <GapRow gap={row.gap} onExpand={onExpand} />
   const { line } = row.cell
@@ -684,17 +681,7 @@ function UnifiedRowView({
   )
 }
 
-function SplitRowView({
-  row,
-  wrap,
-  tokensFor,
-  onExpand,
-}: {
-  row: SplitRow
-  wrap: boolean
-  tokensFor: (line: HunkLine) => SynToken[] | null
-  onExpand?: ((gap: ContextGap) => void) | undefined
-}) {
+function SplitRowView({ row, wrap, tokensFor, onExpand }: DiffRowViewProps<SplitRow>) {
   if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} wrap={wrap} />
   if (row.type === 'gap') return <GapRow gap={row.gap} onExpand={onExpand} />
   return (

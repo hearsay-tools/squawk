@@ -642,20 +642,22 @@ function TasksEmptyState({ view, query, origin = 'all', onShowAll }: { view: Lis
     </div>
   )
 }
-/** Frame 4: five scan columns, with resources disclosed per task. The optional detailed table
- * above still owns workspace column preferences, so switching presentation never rewrites them. */
-function SummaryTasksTable({ rows, showHeader, showReference, onRename, onTogglePin, now, showTokens, showCost, automationName, expandedRuns, toggleExpandedRun }: TaskExpansion & {
-  rows: readonly GroupedTask[]
-  /** False keeps the column names for assistive technology only: an earlier group shows them. */
-  showHeader: boolean
-  /** False when no open group has a pull request or an issue to show. */
-  showReference: boolean
+type TaskRowCallbacks = {
   onRename: (id: string, title: string) => void
   onTogglePin?: ((run: RunSummary, pinned: boolean) => void) | undefined
   now: number
   showTokens: boolean
   showCost: boolean
   automationName: (automationId: string) => string | undefined
+}
+/** Frame 4: five scan columns, with resources disclosed per task. The optional detailed table
+ * above still owns workspace column preferences, so switching presentation never rewrites them. */
+function SummaryTasksTable({ rows, showHeader, showReference, onRename, onTogglePin, now, showTokens, showCost, automationName, expandedRuns, toggleExpandedRun }: TaskExpansion & TaskRowCallbacks & {
+  rows: readonly GroupedTask[]
+  /** False keeps the column names for assistive technology only: an earlier group shows them. */
+  showHeader: boolean
+  /** False when no open group has a pull request or an issue to show. */
+  showReference: boolean
 }) {
   const aria = taskListRowIndexes(rows.map(({ run }) => run.id), expandedRuns)
   const labels = ['Task', 'Workflow', 'Changes', ...(showReference ? ['Pull request'] : []), 'Started']
@@ -738,13 +740,7 @@ function GroupedTasks({
   expandedColumns: NormalizedExpandedColumns
   onToggleColumn: (id: TaskColumnId) => void
   columnsPending: boolean
-  onRename: (id: string, title: string) => void
-  onTogglePin?: ((run: RunSummary, pinned: boolean) => void) | undefined
-  now: number
-  showTokens: boolean
-  showCost: boolean
-  automationName: (automationId: string) => string | undefined
-} & TaskExpansion) {
+} & TaskExpansion & TaskRowCallbacks) {
   const rows: GroupedTask[] = group.rows.flatMap((row) =>
     rowTasks(row).map((run) => ({ run, queuePosition: run.status === 'queued' ? row.queuePosition : null })),
   )
