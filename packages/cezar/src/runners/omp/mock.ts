@@ -5,6 +5,7 @@ export const OMP_MOCK = {
   askResumeCases: [{ kind: 'cezar_ask', scenario: 'ask-resume', answer: 'Library: Vitest' }],
   binEnv: 'CEZ_OMP_BIN',
   script: 'mock-omp-rpc.mjs',
+  implicitAutoResume: true,
   // scripts/mock-omp-rpc.mjs: CEZ_MOCK_OMP_RESUME_MOVED reports the session moved to a new id.
   missingSession: { session: 'empty-file', env: { CEZ_MOCK_OMP_RESUME_MOVED: '1' } },
   // scripts/mock-omp-rpc.mjs reads these at start: a closed input pipe, and an implicit autoResume.

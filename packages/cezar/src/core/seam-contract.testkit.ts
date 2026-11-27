@@ -36,7 +36,7 @@ import { expect } from 'vitest';
 import { createFailureControl } from '../../scripts/mock-failure-control.mjs';
 import type { AgentEvent, AgentSession, InputDelivery } from './agent-runner.ts';
 import { inputDeliveryOf } from './agent-runner-values.ts';
-import { driveSeam, PINNED_SESSION_ID, promptFor, seedMockSession, type DriveSeamOptions, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
+import { driveSeam, PINNED_SESSION_ID, promptFor, resumeSessionIdFor, seedMockSession, type DriveSeamOptions, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
@@ -584,8 +584,8 @@ async function observeSystemPrompt(backend: string, resume: boolean): Promise<Co
     const observed = await driveContract(backend, {
       scenario: 'baseline', variant: resume ? 'resume' : 'fresh',
       env: { CEZ_MOCK_ARGS_FILE: files[0], CEZ_MOCK_STDIN_FILE: files[1] },
-      // Codex resumes the thread its mock knows by id (S14).
-      spec: { systemPrompt: SYSTEM_PROMPT, resume, sessionId: resume && backend === 'codex' ? 'th_mock_1' : PINNED_SESSION_ID },
+      // A mock with a fixed native session id (e.g. Codex `th_mock_1`) resumes that id (S14).
+      spec: { systemPrompt: SYSTEM_PROMPT, resume, sessionId: resume ? resumeSessionIdFor(backend, PINNED_SESSION_ID) : PINNED_SESSION_ID },
       whileOpen: async (_session, rec) => { await until(rec, () => turnEnds(rec) >= 1); },
     });
     const records = files.flatMap(file => existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter(Boolean) : []);
@@ -678,7 +678,7 @@ async function observeProviderFailure(backend: string, variant: typeof FAILURE_V
       scenario: variant === 'wake' ? 'baseline' : 'provider-error-controlled', variant,
       env: { CEZ_MOCK_FAILURE_CONTROL: control.path, CEZ_MOCK_ARGS_FILE: files[0], CEZ_MOCK_STDIN_FILE: files[1] },
       // A wake resumes the native session with its opening prompt (S14, S42).
-      spec: variant === 'wake' ? { userPrompt: `${WAKE_OPENING} ${FOLLOW_UP}`, resume: true, sessionId: backend === 'codex' ? 'th_mock_1' : PINNED_SESSION_ID } : {},
+      spec: variant === 'wake' ? { userPrompt: `${WAKE_OPENING} ${FOLLOW_UP}`, resume: true, sessionId: resumeSessionIdFor(backend, PINNED_SESSION_ID) } : {},
       whileOpen: async (session, rec) => {
         if (variant === 'gated') {
           await until(rec, control.held);

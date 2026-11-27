@@ -86,10 +86,13 @@ export interface RunnerFacts {
   /**
    * When the runner reports the turn that a human `sendMessage` to an idle session opens.
    * `on-write`: `turn.started` is emitted inside `sendMessage`, before the call returns.
-   * `on-wire`: it comes later, from a wire frame or a later process. Seam row S37 checks it. Shared
-   * code must not read it; tests use it to pick runners.
+   * `on-dispatch`: it is emitted synthetically after `sendMessage` returns, when the runner
+   * dispatches the prompt (e.g. an async HTTP POST), with no native turn-start wire frame.
+   * `on-wire`: it comes later, from a native wire turn-start frame (e.g. Codex `turn/started`).
+   * Seam row S37 checks `on-write` vs later; F11 runs where the wire sends a native turn-start
+   * frame (`on-wire`). Shared code must not read it; tests use it to pick runners.
    */
-  readonly turnStart: 'on-write' | 'on-wire';
+  readonly turnStart: 'on-write' | 'on-dispatch' | 'on-wire';
 }
 
 /**

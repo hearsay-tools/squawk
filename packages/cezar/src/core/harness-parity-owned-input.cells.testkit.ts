@@ -281,6 +281,106 @@ const OWNED_INPUT_CELLS: OwnedInputCells = {
       expect(() => manager.steerWorker(runId, agentInput(parentRunId))).toThrow(/state/i);
     });
   },
+  durableOpeningAnswer: (backend, outcome) => async () => {
+    await withOwnedInputRun(backend, 'ask', async fixture => {
+      const { runId, parentRunId } = fixture;
+      fixture.manager.enqueueOwnedRun(runId);
+      await waitFor(() => fixture.store.transcriptFacts.transcriptFacts(runId).pendingAsk?.routedMessageId !== undefined);
+      const input = agentInput(parentRunId);
+      expect(fixture.manager.steerWorker(runId, input)).toBe('queued');
+      const { store, manager } = await fixture.restart();
+      const before = store.eventLog.readEvents(runId).at(-1)!.seq;
+      // The parent's answer reopens the closed session as its opening input (hearsay-tools/cezarion#2410).
+      const reply = await fixture.answer(outcome === 'rejected' ? 'mock:reject-agent-post' : 'mock:hold');
+      // The reopened session waits for capacity, so it may not have started yet.
+      await waitFor(() => manager.isActive(runId) || store.getRun(runId)?.status === 'failed');
+      if (outcome !== 'rejected') {
+        await waitFor(() => store.eventLog.readEvents(runId).some(e => e.seq > before && e.type === 'turn.started'));
+        if (outcome === 'finished') expect(manager.finish(runId)).toBe(true);
+        else manager.cancel(runId);
+      }
+      await waitFor(() => !manager.isActive(runId));
+      const events = store.eventLog.readEvents(runId).filter(e => e.seq > before);
+      if (outcome === 'rejected') {
+        // A parent's rejected answer stays queued for another try, so the worker waits.
+        expect(store.getRun(runId)?.status).toBe('waiting');
+        expect(events.filter(e => e.type === 'error')).toHaveLength(1);
+        expect(events.findIndex(e => e.type === 'error')).toBeLessThan(events.findIndex(e => e.type === 'turn-end'));
+      }
+      expect(events.filter(e => e.type === 'human-input-delivered')).toEqual([]);
+      // #505: the queued message steers into the answering turn right behind the answer,
+      // so it may carry a delivery receipt; the input itself is unchanged and never lost.
+      const withoutReceipts = (inputs: AgentInput[] | undefined) => inputs?.filter(entry => entry.id !== reply).map(({ deliveredAt: _d, consumedAt: _c, awaitingRead: _a, ...rest }) => rest);
+      expect(withoutReceipts(store.getRun(runId)?.agentInputs)).toEqual([input]);
+      // hearsay-tools/cezarion#1260: Finish closes the question it never saw answered, without a
+      // delivery. A Stop closes it with the worker (hearsay-tools/cezarion#2410). A rejected answer
+      // leaves it for another answer.
+      const askSeq = store.eventLog.readEvents(runId).find(e => e.type === 'ask.requested')!.seq;
+      const closed = { finished: 'finish', cancelled: 'worker-stopped', rejected: undefined }[outcome];
+      expect(events.filter(e => e.type === 'human-ask-closed')).toEqual(closed ? [expect.objectContaining({ askSeq, reason: closed })] : []);
+      const recovered = await fixture.restart();
+      expect(hasPendingAsk(recovered.store, runId)).toBe(outcome === 'rejected');
+      if (outcome === 'rejected') expect(recovered.manager.continueRun(runId).ok).toBe(false);
+      expect(withoutReceipts(recovered.store.getRun(runId)?.agentInputs)).toEqual([input]);
+    });
+  },
+  durableLateReplyDone: (backend, mode) => async () => {
+    await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId, parentRunId, answer }) => {
+      const prompt = 'mock:ask-reply-late-cezar-done';
+      if (mode === 'fresh') store.updateRun(runId, { task: prompt });
+      manager.enqueueOwnedRun(runId);
+      let asked = 0;
+      if (mode === 'continuation') {
+        await waitFor(() => store.getRun(runId)?.status === 'waiting');
+        manager.finish(runId);
+        await waitFor(() => !manager.isActive(runId));
+        // The idle worker's park may already be Squawk's fallback question (hearsay-tools/cezarion#1301).
+        asked = store.eventLog.readEvents(runId).filter(e => e.type === 'ask.requested').length;
+        expect(manager.continueRun(runId, { text: prompt }).ok).toBe(true);
+      }
+      await waitFor(() => store.eventLog.readEvents(runId).filter(e => e.type === 'ask.requested').length > asked);
+      const input = agentInput(parentRunId);
+      expect(manager.steerWorker(runId, input)).toBe('queued');
+      await answer('Vitest');
+      await waitFor(() => !!store.getRun(runId)?.agentInputs?.[0]?.deliveredAt);
+      await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes(input.text)));
+      expect(manager.isActive(runId)).toBe(true);
+    });
+  },
+  durableRejectedHumanPost: backend => async () => {
+    await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId }) => {
+      manager.enqueueOwnedRun(runId);
+      await waitFor(() => store.getRun(runId)?.status === 'waiting');
+      expect(manager.sendMessage(runId, [{ type: 'text', text: 'mock:reject-agent-post' }])).toBe(true);
+      await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'note' && String(e.message).includes('prompt failed')));
+      expect(store.eventLog.readEvents(runId).filter(e => e.type === 'error')).toEqual([]);
+      expect(manager.isActive(runId)).toBe(true);
+      manager.finish(runId);
+      await waitFor(() => !manager.isActive(runId));
+      expect(['done', 'review']).toContain(store.getRun(runId)?.status);
+    });
+  },
+  durableRejectedAgentPost: (backend, mode) => async () => {
+    await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId, parentRunId }) => {
+      manager.enqueueOwnedRun(runId);
+      await waitFor(() => store.getRun(runId)?.status === 'waiting');
+      if (mode === 'continuation') {
+        manager.finish(runId);
+        await waitFor(() => !manager.isActive(runId));
+        expect(manager.continueRun(runId, { text: 'mock:baseline' }).ok).toBe(true);
+        await waitFor(() => manager.isActive(runId) && store.getRun(runId)?.status === 'waiting');
+      }
+      const rejected = agentInput(parentRunId, 'mock:reject-agent-post');
+      expect(manager.steerWorker(runId, rejected)).toBe('queued');
+      const pending = agentInput(parentRunId);
+      expect(manager.steerWorker(runId, pending)).toBe('queued');
+      await waitFor(() => store.eventLog.readEvents(runId).some(e => e.type === 'error'));
+      await waitFor(() => !manager.isActive(runId));
+      expect(store.getRun(runId)?.status).toBe('failed');
+      expect(store.getRun(runId)?.error).toContain('agent input failed');
+      expect(store.getRun(runId)?.agentInputs?.[1]).toEqual(pending);
+    });
+  },
 };
 
 export const OWNED_INPUT_GROUPS = ownedInputGroups(OWNED_INPUT_CELLS);

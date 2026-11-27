@@ -1,4 +1,4 @@
-import { appendedSystemPrompt, flagValues, stdinPrompts, wireArgv, type SessionWire } from '../../workflows/native-session-wire.testkit.ts';
+import { appendedSystemPrompt, appendedSystemPrompts, flagValues, stdinPrompts, wireArgv, type SessionWire } from '../../workflows/native-session-wire.testkit.ts';
 
 /** How the fixture mock's recorded command lines and stdin messages show a session and its prompts. */
 export const FIXTURE_SESSION_WIRE: SessionWire = {
@@ -9,6 +9,9 @@ export const FIXTURE_SESSION_WIRE: SessionWire = {
   prompts: stdinPrompts,
   steers: () => [],
   systemPrompt: appendedSystemPrompt,
+  systemPrompts: appendedSystemPrompts,
   skillTriggers: () => [],
   expectSkillTrigger: () => { throw new Error('The fixture runner has no native skill trigger'); },
+  expectCiWire: () => {},
+  expectSquawkToolAdmission: () => {},
 };

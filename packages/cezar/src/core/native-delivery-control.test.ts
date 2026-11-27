@@ -1,13 +1,17 @@
 import { runnerDefinition } from './runner-registry.ts';
 import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDeliveryControl, readDeliveryControl, type DeliveryControlOptions, type DeliveryKind } from '../../scripts/mock-delivery-control.mjs';
+import { readMockRecords } from '../mock-records.testkit.ts';
+import { sessionWire } from '../workflows/runner-session-wires.testkit.ts';
+import type { WireRow } from '../workflows/native-session-wire.testkit.ts';
 import type { AgentEvent, AgentSession } from './agent-runner.ts';
 import { driveSeam, exemptionFor, HARNESS_ADAPTERS, waitFor } from './harness-parity.testkit.ts';
+import { httpDeliveryControlRunners } from './parity-exemptions.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
 import { runnerGolden } from './runner-golden.testkit.ts';
 
@@ -299,7 +303,7 @@ describe.each(BUILT_IN_RUNNER_IDS)('%s native delivery control', runner => {
 });
 
 it('fails closed on an empty control variable', async () => {
-  const observation = await driveSeam('codex', 'baseline', { spec: { env: { ...ENV_BASE, CEZ_MOCK_DELIVERY_CONTROL: '' } } });
+  const observation = await driveSeam(BUILT_IN_RUNNER_IDS[0]!, 'baseline', { spec: { env: { ...ENV_BASE, CEZ_MOCK_DELIVERY_CONTROL: '' } } });
   expect(observation.v1.some(event => event.type === 'turn-end')).toBe(false);
   expect(JSON.stringify(observation)).toContain('CEZ_MOCK_DELIVERY_CONTROL');
 }, 60_000);
@@ -352,14 +356,43 @@ describe('controls reach every scenario branch', () => {
   }, 60_000);
 });
 
-it('opencode matches the prompt text, not its JSON encoding', async () => {
-  const persistent = createDeliveryControl(tempRoot(), { kind: 'reject', match: 'line one\nline "two"', persistent: true });
-  await seam('opencode', persistent.path, async session => {
-    const input = send(session, 'mock:agent-echo line one\nline "two"');
-    await input.done;
-    expect(input.state.rejected).toBe(true);
-  });
-}, 60_000);
+describe.each(httpDeliveryControlRunners())('%s HTTP delivery control', runner => {
+  it('matches the prompt text, not its JSON encoding', async () => {
+    const persistent = createDeliveryControl(tempRoot(), { kind: 'reject', match: 'line one\nline "two"', persistent: true });
+    await seam(runner, persistent.path, async session => {
+      const input = send(session, 'mock:agent-echo line one\nline "two"');
+      await input.done;
+      expect(input.state.rejected).toBe(true);
+    });
+  }, 60_000);
+
+  // hearsay-tools/cezarion#2127: busy input uses a different native HTTP acknowledgement.
+  it('holds a busy input acknowledgement through the native turn end', async () => {
+    const holdAck = createDeliveryControl(tempRoot(), { kind: 'hold-ack', match: 'delay-owned-ack' });
+    const releaseTurn = join(tempRoot(), 'release-turn');
+    const requests = join(tempRoot(), 'requests.ndjson');
+    await driveSeam(runner, 'hold-gated', {
+      spec: { env: { ...ENV_BASE, CEZ_MOCK_DELIVERY_CONTROL: holdAck.path,
+        CEZ_MOCK_RELEASE_FILE: releaseTurn, CEZ_MOCK_ARGS_FILE: requests } },
+      whileOpen: async (session, wire) => {
+        // The native request record proves the opening turn reached the server. Its
+        // content stays behind releaseTurn, so host load cannot end it before the steer.
+        await waitFor(() => existsSync(requests) && sessionWire(runner).started(readMockRecords<WireRow>(requests)));
+        const input = send(session, 'busy delay-owned-ack');
+        try {
+          await waitFor(() => holdAck.held() || input.state.settled);
+          writeFileSync(releaseTurn, '');
+          await waitFor(() => turnEnds(wire) === 1);
+          expect(input.state.settled).toBe(false);
+          expect(holdAck.held()).toBe(true);
+          expect(echoed(wire, 'busy delay-owned-ack')).toBe(true);
+        } finally { writeFileSync(releaseTurn, ''); holdAck.release(); }
+        await input.done;
+        expect(input.state.rejected).toBe(false);
+      },
+    });
+  }, 60_000);
+});
 
 // A held response keeps pi's prompt queue in order: the next prompt's turn and user message
 // follow the held turn's settlement, exactly as on an unconfigured wire.
@@ -393,31 +426,4 @@ it('pi keeps turn framing for a prompt queued behind a held response', async () 
   const hold = createDeliveryControl(tempRoot(), { kind: 'hold-response', match: 'held one' });
   expect(await frames({ CEZ_MOCK_DELIVERY_CONTROL: hold.path }, hold.release, hold.held)).toEqual(ordinary);
   expect(ordinary.filter(frame => frame.startsWith('user:'))).toEqual(['user:mock:agent-echo held one', 'user:mock:agent-echo held two']);
-}, 60_000);
-
-// hearsay-tools/cezarion#2127: busy input uses a different native HTTP acknowledgement.
-it('opencode holds a busy input acknowledgement through the native turn end', async () => {
-  const holdAck = createDeliveryControl(tempRoot(), { kind: 'hold-ack', match: 'delay-owned-ack' });
-  const releaseTurn = join(tempRoot(), 'release-turn');
-  const requests = join(tempRoot(), 'requests.ndjson');
-  await driveSeam('opencode', 'hold-gated', {
-    spec: { env: { ...ENV_BASE, CEZ_MOCK_DELIVERY_CONTROL: holdAck.path,
-      CEZ_MOCK_RELEASE_FILE: releaseTurn, CEZ_MOCK_ARGS_FILE: requests } },
-    whileOpen: async (session, wire) => {
-      // The native request record proves the opening turn reached the server. Its
-      // content stays behind releaseTurn, so host load cannot end it before the steer.
-      await waitFor(() => existsSync(requests) && readFileSync(requests, 'utf8').includes('/prompt_async'));
-      const input = send(session, 'busy delay-owned-ack');
-      try {
-        await waitFor(() => holdAck.held() || input.state.settled);
-        writeFileSync(releaseTurn, '');
-        await waitFor(() => turnEnds(wire) === 1);
-        expect(input.state.settled).toBe(false);
-        expect(holdAck.held()).toBe(true);
-        expect(echoed(wire, 'busy delay-owned-ack')).toBe(true);
-      } finally { writeFileSync(releaseTurn, ''); holdAck.release(); }
-      await input.done;
-      expect(input.state.rejected).toBe(false);
-    },
-  });
 }, 60_000);

@@ -17,9 +17,8 @@ import { skillResumeParity, type SkillResumeCells } from './skill-resume-rows.te
 // installSkillResumeEngine() (skill-resume-engine.testkit.ts) before they register, so a seam
 // part file never imports run.ts.
 
-type EngineCellBody = 'lostSession';
-type EngineRunnerCell = 'resumedContinue' | 'recoveredContinuation' | 'recordedSession' | 'interruptedContinue' | 'skillGone' | 'freshSession';
-export type SkillResumeEngineCells = Pick<SkillResumeCells, EngineCellBody | EngineRunnerCell>;
+type EngineRunnerCell = 'resumedContinue' | 'recoveredContinuation' | 'recordedSession' | 'interruptedContinue' | 'skillGone' | 'freshSession' | 'lostSession';
+export type SkillResumeEngineCells = Pick<SkillResumeCells, EngineRunnerCell>;
 
 let engineCells: SkillResumeEngineCells | undefined;
 
@@ -33,7 +32,6 @@ function installed(cell: string): SkillResumeEngineCells {
   return engineCells;
 }
 
-const engineCell = (key: EngineCellBody): CellBody => () => installed(key)[key]();
 const engineRunnerCell = (key: EngineRunnerCell) => (backend: string): CellBody => () => installed(`${backend} ${key}`)[key](backend)();
 
 export function parsedLines(recording: string): unknown[] {
@@ -43,19 +41,6 @@ export function parsedLines(recording: string): unknown[] {
     } catch {
       return [];
     }
-  });
-}
-
-export function asRecord(row: unknown): Record<string, unknown> | undefined {
-  return row && typeof row === 'object' ? row as Record<string, unknown> : undefined;
-}
-
-export function opencodeSessionGets(recording: string): string[] {
-  return parsedLines(recording).flatMap((row) => {
-    const rec = asRecord(row);
-    if (rec?.method !== 'GET' || typeof rec.url !== 'string') return [];
-    const match = /^\/session\/([^/]+)$/.exec(rec.url);
-    return match ? [match[1]!] : [];
   });
 }
 
@@ -111,15 +96,15 @@ export const describeSkillResumeParity = skillResumeParity({
       expect(resumed.v1.filter((event) => event.type === 'error')).toEqual([]);
       const freshWire = readRecording(join(dir, `${freshName}.args.ndjson`), join(dir, `${freshName}.stdin.ndjson`));
       const resumeWire = readRecording(join(dir, `${resumeName}.args.ndjson`), join(dir, `${resumeName}.stdin.ndjson`));
+      const resumedIn = (name: string) => sessionWire(backend).resumed(readMockRecords<WireRow>(join(dir, `${name}.args.ndjson`)));
       const mode = (await createRunner(backend)).systemPromptOnResume;
       if (mode === 'resent') {
         expect(freshWire).toContain('SENTINEL-790-SYSTEM');
         expect(resumeWire).toContain('SENTINEL-790-SYSTEM');
-        expect(resumeWire).toMatch(/--resume|--session|thread\/resume|session\/(?:load|resume)/);
+        expect(resumedIn(resumeName)).toEqual([PINNED_SESSION_ID]);
       } else {
         expect(freshWire).toContain('SENTINEL-790-SYSTEM');
         // The runner's reader shows which session each launch resumed: the pinned one, and none fresh.
-        const resumedIn = (name: string) => sessionWire(backend).resumed(readMockRecords<WireRow>(join(dir, `${name}.args.ndjson`)));
         expect(resumedIn(resumeName)).toEqual([PINNED_SESSION_ID]);
         expect(resumedIn(freshName)).toEqual([]);
         // The pinned session reopened: no fallback opened a fresh one beside the resume request.
@@ -129,5 +114,5 @@ export const describeSkillResumeParity = skillResumeParity({
       rmSync(dir, { recursive: true, force: true });
     }
   },
-  lostSession: engineCell('lostSession'),
+  lostSession: engineRunnerCell('lostSession'),
 });

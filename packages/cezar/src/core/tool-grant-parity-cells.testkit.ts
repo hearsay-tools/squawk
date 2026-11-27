@@ -39,14 +39,13 @@ export type ToolGrantCase = {
 };
 
 const stepDefault = (backend: string): string[] => allowedToolsForStep(undefined, backend);
-/** Another runner's extra tools for TG3 (`inherited`): kept as plain data so per-runner tool-grant
- *  tests load no other runner's `extra-tools.ts`; `core/runner-fact-rows.test.ts` pins these values
- *  to `extraToolRows()` (hearsay-tools/squawk#4175). */
-export const INHERITED_EXTRA_TOOLS = {
-  claude: [],
-  pi: ['Subagent', 'SubagentSupervisor', 'SubagentWait'],
-} as const satisfies Readonly<Record<'claude' | 'pi', readonly string[]>>;
-const otherStepDefault = (backend: 'claude' | 'pi'): string[] => [...DEFAULT_ALLOWED_TOOLS, ...INHERITED_EXTRA_TOOLS[backend]];
+/** Extra tools from another runner's default for TG3 (`inherited`) when the runner under test
+ *  declares no extra tools of its own, so the inherited list differs from its own `step-default`.
+ *  Kept as plain data so per-runner tool-grant tests load no other runner's `extra-tools.ts`;
+ *  `core/runner-fact-rows.test.ts` pins this value to `extraToolRows()` (hearsay-tools/squawk#4175). */
+export const FOREIGN_EXTRA_TOOLS: readonly string[] = ['Subagent', 'SubagentSupervisor', 'SubagentWait'];
+const inheritedTools = (backend: string): string[] =>
+  runnerDefinition(backend).extraTools.length === 0 ? [...DEFAULT_ALLOWED_TOOLS, ...FOREIGN_EXTRA_TOOLS] : [...DEFAULT_ALLOWED_TOOLS];
 
 export const TOOL_GRANT_CASES: readonly ToolGrantCase[] = [
   { id: 'unset', name: 'TG1 an unset grant', grant: () => ({ kind: 'unset' }) },
@@ -54,7 +53,7 @@ export const TOOL_GRANT_CASES: readonly ToolGrantCase[] = [
   {
     id: 'inherited',
     name: 'TG3 a list inherited from another runner\'s default',
-    grant: backend => ({ kind: 'inherited', tools: otherStepDefault(backend === 'claude' ? 'pi' : 'claude') }),
+    grant: backend => ({ kind: 'inherited', tools: inheritedTools(backend) }),
   },
   { id: 'explicit-copy', name: 'TG4 a hand-written copy of the default', grant: backend => ({ kind: 'explicit', tools: stepDefault(backend) }) },
   { id: 'extra-built-in', name: 'TG5 the default plus a built-in', grant: backend => ({ kind: 'explicit', tools: [...stepDefault(backend), 'WebFetch'] }) },
@@ -116,7 +115,9 @@ export function describeToolGrantParity(scope: string | 'once'): void {
   if (scope === 'once') {
     describe('harness parity — tool-grant cases', () => {
       it('the cases cover every ToolGrant kind', () => {
-        expect(new Set(TOOL_GRANT_CASES.map(entry => entry.grant('claude').kind))).toEqual(new Set(TOOL_GRANT_KINDS));
+        for (const backend of BUILT_IN_RUNNER_IDS) {
+          expect(new Set(TOOL_GRANT_CASES.map(entry => entry.grant(backend).kind)), backend).toEqual(new Set(TOOL_GRANT_KINDS));
+        }
       });
       it('runs each case exactly once, and each restricting runner pins every case', () => {
         const ids = TOOL_GRANT_CASES.map(entry => entry.id);

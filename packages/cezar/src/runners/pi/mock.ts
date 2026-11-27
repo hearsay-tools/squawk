@@ -5,6 +5,7 @@ export const PI_MOCK = {
   askResumeCases: [{ kind: 'cezar_ask', scenario: 'ask-resume', answer: 'Library: Vitest' }],
   binEnv: 'CEZ_PI_BIN',
   script: 'mock-pi-rpc.mjs',
+  defaultToolsBypassAllowlist: true,
   // scripts/mock-pi-rpc.mjs: an empty session file holds no session, so the resume opens a fresh one.
   missingSession: { session: 'empty-file' },
   scenarios: {

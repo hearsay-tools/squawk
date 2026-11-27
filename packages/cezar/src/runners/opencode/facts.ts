@@ -21,6 +21,7 @@ export const OPENCODE_FACTS = {
   systemPromptOnResume: 'in-thread',
   nativeAsk: 'answerable', nativeSubagents: 'turn-held', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'native',
   claudeModelAliases: false,
-  // A human prompt_async POST goes out after the ready promise, so after sendMessage returns.
-  turnStart: 'on-wire',
+  // A human prompt_async POST goes out after the ready promise, emitting a synthetic turn.started
+  // on dispatch (after sendMessage returns) rather than from a native wire turn-start frame.
+  turnStart: 'on-dispatch',
 } as const satisfies RunnerFacts;

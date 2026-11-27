@@ -18,3 +18,8 @@ export function exemptionFor(criterion: string, backend: string): ParityExemptio
 export function humanPromptReadReleases(): string[] {
   return factsWhere(releasesHumanPromptOnRead);
 }
+
+/** Every built-in runner whose declared wire transport is HTTP. */
+export function httpDeliveryControlRunners(): string[] {
+  return factsWhere(facts => facts.transport === 'http');
+}

@@ -1,10 +1,11 @@
 import '../core-registries.testkit.ts';
 import { runnerDefinition } from './runner-registry.ts';
-import { sessionWire } from '../workflows/runner-session-wires.testkit.ts';
-import type { WireRow } from '../workflows/native-session-wire.testkit.ts';
+import { nativeRecording, sessionWire } from '../workflows/runner-session-wires.testkit.ts';
+import type { NativeRecording, WireRow } from '../workflows/native-session-wire.testkit.ts';
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
+import { factsWhere } from './runner-fact-rows.testkit.ts';
 import { IN_THREAD } from './skill-resume-rows.testkit.ts';
-import { asRecord, opencodeSessionGets, parsedLines, readRecording, setSkillResumeEngineCells, type SkillResumeEngineCells } from './skill-resume-parity.testkit.ts';
+import { parsedLines, setSkillResumeEngineCells, type SkillResumeEngineCells } from './skill-resume-parity.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 /**
  * hearsay-tools/squawk#3751: Continue and recovery keep native skill/session behavior without
@@ -43,18 +44,8 @@ const SKILL_DESCRIPTION = 'Playbook for continued skill-driven tasks.';
 const SKILL_BODY = 'PLAYBOOK-BODY-790-SENTINEL';
 const EXTRA_PROMPT = 'EXTRA-PROMPT-790';
 
-const LOST_OPENCODE_SESSION =
-  'OpenCode session ses_mock_1 no longer exists; the continuation runs in a fresh session without the earlier conversation.';
-
 function skillMarkdown(): string {
   return `---\nname: ${SKILL_NAME}\ndescription: ${SKILL_DESCRIPTION}\n---\n${SKILL_BODY}\n`;
-}
-
-function opencodeSessionPosts(recording: string): unknown[] {
-  return parsedLines(recording).filter((row) => {
-    const rec = asRecord(row);
-    return rec?.method === 'POST' && rec.url === '/session';
-  });
 }
 
 function recordedSessionId(store: RunStore, runId: string): string {
@@ -66,81 +57,16 @@ function recordedSessionId(store: RunStore, runId: string): string {
 
 function assertReusedRecordedSession(
   backend: string,
-  continuationRecording: string,
+  continuationRecording: NativeRecording,
   sessionId: string,
-  argsRecording: string,
 ): void {
-  if (backend === 'opencode') {
-    expect(opencodeSessionPosts(continuationRecording), `${backend} Continue must not POST /session`).toEqual([]);
-    expect(opencodeSessionGets(continuationRecording)).toEqual([sessionId]);
-    return;
-  }
-  if (backend === 'codex') {
-    expect(continuationRecording).toContain('thread/resume');
-    expect(continuationRecording).toContain(sessionId);
-    expect(continuationRecording).not.toContain('thread/start');
-    return;
-  }
-  if (backend === 'claude') {
-    expect(continuationRecording).toMatch(/--resume/);
-    expect(continuationRecording).toContain(sessionId);
-    return;
-  }
-  if (backend === 'pi') {
-    expect(continuationRecording).toMatch(/--session/);
-    expect(continuationRecording).toContain(sessionId);
-    return;
-  }
-  // The combined recording mirrors stdin requests in args. Read one source,
-  // so the exact one-resume assertion counts native requests, not their copies.
-  const rows = parsedLines(argsRecording) as WireRow[];
-  expect(sessionWire(backend).resumed(rows)).toEqual([sessionId]);
-  expect(sessionWire(backend).freshSessions(rows)).toBe(0);
+  const wire = sessionWire(backend);
+  expect(wire.resumed(continuationRecording.args), `${backend} Continue must reuse the recorded session`).toEqual([sessionId]);
+  expect(wire.freshSessions(continuationRecording.args), `${backend} Continue must not open a fresh session`).toBe(0);
 }
 
-function systemFromPrepended(text: string): string {
-  const sep = '\n\n---\n\n';
-  const at = text.lastIndexOf(sep);
-  return at >= 0 ? text.slice(0, at) : text;
-}
-
-function appendedSystemPrompts(rows: unknown[]): string[] {
-  return rows.flatMap((row) => {
-    if (!Array.isArray(row)) return [];
-    const index = row.indexOf('--append-system-prompt');
-    return index >= 0 && typeof row[index + 1] === 'string' ? [row[index + 1]] : [];
-  });
-}
-
-function recordedSystemPrompt(backend: string, rec: Record<string, unknown>): string | undefined {
-  if (backend === 'codex' && rec.method === 'turn/start') {
-    const input = (rec.params as { input?: Array<{ text?: string }> } | undefined)?.input;
-    const text = input?.[0]?.text;
-    if (typeof text === 'string') return systemFromPrepended(text);
-  }
-  if (backend === 'opencode' && typeof rec.url === 'string' && rec.url.endsWith('/command')) return (rec.body as { arguments?: string }).arguments;
-  if (backend === 'opencode' && typeof rec.url === 'string' && rec.url.includes('prompt_async')) {
-    const parts = (rec.body as { parts?: Array<{ type?: string; text?: string }> } | undefined)?.parts;
-    const text = parts?.[0]?.text;
-    if (typeof text === 'string') return systemFromPrepended(text);
-  }
-  return undefined;
-}
-
-function systemPromptsFrom(backend: string, recording: string): string[] {
-  const rows = parsedLines(recording);
-  if (backend === 'claude' || backend === 'pi' || backend === 'omp') return appendedSystemPrompts(rows);
-  if (!['codex', 'opencode'].includes(backend)) {
-    const prompt = sessionWire(backend).systemPrompt({ args: rows as WireRow[], stdin: rows as WireRow[] });
-    return prompt === undefined ? [] : [prompt];
-  }
-  const texts: string[] = [];
-  for (const row of rows) {
-    if (!row || typeof row !== 'object') continue;
-    const text = recordedSystemPrompt(backend, row as Record<string, unknown>);
-    if (text !== undefined) texts.push(text);
-  }
-  return texts;
+function systemPromptsFrom(backend: string, recording: NativeRecording): string[] {
+  return sessionWire(backend).systemPrompts(recording);
 }
 
 function fileText(path: string): string {
@@ -149,7 +75,14 @@ function fileText(path: string): string {
 
 type WireMark = { args: number; stdin: number };
 
-function wireSince(argsFile: string, stdinFile: string, marked: WireMark): string {
+function wireSince(argsFile: string, stdinFile: string, marked: WireMark): NativeRecording {
+  return {
+    args: parsedLines(fileText(argsFile).slice(marked.args)) as WireRow[],
+    stdin: parsedLines(fileText(stdinFile).slice(marked.stdin)) as WireRow[],
+  };
+}
+
+function wireTextSince(argsFile: string, stdinFile: string, marked: WireMark): string {
   return `${fileText(argsFile).slice(marked.args)}${fileText(stdinFile).slice(marked.stdin)}`;
 }
 
@@ -160,25 +93,17 @@ function markWire(argsFile: string, stdinFile: string): WireMark {
 function skillInPrompt(prompt: string, _repoRoot: string): boolean {
   return !prompt.includes(SKILL_BODY) && !prompt.includes('Selected skill:') && prompt.includes(EXTRA_PROMPT);
 }
-function hasNativeTrigger(backend: string, recording: string): boolean {
-  if (!['claude', 'codex', 'opencode', 'pi', 'omp'].includes(backend)) {
-    const rows = parsedLines(recording) as WireRow[];
-    return sessionWire(backend).skillTriggers({ args: rows, stdin: rows }, SKILL_NAME).length > 0;
-  }
-  return parsedLines(recording).some(row => {
-    const rec = asRecord(row);
-    if (!rec) return false;
-    if (backend === 'codex') {
-      const input = asRecord(rec.params)?.input;
-      return rec.method === 'turn/start' && Array.isArray(input) && input.some(block => asRecord(block)?.type === 'skill');
-    }
-    if (backend === 'opencode') return typeof rec.url === 'string' && rec.url.endsWith('/command') && asRecord(rec.body)?.command === SKILL_NAME;
-    if (backend === 'claude') return Array.isArray(rec.blocks) && rec.blocks.some(block => {
-      const text = asRecord(block)?.text;
-      return typeof text === 'string' && text.startsWith(`/${SKILL_NAME} `);
-    });
-    return typeof rec.userText === 'string' && rec.userText.startsWith(`/skill:${SKILL_NAME} `);
-  });
+
+function hasNativeTrigger(backend: string, recording: NativeRecording): boolean {
+  return sessionWire(backend).skillTriggers(recording, SKILL_NAME).length > 0;
+}
+
+function hasWireActivity(backend: string, recording: NativeRecording, includeResume = false): boolean {
+  const wire = sessionWire(backend);
+  return wire.started(recording.args)
+    || wire.prompts(recording).length > 0
+    || wire.skillTriggers(recording).length > 0
+    || (includeResume && wire.resumed(recording.args).length > 0);
 }
 
 const idleOwners = new WeakMap<RunManager, {
@@ -216,10 +141,12 @@ async function idleClose(manager: RunManager, runId: string): Promise<void> {
 
 /** What a run-aware wait reads; the fixture's getters follow a restart to the new store and manager. */
 interface RunWatch {
+  readonly backend: string;
   readonly manager: RunManager;
   readonly store: RunStore;
   readonly runId: string;
-  readonly wireSince: (marked: WireMark) => string;
+  readonly wireSince: (marked: WireMark) => NativeRecording;
+  readonly wireTextSince: (marked: WireMark) => string;
 }
 
 const SETTLED_RUN: ReadonlySet<string> = new Set(['review', 'done', 'failed', 'cancelled']);
@@ -243,7 +170,7 @@ function describeRun(fixture: RunWatch, statuses: readonly string[], marked: Wir
     'steps:', ...steps,
     `events${from > 0 ? ` (last ${DESCRIBED_RUN_EVENTS} of ${events.length})` : ''}:`,
     ...events.slice(from).map(event => `  ${clip(JSON.stringify(event), 400)}`),
-    ...(marked ? ['wire since the mark:', clip(fixture.wireSince(marked), DESCRIBED_WIRE_CHARS)] : []),
+    ...(marked ? ['wire since the mark:', clip(fixture.wireTextSince(marked), DESCRIBED_WIRE_CHARS)] : []),
   ].join('\n');
 }
 
@@ -278,12 +205,15 @@ async function untilRun(fixture: RunWatch, cond: () => boolean, marked?: WireMar
   }
 }
 
-const PROMPT_MARKERS = ['--append-system-prompt', 'turn/start', 'session/prompt', 'prompt_async', '--output-format'];
-
 /** Wait until the continued run parks on its live session with its prompt on the wire since `marked`. */
-async function untilParkedWithPrompt(fixture: RunWatch, marked: WireMark, markers: readonly string[] = PROMPT_MARKERS): Promise<void> {
+async function untilParkedWithPrompt(
+  fixture: RunWatch,
+  marked: WireMark,
+  options: { backend?: string; includeResume?: boolean } = {},
+): Promise<void> {
+  const target = options.backend ?? fixture.backend;
   await untilRun(fixture, () => fixture.store.getRun(fixture.runId)?.status === 'waiting' && fixture.manager.isActive(fixture.runId), marked);
-  await untilRun(fixture, () => markers.some(marker => fixture.wireSince(marked).includes(marker)), marked);
+  await untilRun(fixture, () => hasWireActivity(target, fixture.wireSince(marked), options.includeResume), marked);
 }
 
 /** Idle-close leaves the run `waiting`, so a second wait-for-waiting is a race. */
@@ -291,24 +221,26 @@ async function continueAndPark(
   fixture: RunWatch,
   opts: { text: string; runner?: string },
   marked: WireMark,
-): Promise<string> {
+): Promise<NativeRecording> {
   expect(fixture.manager.continueRun(fixture.runId, opts).ok).toBe(true);
-  await untilParkedWithPrompt(fixture, marked);
+  await untilParkedWithPrompt(fixture, marked, opts.runner ? { backend: opts.runner } : {});
   return fixture.wireSince(marked);
 }
 
 async function withSkillResumeRun(
   backend: string,
   body: (fixture: {
+    backend: string;
     repoRoot: string;
     runId: string;
     store: RunStore;
     manager: RunManager;
     argsFile: string;
     stdinFile: string;
-    snapshotWire: () => string;
+    snapshotWire: () => NativeRecording;
     markWire: () => WireMark;
-    wireSince: (marked: WireMark) => string;
+    wireSince: (marked: WireMark) => NativeRecording;
+    wireTextSince: (marked: WireMark) => string;
     restart: () => Promise<void>;
   }) => Promise<void>,
 ): Promise<void> {
@@ -352,9 +284,10 @@ async function withSkillResumeRun(
       systemPrompt: EXTRA_PROMPT,
     });
     const since = (marked: WireMark) => wireSince(argsFile, stdinFile, marked);
-    const launch: RunWatch = { store, manager, runId: started.id, wireSince: since };
+    const textSince = (marked: WireMark) => wireTextSince(argsFile, stdinFile, marked);
+    const launch: RunWatch = { backend, store, manager, runId: started.id, wireSince: since, wireTextSince: textSince };
     await untilRun(launch, () => launch.store.getRun(launch.runId)?.status === 'waiting', undefined, 30_000);
-    const snapshotWire = () => readRecording(argsFile, stdinFile);
+    const snapshotWire = () => nativeRecording(argsFile, stdinFile);
     const mark = () => markWire(argsFile, stdinFile);
     const restart = async () => {
       store!.persistence.flush();
@@ -370,6 +303,7 @@ async function withSkillResumeRun(
       await manager.recover();
     };
     await body({
+      backend,
       repoRoot,
       runId: started.id,
       get store() { return store!; },
@@ -379,6 +313,7 @@ async function withSkillResumeRun(
       snapshotWire,
       markWire: mark,
       wireSince: since,
+      wireTextSince: textSince,
       restart,
     });
   } finally {
@@ -393,7 +328,7 @@ async function withSkillResumeRun(
   }
 }
 
-function assertLaunchKeepsSkill(backend: string, repoRoot: string, recording: string): string {
+function assertLaunchKeepsSkill(backend: string, repoRoot: string, recording: NativeRecording): string {
   const prompts = systemPromptsFrom(backend, recording);
   expect(prompts.length, `${backend} launch recorded a system prompt`).toBeGreaterThan(0);
   const launch = prompts[0]!;
@@ -406,7 +341,7 @@ function assertContinuationSkill(
   backend: string,
   repoRoot: string,
   _launchPrompt: string,
-  continuationRecording: string,
+  continuationRecording: NativeRecording,
 ): void {
   const prompts = systemPromptsFrom(backend, continuationRecording);
   expect(prompts.length, `${backend} continuation recorded a system prompt`).toBeGreaterThan(0);
@@ -453,15 +388,15 @@ const ENGINE_CELLS: SkillResumeEngineCells = {
       await idleClose(fixture.manager, fixture.runId);
       const continuedMark = fixture.markWire();
       const continued = await continueAndPark(fixture, { text: promptFor(backend, 'baseline') }, continuedMark);
-      assertReusedRecordedSession(backend, continued, sessionId, fileText(fixture.argsFile).slice(continuedMark.args));
+      assertReusedRecordedSession(backend, continued, sessionId);
       expect(recordedSessionId(fixture.store, fixture.runId)).toBe(sessionId);
 
       await idleClose(fixture.manager, fixture.runId);
       const recoverMark = fixture.markWire();
       expect(fixture.manager.continueRun(fixture.runId, { text: promptFor(backend, 'baseline') }).ok).toBe(true);
       await fixture.restart();
-      await untilParkedWithPrompt(fixture, recoverMark, [...PROMPT_MARKERS, 'session/load', 'thread/resume']);
-      assertReusedRecordedSession(backend, fixture.wireSince(recoverMark), sessionId, fileText(fixture.argsFile).slice(recoverMark.args));
+      await untilParkedWithPrompt(fixture, recoverMark, { includeResume: true });
+      assertReusedRecordedSession(backend, fixture.wireSince(recoverMark), sessionId);
       expect(recordedSessionId(fixture.store, fixture.runId)).toBe(sessionId);
     });
   },
@@ -482,8 +417,8 @@ const ENGINE_CELLS: SkillResumeEngineCells = {
         event.type === 'session' && event.stepId === 'continue-1')).toBe(false);
       const marked = fixture.markWire();
       await fixture.restart();
-      await untilRun(fixture, () => PROMPT_MARKERS.some(marker => fixture.wireSince(marked).includes(marker)), marked);
-      assertReusedRecordedSession(backend, fixture.wireSince(marked), sessionId, fileText(fixture.argsFile).slice(marked.args));
+      await untilRun(fixture, () => hasWireActivity(backend, fixture.wireSince(marked)), marked);
+      assertReusedRecordedSession(backend, fixture.wireSince(marked), sessionId);
       expect(fixture.store.getRun(fixture.runId)?.status).not.toBe('failed');
     });
   },
@@ -499,10 +434,11 @@ const ENGINE_CELLS: SkillResumeEngineCells = {
     });
   },
   freshSession: backend => async () => {
-    const origin: string = 'claude';
-    const savedClaude = process.env.CEZ_CLAUDE_BIN;
+    const origin = factsWhere(facts => facts.systemPromptOnResume === 'resent')[0]!;
+    const originAdapter = HARNESS_ADAPTERS[origin]!;
+    const savedOrigin = process.env[originAdapter.binEnv];
     const savedTarget = process.env[HARNESS_ADAPTERS[backend]!.binEnv];
-    process.env.CEZ_CLAUDE_BIN = HARNESS_ADAPTERS.claude!.mockBin;
+    process.env[originAdapter.binEnv] = originAdapter.mockBin;
     process.env[HARNESS_ADAPTERS[backend]!.binEnv] = HARNESS_ADAPTERS[backend]!.mockBin;
     try {
       await withSkillResumeRun(origin, async (fixture) => {
@@ -522,40 +458,45 @@ const ENGINE_CELLS: SkillResumeEngineCells = {
         expect(launchPrompt).not.toContain(SKILL_BODY);
       });
     } finally {
-      if (savedClaude === undefined) delete process.env.CEZ_CLAUDE_BIN;
-      else process.env.CEZ_CLAUDE_BIN = savedClaude;
+      if (savedOrigin === undefined) delete process.env[originAdapter.binEnv];
+      else process.env[originAdapter.binEnv] = savedOrigin;
       if (savedTarget === undefined) delete process.env[HARNESS_ADAPTERS[backend]!.binEnv];
       else process.env[HARNESS_ADAPTERS[backend]!.binEnv] = savedTarget;
     }
   },
-  lostSession: async () => {
-    await withSkillResumeRun('opencode', async (fixture) => {
-      const launchPrompt = assertLaunchKeepsSkill('opencode', fixture.repoRoot, fixture.snapshotWire());
+  lostSession: backend => async () => {
+    const definition = runnerDefinition(backend);
+    const sessionStore = definition.mock.sessionStore;
+    expect(sessionStore, `${backend} declares mock.sessionStore`).toBeDefined();
+    await withSkillResumeRun(backend, async (fixture) => {
+      const launchPrompt = assertLaunchKeepsSkill(backend, fixture.repoRoot, fixture.snapshotWire());
       const lostId = recordedSessionId(fixture.store, fixture.runId);
-      expect(lostId).toBe('ses_mock_1');
       await idleClose(fixture.manager, fixture.runId);
-      const persist = `${fixture.argsFile}.opencode-sessions.json`;
+      const persist = `${fixture.argsFile}${sessionStore!.argsFileSuffix}`;
       const stored = JSON.parse(readFileSync(persist, 'utf8')) as { seq: number; sessions: Record<string, unknown> };
       expect(stored.sessions[lostId]).toBeDefined();
       writeFileSync(persist, JSON.stringify({ seq: stored.seq, sessions: {} }));
       const marked = fixture.markWire();
-      const continued = await continueAndPark(fixture, { text: promptFor('opencode', 'baseline') }, marked);
-      expect(opencodeSessionGets(continued)).toEqual([lostId]);
-      expect(opencodeSessionPosts(continued)).toHaveLength(1);
-      const prompts = systemPromptsFrom('opencode', continued);
+      const continued = await continueAndPark(fixture, { text: promptFor(backend, 'baseline') }, marked);
+      const wire = sessionWire(backend);
+      expect(wire.resumed(continued.args)).toEqual([lostId]);
+      expect(wire.freshSessions(continued.args)).toBe(1);
+      const prompts = systemPromptsFrom(backend, continued);
       expect(prompts.length).toBeGreaterThan(0);
       expect(skillInPrompt(prompts[0]!, fixture.repoRoot)).toBe(true);
-      expect(hasNativeTrigger('opencode', continued)).toBe(true);
+      expect(hasNativeTrigger(backend, continued)).toBe(true);
       expect(launchPrompt).not.toContain(SKILL_BODY);
       const events = fixture.store.eventLog.readEvents(fixture.runId);
-      const notices = events.filter((event) => String(event.message).includes('no longer exists'));
+      const notices = events.filter((event) => String(event.message).includes(lostId));
       expect(notices).toHaveLength(1);
       expect(notices[0]?.type).toBe('note');
-      expect(notices[0]?.message).toBe(LOST_OPENCODE_SESSION);
-      expect(events.filter((event) => event.type === 'lifecycle' && String(event.message).includes('no longer exists'))).toEqual([]);
+      expect(String(notices[0]?.message)).toContain(definition.display.displayName);
+      expect(String(notices[0]?.message)).toMatch(/no longer exists|could not resume/);
+      expect(String(notices[0]?.message)).toMatch(/fresh session|new session/);
+      expect(events.filter((event) => event.type === 'lifecycle' && String(event.message).includes(lostId))).toEqual([]);
       const freshId = recordedSessionId(fixture.store, fixture.runId);
       expect(freshId).not.toBe(lostId);
-      expect(freshId).toMatch(/^ses_mock_/);
+      expect(freshId.length).toBeGreaterThan(0);
     });
   },
 };
