@@ -70,22 +70,21 @@ the PR when its required checks pass.
 
 ## Show an open review round on the PR
 
-When a reviewer round runs on a pushed head, mark it on GitHub, auto-merge or
+When a reviewer round runs on an open PR, mark it on GitHub, auto-merge or
 not. The owner then sees that the PR is not ready to queue:
 
 ```bash
-node .github/scripts/pre-pr-review.cjs open --head <sha> --pr <n>     # the round starts
-node .github/scripts/pre-pr-review.cjs blocked --head <sha> --pr <n>  # a finding scored 5 or more
-node .github/scripts/pre-pr-review.cjs clean --head <sha> --pr <n>    # no finding scored 5 or more
+node .github/scripts/pre-pr-review.cjs open --pr <n>     # the round starts
+node .github/scripts/pre-pr-review.cjs blocked --pr <n>  # a finding scored 5 or more
+node .github/scripts/pre-pr-review.cjs clean --pr <n>    # no finding scored 5 or more
 ```
 
-It sets the `pre-pr-review` commit status on `<sha>` (pending, failure, success)
-and writes or removes the banner at the top of the PR body. GitHub accepts a
-status only on a pushed commit: push, open the PR, then run `open`. Leave out
-`--pr` when no PR exists yet. While the status is pending or failure, PR Readiness
-keeps the card In progress and `arm-check.mjs` prints `DO NOT ARM`. A round that
-ends without a result still needs `clean` or `blocked`, or the card stays In
-progress. A new head carries no status: run `open` for its round.
+`open` and `blocked` add the `pre-pr-review` label and write the matching
+banner at the top of the PR body; `clean` removes both. Push, open the PR,
+then run `open`. While the label is present, PR Readiness keeps the card In
+progress and `arm-check.mjs` prints `DO NOT ARM`. A push keeps the label in
+place until a round marks the PR `clean`. A round that ends without a result
+still needs `clean` or `blocked`, or the card stays In progress.
 
 ## The merge queue is not yours
 
