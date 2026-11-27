@@ -118,6 +118,9 @@ describe('per-port hashed MCP bearer token store (hearsay-tools/squawk#4402)', (
     expect(verifyMcpBearerToken(b.token, {}, 4322, home)).toMatchObject({ id: b.id });
 
     expect(() => revokeMcpToken({ home, id: 'missing-id' })).toThrow(McpTokenRevokeError);
+    expect(() => createMcpToken({ port: 4321, project: '', home })).toThrow(/must not be empty/);
+    expect(() => createMcpToken({ port: 4321, project: '   ', home })).toThrow(/must not be empty/);
+    expect(() => createMcpToken({ port: 4321, project: 'all', home })).toThrow(/cannot be "all"/);
   });
 
   it('refuses HTTP home-recovery mutations on mcp-tokens files even locally', async () => {

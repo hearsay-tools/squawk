@@ -150,7 +150,7 @@ interface ToolCallContext {
 }
 
 function assertAllowedProject(project: string, ctx: ToolCallContext): void {
-  if (ctx.allowedProject !== undefined && project !== ctx.allowedProject) {
+  if (ctx.allowedProject !== undefined && (project === 'all' || project !== ctx.allowedProject)) {
     throw new TaskCliError(2, {
       code: 'forbidden',
       error: `bearer token is scoped to project '${ctx.allowedProject}' and cannot access '${project}'`,
@@ -470,7 +470,7 @@ const TOOLS: readonly ToolEntry[] = [
       assertAllowedProject(args.project, ctx);
       const statuses = parseStatusFilter(args.status);
       const limit = args.limit ?? 20;
-      if (args.project === 'all') {
+      if (args.project === 'all' && ctx.allowedProject === undefined) {
         return listAllProjectsTasks(ctx.origin, {
           statuses,
           limit,

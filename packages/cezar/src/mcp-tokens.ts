@@ -28,7 +28,7 @@ const storedTokenSchema = z.object({
   name: z.string().min(1),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
   createdAt: z.iso.datetime(),
-  project: z.string().min(1).optional(),
+  project: z.string().trim().min(1).refine((value) => value !== 'all', 'project scope cannot be "all"').optional(),
 }).strict();
 
 const tokenFileSchema = z.object({
@@ -221,7 +221,13 @@ export function createMcpToken(options: CreateMcpTokenOptions): CreatedMcpToken 
   const { port, home } = options;
   if (!isPort(port)) throw new RangeError(`not a port: ${port}`);
   const name = options.name?.trim() || 'default';
-  const project = options.project?.trim() || undefined;
+  let project: string | undefined;
+  if (options.project !== undefined) {
+    const trimmed = options.project.trim();
+    if (!trimmed) throw new RangeError('project scope must not be empty');
+    if (trimmed === 'all') throw new RangeError('project scope cannot be "all"');
+    project = trimmed;
+  }
   const now = options.now ?? new Date();
   const path = mcpTokenFile(port, home);
   const rawToken = `${MCP_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;

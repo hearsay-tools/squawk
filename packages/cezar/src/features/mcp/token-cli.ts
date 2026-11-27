@@ -121,6 +121,11 @@ type ParsedTokenValues = ReturnType<typeof parseTokenArgs>['values'];
 async function runCreateAction(rest: string[], values: ParsedTokenValues, port: number | undefined, home: Home, io: McpTokenCliIo): Promise<Record<string, unknown>> {
   if (rest.length > 0) invalidInput(`unexpected argument '${rest[0]}'`);
   if (values.all) invalidInput('create takes no --all');
+  if (values.project !== undefined) {
+    const trimmedProject = values.project.trim();
+    if (!trimmedProject) invalidInput('--project must not be empty');
+    if (trimmedProject === 'all') invalidInput('--project cannot be "all" (reserved for cross-project listing)');
+  }
   const targetPort = await resolveCreatePort(port, io);
   const created = createMcpToken({ port: targetPort, home, name: values.name, project: values.project });
   return {

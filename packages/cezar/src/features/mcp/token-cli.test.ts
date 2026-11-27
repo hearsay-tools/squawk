@@ -105,6 +105,13 @@ describe('hsq mcp token CLI and installer lifecycle (hearsay-tools/squawk#4402)'
     const revokeAll = await execToken(['revoke', '--all', '--port', '4322']);
     expect(revokeAll.code).toBe(0);
     expect(hasConfiguredMcpTokens({}, 4322, home)).toBe(false);
+
+    for (const badProject of ['', '   ', 'all']) {
+      const rejected = await execToken(['create', '--port', '4323', '--project', badProject]);
+      expect(rejected.code).toBe(64);
+      expect(rejected.json()).toMatchObject({ ok: false, code: 'invalid_input' });
+    }
+    expect(hasConfiguredMcpTokens({}, 4323, home)).toBe(false);
   });
 
   it('refuses `hsq mcp token` inside a Squawk task', async () => {
