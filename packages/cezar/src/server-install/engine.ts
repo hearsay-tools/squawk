@@ -149,7 +149,7 @@ async function withdrawRemoteSettings(ctx: InstallContext, port: number, why: st
  * fresh installs on that port so a replacement cockpit starts with no inherited credentials.
  */
 async function withdrawMcpTokens(ctx: InstallContext, port: number, why: string, when = true): Promise<void> {
-  if (!when) return;
+  if (!when || !Number.isInteger(port) || port < 1 || port > 65_535) return;
   const state = listMcpTokens(ctx.home, port);
   if (state.tokens.length === 0 && !state.issue) return;
   if (ctx.dryRun) {

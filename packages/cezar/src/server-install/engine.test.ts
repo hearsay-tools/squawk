@@ -442,5 +442,13 @@ describe('engine — ledger preservation and uninstall safety (PR #423 review fi
     // Uninstalling withdraws tokens for that port.
     await runUninstall(strategyOf([fakeStep('a'), fakeStep('b')]), opts({ port }));
     expect(listMcpTokens(testHome(), port).tokens).toHaveLength(0);
+
+    // Out-of-range recorded ports skip MCP token withdrawal so uninstall still reaches step undo.
+    const stepA = fakeStep('a');
+    await runInstall(strategyOf([stepA]), opts({ port: 70_000 }));
+    const undoStepA = fakeStep('a');
+    const uninstalled = await runUninstall(strategyOf([undoStepA]), opts({ port: 70_000 }));
+    expect(uninstalled.status).toBe('complete');
+    expect(undoStepA.undo).toHaveBeenCalledOnce();
   });
 });
