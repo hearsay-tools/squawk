@@ -293,7 +293,7 @@ jobs:
     needs: [plan, build, candidate]
     if: ${{ !cancelled() && needs.candidate.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     environment: production
     permissions:
       contents: read
@@ -421,7 +421,10 @@ jobs:
         run: node scripts/release.mjs "${{ inputs.bump }}"
 
       # A retry skips names already on the registry, so check that each stable dist-tag
-      # really points to this version before the promotion counts as done.
+      # really points to this version before the promotion counts as done. Right after
+      # `npm publish` the registry CDN can still serve the old dist-tag for up to 300 s
+      # (hearsay-tools/squawk#4413), so a wrong or unreadable tag is read again until
+      # WAIT_SECONDS pass. `--prefer-online` skips npm's local metadata cache.
       - name: Check the dist-tags
         id: dist_tags
         if: steps.release.outputs.published == 'true'
@@ -429,13 +432,21 @@ jobs:
           NAMES: ${{ steps.release.outputs.publishedNames }}
           VERSION: ${{ steps.release.outputs.version }}
           TAG: ${{ needs.plan.outputs.stable_tag }}
+          WAIT_SECONDS: '600'
+          POLL_SECONDS: '15'
         run: |
+          deadline=$((SECONDS + WAIT_SECONDS))
           for name in ${NAMES//,/ }; do
-            current=$(npm view "$name" "dist-tags.$TAG")
-            if [ "$current" != "$VERSION" ]; then
-              echo "::error::$name@$TAG is ${current:-unset}, expected $VERSION. Move it with npm dist-tag add $name@$VERSION $TAG, then rerun this job."
-              exit 1
-            fi
+            while :; do
+              current=$(npm view "$name" "dist-tags.$TAG" --prefer-online 2>/dev/null) || current=''
+              [ "$current" = "$VERSION" ] && break
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo "::error::$name@$TAG is ${current:-unset or unreadable}, expected $VERSION. Move it with npm dist-tag add $name@$VERSION $TAG, then rerun this job."
+                exit 1
+              fi
+              echo "$name@$TAG reads ${current:-unset or unreadable}, expected $VERSION; reading it again in $POLL_SECONDS s."
+              sleep "$POLL_SECONDS"
+            done
           done
 
   # The install runs the published package's own scripts, so it runs outside the

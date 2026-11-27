@@ -239,3 +239,50 @@ test('the promotion checks each stable dist-tag and the candidate tests cover th
     assert.equal(step.env.PACKAGES, '${{ inputs.package }} ${{ inputs.alias }}', step.name);
   }
 });
+
+// The step's own shell, run against a fake `npm` that answers each call from a list, so the
+// test sees what the promotion sees right after `npm publish`: the registry CDN may serve
+// the old dist-tag for minutes (hearsay-tools/squawk#4413).
+async function runDistTagCheck(answers, { wait = '60' } = {}) {
+  const { jobs } = await parsed();
+  const check = jobs.release.steps.find(step => step.name === 'Check the dist-tags');
+  const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'dist-tag-check-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'answers'), answers.join('\n') + '\n');
+    fs.writeFileSync(path.join(dir, 'npm'), [
+      '#!/usr/bin/env bash',
+      'echo "$*" >> "$FAKE_DIR/calls"',
+      'answer=$(head -n1 "$FAKE_DIR/answers"); sed -i 1d "$FAKE_DIR/answers"',
+      'if [ "$answer" = FAIL ]; then echo "npm error network" >&2; exit 1; fi',
+      'echo "$answer"',
+    ].join('\n'), { mode: 0o755 });
+    const result = require('node:child_process').spawnSync('bash', ['-e', '-c', check.run], {
+      encoding: 'utf8',
+      env: { ...process.env, ...check.env, PATH: `${dir}:${process.env.PATH}`, FAKE_DIR: dir,
+        NAMES: '@hearsay-tools/squawk,cezarion', VERSION: '0.19.0', TAG: 'latest', WAIT_SECONDS: wait, POLL_SECONDS: '0' },
+    });
+    const calls = fs.existsSync(path.join(dir, 'calls')) ? fs.readFileSync(path.join(dir, 'calls'), 'utf8').trim().split('\n') : [];
+    return { ...result, calls };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('the dist-tag check waits out a stale registry cache and a failed npm call', async () => {
+  const { jobs } = await parsed();
+  const check = jobs.release.steps.find(step => step.name === 'Check the dist-tags');
+  assert.ok(Number(check.env.WAIT_SECONDS) >= 300, 'the registry CDN keeps a metadata document for up to 300 s');
+  assert.ok(Number(check.env.POLL_SECONDS) > 0);
+  assert.ok(jobs.release['timeout-minutes'] * 60 >= Number(check.env.WAIT_SECONDS) + 300, 'the publish steps keep room before the job times out');
+  const result = await runDistTagCheck(['0.18.0', 'FAIL', '0.19.0', '0.19.0']);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(result.calls.length, 4);
+  for (const call of result.calls) assert.match(call, /^view \S+ dist-tags\.latest --prefer-online$/);
+});
+
+test('the dist-tag check fails when the tag is still wrong at the deadline', async () => {
+  const result = await runDistTagCheck(['0.18.0'], { wait: '0' });
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /::error::@hearsay-tools\/squawk@latest is 0\.18\.0, expected 0\.19\.0\./);
+  assert.equal(result.calls.length, 1);
+});
