@@ -373,7 +373,7 @@ export function ActivityTriageDrawer({
             onRestoreFocus()
           }
         }}
-        className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-lg"
+        className="flex h-full w-full flex-col gap-0 p-0 data-[state=closed]:duration-150 data-[state=open]:duration-200 sm:max-w-lg"
       >
         {record ? (
           <>

@@ -29,7 +29,7 @@ export interface MarginArcGeometry {
   endY: number
 }
 
-const LANE_BASE = 24
+const LANE_BASE = 36
 const LANE_STEP = 22
 const MAX_LANES = 4
 const CORNER_R = 10
@@ -72,7 +72,7 @@ export function marginArcEdges(
   }
   if (edges.length === 0) return { edges, gutterWidth: 0 }
   const lanes = Math.min(MAX_LANES, edges.length)
-  return { edges, gutterWidth: Math.min(116, 46 + (lanes - 1) * LANE_STEP) }
+  return { edges, gutterWidth: Math.min(132, 64 + (lanes - 1) * LANE_STEP) }
 }
 
 /** Connected run ids for pointer/focus highlight across both peer requests and peer waits. */

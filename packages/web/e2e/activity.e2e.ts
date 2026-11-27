@@ -210,8 +210,12 @@ describe('activity view', () => {
     browser.click(`[data-activity-card="${recipientId}"] [data-slot="activity-triage-trigger"]`)
     expect(browser.waitForValue<boolean>(`(() => {
       const drawer = document.querySelector('[data-slot="activity-triage-drawer"]');
-      return drawer ? drawer.textContent.includes('Ship the contract before the migration?') : false;
-    })()`, undefined, { failure: 'clicking Answer never opened the triage drawer with the question' })).toBe(true)
+      const closeBtn = drawer?.querySelector('button[aria-label="Close triage drawer"]');
+      if (!drawer || !closeBtn || !drawer.textContent.includes('Ship the contract before the migration?')) return false;
+      const drawerRect = drawer.getBoundingClientRect();
+      const closeRect = closeBtn.getBoundingClientRect();
+      return closeRect.width > 0 && closeRect.right <= window.innerWidth && Math.abs(drawerRect.right - window.innerWidth) <= 1;
+    })()`, undefined, { failure: 'clicking Answer never opened the triage drawer inside the viewport with the question' })).toBe(true)
     expect(browser.waitForValue<string>('location.pathname')).toBe(`/p/${project}/activity`)
     browser.click('[data-slot="activity-triage-drawer"] button[aria-label="Close triage drawer"]')
     expect(browser.waitForValue<boolean>(`document.querySelector('[data-slot="activity-triage-drawer"]') === null`)).toBe(true)
