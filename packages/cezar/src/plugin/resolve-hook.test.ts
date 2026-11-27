@@ -44,11 +44,15 @@ it('gives a plugin outside the repository the running copy of @hearsay-tools/squ
   const outside = mkdtempSync(join(tmpdir(), 'hsq-hook-plugin-'));
   try {
     mkdirSync(join(outside, 'plugin'));
-    writeFileSync(join(outside, 'plugin', 'index.mjs'), "export { productEnv, z } from '@hearsay-tools/squawk/plugin';\nexport { nativeMockPath, readNdjson } from '@hearsay-tools/squawk/plugin/runtime';\n");
+    writeFileSync(
+      join(outside, 'plugin', 'index.mjs'),
+      "export { productEnv, z } from '@hearsay-tools/squawk/plugin';\nexport { nativeMockPath, readNdjson } from '@hearsay-tools/squawk/plugin/runtime';\nexport { AcpEvents, AcpRpcError, AcpSession, AcpTransport } from '@hearsay-tools/squawk/plugin/acp';\n",
+    );
     writeFileSync(join(outside, 'plugin', 'subpath.mjs'), "export * from '@hearsay-tools/squawk/plugin/runner-kit';\n");
     const hook = pathToFileURL(fileURLToPath(new URL('./resolve-hook.ts', import.meta.url))).href;
     const entry = pathToFileURL(fileURLToPath(new URL('./index.ts', import.meta.url))).href;
     const runtime = pathToFileURL(fileURLToPath(new URL('./runtime.ts', import.meta.url))).href;
+    const acp = pathToFileURL(fileURLToPath(new URL('./acp.ts', import.meta.url))).href;
     const plugin = pathToFileURL(join(outside, 'plugin', 'index.mjs')).href;
     const subpath = pathToFileURL(join(outside, 'plugin', 'subpath.mjs')).href;
     const script = `
@@ -57,13 +61,18 @@ it('gives a plugin outside the repository the running copy of @hearsay-tools/squ
       const fromPlugin = await import(${JSON.stringify(plugin)});
       const running = await import(${JSON.stringify(entry)});
       const runningRuntime = await import(${JSON.stringify(runtime)});
+      const runningAcp = await import(${JSON.stringify(acp)});
       const parsed = fromPlugin.z.object({ id: fromPlugin.z.string() }).parse({ id: 'host-plugin' });
       const subpath = await import(${JSON.stringify(subpath)}).then(() => 'loaded', error => error.message);
       console.log(JSON.stringify({
         same: fromPlugin.productEnv === running.productEnv
           && fromPlugin.z === running.z
           && fromPlugin.readNdjson === runningRuntime.readNdjson
-          && fromPlugin.nativeMockPath === runningRuntime.nativeMockPath,
+          && fromPlugin.nativeMockPath === runningRuntime.nativeMockPath
+          && fromPlugin.AcpSession === runningAcp.AcpSession
+          && fromPlugin.AcpTransport === runningAcp.AcpTransport
+          && fromPlugin.AcpEvents === runningAcp.AcpEvents
+          && fromPlugin.AcpRpcError === runningAcp.AcpRpcError,
         parsed,
         subpath,
       }));

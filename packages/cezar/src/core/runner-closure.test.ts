@@ -74,17 +74,17 @@ function foreignRunnerModules(closure: Set<string>, allowed: ReadonlySet<string>
 }
 
 describe('per-runner test closures', () => {
-  it('refuses any import from a foreign runner folder, including antigravity/acp', async () => {
+  it('refuses any import from a foreign runner folder, including nested antigravity modules', async () => {
     const result = await build({
-      stdin: { contents: `import { AcpSession } from './runners/antigravity/acp/session.ts';
+      stdin: { contents: `import { AntigravitySession } from './runners/antigravity/antigravity-session.ts';
         import { PiRunner } from './runners/pi/pi-runner.ts';
-        export class FixtureRunner { session = AcpSession; foreign = PiRunner; }`, resolveDir: src },
+        export class FixtureRunner { session = AntigravitySession; foreign = PiRunner; }`, resolveDir: src },
       absWorkingDir: src, bundle: true, write: false, metafile: true, platform: 'node', format: 'esm', packages: 'external', logLevel: 'silent',
       plugins: [pluginKitAlias],
     });
     const closure = new Set(Object.keys(result.metafile.inputs));
     const foreign = foreignRunnerModules(closure, new Set(['fixture']));
-    expect(foreign).toContain('runners/antigravity/acp/session.ts');
+    expect(foreign).toContain('runners/antigravity/antigravity-session.ts');
     expect(foreign).toContain('runners/pi/pi-runner.ts');
   });
 

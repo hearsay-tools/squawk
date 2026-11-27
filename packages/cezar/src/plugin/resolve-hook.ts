@@ -8,7 +8,7 @@ export const PLUGIN_ENTRY_SPECIFIER = '@hearsay-tools/squawk/plugin';
 /**
  * Allowed `@hearsay-tools/squawk/plugin*` specifiers and their module stem next to this file.
  * Narrow subpaths keep `bootRuntime()` and runner `definition.ts` modules off eager
- * `node:child_process`, TOML/YAML parsers, managed-CLI storage, and Pi RPC code.
+ * `node:child_process`, TOML/YAML parsers, managed-CLI storage, Pi RPC, and ACP code.
  */
 export const PLUGIN_ENTRY_SUBPATHS: Readonly<Record<string, string>> = {
   [PLUGIN_ENTRY_SPECIFIER]: 'index',
@@ -16,6 +16,7 @@ export const PLUGIN_ENTRY_SUBPATHS: Readonly<Record<string, string>> = {
   '@hearsay-tools/squawk/plugin/model-settings': 'model-settings',
   '@hearsay-tools/squawk/plugin/managed-cli': 'managed-cli',
   '@hearsay-tools/squawk/plugin/pi-rpc': 'pi-rpc',
+  '@hearsay-tools/squawk/plugin/acp': 'acp',
 };
 
 /**

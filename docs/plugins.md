@@ -60,7 +60,7 @@ The fields of each registration are in the types that `@hearsay-tools/squawk/plu
 `registerRemovalSlots`, `registerLaunchPart` and `onRunLifecycle`. The setup function may be `async`.
 
 A plugin imports Squawk code only from `@hearsay-tools/squawk/plugin` and these subpaths:
-`/runtime`, `/model-settings`, `/managed-cli` and `/pi-rpc`. Squawk maps them to its own running
+`/runtime`, `/model-settings`, `/managed-cli`, `/pi-rpc` and `/acp`. Squawk maps them to its own running
 copy, so a plugin needs no installed copy of Squawk. Any other `@hearsay-tools/squawk` import
 fails. `packages/cezar/src/plugin/__fixtures__/external-runner/` is a complete runner plugin in
 plain JavaScript.

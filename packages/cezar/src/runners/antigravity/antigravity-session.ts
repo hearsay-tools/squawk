@@ -1,8 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { z, type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentSession, type ContentBlock, type SessionOptions, productEnv, type UiAskQuestion, type UiEvent } from '@hearsay-tools/squawk/plugin';
 import { prependSystemPrompt, SessionEndedBeforeAcknowledgement, openingContent, validSkillMessage, spawnSessionLeader, signalSession, SessionDescendants, AUTO_END_DELAY_MS, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS, squawkToolNames, summarizeRunnerStderr } from '@hearsay-tools/squawk/plugin/runtime';
-import { AcpSession } from './acp/session.ts';
-import { AcpRpcError } from './acp/transport.ts';
+import { AcpRpcError, AcpSession } from '@hearsay-tools/squawk/plugin/acp';
 import { antigravityEnv } from './runtime-env.ts';
 import { antigravityMcp } from './http-mcp.ts';
 import { ANTIGRAVITY_MCP_NAME } from './mcp-name.ts';

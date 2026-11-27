@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { UiEvent, UiToolItem } from '../../core/ui-events.ts';
-import { AcpEvents } from './acp/events.ts';
+import { AcpEvents } from '@hearsay-tools/squawk/plugin/acp';
 import {
   AntigravitySubagentTracker,
   parseChildMessageDelivery,

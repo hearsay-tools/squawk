@@ -47,7 +47,7 @@ scan(dist);
 // declaration without touching string-literal type constants; `.js` runtime imports stay on the
 // package specifier and resolve through `installPluginResolveHook()`.
 const PLUGIN_PACKAGE = '@hearsay-tools/squawk/plugin';
-const PLUGIN_SPEC = /^@hearsay-tools\/squawk\/plugin(?:\/(runtime|model-settings|managed-cli|pi-rpc))?$/;
+const PLUGIN_SPEC = /^@hearsay-tools\/squawk\/plugin(?:\/(runtime|model-settings|managed-cli|pi-rpc|acp))?$/;
 /** The module specifier literals of a declaration file: `from`, side-effect `import` and `import(...)` types. */
 function declarationSpecifiers(text) {
   const found = [];

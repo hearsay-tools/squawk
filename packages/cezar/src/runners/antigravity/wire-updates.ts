@@ -1,5 +1,5 @@
 import { z } from '@hearsay-tools/squawk/plugin';
-import type { AcpHooks } from './acp/protocol.ts';
+import type { AcpHooks } from '@hearsay-tools/squawk/plugin/acp';
 import { AntigravitySubagentTracker, parseChildToolCallId } from './subagent-tracker.ts';
 import { antigravityTool } from './tool-normalization.ts';
 

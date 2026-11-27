@@ -12,7 +12,7 @@ import { antigravityRunner } from './definition.ts';
 import { pidExists } from '../../core/process-stat.ts';
 import { permissionPolicy } from './permissions.ts';
 import { antigravityTool } from './tool-normalization.ts';
-import type { AcpPermissionRequest } from './acp/protocol.ts';
+import type { AcpPermissionRequest } from '@hearsay-tools/squawk/plugin/acp';
 import { parseUsageLimit } from '../../core/usage-limit.ts';
 
 sealTestRunners(antigravityRunner);

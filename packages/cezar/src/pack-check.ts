@@ -16,6 +16,7 @@ export const PLUGIN_ENTRY_FILES: readonly string[] = [
   'dist/plugin/model-settings.js',
   'dist/plugin/managed-cli.js',
   'dist/plugin/pi-rpc.js',
+  'dist/plugin/acp.js',
 ];
 
 /** Human-readable problems with a would-be tarball; empty array = publishable.
