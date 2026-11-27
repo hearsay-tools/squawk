@@ -13,8 +13,13 @@ import { Button } from '@/components/ui/button'
 import { orderProjects } from '@/lib/project-order'
 import { useProjectOrder } from '@/lib/use-project-order'
 
-import { ScopeSwitch, SummaryChips, activityHeaderProps } from './activity-header'
-import { summarize } from './activity-model'
+import {
+  ActivityHeaderActions,
+  SummaryChips,
+  activityHeaderProps,
+} from './activity-header'
+import { projectNotice, summarize } from './activity-model'
+import { ActivitySupervisionView } from './activity-supervision-view'
 import { groupProjects, inRailOrder } from './global-model'
 import { IdleLine, ProjectPanel } from './global-panel'
 import { useActivityMotion } from './use-activity-motion'
@@ -22,10 +27,10 @@ import { useServerNow } from './use-server-now'
 import './activity-motion.css'
 
 /**
- * `/activity`, the global activity view (spec 2026-11-05-live-activity-view, "Global view"),
- * static: one panel for each project with active work or with a notice, in project-rail order,
- * and the loaded idle projects in one line at the bottom. It reads the live workspace snapshot
- * (`useActivityLive`) and plays the same motion on the pills and arcs as the project view.
+ * `/activity`, the global supervision decision queue (hearsay-tools/squawk#4376):
+ * flat priority-sorted Attention queue and compact Working rows across every loaded project
+ * (each item carrying its project badge) with an explicit `Group by project` toggle, inline
+ * triage drawer, collapsible margin arcs, unloaded/unavailable project notices, and the idle line.
  */
 
 const WORKSPACE = { kind: 'workspace' } as const
@@ -53,12 +58,24 @@ export function GlobalActivityRoute() {
   const activity = useActivityLive(WORKSPACE)
   const back = useReturnProject()
   const railIds = useRailIds()
+  const [grouped, setGrouped] = React.useState(false)
   const now = useServerNow(activity.data?.generatedAt, activity.dataUpdatedAt)
   const snapshot = activity.data?.projects
-  const groups = React.useMemo(() => groupProjects(inRailOrder(snapshot ?? [], railIds)), [snapshot, railIds])
-  const { motion, paused, reduced } = useActivityMotion(activity.data, 'workspace')
+  const ordered = React.useMemo(() => inRailOrder(snapshot ?? [], railIds), [snapshot, railIds])
+  const groups = React.useMemo(() => groupProjects(ordered), [ordered])
+  const activeProjects = React.useMemo(
+    () => groups.panels.filter((project) => projectNotice(project) === undefined),
+    [groups.panels],
+  )
+  const noticeProjects = React.useMemo(
+    () => groups.panels.filter((project) => projectNotice(project) !== undefined),
+    [groups.panels],
+  )
+  const projectOrder = React.useMemo(() => ordered.map((project) => project.projectId), [ordered])
+  const { motion, feed, paused, reduced } = useActivityMotion(activity.data, 'workspace')
 
-  const density = snapshot ? pageShellDensity(groups.panels.length) : 'full'
+  const totalTasks = activeProjects.reduce((sum, project) => sum + project.tasks.length, 0)
+  const density = snapshot ? pageShellDensity(totalTasks + noticeProjects.length) : 'full'
 
   return (
     <BoardPage
@@ -72,12 +89,20 @@ export function GlobalActivityRoute() {
         now: activity.data ? now : undefined,
         updatedAt: activity.data?.generatedAt,
         stale: activity.isError,
-        scopeSwitch: <ScopeSwitch scope="all" projectId={back.id} projectName={back.name} />,
+        scopeSwitch: (
+          <ActivityHeaderActions
+            scope="all"
+            projectId={back.id}
+            projectName={back.name}
+            grouped={grouped}
+            onToggleGroup={() => setGrouped((value) => !value)}
+          />
+        ),
       })}
       sparseFooter={
         snapshot && groups.panels.length > 0 ? (
           <PageShellSparseFooter
-            summary={`${groups.panels.length} active ${groups.panels.length === 1 ? 'project' : 'projects'} with live work.`}
+            summary={`${activeProjects.length} active ${activeProjects.length === 1 ? 'project' : 'projects'} with live work.`}
             actions={
               <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
                 <RouterLink to="/tasks">View all tasks</RouterLink>
@@ -108,9 +133,26 @@ export function GlobalActivityRoute() {
           }
         />
       ) : null}
-      <div data-slot="activity-panels" className="flex flex-col gap-3">
-        {groups.panels.map((project) => <ProjectPanel key={project.projectId} project={project} now={now} motion={motion} paused={paused || reduced} />)}
-      </div>
+      {activeProjects.length > 0 ? (
+        <ActivitySupervisionView
+          projects={activeProjects}
+          now={now}
+          global
+          grouped={grouped}
+          projectOrder={projectOrder}
+          motion={motion}
+          feed={feed}
+          still={reduced}
+          paused={paused}
+        />
+      ) : null}
+      {noticeProjects.length > 0 ? (
+        <div data-slot="activity-panels" className="flex flex-col gap-3">
+          {noticeProjects.map((project) => (
+            <ProjectPanel key={project.projectId} project={project} now={now} motion={motion} paused={paused || reduced} />
+          ))}
+        </div>
+      ) : null}
       <IdleLine projects={groups.idle} belowPanels={groups.panels.length > 0} />
     </BoardPage>
   )

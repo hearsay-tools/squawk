@@ -1,3 +1,4 @@
+// real-clock: static ISO timestamps used solely to validate schema parsing; never compared against system clock.
 import { describe, expect, it } from 'vitest';
 import { ACTIVITY_TOOL_KINDS, activityWaitSchema, activityQuerySchema, activityRunSchema } from './activity.ts';
 import { WAIT_KIND } from './wait-factories.testkit.ts';
@@ -20,6 +21,15 @@ describe('the activity contract', () => {
     const run = { runId: 'r', title: 't', status: RUN_STATUS.running, rung: 'running', rate: Array.from({ length: 30 }, () => 0), workers: [] };
     expect(activityRunSchema.safeParse(run).success).toBe(true);
     expect(activityRunSchema.safeParse({ ...run, rate: [0] }).success).toBe(false);
+  });
+
+  it('accepts optional createdAt and finishedAt timestamps for decision-queue age', () => {
+    const run = {
+      runId: 'r', title: 't', status: RUN_STATUS.review, rung: 'needs-review',
+      createdAt: '2026-11-23T10:00:00Z', startedAt: '2026-11-23T10:01:00Z', finishedAt: '2026-11-23T10:05:00Z',
+      rate: Array.from({ length: 30 }, () => 0), workers: [],
+    };
+    expect(activityRunSchema.parse(run)).toEqual(run);
   });
 });
 

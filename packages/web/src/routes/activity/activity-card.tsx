@@ -1,4 +1,5 @@
 import type { HTMLAttributes } from 'react'
+import { Link as RouterLink } from 'react-router'
 import type { ActivityRequest, ActivityRun, ActivityWorker } from '@open-mercato/cezar-api-client/contract/activity'
 import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 
@@ -69,13 +70,42 @@ interface WorkerRowProps {
   index: ReadonlyMap<string, RunEntry>
   ctx: NowContext
   motion: MotionState
+  href?: string | undefined
+  global?: boolean | undefined
+  compact?: boolean | undefined
 }
 
-function WorkerRow({ worker, parentId, requests, index, ctx, motion }: WorkerRowProps) {
+const WORKER_ROW_CLASS = {
+  compact: {
+    base: 'relative flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1 text-[12px] text-muted-foreground',
+    asks: 'border-l-2 border-dashed border-message-inbound-accent bg-message-inbound-bg',
+    shape: undefined,
+    title: 'min-w-0 truncate text-[12px] font-medium text-foreground',
+    line: 'truncate text-[11.5px] text-muted-foreground tabular-nums',
+    main: 'text-foreground',
+  },
+  card: {
+    base: 'relative grid grid-cols-[14px_minmax(0,1fr)] items-start gap-x-2 rounded-lg py-[5px] before:absolute before:top-[13px] before:-left-3.5 before:w-2.5 before:border-t before:border-border',
+    asks: '-mx-1.5 bg-message-inbound-bg px-1.5',
+    shape: 'mt-[3px]',
+    title: 'min-w-0 truncate text-[12.5px] font-medium text-foreground',
+    line: 'col-start-2 truncate text-[11.5px] text-muted-foreground tabular-nums',
+    main: undefined,
+  },
+} as const
+
+function WorkerTitleLink({ to, title, global }: { to: string; title: string; global: boolean }) {
+  const cls = 'relative z-[1] hover:underline focus-visible:outline-2 focus-visible:outline-ring max-md:inline-flex max-md:min-h-11 max-md:items-center'
+  return global ? <RouterLink to={to} className={cls}>{title}</RouterLink> : <Link to={to} className={cls}>{title}</Link>
+}
+
+function WorkerRow({ worker, parentId, requests, index, ctx, motion, href, global = false, compact = false }: WorkerRowProps) {
   const ask = askOf(worker.runId, parentId, requests)
   const line = workerLine(worker, ctx, ask?.text)
   const hold = motion.workerHold[worker.runId]
   const runners = useRunners().data
+  const style = compact ? WORKER_ROW_CLASS.compact : WORKER_ROW_CLASS.card
+  const meta = [worker.runner ? runnerDisplayName(runners, worker.runner) : undefined, worker.model].filter(Boolean).join(' · ')
   return (
     <li
       data-slot="activity-worker"
@@ -83,20 +113,20 @@ function WorkerRow({ worker, parentId, requests, index, ctx, motion }: WorkerRow
       data-asks={line.asks ? 'true' : undefined}
       data-hold={hold?.phase}
       className={cn(
-        'relative grid grid-cols-[14px_minmax(0,1fr)] items-start gap-x-2 rounded-lg py-[5px] before:absolute before:top-[13px] before:-left-3.5 before:w-2.5 before:border-t before:border-border',
-        line.asks && '-mx-1.5 bg-message-inbound-bg px-1.5',
+        style.base,
+        line.asks && style.asks,
         worker.runId in motion.workerEnter && 'activity-row-enter',
         hold?.phase === 'fold' && 'activity-row-fold',
       )}
     >
       {hold ? <span key={hold.key} aria-hidden="true" className={cn('activity-row-flash', TONE_FILL[hold.tone])} /> : null}
-      <span className="mt-[3px]"><RunShape run={worker} role="worker" /></span>
-      <span className="min-w-0 truncate text-[12.5px] font-medium">
-        <Link to={taskPath(worker.runId)} className="relative z-[1] hover:underline focus-visible:outline-2 focus-visible:outline-ring max-md:inline-flex max-md:min-h-11 max-md:items-center">{worker.title}</Link>
-        <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{[worker.runner ? runnerDisplayName(runners, worker.runner) : undefined, worker.model].filter(Boolean).join(' · ')}</span>
+      <span className={style.shape}><RunShape run={worker} role="worker" /></span>
+      <span className={style.title}>
+        <WorkerTitleLink to={href ?? taskPath(worker.runId)} title={worker.title} global={global} />
+        {meta ? <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{meta}</span> : null}
       </span>
-      <span data-slot="activity-worker-line" className="col-start-2 truncate text-[11.5px] text-muted-foreground tabular-nums">
-        <b className={cn('font-semibold', TONE_INK[line.tone])}>{line.verb}</b> · <span className={cn(line.mono && 'font-mono')}>{line.main}</span>
+      <span data-slot="activity-worker-line" className={style.line}>
+        <b className={cn('font-semibold', TONE_INK[line.tone])}>{line.verb}</b> · <span className={cn(style.main, line.mono && 'font-mono')}>{line.main}</span>
       </span>
       <LineText texts={lineTexts(worker.runId, requests, index)} />
     </li>
@@ -112,12 +142,48 @@ function WorkerDots({ workers }: { workers: readonly ActivityWorker[] }) {
   )
 }
 
-function Workers({ task, requests, index, ctx, dense, motion }: Omit<CardProps, 'narrow' | 'motion'> & { motion: MotionState }) {
+export function ActivityWorkers({
+  task,
+  requests,
+  index,
+  ctx,
+  dense = false,
+  motion,
+  projectId,
+  global = false,
+  compact = false,
+}: {
+  task: ActivityRun
+  requests: readonly ActivityRequest[]
+  index: ReadonlyMap<string, RunEntry>
+  ctx: NowContext
+  dense?: boolean
+  motion: MotionState
+  projectId?: string | undefined
+  global?: boolean | undefined
+  compact?: boolean | undefined
+}) {
   // Settled done, failed and cancelled workers fold into the count; review workers stay a row. A
   // worker that just settled stays a row while it flashes, then folds.
   const held = (runId: string) => runId in motion.workerHold
   const rows = task.workers.filter((worker) => isLiveStatus(worker.status) || worker.status === 'review' || held(worker.runId))
   const finished = finishedText(foldedWorkers(task, held))
+  if (rows.length === 0 && !finished) return null
+  const hrefOf = (runId: string) => (global && projectId ? `/p/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(runId)}` : taskPath(runId))
+  if (compact) {
+    return (
+      <div className="ml-4 border-l border-border pl-3">
+        {rows.length > 0 ? (
+          <ul data-slot="activity-workers" className="flex flex-col gap-0.5">
+            {rows.map((worker) => (
+              <WorkerRow key={worker.runId} worker={worker} parentId={task.runId} requests={requests} index={index} ctx={ctx} motion={motion} href={hrefOf(worker.runId)} global={global} compact />
+            ))}
+          </ul>
+        ) : null}
+        {finished ? <p data-slot="activity-finished" className="mt-1 px-2 text-[11px] text-muted-foreground">{finished}</p> : null}
+      </div>
+    )
+  }
   return (
     <>
       {rows.length > 0 && dense ? <WorkerDots workers={rows} /> : null}
@@ -129,6 +195,10 @@ function Workers({ task, requests, index, ctx, dense, motion }: Omit<CardProps, 
       {finished ? <p data-slot="activity-finished" className="mt-1.5 ml-[18px] text-[11px] text-muted-foreground">{finished}</p> : null}
     </>
   )
+}
+
+function Workers(props: Omit<CardProps, 'narrow' | 'motion'> & { motion: MotionState }) {
+  return <ActivityWorkers {...props} />
 }
 
 const PEER_LINK = 'relative z-[1] text-[12px] text-message-peer-accent hover:underline focus-visible:outline-2 focus-visible:outline-ring max-md:inline-flex max-md:min-h-11 max-md:items-center'

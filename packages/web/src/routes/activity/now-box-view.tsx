@@ -19,9 +19,19 @@ const BUCKET_FILL: Record<ActivityCheckBucket, string> = {
 const checkMotion = (bucket: ActivityCheckBucket, passed: boolean) => (passed ? 'activity-check-pass' : bucket === 'pending' ? 'activity-breathe-fast' : undefined)
 
 /** One segment for each check; a long list narrows the gaps so every segment still fits. */
-function CheckSegments({ checks, overflow, passed }: { checks: NonNullable<NowBox['checks']>; overflow: NowBox['overflow']; passed: ReadonlySet<string> }) {
+export function CheckSegments({
+  checks,
+  overflow,
+  passed,
+  className,
+}: {
+  checks: NonNullable<NowBox['checks']>
+  overflow?: NowBox['overflow']
+  passed: ReadonlySet<string>
+  className?: string | undefined
+}) {
   return (
-    <span data-slot="activity-checks" aria-hidden="true" className={cn('col-start-2 mt-[5px] flex items-center', checks.length > 40 ? 'gap-px' : 'gap-[3px]')}>
+    <span data-slot="activity-checks" aria-hidden="true" className={className ?? cn('col-start-2 mt-[5px] flex items-center', checks.length > 40 ? 'gap-px' : 'gap-[3px]')}>
       {checks.map((check) => (
         <i
           key={check.name}

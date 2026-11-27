@@ -169,10 +169,10 @@ export function useProjectRun(projectId: string | undefined, id: string | undefi
   })
 }
 
-export function useRunDiff(id: string | undefined) {
+export function useRunDiff(id: string | undefined, projectId?: string) {
   return useQuery({
-    queryKey: queryKeys.runs.diff(id ?? ''),
-    queryFn: ({ signal }) => getRunDiff(id as string, { signal }),
+    queryKey: projectId ? [projectId, 'runs', 'diff', id ?? ''] as const : queryKeys.runs.diff(id ?? ''),
+    queryFn: ({ signal }) => getRunDiff(id as string, { signal, ...(projectId ? { projectId } : {}) }),
     enabled: Boolean(id),
   })
 }
