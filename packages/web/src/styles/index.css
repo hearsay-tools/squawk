@@ -315,7 +315,7 @@
   --conflict: var(--semantic-text-conflict);
 
   --success: var(--semantic-text-green);
-  --danger: oklch(0.57709882 0.21515673 27.325049);
+  --danger: oklch(0.545 0.205 27.325049);
 
   --shadow-modal: 0 16px 48px 0 oklch(0.00000000 0.00000000 none / 0.120000);
 

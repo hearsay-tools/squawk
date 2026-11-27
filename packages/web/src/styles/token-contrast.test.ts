@@ -186,6 +186,15 @@ describe('cockpit design token contrast (dark & light)', () => {
         `${theme.name} --semantic-text-red must be distinct from --danger fill`,
       ).not.toBe(resolveToken('danger', theme.tokens, theme.fallback))
     }
+
+    // Light-theme --danger also stays >= 4.5:1 on both canvas and raised cards for legacy text-danger/text-destructive sites.
+    for (const surface of ['surface-base', 'surface-raised'] as const) {
+      const ratio = contrastRatio(
+        resolveToken('danger', lightTokens, darkTokens),
+        resolveToken(surface, lightTokens, darkTokens),
+      )
+      expect(ratio, `light --danger on --${surface} (${ratio.toFixed(2)}:1)`).toBeGreaterThanOrEqual(4.5)
+    }
   })
 
   it('guarantees >= 4.5:1 contrast for button and signal-pill foreground/fill pairs', () => {

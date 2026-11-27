@@ -562,7 +562,7 @@ function ThreadTranscript({
           data-state={footer.state}
           className={cn(
             'mt-auto flex items-center gap-2 border-t border-border pt-3 text-xs',
-            footer.tone === 'danger' ? 'text-danger' : 'text-soft-foreground',
+            footer.tone === 'danger' ? 'text-semantic-red' : 'text-soft-foreground',
           )}
         >
           {footer.label}
