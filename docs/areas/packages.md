@@ -49,7 +49,7 @@ it, and the readers of the old path. A per-file record names its source file by 
 | --- | --- |
 | `.github/mutants/targets.json` | Mutation targets, keyed by file, with the functions they guard |
 | `.github/mutants/equivalent/<source path>.json` | Equivalent mutants of one source file, by function (a per-file record) |
-| `packages/cezar/src/file-length.baseline.json` | The length of each file over 1,000 lines |
+| `packages/cezar/src/file-length.baseline/<source path>.json` | `{ "lines": N }`: the pin of one file over 1,000 lines (a per-file record) |
 | `packages/cezar/src/lint/layer-import.baseline.json` | Core-to-feature imports, by `file` and `target` |
 | `packages/cezar/src/lint/layers.json` | The layer of each path |
 | `packages/cezar/src/lint/*.baseline.json` and the other `*.baseline.json` files | Lint and wait-discipline allowances, by file |
