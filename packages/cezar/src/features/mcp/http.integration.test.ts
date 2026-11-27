@@ -50,6 +50,19 @@ function parseToolResult(result: unknown) {
   return { isError: obj.isError === true, data: JSON.parse(text) as Record<string, unknown> };
 }
 
+async function callTool(client: Client, name: string, args: Record<string, unknown> = {}) {
+  return parseToolResult(await client.callTool({ name, arguments: args }));
+}
+
+async function connectHttpClient(origin: string, token: string, extraHeaders: Record<string, string> = {}) {
+  const transport = new StreamableHTTPClientTransport(new URL(`${origin}/api/v1/mcp`), {
+    requestInit: { headers: { authorization: `Bearer ${token}`, ...extraHeaders } },
+  });
+  const client = new Client({ name: 'http-mcp-test', version: '1.0.0' });
+  await client.connect(transport as unknown as Transport);
+  return { client, transport };
+}
+
 /** Send a raw HTTP POST via `node:http` to exercise streaming/chunked 401 and 413 handling cleanly. */
 async function postRawHttp(
   url: string,
@@ -307,30 +320,19 @@ describe('Streamable HTTP /api/v1/mcp auth matrix and lifecycle (hearsay-tools/s
 
   it('enforces project-scoped token isolation across project_list and task_* tools', async () => {
     const scoped = createMcpToken({ port: cockpit.port, name: 'scoped-a', project: cockpit.projectA, home: testHome() });
-    const transport = new StreamableHTTPClientTransport(new URL(`${cockpit.origin}/api/v1/mcp`), {
-      requestInit: { headers: { authorization: `Bearer ${scoped.token}` } },
-    });
-    const client = new Client({ name: 'scoped-test', version: '1.0.0' });
-    await client.connect(transport as unknown as Transport);
+    const { client } = await connectHttpClient(cockpit.origin, scoped.token);
     try {
-      const projects = parseToolResult(await client.callTool({ name: 'project_list', arguments: {} }));
+      const projects = await callTool(client, 'project_list');
       expect(projects.isError).toBe(false);
       expect((projects.data.projects as Array<{ id: string }>).map((p) => p.id)).toEqual([cockpit.projectA]);
 
-      const okList = parseToolResult(await client.callTool({ name: 'task_list', arguments: { project: cockpit.projectA } }));
-      expect(okList.isError).toBe(false);
+      expect((await callTool(client, 'task_list', { project: cockpit.projectA })).isError).toBe(false);
 
-      const otherStart = parseToolResult(await client.callTool({
-        name: 'task_start',
-        arguments: { project: cockpit.projectB, task: 'Should be rejected' },
-      }));
+      const otherStart = await callTool(client, 'task_start', { project: cockpit.projectB, task: 'Should be rejected' });
       expect(otherStart.isError).toBe(true);
       expect(otherStart.data).toMatchObject({ code: 'forbidden' });
 
-      const allList = parseToolResult(await client.callTool({
-        name: 'task_list',
-        arguments: { project: 'all' },
-      }));
+      const allList = await callTool(client, 'task_list', { project: 'all' });
       expect(allList.isError).toBe(true);
       expect(allList.data).toMatchObject({ code: 'forbidden' });
     } finally {
@@ -340,30 +342,20 @@ describe('Streamable HTTP /api/v1/mcp auth matrix and lifecycle (hearsay-tools/s
 
   it('completes a full StreamableHTTPClientTransport lifecycle and survives a cockpit restart statelessly', async () => {
     const created = createMcpToken({ port: cockpit.port, name: 'fleet', home: testHome() });
-    const transport = new StreamableHTTPClientTransport(new URL(`${cockpit.origin}/api/v1/mcp`), {
-      requestInit: { headers: { authorization: `Bearer ${created.token}` } },
-    });
-    const client = new Client({ name: 'http-lifecycle-test', version: '1.0.0' });
-    await client.connect(transport as unknown as Transport);
+    const { client } = await connectHttpClient(cockpit.origin, created.token);
     try {
-      const listedProjects = parseToolResult(await client.callTool({ name: 'project_list', arguments: {} }));
+      const listedProjects = await callTool(client, 'project_list');
       expect(listedProjects.isError).toBe(false);
       expect((listedProjects.data.projects as Array<{ id: string }>).map((p) => p.id)).toEqual(
         expect.arrayContaining([cockpit.projectA, cockpit.projectB]),
       );
 
-      const started = parseToolResult(await client.callTool({
-        name: 'task_start',
-        arguments: { project: cockpit.projectA, task: 'Verify Streamable HTTP MCP lifecycle' },
-      }));
+      const started = await callTool(client, 'task_start', { project: cockpit.projectA, task: 'Verify Streamable HTTP MCP lifecycle' });
       expect(started.isError).toBe(false);
       const id = started.data.id as string;
 
       setTimeout(() => setRunStatus(cockpit.storeA, id, RUN_STATUS.waiting), 80);
-      const waited = parseToolResult(await client.callTool({
-        name: 'task_wait',
-        arguments: { project: cockpit.projectA, ids: [id], timeoutSeconds: 10 },
-      }));
+      const waited = await callTool(client, 'task_wait', { project: cockpit.projectA, ids: [id], timeoutSeconds: 10 });
       expect(waited.isError).toBe(false);
       expect(waited.data).toMatchObject({
         project: cockpit.projectA,
@@ -371,54 +363,24 @@ describe('Streamable HTTP /api/v1/mcp auth matrix and lifecycle (hearsay-tools/s
         runs: [expect.objectContaining({ id, status: RUN_STATUS.waiting, attention: 'waiting' })],
       });
 
-      const sent = parseToolResult(await client.callTool({
-        name: 'task_send',
-        arguments: { project: cockpit.projectA, id, text: 'Continue via HTTP MCP' },
-      }));
-      expect(sent.isError).toBe(false);
+      expect((await callTool(client, 'task_send', { project: cockpit.projectA, id, text: 'Continue via HTTP MCP' })).isError).toBe(false);
+      expect((await callTool(client, 'task_log', { project: cockpit.projectA, id })).isError).toBe(false);
 
-      const log = parseToolResult(await client.callTool({
-        name: 'task_log',
-        arguments: { project: cockpit.projectA, id },
-      }));
-      expect(log.isError).toBe(false);
+      // Restart cockpit on the same port — stateless client keeps working without session errors.
+      const restart = await connectHttpClient(cockpit.origin, created.token, { connection: 'close' });
+      try {
+        expect(restart.transport.sessionId).toBeUndefined();
+        expect((await callTool(restart.client, 'task_status', { project: cockpit.projectA, id })).isError).toBe(false);
+        await cockpit.restart();
+        const statusAfterRestart = await callTool(restart.client, 'task_status', { project: cockpit.projectA, id });
+        expect(statusAfterRestart.isError).toBe(false);
+        expect(statusAfterRestart.data).toMatchObject({ id, project: cockpit.projectA });
+      } finally {
+        await restart.client.close();
+      }
 
-    // Restart cockpit on the same port — stateless client keeps working without session errors.
-    const created2Transport = new StreamableHTTPClientTransport(new URL(`${cockpit.origin}/api/v1/mcp`), {
-      requestInit: { headers: { authorization: `Bearer ${created.token}`, connection: 'close' } },
-    });
-    const restartClient = new Client({ name: 'http-restart-test', version: '1.0.0' });
-    await restartClient.connect(created2Transport as unknown as Transport);
-    try {
-      expect(created2Transport.sessionId).toBeUndefined();
-      const before = parseToolResult(await restartClient.callTool({
-        name: 'task_status',
-        arguments: { project: cockpit.projectA, id },
-      }));
-      expect(before.isError).toBe(false);
-
-      await cockpit.restart();
-
-      const statusAfterRestart = parseToolResult(await restartClient.callTool({
-        name: 'task_status',
-        arguments: { project: cockpit.projectA, id },
-      }));
-      expect(statusAfterRestart.isError).toBe(false);
-      expect(statusAfterRestart.data).toMatchObject({ id, project: cockpit.projectA });
-    } finally {
-      await restartClient.close();
-    }
-
-    const stopped = parseToolResult(await client.callTool({
-        name: 'task_stop',
-        arguments: { project: cockpit.projectA, id },
-      }));
-      expect(stopped.isError).toBe(false);
-
-      const listed = parseToolResult(await client.callTool({
-        name: 'task_list',
-        arguments: { project: cockpit.projectA },
-      }));
+      expect((await callTool(client, 'task_stop', { project: cockpit.projectA, id })).isError).toBe(false);
+      const listed = await callTool(client, 'task_list', { project: cockpit.projectA });
       expect(listed.isError).toBe(false);
       expect((listed.data.runs as Array<{ id: string }>).map((r) => r.id)).toContain(id);
     } finally {
@@ -428,16 +390,9 @@ describe('Streamable HTTP /api/v1/mcp auth matrix and lifecycle (hearsay-tools/s
 
   it('aborts an in-flight HTTP task_wait cleanly when the client disconnects', async () => {
     const created = createMcpToken({ port: cockpit.port, name: 'abort-test', home: testHome() });
-    const transport = new StreamableHTTPClientTransport(new URL(`${cockpit.origin}/api/v1/mcp`), {
-      requestInit: { headers: { authorization: `Bearer ${created.token}` } },
-    });
-    const client = new Client({ name: 'abort-client', version: '1.0.0' });
-    await client.connect(transport as unknown as Transport);
+    const { client } = await connectHttpClient(cockpit.origin, created.token);
     try {
-      const started = parseToolResult(await client.callTool({
-        name: 'task_start',
-        arguments: { project: cockpit.projectA, task: 'Wait to be aborted' },
-      }));
+      const started = await callTool(client, 'task_start', { project: cockpit.projectA, task: 'Wait to be aborted' });
       const id = started.data.id as string;
 
       const ac = new AbortController();
