@@ -1,18 +1,19 @@
 /**
  * Stateless Streamable HTTP MCP endpoint (`/api/v1/mcp`, hearsay-tools/squawk#4402).
  *
- * Security invariants (after the global `/api/*` loopback-Host check in local mode):
- * 1. Reject any request carrying an `Origin` header (`403`).
- * 2. Enforce a 1 MiB request body limit (`413`).
- * 3. Fail closed (`404`) when no MCP bearer token is configured for this port or env.
- * 4. Require `Authorization: Bearer <token>` verified via SHA-256 + `crypto.timingSafeEqual`
- *    (`401` + `WWW-Authenticate: Bearer` on missing, invalid, or Basic auth).
- * 5. Allow `POST` only (`405` + `Allow: POST` on `GET`/`DELETE`/other methods).
+ * Security invariants (after the global `/api/*` loopback-Host check in local mode; skips global
+ * 32 MiB `bodyLimit` buffering via `managesBodyLimit: true`):
+ * 1. Reject any request carrying an `Origin` header (`403`) before reading the body.
+ * 2. Fail closed (`404`) when no MCP bearer token is configured for this port or env.
+ * 3. Require `Authorization: Bearer <token>` verified via SHA-256 + `crypto.timingSafeEqual`
+ *    (`401` + `WWW-Authenticate: Bearer` on missing, invalid, or Basic auth) before reading the body.
+ * 4. Allow `POST` only (`405` + `Allow: POST` on `GET`/`DELETE`/other methods).
+ * 5. Enforce a 1 MiB streaming request body limit (`413`) on authenticated `POST`s.
  */
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { HttpRouteContext, HttpRouteDefinition } from '../../core/http-route-registry.ts';
 import { registerRuntimeSecret } from '../../core/secret-redaction.ts';
-import { hasConfiguredMcpTokens, verifyMcpBearerToken } from '../../mcp-tokens.ts';
+import { authenticateMcpRequest } from '../../mcp-tokens.ts';
 import type { FetchFn } from '../../task-cli/http.ts';
 import { createOrchestratorMcpServer } from './tools.ts';
 
@@ -157,34 +158,31 @@ export async function handleMcpHttpRequest(
     );
   }
 
-  let bodyBytes: Uint8Array<ArrayBuffer> | undefined;
-  if (request.method === 'POST' || request.method === 'PUT' || request.method === 'PATCH') {
-    const bounded = await readBoundedBody(request, MCP_MAX_BODY_BYTES);
-    if (bounded === null) {
-      return Response.json(
-        { error: 'request body exceeds 1 MiB limit' },
-        { status: 413 },
-      );
-    }
-    bodyBytes = bounded;
-  }
-
   const env = options.env ?? process.env;
   const port = context.squawkPort();
-  if (!hasConfiguredMcpTokens(env, port, context.home)) {
+  const rawToken = parseBearerHeader(request.headers.get('authorization'));
+  const auth = authenticateMcpRequest(rawToken, env, port, context.home);
+  if (auth.status === 'unconfigured') {
     return Response.json({ error: 'not found' }, { status: 404 });
   }
-
-  const rawToken = parseBearerHeader(request.headers.get('authorization'));
-  if (!rawToken) return unauthorizedResponse();
-  const verified = verifyMcpBearerToken(rawToken, env, port, context.home);
-  if (!verified) return unauthorizedResponse();
-  registerRuntimeSecret(rawToken);
+  if (auth.status === 'unauthorized') {
+    return unauthorizedResponse();
+  }
+  const verified = auth.verified;
+  if (rawToken) registerRuntimeSecret(rawToken);
 
   if (request.method !== 'POST') {
     return Response.json(
       { error: 'method not allowed: use POST /api/v1/mcp' },
       { status: 405, headers: { Allow: 'POST' } },
+    );
+  }
+
+  const bodyBytes = await readBoundedBody(request, MCP_MAX_BODY_BYTES);
+  if (bodyBytes === null) {
+    return Response.json(
+      { error: 'request body exceeds 1 MiB limit' },
+      { status: 413 },
     );
   }
 
@@ -252,7 +250,7 @@ export function createMcpHttpRoute(options: McpHttpHandlerOptions = {}): HttpRou
     id: MCP_HTTP_ROUTE_ID,
     method: 'ALL',
     path: MCP_HTTP_PATH,
-    maxBodyBytes: MCP_MAX_BODY_BYTES,
+    managesBodyLimit: true,
     handle: (request, context) => handleMcpHttpRequest(request, context, options),
   };
 }

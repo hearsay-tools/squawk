@@ -1,5 +1,6 @@
 // real-clock: drives a real loopback HTTP server with StreamableHTTPClientTransport and restart recovery
 import { mkdtempSync, rmSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -47,6 +48,60 @@ function parseToolResult(result: unknown) {
   const blocks = Array.isArray(obj.content) ? obj.content as Array<{ type: string; text?: string }> : [];
   const text = blocks.find((entry) => entry.type === 'text')?.text ?? '{}';
   return { isError: obj.isError === true, data: JSON.parse(text) as Record<string, unknown> };
+}
+
+/** Send a raw HTTP POST via `node:http` to exercise streaming/chunked 401 and 413 handling cleanly. */
+async function postRawHttp(
+  url: string,
+  options: {
+    headers: Record<string, string>;
+    totalBytes: number;
+    chunked: boolean;
+    /** When true, flush headers and hold the stream open without writing body bytes until the server responds. */
+    headersOnly?: boolean;
+  },
+): Promise<{ status: number; writtenBytes: number }> {
+  const chunk = Buffer.alloc(64 * 1024, 0x78);
+  return new Promise((resolve, reject) => {
+    let writtenBytes = 0;
+    let settled = false;
+    const finish = (result?: { status: number; writtenBytes: number }, error?: Error) => {
+      if (settled) return;
+      settled = true;
+      if (error) reject(error);
+      else resolve(result!);
+    };
+    const headers: Record<string, string> = { ...options.headers, connection: 'close' };
+    if (options.chunked) headers['transfer-encoding'] = 'chunked';
+    else headers['content-length'] = String(options.totalBytes);
+    const req = httpRequest(url, { method: 'POST', headers }, (res) => {
+      res.resume();
+      finish({ status: res.statusCode ?? 0, writtenBytes });
+      req.destroy();
+    });
+    req.on('error', (error: NodeJS.ErrnoException) => {
+      if (settled || error.code === 'EPIPE' || error.code === 'ECONNRESET') return;
+      finish(undefined, error);
+    });
+    req.on('close', () => {
+      if (!settled) finish(undefined, new Error('socket closed without response'));
+    });
+    req.flushHeaders();
+    if (options.headersOnly) return;
+    const sendNextChunk = () => {
+      if (settled || req.destroyed) return;
+      if (writtenBytes >= options.totalBytes) {
+        req.end();
+        return;
+      }
+      const remaining = options.totalBytes - writtenBytes;
+      const slice = remaining >= chunk.byteLength ? chunk : chunk.subarray(0, remaining);
+      writtenBytes += slice.byteLength;
+      if (req.write(slice)) setImmediate(sendNextChunk);
+      else req.once('drain', sendNextChunk);
+    };
+    sendNextChunk();
+  });
 }
 
 interface HttpCockpit {
@@ -126,6 +181,7 @@ async function startHttpCockpit(): Promise<HttpCockpit> {
     },
     async close() {
       await stopListener();
+      if (boundPort > 0) revokeMcpToken({ home, port: boundPort, all: true });
       await removeProject(entryA.id, home).catch(() => {});
       await removeProject(entryB.id, home).catch(() => {});
       rmSync(repoA, { recursive: true, force: true });
@@ -182,36 +238,33 @@ describe('Streamable HTTP /api/v1/mcp auth matrix and lifecycle (hearsay-tools/s
       expect(res.status, origin).toBe(403);
     }
 
-    // 5. Oversized body (> 1 MiB) returns 413 — both with Content-Length and chunked streaming
-    //    (enforced before the global 32 MiB bodyLimit middleware, even without auth).
-    const oversized = await fetch(endpoint, {
-      method: 'POST',
-      headers: { ...MCP_HEADERS, authorization: `Bearer ${created.token}`, connection: 'close' },
-      body: 'x'.repeat(MCP_MAX_BODY_BYTES + 1),
+    // 5. Oversized body (> 1 MiB): unauthenticated chunked request returns 401 before reading any
+    //    body bytes, and authenticated Content-Length or chunked uploads fail at 1 MiB with 413
+    //    (skipping the global 32 MiB bodyLimit middleware).
+    const unauthedChunked = await postRawHttp(endpoint, {
+      headers: MCP_HEADERS,
+      totalBytes: 0,
+      chunked: true,
+      headersOnly: true,
+    });
+    expect(unauthedChunked.status).toBe(401);
+    expect(unauthedChunked.writtenBytes).toBe(0);
+
+    const oversized = await postRawHttp(endpoint, {
+      headers: { ...MCP_HEADERS, authorization: `Bearer ${created.token}` },
+      totalBytes: MCP_MAX_BODY_BYTES + 1,
+      chunked: false,
+      headersOnly: true,
     });
     expect(oversized.status).toBe(413);
+    expect(oversized.writtenBytes).toBe(0);
 
-    let streamedBytes = 0;
-    const chunk = new Uint8Array(64 * 1024).fill(0x78);
-    const maxStreamBytes = 4 * 1024 * 1024;
-    const chunkedStream = new ReadableStream<Uint8Array>({
-      pull(controller) {
-        if (streamedBytes >= maxStreamBytes) {
-          controller.close();
-          return;
-        }
-        streamedBytes += chunk.byteLength;
-        controller.enqueue(chunk);
-      },
+    const chunkedOversized = await postRawHttp(endpoint, {
+      headers: { ...MCP_HEADERS, authorization: `Bearer ${created.token}` },
+      totalBytes: MCP_MAX_BODY_BYTES + 64 * 1024,
+      chunked: true,
     });
-    const chunkedOversized = await fetch(endpoint, {
-      method: 'POST',
-      headers: { ...MCP_HEADERS, connection: 'close' },
-      body: chunkedStream,
-      duplex: 'half',
-    } as RequestInit);
     expect(chunkedOversized.status).toBe(413);
-    expect(streamedBytes).toBeLessThan(maxStreamBytes);
 
     // 6. GET and DELETE return 405 with Allow: POST when authorized.
     for (const method of ['GET', 'DELETE']) {
@@ -415,12 +468,22 @@ describe('Streamable HTTP /api/v1/mcp auth matrix and lifecycle (hearsay-tools/s
         ac.abort(new Error('client disconnected'));
         await expect(response.text()).rejects.toThrow();
 
-        // Allow disconnect cleanup to propagate over loopback, then prove server-side polling ceased.
+        // Poll until `pollCount` stays unchanged across 3 consecutive 50 ms intervals (6x the 25 ms
+        // pollMs), proving server-side polling ceased without relying on a single fixed settle delay.
         // Real time is needed here because the live HTTP server and 25 ms poll loop run on real timers.
-        await new Promise((resolve) => setTimeout(resolve, 60)); // bound: settle TCP FIN cleanup
-        const countAfterDisconnect = pollCount;
-        await new Promise((resolve) => setTimeout(resolve, 150)); // bound: 6x 25 ms pollMs proves no further polls fire
-        expect(pollCount).toBe(countAfterDisconnect);
+        let stableChecks = 0;
+        let lastCount = pollCount;
+        const deadline = Date.now() + 12_000;
+        while (stableChecks < 3 && Date.now() < deadline) { // bound: 12 s max wait for server polling to stabilize after abort
+          await new Promise((resolve) => setTimeout(resolve, 50)); // bound: 2x 25 ms pollMs interval
+          if (pollCount === lastCount) {
+            stableChecks += 1;
+          } else {
+            lastCount = pollCount;
+            stableChecks = 0;
+          }
+        }
+        expect(stableChecks).toBe(3);
       } finally {
         listRunsSpy.mockRestore();
       }

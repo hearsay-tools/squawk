@@ -24,8 +24,11 @@ export interface HttpRouteDefinition {
   readonly method: HttpRouteMethod;
   /** Must start with `/api/v1/`. */
   readonly path: string;
-  /** Optional stricter body byte cap enforced before the global 32 MiB bodyLimit middleware. */
-  readonly maxBodyBytes?: number | undefined;
+  /**
+   * When true, the global 32 MiB `bodyLimit` middleware skips this path so the route handler
+   * enforces auth and its own streaming body cap before buffering request bytes.
+   */
+  readonly managesBodyLimit?: boolean | undefined;
   handle(request: Request, context: HttpRouteContext): Response | Promise<Response>;
 }
 
@@ -47,8 +50,8 @@ function checkShape(route: HttpRouteDefinition): void {
   if (typeof route.path !== 'string' || !route.path.startsWith(API_V1_PREFIX) || route.path.length <= API_V1_PREFIX.length) {
     throw new Error(`HTTP routes: '${route.id}' path must start with '${API_V1_PREFIX}', got ${JSON.stringify(route.path)}.`);
   }
-  if (route.maxBodyBytes !== undefined && (!Number.isSafeInteger(route.maxBodyBytes) || route.maxBodyBytes <= 0)) {
-    throw new Error(`HTTP routes: '${route.id}' maxBodyBytes must be a positive integer.`);
+  if (route.managesBodyLimit !== undefined && typeof route.managesBodyLimit !== 'boolean') {
+    throw new Error(`HTTP routes: '${route.id}' managesBodyLimit must be a boolean.`);
   }
   if (typeof route.handle !== 'function') throw new Error(`HTTP routes: '${route.id}' needs a handle function.`);
 }

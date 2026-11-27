@@ -1,5 +1,4 @@
 import type { Context, Hono } from 'hono';
-import { bodyLimit } from 'hono/body-limit';
 import {
   httpRoutesSealed,
   registeredHttpRoutes,
@@ -18,26 +17,16 @@ export interface MountPluginHttpRoutesInput {
 }
 
 /**
- * Register per-route body limits BEFORE the global 32 MiB `bodyLimit` middleware so chunked
- * streaming uploads to stricter routes (like `/api/v1/mcp` at 1 MiB) fail at their own cap.
- * Returns the paths already gated here so the global middleware can skip double-buffering them.
+ * Paths whose plugin route enforces its own auth and streaming body limit, so the global 32 MiB
+ * `bodyLimit` middleware skips them instead of pre-buffering unauthenticated chunked uploads.
  */
-export function mountPluginHttpRouteLimits(
-  app: Hono,
-  httpRoutes?: readonly HttpRouteDefinition[],
-): ReadonlySet<string> {
+export function pluginManagedBodyLimitPaths(httpRoutes?: readonly HttpRouteDefinition[]): ReadonlySet<string> {
   const routes = httpRoutes ?? (httpRoutesSealed() ? registeredHttpRoutes() : []);
-  const limitedPaths = new Set<string>();
+  const paths = new Set<string>();
   for (const route of routes) {
-    if (route.maxBodyBytes === undefined) continue;
-    const limit = route.maxBodyBytes;
-    limitedPaths.add(route.path);
-    app.use(route.path, bodyLimit({
-      maxSize: limit,
-      onError: (c) => c.json({ error: `request body exceeds ${limit} byte limit` }, 413),
-    }));
+    if (route.managesBodyLimit) paths.add(route.path);
   }
-  return limitedPaths;
+  return paths;
 }
 
 /**
