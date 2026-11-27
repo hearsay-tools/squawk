@@ -378,9 +378,22 @@ describe('live preview', () => {
       } finally { off(); await request('Target.closeTarget', { targetId: second.targetId }); await request('Target.activateTarget', { targetId: first.targetId }) }
     })
 
-    // More → Stop server; the card reads stopped.
+    // The CDP block ends on Target.activateTarget, whose visibility change can land after its
+    // reply, and a hidden-then-visible flip reopens the preview socket. Act only once this tab is
+    // visible and its pane streams on an open socket (hearsay-tools/squawk#4354).
+    browser.waitForStable(
+      `document.visibilityState === 'visible' && !!document.querySelector('[data-slot="preview-pane"] [data-slot="preview-stats"]')`,
+      { holdMs: 500 },
+    )
+    // More → Stop server; the card reads stopped. The item is clicked once the open menu holds still.
+    const stopItem = '[role="menu"][data-state="open"] [role="menuitem"][data-variant="destructive"]'
     browser.click('button[aria-label="More"]')
-    browser.click('[role="menuitem"][data-variant="destructive"]')
+    browser.waitForStable(
+      `(() => { const item = document.querySelector('${stopItem}'); if (!item) return null;
+        const r = item.getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map(Math.round).join(',') })()`,
+      { holdMs: 300 },
+    )
+    browser.click(stopItem)
     const stopped = browser.waitForValue(
       `(() => { const c = document.querySelector('${card}'); return c ? c.textContent : null })()`,
       text => typeof text === 'string' && text.includes('stopped'),

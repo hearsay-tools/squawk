@@ -101,12 +101,17 @@ it('reports messages, download progress and takeover without sending more input'
   expect(sockets).toHaveLength(2)
 })
 
-it('sends controls only through an open socket and keeps close as the owner callback', () => {
+it('holds controls until the socket opens and keeps close as the owner callback', () => {
   const onClose = vi.fn()
   const hook = mount({ onClose })
   act(() => hook.result.current.actions.download())
   expect(last().send).not.toHaveBeenCalled()
+  // Run is refused, not held: what it approved can be replaced before the socket reopens.
+  act(() => hook.result.current.actions.run(5173))
+  expect(toast).toHaveBeenLastCalledWith('The preview is reconnecting. Run the server again once it is back.', { tone: 'danger' })
   transport('open')
+  expect(last().send.mock.calls.map(call => call[0])).toEqual([{ t: 'download' }])
+  last().send.mockClear()
   act(() => {
     const actions = hook.result.current.actions
     actions.download(); actions.cancelDownload(); actions.retryBrowser()
