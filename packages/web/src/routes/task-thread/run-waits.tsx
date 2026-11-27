@@ -180,20 +180,20 @@ function WorkerWaitStatus({ wait }: { wait: WorkerWait }) {
   return (
     <div data-slot="worker-wait-status" role="status" aria-live="polite" aria-atomic="true"
       className="min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
-      <p>Waiting on {count} {noun}</p>
+      <p>Waiting for {count} {noun}</p>
       {dateLabel ? <p>Deadline{' '}<time dateTime={wait.deadline}>{dateLabel}</time></p> : <p>Worker wait deadline unavailable</p>}
     </div>
   )
 }
 
-/** "Waiting on N tasks": the peer tasks a peer wait names, with its deadline (hearsay-tools/cezarion#1995). */
+/** "Waiting for N tasks": the peer tasks a peer wait names, with its deadline (hearsay-tools/cezarion#1995). */
 function PeerWaitStatus({ wait }: { wait: PeerWait }) {
   const count = wait.peerIds.length
   const dateLabel = formatInstant(wait.deadline)
   return (
     <div data-slot="peer-wait-status" role="status" aria-live="polite" aria-atomic="true"
       className="min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
-      <p>Waiting on {count} {count === 1 ? 'task' : 'tasks'}</p>
+      <p>Waiting for {count} {count === 1 ? 'task' : 'tasks'}</p>
       {dateLabel ? <p>Deadline{' '}<time dateTime={wait.deadline}>{dateLabel}</time></p> : <p>Peer wait deadline unavailable</p>}
     </div>
   )

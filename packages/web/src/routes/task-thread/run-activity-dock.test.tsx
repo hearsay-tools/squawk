@@ -345,7 +345,7 @@ describe('RunActivityDock — the workers section', () => {
     expect(section('workers')).toBeNull()
     expect(document.querySelector('[data-slot="run-activity-status"]')?.textContent).toBe('Waiting for parent reply')
     fireEvent.click(sectionHead('status-row'))
-    expect(await screen.findByText(/Waiting on 1 request reply/)).toBeTruthy()
+    expect(await screen.findByText(/Waiting for 1 request reply/)).toBeTruthy()
   })
 
   it('omits empty worker sections after cleanup completes', () => {

@@ -3,7 +3,7 @@ import { ArrowUpRightIcon, CircleCheckIcon, CircleDotIcon, CircleIcon, CircleSla
 import { EyeIcon, LoaderCircleIcon } from 'lucide-react'
 import { useIsDesktop } from '@/lib/use-desktop'
 import { workerWaitLabel, workersWaitingLabel } from '@/lib/attention'
-import { rawRunStatusLabel } from '@/lib/status-semantics'
+import { canonicalRungLabel, rawRunStatusLabel } from '@/lib/status-semantics'
 import { completionWaitView, requestsToPeers, workerWaitView } from '@open-mercato/cezar-api-client/contract/waits'
 import { isLiveStatus } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { runTitle } from '@/lib/task-groups'
@@ -235,10 +235,10 @@ function statusTone(status?: WorkerInspection['status']): string {
 
 function WaitNote({ wait, dependencyLabel }: { wait: DelegationWait; dependencyLabel: string | undefined }) {
   return <p className="px-2 break-words">
-    {wait.phase === 'parked' && dependencyLabel ? `${dependencyLabel.charAt(0).toUpperCase()}${dependencyLabel.slice(1)}`
-      : 'requestIds' in wait && wait.requestIds ? (wait.phase === 'parked' ? 'Waiting on request replies' : wait.phase === 'wake-pending'
+    {wait.phase === 'parked' && dependencyLabel ? canonicalRungLabel('waiting-on-workers', dependencyLabel)
+      : 'requestIds' in wait && wait.requestIds ? (wait.phase === 'parked' ? 'Waiting for request replies' : wait.phase === 'wake-pending'
       ? 'Conversation update queued for this task' : 'Request wait registered — the agent is finishing its turn')
-      : wait.phase === 'parked' ? 'Waiting on workers' : wait.phase === 'wake-pending'
+      : wait.phase === 'parked' ? 'Waiting for workers' : wait.phase === 'wake-pending'
       ? 'Worker update queued for the parent' : 'Worker wait registered — the agent is finishing its turn'}.
     {'deadline' in wait ? <>{' '}Deadline: <time dateTime={wait.deadline}>{wait.deadline}</time></>
       : ` No deadline: Squawk wakes this task when they have all settled.`}
