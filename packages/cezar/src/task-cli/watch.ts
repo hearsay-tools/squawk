@@ -79,7 +79,20 @@ function isFailure(entry: WaitEntry): boolean {
   return entry.status === 'missing' || entry.status === 'failed' || entry.status === 'cancelled';
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const onAbort = () => { clearTimeout(timer); resolve(); };
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+const DEFAULT_HEARTBEAT_MS = 15_000;
+
+function throwIfAborted(signal: AbortSignal | undefined, what: string): void {
+  if (signal?.aborted) throw new TaskCliError(2, { code: 'cancelled', error: `${what} cancelled` });
+}
 
 /**
  * Grace for the millisecond race between a budget-bounded poll's abort and the
@@ -119,13 +132,23 @@ export function abortedPoll(error: unknown): boolean {
  * roots. A cockpit older than the window ignores the parameter and answers every run, which is
  * still correct for a caller that filters archived runs out.
  */
-export async function requestRunSummaries(cockpit: Cockpit, timeoutMs?: number, options: { archived?: 'recent' | 'all' } = {}): Promise<RunSummary[]> {
+export async function requestRunSummaries(
+  cockpit: Cockpit,
+  timeoutMs?: number,
+  options: { archived?: 'recent' | 'all'; signal?: AbortSignal | undefined } = {},
+): Promise<RunSummary[]> {
   const start = Date.now();
   const path = options.archived === 'recent' ? '/run-summaries?archived=recent' : '/run-summaries';
-  const result = await request(cockpit, path, timeoutMs === undefined ? {} : { timeoutMs });
+  const result = await request(cockpit, path, {
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    ...(options.signal ? { signal: options.signal } : {}),
+  });
   if (result.status === 404) {
     const left = timeoutMs === undefined ? undefined : Math.max(1, timeoutMs - (Date.now() - start));
-    const full = await request(cockpit, '/runs', left === undefined ? {} : { timeoutMs: left });
+    const full = await request(cockpit, '/runs', {
+      ...(left === undefined ? {} : { timeoutMs: left }),
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
     if (full.status !== 200) refuse(full);
     const runs = apiRunSchema.array().safeParse(full.data);
     return runs.success ? runs.data.map((run) => toRunSummary(run)) : invalidResponse('run list');
@@ -133,6 +156,16 @@ export async function requestRunSummaries(cockpit: Cockpit, timeoutMs?: number, 
   if (result.status !== 200) refuse(result);
   const runs = runSummarySchema.array().safeParse(result.data);
   return runs.success ? runs.data : invalidResponse('run list');
+}
+
+export interface WaitForRunsOptions {
+  mode: WaitMode;
+  until: WaitUntil;
+  timeoutMs: number;
+  pollMs?: number | undefined;
+  signal?: AbortSignal | undefined;
+  onHeartbeat?: ((elapsedMs: number, entries: readonly WaitEntry[]) => void | Promise<void>) | undefined;
+  heartbeatMs?: number | undefined;
 }
 
 /**
@@ -143,35 +176,48 @@ export async function requestRunSummaries(cockpit: Cockpit, timeoutMs?: number, 
 export async function waitForRuns(
   cockpit: Cockpit,
   ids: string[],
-  options: { mode: WaitMode; until: WaitUntil; timeoutMs: number; pollMs?: number | undefined },
+  options: WaitForRunsOptions,
 ): Promise<WaitResult> {
-  const deadline = Date.now() + options.timeoutMs;
+  const waitStartedAt = Date.now();
+  const deadline = waitStartedAt + options.timeoutMs;
   let entries: WaitEntry[] = ids.map((id) => ({ id, status: 'unknown' }));
-  for (;;) {
-    const budget = deadline - Date.now();
-    const timedOut = (): WaitResult => ({ exitCode: 3, until: options.until, runs: entries, timedOut: true });
-    if (budget <= 0) return timedOut();
-    const pollStart = Date.now();
-    let result;
-    try {
-      result = await requestRunSummaries(cockpit, budget);
-    } catch (error) {
-      if (Date.now() >= deadline) return timedOut();
-      if (abortedPoll(error) && pollHitDeadline(pollStart, budget)) return timedOut();
-      throw error;
+  const heartbeat = options.onHeartbeat
+    ? setInterval(() => {
+      if (options.signal?.aborted) return;
+      void Promise.resolve(options.onHeartbeat!(Date.now() - waitStartedAt, entries)).catch(() => { /* best effort */ });
+    }, options.heartbeatMs ?? DEFAULT_HEARTBEAT_MS)
+    : undefined;
+  try {
+    for (;;) {
+      throwIfAborted(options.signal, 'wait');
+      const budget = deadline - Date.now();
+      const timedOut = (): WaitResult => ({ exitCode: 3, until: options.until, runs: entries, timedOut: true });
+      if (budget <= 0) return timedOut();
+      const pollStart = Date.now();
+      let result;
+      try {
+        result = await requestRunSummaries(cockpit, budget, { signal: options.signal });
+      } catch (error) {
+        throwIfAborted(options.signal, 'wait');
+        if (Date.now() >= deadline) return timedOut();
+        if (abortedPoll(error) && pollHitDeadline(pollStart, budget)) return timedOut();
+        throw error;
+      }
+      const byId = new Map(result.map((run) => [run.id, run]));
+      entries = ids.map((id) => entryFor(id, byId.get(id)));
+      const ended = entries.filter((entry) => endsWait(entry, options.until));
+      const done = options.mode === 'any' ? ended.length > 0 : ended.length === entries.length;
+      if (done) {
+        // 0 when every judged run is done/review or stopped for attention; 1 on failed/cancelled/missing.
+        const judged = options.mode === 'any' ? ended : entries;
+        return { exitCode: judged.some(isFailure) && (options.mode === 'all' || judged.every(isFailure)) ? 1 : 0, until: options.until, runs: entries, timedOut: false };
+      }
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return timedOut();
+      await sleep(Math.min(options.pollMs ?? DEFAULT_POLL_MS, remaining), options.signal);
     }
-    const byId = new Map(result.map((run) => [run.id, run]));
-    entries = ids.map((id) => entryFor(id, byId.get(id)));
-    const ended = entries.filter((entry) => endsWait(entry, options.until));
-    const done = options.mode === 'any' ? ended.length > 0 : ended.length === entries.length;
-    if (done) {
-      // 0 when every judged run is done/review or stopped for attention; 1 on failed/cancelled/missing.
-      const judged = options.mode === 'any' ? ended : entries;
-      return { exitCode: judged.some(isFailure) && (options.mode === 'all' || judged.every(isFailure)) ? 1 : 0, until: options.until, runs: entries, timedOut: false };
-    }
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) return timedOut();
-    await sleep(Math.min(options.pollMs ?? DEFAULT_POLL_MS, remaining));
+  } finally {
+    if (heartbeat !== undefined) clearInterval(heartbeat);
   }
 }
 
@@ -219,13 +265,18 @@ export function logLine(event: RunHistoryEvent): Record<string, unknown> | undef
 class LineTail {
   private lines: string[] = [];
   private size = 0;
+  private droppedAny = false;
   constructor(private readonly maxChars: number) {}
+  get truncated(): boolean {
+    return this.droppedAny;
+  }
   push(line: string): void {
     this.lines.push(line);
     this.size += line.length + (this.lines.length > 1 ? 1 : 0);
     while (this.size > this.maxChars && this.lines.length) {
       const dropped = this.lines.shift()!;
       this.size -= dropped.length + (this.lines.length ? 1 : 0);
+      this.droppedAny = true;
     }
   }
   drain(): string[] {
@@ -283,11 +334,23 @@ async function* sseFrames(body: ReadableStream<Uint8Array>): AsyncGenerator<SseF
  * The stream rather than `GET /history` pages: a history page starts at its first transcript
  * item, so it drops lifecycle events such as the opening `step-start`.
  */
+export interface ReadLogOptions {
+  afterSeq: number;
+  maxChars: number;
+  follow: boolean;
+  until: WaitUntil;
+  deadline: number;
+  print: (line: string) => void;
+  signal?: AbortSignal | undefined;
+  onSnapshotMeta?: ((meta: { lastSeq: number; truncated: boolean }) => void) | undefined;
+}
+
 export async function readLog(
   cockpit: Cockpit,
   id: string,
-  options: { afterSeq: number; maxChars: number; follow: boolean; until: WaitUntil; deadline: number; print: (line: string) => void },
+  options: ReadLogOptions,
 ): Promise<number> {
+  throwIfAborted(options.signal, 'log read');
   const tail = new LineTail(options.maxChars);
   const remaining = () => options.deadline - Date.now();
   let lastSeq = options.afterSeq;
@@ -303,38 +366,23 @@ export async function readLog(
   const boundarySeq = await highWater();
   if (boundarySeq === undefined) return timedOut();
   let replaying = boundarySeq > options.afterSeq;
-  if (!replaying && !options.follow) return 0;
+  if (!replaying && !options.follow) {
+    options.onSnapshotMeta?.({ lastSeq, truncated: false });
+    return 0;
+  }
   // Nothing to replay: the boundary is already behind us, so the first run read is owed now.
   readOwed = !replaying;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(remaining(), 0));
+  const eventSignal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal;
+  const fetchImpl = cockpit.fetch ?? globalThis.fetch;
   try {
-    let response: Response;
-    try {
-      response = await fetch(`${cockpit.api}/runs/${encodeURIComponent(id)}/events?afterSeq=${lastSeq}`, {
-        redirect: 'error', signal: controller.signal, headers: { accept: 'text/event-stream' },
-      });
-    } catch (error) {
-      if (controller.signal.aborted) return timedOut();
-      throw new TaskCliError(2, { code: 'unavailable', error: `cockpit request failed: ${error instanceof Error ? error.message : String(error)}` });
-    }
+    const response = await openEventStream(fetchImpl, `${cockpit.api}/runs/${encodeURIComponent(id)}/events?afterSeq=${lastSeq}`, eventSignal, controller.signal, options.signal);
+    if (response === 'timed-out') return timedOut();
     if (!response.ok || !response.body) return await refusedOrMissing(response);
-    try {
-      for await (const frame of sseFrames(response.body)) {
-        if (!applyFrame(frame)) continue;
-        let exit = step();
-        if (exit === 'judge') exit = await judge();
-        if (exit === 'drain') {
-          drainSeq = await highWater();
-          if (drainSeq === undefined) return timedOut();
-          exit = step();
-        }
-        if (typeof exit === 'number') return exit;
-      }
-    } catch (error) {
-      if (!controller.signal.aborted) throw error;
-    }
-    if (controller.signal.aborted) return timedOut();
+    const streamExit = await consumeEventStream(response.body, controller.signal, options.signal, handleFrame);
+    if (streamExit === 'timed-out') return timedOut();
+    if (typeof streamExit === 'number') return streamExit;
     // Deleting a run resets its feed and closes the stream without a `run` frame, so a follow
     // asks whether the run is still there before calling the close a cockpit failure.
     const exit = await endIfMissing();
@@ -343,6 +391,18 @@ export async function readLog(
   } finally {
     clearTimeout(timer);
     controller.abort();
+  }
+
+  async function handleFrame(frame: SseFrame): Promise<number | undefined> {
+    if (!applyFrame(frame)) return undefined;
+    let exit = step();
+    if (exit === 'judge') exit = await judge();
+    if (exit === 'drain') {
+      drainSeq = await highWater();
+      if (drainSeq === undefined) return timedOut();
+      exit = step();
+    }
+    return typeof exit === 'number' ? exit : undefined;
   }
 
   /**
@@ -354,8 +414,12 @@ export async function readLog(
     if (replaying && seenSeq >= boundarySeq!) {
       replaying = false;
       readOwed = true;
+      const truncated = tail.truncated;
       for (const line of tail.drain()) options.print(line);
-      if (!options.follow) return 0;
+      if (!options.follow) {
+        options.onSnapshotMeta?.({ lastSeq, truncated });
+        return 0;
+      }
     }
     if (replaying) return undefined;
     if (readOwed) return 'judge';
@@ -465,12 +529,17 @@ export async function readLog(
 
   /** One budget-bounded read; undefined once the deadline has passed. */
   async function bounded(path: string): Promise<HttpResult | undefined> {
+    throwIfAborted(options.signal, 'log read');
     const budget = remaining();
     if (budget <= 0) return undefined;
     const startedAt = Date.now();
     try {
-      return await request(cockpit, path, { timeoutMs: budget });
+      return await request(cockpit, path, {
+        timeoutMs: budget,
+        ...(options.signal ? { signal: options.signal } : {}),
+      });
     } catch (error) {
+      throwIfAborted(options.signal, 'log read');
       if (remaining() <= 0) return undefined;
       if (abortedPoll(error) && pollHitDeadline(startedAt, budget)) return undefined;
       throw error;
@@ -495,4 +564,73 @@ export async function readLog(
     const run = apiRunSchema.safeParse(result.data);
     return run.success ? entryFor(id, toRunSummary(run.data)) : invalidResponse('run');
   }
+}
+
+async function openEventStream(
+  fetchImpl: typeof fetch,
+  url: string,
+  eventSignal: AbortSignal,
+  deadlineSignal: AbortSignal,
+  callerSignal: AbortSignal | undefined,
+): Promise<Response | 'timed-out'> {
+  try {
+    return await fetchImpl(url, { redirect: 'error', signal: eventSignal, headers: { accept: 'text/event-stream' } });
+  } catch (error) {
+    throwIfAborted(callerSignal, 'log read');
+    if (deadlineSignal.aborted) return 'timed-out';
+    throw new TaskCliError(2, { code: 'unavailable', error: `cockpit request failed: ${error instanceof Error ? error.message : String(error)}` });
+  }
+}
+
+async function consumeEventStream(
+  body: ReadableStream<Uint8Array>,
+  deadlineSignal: AbortSignal,
+  callerSignal: AbortSignal | undefined,
+  onFrame: (frame: SseFrame) => Promise<number | undefined>,
+): Promise<number | 'timed-out' | undefined> {
+  try {
+    for await (const frame of sseFrames(body)) {
+      throwIfAborted(callerSignal, 'log read');
+      const exit = await onFrame(frame);
+      if (exit !== undefined) return exit;
+    }
+  } catch (error) {
+    throwIfAborted(callerSignal, 'log read');
+    if (!deadlineSignal.aborted) throw error;
+  }
+  throwIfAborted(callerSignal, 'log read');
+  return deadlineSignal.aborted ? 'timed-out' : undefined;
+}
+
+export interface LogSnapshot {
+  events: Record<string, unknown>[];
+  lastSeq: number;
+  truncated: boolean;
+}
+
+/** Snapshot replay of a run's transcript, bounded to `maxChars`, without writing stdout. */
+export async function readLogSnapshot(
+  cockpit: Cockpit,
+  id: string,
+  options: { afterSeq: number; maxChars: number; timeoutMs?: number | undefined; signal?: AbortSignal | undefined },
+): Promise<LogSnapshot> {
+  const events: Record<string, unknown>[] = [];
+  let meta: { lastSeq: number; truncated: boolean } = { lastSeq: options.afterSeq, truncated: false };
+  const exit = await readLog(cockpit, id, {
+    afterSeq: options.afterSeq,
+    maxChars: options.maxChars,
+    follow: false,
+    until: DEFAULT_WAIT_UNTIL,
+    deadline: Date.now() + (options.timeoutMs ?? 45_000),
+    signal: options.signal,
+    print: (line) => {
+      const parsed = JSON.parse(line) as Record<string, unknown>;
+      if (!('timedOut' in parsed)) events.push(parsed);
+    },
+    onSnapshotMeta: (next) => { meta = next; },
+  });
+  if (exit === 3) {
+    throw new TaskCliError(3, { code: 'timeout', error: 'timed out reading task log' });
+  }
+  return { events, lastSeq: meta.lastSeq, truncated: meta.truncated };
 }

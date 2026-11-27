@@ -1,36 +1,31 @@
 import { commandText } from '../home/command.ts';
 import { productEnv } from '../core/product-env.ts';
-import { randomUUID } from 'node:crypto';
 import { open as openFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { controlLocation } from '@open-mercato/cezar-contract/control-locations';
-import {
-  apiRunSchema,
-  archiveFinishedResponseSchema,
-  cancelResponseSchema,
-  finishResponseSchema,
-  messageResponseSchema,
-  runRecordSchema,
-  runStatusSchema,
-  type RunRecord,
-  type ApiRun,
-  type RunSummary,
-} from '@open-mercato/cezar-contract/runs';
-import { changesPayloadSchema } from '@open-mercato/cezar-contract/repo';
-import { pendingAskOf, type PendingAsk } from '@open-mercato/cezar-contract/pending-ask';
-import { asksQuestion } from '@open-mercato/cezar-contract/waiting-on';
-import { runHistoryContextSchema } from '@open-mercato/cezar-contract/events';
-import { runnerSkillListSchema } from '@open-mercato/cezar-contract/runner-skills';
-import { runnerSchema } from '@open-mercato/cezar-contract/runner';
-import { runnersResponseSchema } from '@open-mercato/cezar-contract/runners';
+import { runStatusSchema } from '@open-mercato/cezar-contract/runs';
 import { openUrl } from '../open-url.ts';
 import { knownRunnerIds } from '../core/runner-registry.ts';
-import { runnerFlag, skillFlagIssue, skillTaskSteps } from '../workflows/types.ts';
+import { runnerFlag, skillFlagIssue } from '../workflows/types.ts';
 import { discoverCockpit, type DiscoverOptions } from './discovery.ts';
-import { fetchJson, handoffUrl, invalidResponse, refuse, request, TaskCliError, threadUrl, type Cockpit } from './http.ts';
-import { projectListRow, projectStatus } from './projections.ts';
-import { DEFAULT_WAIT_UNTIL, readLog, requestRunSummaries, waitForRuns, type WaitMode, type WaitUntil } from './watch.ts';
+import { TaskCliError, threadUrl, type Cockpit } from './http.ts';
+import {
+  archiveFinishedTasks,
+  archiveTask,
+  finishTask,
+  getRun,
+  getTaskDiff,
+  getTaskStatus,
+  listTasks,
+  sendTaskMessage,
+  setTaskNotify,
+  startTask,
+  stopTask,
+  waitForTasks,
+  workerParent,
+} from './operations.ts';
+import { DEFAULT_WAIT_UNTIL, readLog, type WaitMode, type WaitUntil } from './watch.ts';
 
 /**
  * `cez task` — start, watch and steer cockpit tasks from a terminal or a bot (#504, spec
@@ -439,42 +434,11 @@ function validateFlags(name: string, values: Values): void {
   if (name === 'wait' || name === 'log' || values.wait) timeoutMs(values);
 }
 
-async function getRun(cockpit: Cockpit, id: string): Promise<ApiRun> {
-  const result = await request(cockpit, `/runs/${encodeURIComponent(id)}`);
-  if (result.status !== 200) refuse(result);
-  const run = apiRunSchema.safeParse(result.data);
-  return run.success ? run.data : invalidResponse('run');
-}
-
-/** `list --full` prints contract `ApiRun` rows, so it alone still reads every full record. */
-async function listRuns(cockpit: Cockpit): Promise<ApiRun[]> {
-  const result = await request(cockpit, '/runs');
-  if (result.status !== 200) refuse(result);
-  const runs = apiRunSchema.array().safeParse(result.data);
-  return runs.success ? runs.data : invalidResponse('run list');
-}
-
-/**
- * Workers are steer targets of their parent, not tasks ops follows (#635): the list leaves them
- * out, and subscribing one to the webhook is refused with the parent to subscribe instead. Every
- * other id-addressed operation still reaches a worker.
- */
-function workerParent(run: Pick<ApiRun, 'delegation'> | Pick<RunSummary, 'delegation'>): string | undefined {
-  return run.delegation?.role === 'worker' ? run.delegation.parentRunId : undefined;
-}
-
 async function refuseWorkerNotify(cockpit: Cockpit, id: string): Promise<void> {
   const parentId = workerParent(await getRun(cockpit, id));
   if (parentId !== undefined) {
     usageError(commandText(`task ${id} is a worker of task ${parentId}; notify the parent instead: cez task notify ${parentId}`), { parentId });
   }
-}
-
-/** The latest valid unanswered question, from the same derivation the cockpit renders. */
-async function pendingQuestion(cockpit: Cockpit, id: string): Promise<PendingAsk | undefined> {
-  const result = await request(cockpit, `/runs/${encodeURIComponent(id)}/history-context`);
-  const context = runHistoryContextSchema.safeParse(result.data);
-  return result.status === 200 && context.success ? pendingAskOf(context.data.contextEvents) : undefined;
 }
 
 type Values = Record<string, string | boolean | undefined>;
@@ -492,134 +456,61 @@ function startToggles(values: Values) {
 }
 type Printer = (value: unknown) => void;
 
-/**
- * The project's default runner as the server runs it. A stored id no runner registered names the
- * first registered runner, as the server's `resolveRunnerId` does (hearsay-tools/squawk#4200). When
- * the runners list cannot be read, the stored id is used as it is.
- */
-async function defaultRunnerFor(cockpit: Cockpit): Promise<string | undefined> {
-  const config = await request(cockpit, '/config');
-  const stored = config.status === 200 && config.data && typeof config.data === 'object' ? runnerSchema.safeParse(Reflect.get(config.data, 'defaultRunner')) : undefined;
-  if (!stored?.success) return undefined;
-  const runners = await fetchJson(`${cockpit.origin}/api/v1/runners`);
-  const registered = runners.status === 200 ? runnersResponseSchema.safeParse(runners.data) : undefined;
-  if (!registered?.success) return stored.data;
-  const ids = registered.data.runners.map((entry) => entry.id);
-  return ids.includes(stored.data) ? stored.data : ids[0] ?? stored.data;
-}
-
-async function skillWarning(cockpit: Cockpit, skill: string, runner: string | undefined): Promise<string | undefined> {
-  let warning: string | undefined;
-    // Discovery is advisory: the catalog can change before a queued run executes. The server
-    // fails a step with a missing skill, and idempotent retries still go to POST /runs.
-    const unverified = `could not check whether skill "${skill}" is available; a missing id fails the step`;
-    try {
-      const selectedRunner = runner ?? await defaultRunnerFor(cockpit);
-      const catalog = selectedRunner ? await request(cockpit, `/runner-skills?runner=${encodeURIComponent(selectedRunner)}`) : undefined;
-      if (catalog?.status === 200) {
-        const skills = runnerSkillListSchema.safeParse(catalog.data);
-        warning = skills.success
-          ? skills.data.skills.some((entry) => entry.id === skill)
-            ? undefined
-            : `skill "${skill}" is not currently available; a missing id fails the step`
-          : unverified;
-      } else {
-        warning = unverified;
-      }
-    } catch {
-      warning = unverified;
-    }
-  return warning;
-}
-
 async function start(cockpit: Cockpit, io: TaskIo, values: Values, task: string, print: Printer): Promise<number> {
   const waitMs = values.wait ? timeoutMs(values) : undefined;
-  const requestId = (values['request-id'] as string | undefined) ?? randomUUID();
-  const skill = values.skill as string | undefined;
   const { runner } = runnerFlag({ runner: values.runner as string | undefined, backend: values.backend as string | undefined });
   // The webhook is opt-in: only `--notify` subscribes the task, and the server refuses it on a
   // project with no webhook (400 with a hint). `--no-notify` stays accepted for older scripts.
   const notify = values['no-notify'] ? false : values.notify ? true : undefined;
-  const warning = skill === undefined ? undefined : await skillWarning(cockpit, skill, runner);
-  const result = await request(cockpit, '/runs', {
-    body: {
-      task,
-      ...(skill === undefined
-        ? { workflow: (values.workflow as string | undefined) ?? 'quick-task' }
-        : { steps: skillTaskSteps(skill) }),
-      runner,
-      model: values.model,
-      effort: values.effort,
-      ...startToggles(values),
-      notify,
-      clientRequestId: requestId,
-    },
+  const started = await startTask(cockpit, {
+    task,
+    requestId: values['request-id'] as string | undefined,
+    workflow: values.workflow as string | undefined,
+    skill: values.skill as string | undefined,
+    runner,
+    model: values.model as string | undefined,
+    effort: values.effort as string | undefined,
+    ...startToggles(values),
+    notify,
   });
-  if (result.status !== 200 && result.status !== 201) refuse(result);
-  const run = runRecordSchema.safeParse(result.data);
-  if (!run.success) invalidResponse('start');
-  const started = {
-    id: run.data.id,
-    url: threadUrl(cockpit, run.data.id),
-    status: run.data.status,
-    created: result.status === 201,
-    requestId,
-    notify: run.data.notify === true,
-    warning,
-    branch: run.data.branch,
-  };
   if (waitMs === undefined) { print(started); return EXIT.ok; }
-  const waited = await waitForRuns(cockpit, [run.data.id], { mode: 'all', until: waitUntil(values), timeoutMs: waitMs, pollMs: io.pollMs });
+  const waited = await waitForTasks(cockpit, {
+    ids: [started.id],
+    mode: 'all',
+    until: waitUntil(values),
+    timeoutMs: waitMs,
+    pollMs: io.pollMs,
+  });
   const final = waited.runs[0]!;
   print({ ...started, ...final, until: waited.until, timedOut: waited.timedOut });
   return waited.exitCode;
 }
 
-async function setNotify(cockpit: Cockpit, id: string, notify: boolean, message: string | undefined): Promise<RunRecord> {
-  const result = await request(cockpit, `/runs/${encodeURIComponent(id)}/notify`, {
-    body: { notify, message },
-  });
-  if (result.status !== 200) refuse(result);
-  const run = runRecordSchema.safeParse(result.data);
-  return run.success ? run.data : invalidResponse('notify');
-}
-
 async function send(cockpit: Cockpit, values: Values, id: string, text: string, print: Printer): Promise<number> {
-  const path = `/runs/${encodeURIComponent(id)}`;
   if (values.notify) await refuseWorkerNotify(cockpit, id);
   // Before the message, so the status change it causes is already reported.
-  const notified = values.notify ? { notify: (await setNotify(cockpit, id, true, undefined)).notify === true } : {};
-  const delivered = await request(cockpit, `${path}/messages`, { body: { text } });
-  if (delivered.status === 200) {
-    const answer = messageResponseSchema.safeParse(delivered.data);
-    if (!answer.success) invalidResponse('message');
-    const delivery = 'delivered' in answer.data ? 'delivered' : 'queued' in answer.data ? 'queued' : 'deferred';
-    print({ id, delivery, ...notified });
-    return EXIT.ok;
-  }
-  const closed = delivered.status === 409 && (delivered.data as { error?: unknown } | undefined)?.error === 'session closed';
-  if (!closed) refuse(delivered);
-  if (!values.resume) {
-    print({ id, delivery: 'not-delivered', reason: 'session closed', next: commandText(`cez task send ${id} '…' --resume`), ...notified });
-    return EXIT.failed;
-  }
-  const resumed = await request(cockpit, `${path}/continue`, { body: { text } });
-  if (resumed.status !== 200) refuse(resumed);
-  print({ id, delivery: 'resumed', ...notified });
-  return EXIT.ok;
+  const notified = values.notify ? { notify: (await setTaskNotify(cockpit, id, true, undefined)).notify === true } : {};
+  const result = await sendTaskMessage(cockpit, { id, text, resume: values.resume === true }, { closedHintStyle: 'cli' });
+  print({ ...result, ...notified });
+  return result.delivery === 'not-delivered' ? EXIT.failed : EXIT.ok;
 }
 
 async function notify(cockpit: Cockpit, id: string, values: Values, text: string | undefined, print: Printer): Promise<number> {
   // --off stays open so a subscription made before this guard can still be undone.
   if (!values.off) await refuseWorkerNotify(cockpit, id);
-  const run = await setNotify(cockpit, id, !values.off, text);
+  const run = await setTaskNotify(cockpit, id, !values.off, text);
   print({ id, notify: run.notify === true, ...(text === undefined ? {} : { message: true }) });
   return EXIT.ok;
 }
 
 async function wait(cockpit: Cockpit, io: TaskIo, values: Values, positionals: string[], print: Printer): Promise<number> {
-  const mode = waitMode(values);
-  const waited = await waitForRuns(cockpit, positionals, { mode, until: waitUntil(values), timeoutMs: timeoutMs(values), pollMs: io.pollMs });
+  const waited = await waitForTasks(cockpit, {
+    ids: positionals,
+    mode: waitMode(values),
+    until: waitUntil(values),
+    timeoutMs: timeoutMs(values),
+    pollMs: io.pollMs,
+  });
   print({ until: waited.until, runs: waited.runs, timedOut: waited.timedOut });
   return waited.exitCode;
 }
@@ -637,77 +528,42 @@ async function log(cockpit: Cockpit, id: string, io: TaskIo, values: Values): Pr
 }
 
 async function status(cockpit: Cockpit, id: string, values: Values, print: Printer): Promise<number> {
-  const run = await getRun(cockpit, id);
-  if (values.full) { print(run); return EXIT.ok; }
-  const question = asksQuestion(run) ? await pendingQuestion(cockpit, id) : undefined;
-  print({ ...projectStatus(run, threadUrl(cockpit, id), question), handoffUrl: handoffUrl(cockpit, id) });
+  print(await getTaskStatus(cockpit, { id, full: values.full === true }));
   return EXIT.ok;
 }
 
 async function list(cockpit: Cockpit, values: Values, print: Printer): Promise<number> {
-  const wanted = statuses(values.status);
-  const limit = listLimit(values);
-  const listed = <T extends RunSummary | ApiRun>(runs: T[]): T[] => runs
-    .filter((run) => workerParent(run) === undefined)
-    .filter((run) => values.all || !run.archived)
-    .filter((run) => !wanted || wanted.has(run.status))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  // Without --all, archived runs are dropped above, so the windowed list (#864) has every row
-  // this prints; --all needs every archived run there is.
-  const summaries = () => requestRunSummaries(cockpit, undefined, values.all ? {} : { archived: 'recent' });
-  const runs = values.full ? listed(await listRuns(cockpit)) : listed(await summaries());
-  print({ runs: runs.slice(0, limit).map((run) => (values.full ? run : projectListRow(run))), total: runs.length });
+  print(await listTasks(cockpit, {
+    statuses: statuses(values.status),
+    limit: listLimit(values),
+    all: values.all === true,
+    full: values.full === true,
+  }));
   return EXIT.ok;
 }
 
-async function stop(cockpit: Cockpit, path: string, id: string, print: Printer): Promise<number> {
-  const result = await request(cockpit, `${path}/cancel`, { body: {} });
-  const answer = cancelResponseSchema.safeParse(result.data);
-  if (result.status !== 200) refuse(result);
-  if (!answer.success) invalidResponse('cancel');
-  print({ id, cancelled: answer.data.cancelled });
+async function stop(cockpit: Cockpit, id: string, print: Printer): Promise<number> {
+  print(await stopTask(cockpit, id));
   return EXIT.ok;
 }
 
-async function finish(cockpit: Cockpit, path: string, id: string, print: Printer): Promise<number> {
-  const result = await request(cockpit, `${path}/finish`, { body: {} });
-  if (result.status !== 200) refuse(result);
-  if (!finishResponseSchema.safeParse(result.data).success) invalidResponse('finish');
-  print({ id, finished: true });
+async function finish(cockpit: Cockpit, id: string, print: Printer): Promise<number> {
+  print(await finishTask(cockpit, id));
   return EXIT.ok;
 }
 
-async function archive(cockpit: Cockpit, path: string, name: string, id: string, print: Printer): Promise<number> {
-  const archived = name === 'archive';
-  const result = await request(cockpit, `${path}/archive`, { body: { archived } });
-  if (result.status !== 200) refuse(result);
-  const run = runRecordSchema.safeParse(result.data);
-  if (!run.success) invalidResponse('archive');
-  print({ id: run.data.id, archived: run.data.archived === true });
+async function archive(cockpit: Cockpit, name: string, id: string, print: Printer): Promise<number> {
+  print(await archiveTask(cockpit, id, name === 'archive'));
   return EXIT.ok;
 }
 
 async function archiveFinished(cockpit: Cockpit, print: Printer): Promise<number> {
-  const result = await request(cockpit, '/runs/archive-finished', { method: 'POST' });
-  if (result.status !== 200) refuse(result);
-  const answer = archiveFinishedResponseSchema.safeParse(result.data);
-  if (!answer.success) invalidResponse('archive-finished');
-  print(answer.data);
+  print(await archiveFinishedTasks(cockpit));
   return EXIT.ok;
 }
 
-async function diff(cockpit: Cockpit, path: string, id: string, values: Values, print: Printer): Promise<number> {
-  if (values.stat) {
-    const result = await request(cockpit, `${path}/changes`);
-    if (result.status !== 200) refuse(result);
-    const changes = changesPayloadSchema.safeParse(result.data);
-    if (!changes.success) invalidResponse('changes');
-    print({ id, stat: changes.data.stat, files: changes.data.files.map((file) => ({ path: file.path, status: file.status, adds: file.adds, dels: file.dels })) });
-    return EXIT.ok;
-  }
-  const result = await request(cockpit, `${path}/diff`);
-  if (result.status !== 200) refuse(result);
-  print({ id, diff: typeof result.data === 'string' ? result.data : invalidResponse('diff') });
+async function diff(cockpit: Cockpit, id: string, values: Values, print: Printer): Promise<number> {
+  print(await getTaskDiff(cockpit, { id, stat: values.stat === true }));
   return EXIT.ok;
 }
 
@@ -724,7 +580,6 @@ async function execute(
   name: string, cockpit: Cockpit, io: TaskIo, values: Values, positionals: string[], text: string | undefined, print: Printer,
 ): Promise<number> {
   const id = positionals[0]!;
-  const path = `/runs/${encodeURIComponent(id)}`;
   switch (name) {
     case 'start':
       return start(cockpit, io, values, text!, print);
@@ -741,16 +596,16 @@ async function execute(
     case 'list':
       return list(cockpit, values, print);
     case 'stop':
-      return stop(cockpit, path, id, print);
+      return stop(cockpit, id, print);
     case 'finish':
-      return finish(cockpit, path, id, print);
+      return finish(cockpit, id, print);
     case 'archive':
     case 'unarchive':
-      return archive(cockpit, path, name, id, print);
+      return archive(cockpit, name, id, print);
     case 'archive-finished':
       return archiveFinished(cockpit, print);
     case 'diff':
-      return diff(cockpit, path, id, values, print);
+      return diff(cockpit, id, values, print);
     case 'open':
       return open(cockpit, io, id, values, print);
     default:

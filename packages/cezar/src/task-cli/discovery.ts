@@ -9,7 +9,7 @@ import { capabilitiesSchema, healthResponseSchema, pluginsHealthSchema } from '@
  *  `healthPayloadSchema`. */
 const cockpitHealthSchema = healthResponseSchema.extend({ capabilities: capabilitiesSchema.partial(), plugins: pluginsHealthSchema.optional() });
 import { projectsResponseSchema } from '@open-mercato/cezar-contract/projects';
-import { fetchJson, TaskCliError, type Cockpit } from './http.ts';
+import { cockpitForProject, fetchJson, TaskCliError, type Cockpit, type FetchFn } from './http.ts';
 import { runGit } from '../git-command.ts';
 
 /**
@@ -52,11 +52,11 @@ export async function checkoutRoot(dir: string, signal?: AbortSignal): Promise<s
 interface Candidate { origin: string; projects: Array<{ id: string; root: string }>; bootProject: string }
 
 /** Health first (cheap, and it proves this is a Squawk), then the registry with its roots. */
-async function probe(origin: string, timeoutMs: number, signal?: AbortSignal): Promise<Candidate | undefined> {
+async function probe(origin: string, timeoutMs: number, signal?: AbortSignal, fetchImpl?: FetchFn): Promise<Candidate | undefined> {
   try {
-    const health = await fetchJson(`${origin}/api/v1/health`, { timeoutMs, ...(signal ? { signal } : {}) });
+    const health = await fetchJson(`${origin}/api/v1/health`, { timeoutMs, ...(signal ? { signal } : {}), ...(fetchImpl ? { fetch: fetchImpl } : {}) });
     if (health.status !== 200 || !cockpitHealthSchema.safeParse(health.data).success) return undefined;
-    const registry = await fetchJson(`${origin}/api/v1/projects`, { timeoutMs, ...(signal ? { signal } : {}) });
+    const registry = await fetchJson(`${origin}/api/v1/projects`, { timeoutMs, ...(signal ? { signal } : {}), ...(fetchImpl ? { fetch: fetchImpl } : {}) });
     const parsed = projectsResponseSchema.safeParse(registry.data);
     if (registry.status !== 200 || !parsed.success) return undefined;
     const projects = await Promise.all(parsed.data.projects.map(async (entry) => ({ id: entry.id, root: await realpathOr(entry.root) })));
@@ -64,10 +64,6 @@ async function probe(origin: string, timeoutMs: number, signal?: AbortSignal): P
   } catch {
     return undefined;
   }
-}
-
-function cockpitFor(origin: string, projectId: string): Cockpit {
-  return { origin, projectId, api: `${origin}/api/v1/p/${encodeURIComponent(projectId)}` };
 }
 
 export interface DiscoverOptions {
@@ -78,6 +74,15 @@ export interface DiscoverOptions {
   timeoutMs?: number;
   /** Abandons discovery: in-flight probes and git children end, and the call rejects. */
   signal?: AbortSignal;
+  fetch?: FetchFn | undefined;
+}
+
+function parseCockpitOrigin(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    throw new TaskCliError(64, { code: 'invalid_input', error: `invalid cockpit url: ${url}` });
+  }
 }
 
 export async function discoverCockpit(options: DiscoverOptions): Promise<Cockpit> {
@@ -85,25 +90,87 @@ export async function discoverCockpit(options: DiscoverOptions): Promise<Cockpit
   const timeoutMs = options.timeoutMs ?? PROBE_TIMEOUT_MS;
   const hint = `start the cockpit in ${root} with: ${productIdentity().command}`;
   if (options.url) {
-    let origin: string;
-    try { origin = new URL(options.url).origin; } catch {
-      throw new TaskCliError(64, { code: 'invalid_input', error: `invalid cockpit url: ${options.url}` });
-    }
-    const found = await probe(origin, Math.max(timeoutMs, 5_000), options.signal);
+    const origin = parseCockpitOrigin(options.url);
+    const found = await probe(origin, Math.max(timeoutMs, 5_000), options.signal, options.fetch);
     if (!found) throw new TaskCliError(2, { code: 'no-cockpit', error: `no Squawk cockpit answered at ${origin}`, hint });
     // A remote cockpit's roots are its own paths, so no match is the ordinary case there.
     const match = found.projects.find((entry) => entry.root === root);
     const id = match?.id ?? found.bootProject;
-    return cockpitFor(origin, id);
+    return cockpitForProject(origin, id, options.fetch);
   }
   const ports = options.ports ?? COCKPIT_PORTS;
-  const candidates = await Promise.all(ports.map((port) => probe(`http://127.0.0.1:${port}`, timeoutMs, options.signal)));
+  const candidates = await Promise.all(ports.map((port) => probe(`http://127.0.0.1:${port}`, timeoutMs, options.signal, options.fetch)));
   // `ports` is ascending, so the first match is the lowest port serving this checkout.
   for (const candidate of candidates) {
     const match = candidate?.projects.find((entry) => entry.root === root);
-    if (candidate && match) return cockpitFor(candidate.origin, match.id);
+    if (candidate && match) return cockpitForProject(candidate.origin, match.id, options.fetch);
   }
   throw new TaskCliError(2, { code: 'no-cockpit', error: `no running cockpit serves ${root}`, hint });
+}
+
+export interface DiscoverOriginOptions {
+  /** Explicit `--url` or `HSQ_URL` / `CEZ_URL`. */
+  url?: string | undefined;
+  /** Checkout directory to match first (defaults to cwd when omitted). */
+  repoDir?: string | undefined;
+  /** True when the caller explicitly passed `--repo`: do not fall back to another cockpit. */
+  explicitRepo?: boolean | undefined;
+  ports?: readonly number[] | undefined;
+  timeoutMs?: number | undefined;
+  signal?: AbortSignal | undefined;
+  fetch?: FetchFn | undefined;
+}
+
+/**
+ * Discover a running cockpit's origin without selecting a boot project (spec 2026-11-27-orchestrator-mcp-server).
+ * Matches `url` directly when provided; otherwise probes local ports, preferring a cockpit serving
+ * `repoDir`, and falling back to the single running local cockpit when `--repo` was not explicitly set.
+ */
+export async function discoverCockpitOrigin(options: DiscoverOriginOptions): Promise<{ origin: string }> {
+  const timeoutMs = options.timeoutMs ?? PROBE_TIMEOUT_MS;
+  const cmd = productIdentity().command;
+  if (options.url) {
+    const origin = parseCockpitOrigin(options.url);
+    const found = await probe(origin, Math.max(timeoutMs, 5_000), options.signal, options.fetch);
+    if (!found) {
+      throw new TaskCliError(2, {
+        code: 'no-cockpit',
+        error: `no Squawk cockpit answered at ${origin}`,
+        hint: `start the cockpit with: ${cmd}`,
+      });
+    }
+    return { origin };
+  }
+  const ports = options.ports ?? COCKPIT_PORTS;
+  const candidates = await Promise.all(ports.map((port) => probe(`http://127.0.0.1:${port}`, timeoutMs, options.signal, options.fetch)));
+  const live = candidates.filter((candidate): candidate is Candidate => candidate !== undefined);
+  const root = options.repoDir ? await checkoutRoot(options.repoDir, options.signal) : undefined;
+  if (root) {
+    const matched = live.find((candidate) => candidate.projects.some((entry) => entry.root === root));
+    if (matched) return { origin: matched.origin };
+    if (options.explicitRepo) {
+      throw new TaskCliError(2, {
+        code: 'no-cockpit',
+        error: `no running cockpit serves ${root}`,
+        hint: `start the cockpit in ${root} with: ${cmd}`,
+      });
+    }
+  }
+  if (live.length === 1) return { origin: live[0]!.origin };
+  if (live.length > 1) {
+    const origins = live.map((candidate) => candidate.origin);
+    throw new TaskCliError(2, {
+      code: 'ambiguous-cockpit',
+      error: `multiple running Squawk cockpits found (${origins.join(', ')}); pass --url <origin> or --repo <dir> to select one`,
+      origins,
+      hint: `re-run with --url ${origins[0]} or --repo <dir>`,
+    });
+  }
+  throw new TaskCliError(2, {
+    code: 'no-cockpit',
+    error: root ? `no running cockpit serves ${root}` : 'no running Squawk cockpit found',
+    hint: root ? `start the cockpit in ${root} with: ${cmd}` : `start the cockpit with: ${cmd}`,
+  });
 }
 
 /** The env address first; discovery only when the caller named a cockpit or a checkout. */
