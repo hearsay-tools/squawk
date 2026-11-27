@@ -1,9 +1,12 @@
 // real-clock: static ISO timestamps in home-recovery request fixtures are not compared to the wall clock
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
+import './cli-boot.testkit.ts';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { prepareOperatorHome } from './home/entry.ts';
 import { Home } from './home/home.ts';
+import { resolveHome } from './home/resolve.ts'; // test-home-read: fresh home test requires an unresolved scratch path with no marker.
 import { useTestHome } from './home/test-home.testkit.ts';
 import {
   clearMcpTokensForPort,
@@ -127,6 +130,25 @@ describe('per-port hashed MCP bearer token store (hearsay-tools/squawk#4402)', (
       });
       expect(res.status, action).toBe(403);
       expect(await res.json()).toEqual({ error: 'MCP bearer tokens require the host CLI.' });
+    }
+  });
+
+  it('creates an MCP token on an authorized fresh home before install.json exists', () => {
+    const freshRoot = mkdtempSync(join(tmpdir(), 'hsq-mcp-fresh-'));
+    try {
+      const env = { HSQ_HOME: freshRoot };
+      const freshHome = resolveHome({ purpose: 'cli', env, layout: 'split' }); // test-home-read: scratch path without a sandbox marker.
+      prepareOperatorHome(freshHome, 'mcp', env);
+      expect(existsSync(join(freshHome.config, 'install.json'))).toBe(false);
+      const created = createMcpToken({ port: 4321, name: 'first', home: freshHome });
+      expect(existsSync(join(freshHome.config, 'install.json'))).toBe(true);
+      expect(verifyMcpBearerToken(created.token, {}, 4321, freshHome)).toMatchObject({
+        source: 'file',
+        id: created.id,
+        name: 'first',
+      });
+    } finally {
+      rmSync(freshRoot, { recursive: true, force: true });
     }
   });
 });

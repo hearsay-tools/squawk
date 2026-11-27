@@ -16,7 +16,6 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { productEnv } from './core/product-env.ts';
 import type { Home } from './home/home.ts';
-import { assertHomeWritable } from './home/install-marker.ts';
 import { HomeStore, readHomeFile } from './home/store.ts';
 
 export const MCP_TOKENS_DIR = 'mcp-tokens';
@@ -102,23 +101,36 @@ function toPublic(entry: StoredMcpToken, port: number): McpTokenPublic {
   };
 }
 
+function readOptionalHomeFile(path: string, home: Home): { content: string } | { issue: string } | null {
+  try {
+    return { content: readHomeFile(path, home) };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') return null;
+    const detail = error instanceof Error ? error.message : String(error);
+    return { issue: `cannot read ${path}: ${detail}` };
+  }
+}
+
+function parsePortTokenJson(content: string, path: string): { tokens: StoredMcpToken[] } | { issue: string } {
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(content);
+  } catch {
+    return { issue: `${path} is not a valid MCP token store` };
+  }
+  const validated = tokenFileSchema.safeParse(decoded);
+  return validated.success
+    ? { tokens: validated.data.tokens }
+    : { issue: `${path} is not a valid MCP token store` };
+}
+
 /** Read one port's token file. Never throws; malformed or unreadable files fail closed with `issue`. */
 function readPortTokenFile(port: number, home: Home): { tokens: StoredMcpToken[] } | { issue: string } | null {
   const path = mcpTokenFile(port, home);
-  let raw: string;
-  try {
-    raw = readHomeFile(path, home);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    return { issue: `cannot read ${path}: ${error instanceof Error ? error.message : String(error)}` };
-  }
-  try {
-    const parsed = tokenFileSchema.safeParse(JSON.parse(raw));
-    if (parsed.success) return { tokens: parsed.data.tokens };
-  } catch {
-    // falls through to the issue below
-  }
-  return { issue: `${path} is not a valid MCP token store` };
+  const loaded = readOptionalHomeFile(path, home);
+  if (loaded === null || 'issue' in loaded) return loaded;
+  return parsePortTokenJson(loaded.content, path);
 }
 
 /** True when at least one bearer token is configured for `port` (file or env). Read per request. */
@@ -221,7 +233,6 @@ export function createMcpToken(options: CreateMcpTokenOptions): CreatedMcpToken 
     ...(project !== undefined ? { project } : {}),
   };
   const store = new HomeStore(home);
-  assertHomeWritable(home.root);
   store.transaction(() => {
     const existing = readPortTokenFile(port, home);
     if (existing !== null && 'issue' in existing) {
@@ -259,7 +270,6 @@ export function revokeMcpToken(options: { home: Home; id?: string | undefined; p
   const { home, id, port, all } = options;
   if (port !== undefined && !isPort(port)) throw new RangeError(`not a port: ${port}`);
   const store = new HomeStore(home);
-  assertHomeWritable(home.root);
 
   if (all) {
     if (port === undefined) throw new RangeError('--all requires --port <n>');
@@ -325,7 +335,6 @@ export function clearMcpTokensForPort(port: number, home: Home): boolean {
   const existing = readPortTokenFile(port, home);
   if (existing === null) return false;
   const store = new HomeStore(home);
-  assertHomeWritable(home.root);
   store.transaction(() => {
     store.replace(path, null);
   }, [home.mcpTokens, path]);
