@@ -38,6 +38,9 @@ const SECRET_VALUE_NAME_ALLOW: ReadonlySet<string> = new Set([
  */
 const MIN_SECRET_LEN = 12;
 
+/** Squawk MCP HTTP bearer token shape (always scrubbed, even when host redaction is disabled). */
+export const MCP_TOKEN_PATTERN = /hsq_mcp_[A-Za-z0-9_-]{20,}/g;
+
 /** Well-known credential shapes, independent of the host env. */
 const TOKEN_PATTERNS: readonly RegExp[] = [
   /gh[pousr]_[A-Za-z0-9]{20,}/g, // GitHub PAT / OAuth / server / user / refresh
@@ -50,8 +53,13 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
   /ya29\.[0-9A-Za-z_-]+/g, // Google OAuth access token
   /xox[baprs]-[0-9A-Za-z-]{10,}/g, // Slack
   /glpat-[0-9A-Za-z_-]{20,}/g, // GitLab PAT
-  /hsq_mcp_[A-Za-z0-9_-]{20,}/g, // Squawk MCP HTTP bearer token
+  MCP_TOKEN_PATTERN,
 ];
+
+/** Scrub `hsq_mcp_*` bearer token shapes even when general host redaction is disabled. */
+export function redactMcpTokenPattern(text: string): string {
+  return text.includes('hsq_mcp_') ? text.replace(MCP_TOKEN_PATTERN, REDACTED) : text;
+}
 
 /** Matches where any TOKEN_PATTERNS entry matches. With no match, the passes change nothing. */
 const ANY_TOKEN_PATTERN = new RegExp(TOKEN_PATTERNS.map((re) => `(?:${re.source})`).join('|'));

@@ -3,7 +3,7 @@
  * text before they reach disk or the live wire. `RunStore` keeps one of these as `store.redaction`.
  */
 import { productEnv } from '../core/product-env.ts';
-import { activeMcpSecretValues, collectSecretValues, redactDeep, redactDeepWith, redactSecrets } from '../core/secret-redaction.ts';
+import { activeMcpSecretValues, collectSecretValues, redactDeep, redactDeepWith, redactMcpTokenPattern, redactSecrets } from '../core/secret-redaction.ts';
 import type { RunRedaction as RunRedactionPort } from './ports.ts';
 import { redactText } from './record-write-rules.ts';
 import type { RunEvent } from './store.ts';
@@ -35,7 +35,11 @@ export class RunRedaction implements RunRedactionPort {
    */
   redact<T extends RunEvent>(event: T): T {
     const mandatory = this.mandatorySecrets();
-    if (productEnv('REDACT_SECRETS') === '0') return mandatory.length ? redactDeep(event, mandatory) : event;
+    if (productEnv('REDACT_SECRETS') === '0') {
+      return mandatory.length
+        ? redactDeep(event, mandatory)
+        : redactDeepWith(event, redactMcpTokenPattern);
+    }
     const host = this.hostSecrets();
     if (!mandatory.length) return redactDeep(event, host);
     // One copy for both scrubs; each string leaf gets the same two passes in the same order.

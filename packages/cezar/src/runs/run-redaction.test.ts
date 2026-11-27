@@ -46,6 +46,16 @@ describe('RunRedaction.redact', () => {
     expect(redaction.redactText('Authorization: Bearer mcp-env-secret-value-999')).toBe(`Authorization: Bearer ${REDACTED}`);
   });
 
+  it('scrubs unused file-backed hsq_mcp_* tokens even when host redaction is off and no secrets are registered', () => {
+    vi.stubEnv('HSQ_REDACT_SECRETS', '0');
+    vi.stubEnv('HSQ_MCP_TOKEN', '');
+    vi.stubEnv('CEZ_MCP_TOKEN', '');
+    const unusedToken = `hsq_mcp_${'A'.repeat(40)}`;
+    const redaction = new RunRedaction();
+    expect(redaction.redact(event(`Bearer ${unusedToken} ${GH}`))).toEqual(event(`Bearer ${REDACTED} ${GH}`));
+    expect(redaction.redactText(`Bearer ${unusedToken} ${GH}`)).toBe(`Bearer ${REDACTED} ${GH}`);
+  });
+
   it('returns a copy, never the input objects', () => {
     const redaction = new RunRedaction();
     redaction.registerSessionSecret(SESSION);
