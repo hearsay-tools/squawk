@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { useUnsentDraft } from '@/lib/version-reload'
 import { useSavedDraft } from '@/lib/saved-draft'
-import { SettingsField } from './settings-field'
+import { SETTINGS_LABEL_CLASS, SettingsField } from './settings-field'
 import { SaveRow } from './save-cue'
 
 /**
@@ -311,7 +311,7 @@ function WakeField({
         />
         {wakeMode === 'interval' ? (
           <>
-            <label htmlFor="monitoring-wake-interval" className="w-full text-sm">Wake interval</label>
+            <label htmlFor="monitoring-wake-interval" className={`w-full ${SETTINGS_LABEL_CLASS}`}>Wake interval</label>
             <input
               id="monitoring-wake-interval"
               type="number"
@@ -420,7 +420,7 @@ function ComposerDefaultsField({
     >
       <div className="grid gap-4 sm:grid-cols-2" data-slot="resources-composer-defaults">
         <label className="grid gap-1.5 text-sm sm:grid-cols-1">
-          <span className="font-medium">Autonomous by default</span>
+          <span className={SETTINGS_LABEL_CLASS}>Autonomous by default</span>
           <SettingsSelect
             aria-label="Autonomous by default"
             value={triStateValue(composerDefaults.autonomous)}
@@ -439,7 +439,7 @@ function ComposerDefaultsField({
           </span>
         </label>
         <label className="grid gap-1.5 text-sm sm:grid-cols-1">
-          <span className="font-medium">Use a worktree by default</span>
+          <span className={SETTINGS_LABEL_CLASS}>Use a worktree by default</span>
           <SettingsSelect
             aria-label="Use a worktree by default"
             value={triStateValue(composerDefaults.worktree)}

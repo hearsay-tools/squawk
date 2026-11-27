@@ -358,6 +358,23 @@ describe('AgentConfigSection', () => {
     expect(document.querySelector('[data-slot="agent-config-user-mcp-command"]')?.textContent).toBe('claude mcp add')
   })
 
+  it('names a user-scope file in the scope line from the home folder, as ~/, with the full path on hover', async () => {
+    serve({
+      editable: true,
+      files: [fileOf({ id: 'claude.user.settings', label: '~/.claude/settings.json', scope: 'user',
+        path: '/tmp/run-1/server-home/.claude/settings.json', tracked: 'outside-repo' })],
+      userMcp: null,
+    })
+    renderSection()
+    const scope = await waitFor(() => {
+      const el = document.querySelector('[data-slot="agent-config-scope"]')
+      expect(el).toBeTruthy()
+      return el!
+    })
+    expect(scope.textContent).toBe('User scope · ~/.claude/settings.json')
+    expect(scope.getAttribute('title')).toBe('/tmp/run-1/server-home/.claude/settings.json')
+  })
+
   // hearsay-tools/squawk#3898: the panes come from the runners list, so its failure is shown, not a spinner.
   it('shows the runners query error instead of loading forever when the runners list fails', async () => {
     serve({ editable: true, userMcp: null, files: [fileOf({ id: 'claude.memory', label: 'CLAUDE.md', kind: 'memory', format: 'markdown' })] })
@@ -534,7 +551,7 @@ describe('a config file that does not exist yet', () => {
       expect(found).not.toBeNull()
       return found!
     })
-    expect(placeholder.textContent).toBe('{\n  "permissions": {}\n}')
+    expect(placeholder.textContent).toBe('// File not created yet — example:\n{\n  "permissions": {}\n}')
     expect(placeholder.getAttribute('aria-hidden')).toBe('true')
     expect((screen.getByRole('button', { name: 'Create file' }) as HTMLButtonElement).disabled).toBe(true)
     expect(document.querySelector('[data-slot="agent-config-save-cue"]')?.textContent).toBe('Enter content above to create this file')
@@ -546,14 +563,14 @@ describe('a config file that does not exist yet', () => {
     expect((screen.getByRole('button', { name: 'Create file' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('suggests a Markdown heading for an instructions file', async () => {
+  it('says the instructions file is not created yet', async () => {
     serve(
       { editable: true, files: [fileOf({ id: 'claude.memory', label: 'CLAUDE.local.md', kind: 'memory', format: 'markdown', exists: false })], userMcp: null },
       '',
     )
     renderSection()
     await waitFor(() =>
-      expect(document.querySelector('[data-slot="agent-config-placeholder"]')?.textContent).toBe('# Project instructions'),
+      expect(document.querySelector('[data-slot="agent-config-placeholder"]')?.textContent).toBe('<!-- File not created yet — write instructions here -->'),
     )
   })
 

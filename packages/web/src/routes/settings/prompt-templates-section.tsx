@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils'
 import { useUnsentDraft } from '@/lib/version-reload'
 import { sameJson, useSavedDraft } from '@/lib/saved-draft'
 import { SaveRow } from './save-cue'
+import { SETTINGS_LABEL_CLASS } from './settings-field'
 
 /**
  * Settings → Prompt templates (#413): "add the settings pane for editing these prompt templates
@@ -156,7 +157,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                 className="flex flex-col gap-1.5 rounded-md border border-border bg-card p-3"
               >
                 <div className="flex flex-col gap-2">
-                  <label htmlFor={`template-label-${template.id}`} className="text-sm">Template label</label>
+                  <label htmlFor={`template-label-${template.id}`} className={SETTINGS_LABEL_CLASS}>Template label</label>
                   <Input
                     id={`template-label-${template.id}`}
                     aria-label={`Label for ${template.label || 'this template'}`}
@@ -169,7 +170,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                   />
 
                 </div>
-                <label htmlFor={`template-text-${template.id}`} className="text-sm">Instructions</label>
+                <label htmlFor={`template-text-${template.id}`} className={SETTINGS_LABEL_CLASS}>Instructions</label>
                 <Textarea
                   id={`template-text-${template.id}`}
                   aria-label={`Text for ${template.label || 'this template'}`}
@@ -179,7 +180,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                   onChange={(event) => updateTemplate(template.id, { text: event.target.value })}
                   className="min-h-14 rounded-md border border-border bg-background text-[13px]"
                 />
-                <p className="text-sm">Apply automatically with skills</p>
+                <p className={SETTINGS_LABEL_CLASS}>Apply automatically with skills</p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                   <TemplateSkillsPicker
                     label={template.label}
@@ -227,7 +228,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
           className="flex flex-col gap-1.5 rounded-md border border-dashed border-border p-3"
         >
           <h3 className="text-lg">New template</h3>
-          <label htmlFor="new-template-label" className="text-sm">Label</label>
+          <label htmlFor="new-template-label" className={SETTINGS_LABEL_CLASS}>Label</label>
           <Input
             id="new-template-label"
             aria-label="New template label"
@@ -238,7 +239,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
             onChange={(event) => setNewLabel(event.target.value)}
             className="border-border bg-background"
           />
-          <label htmlFor="new-template-text" className="text-sm">Instructions to insert</label>
+          <label htmlFor="new-template-text" className={SETTINGS_LABEL_CLASS}>Instructions to insert</label>
           <Textarea
             id="new-template-text"
             aria-label="New template text"

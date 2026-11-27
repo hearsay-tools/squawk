@@ -340,7 +340,7 @@ export function FileEditor({ file }: { file: AgentConfigFile }) {
   return (
     <div data-slot="settings-config-editor" data-reports-dirty="" className="flex flex-col gap-3">
       <h3 className="text-sm">Configuration file</h3>
-      <p data-slot="agent-config-scope" title={file.path} className="text-[12px] text-muted-foreground break-words">{file.scope.charAt(0).toUpperCase() + file.scope.slice(1)} scope · {file.path}</p>
+      <p data-slot="agent-config-scope" title={file.path} className="text-[12px] text-muted-foreground break-words">{file.scope.charAt(0).toUpperCase() + file.scope.slice(1)} scope · {homeShortPath(file.path, [file])}</p>
       <div className="settings-readout flex flex-wrap items-center gap-2">
         <span className="font-mono text-[13px]">{file.label}</span>
         <Badge variant="outline" className="text-[12px] uppercase">
@@ -459,18 +459,19 @@ function FileActions({
   )
 }
 
-/** A minimal, valid starting point for a file that does not exist yet, in the file's own format. */
+/** An example for a file that does not exist yet, in the file's own format. Its first line says the
+ *  file is not created yet, so the faint text never reads as contents already on disk. */
 function placeholderFor(file: AgentConfigFile, isMcp: boolean): string {
   switch (file.format) {
     case 'json':
     case 'jsonc':
-      return isMcp ? '{\n  "mcpServers": {}\n}' : '{\n  "permissions": {}\n}'
+      return `// File not created yet — example:\n${isMcp ? '{\n  "mcpServers": {}\n}' : '{\n  "permissions": {}\n}'}`
     case 'markdown':
-      return '# Project instructions'
+      return '<!-- File not created yet — write instructions here -->'
     case 'toml':
-      return '# One setting per line, for example:\n# key = "value"'
+      return '# File not created yet — example:\n# key = "value"'
     case 'yaml':
-      return '# One setting per line, for example:\n# key: value'
+      return '# File not created yet — example:\n# key: value'
   }
 }
 

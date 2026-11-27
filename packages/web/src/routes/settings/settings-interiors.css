@@ -259,7 +259,7 @@
 
 /* Flat agent cards (pass 5): ONE bordered card per agent. Top row = name, inline status summary
    and compact actions; then one quiet metadata line per account, split by a hairline. No inner
-   boxes, so three or four agents fit above the fold. */
+   boxes, so four or five agents fit above the fold: a 12px 16px head, then 8px 10px account rows. */
 .settings-panel .settings-agent-card { gap: 0; padding: 0; scroll-margin-block-start: 16px; }
 .settings-agent-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 12px 16px; }
 .settings-agent-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; min-width: 0; flex: 1 1 18rem; }
@@ -270,15 +270,15 @@
 .settings-account-actions { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
 .settings-panel .settings-agent-card .settings-account-actions button:not([data-slot=account-rename-input]) { min-height: 32px; padding-inline: 12px; font-size: 12px; }
 .settings-agent-accounts { display: flex; flex-direction: column; }
-.settings-account-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-inline: 16px; padding-block: 8px 12px; border-block-start: 1px solid var(--border); }
-.settings-account-readout { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.settings-account-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; margin-inline: 16px; padding-block: 8px 10px; border-block-start: 1px solid var(--border); }
+.settings-account-readout { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
 .settings-account-meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; min-width: 0; font-size: 12px; color: var(--muted-foreground); }
 .settings-account-label { font-size: 13px; font-weight: 500; color: var(--foreground); }
 .settings-account-path { font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--muted-foreground); overflow-wrap: anywhere; }
 .settings-account-hint { font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
-.settings-account-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-inline: 16px; padding-block: 10px 12px; border-block-start: 1px solid var(--border); }
-.settings-agent-note { margin-inline: 16px; padding-block: 8px 12px; border-block-start: 1px solid var(--border); font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
-.settings-agent-card > section[aria-label="CLI installation"] { margin-inline: 16px; padding-block: 8px 12px; border-block-start: 1px solid var(--border); }
+.settings-account-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; margin-inline: 16px; padding-block: 8px 10px; border-block-start: 1px solid var(--border); }
+.settings-agent-note { margin-inline: 16px; padding-block: 8px 10px; border-block-start: 1px solid var(--border); font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+.settings-agent-card > section[aria-label="CLI installation"] { margin-inline: 16px; padding-block: 8px 10px; border-block-start: 1px solid var(--border); }
 .settings-account-management { display: contents; }
 .settings-account-management > span { flex-basis: 100%; font-size: 12px; color: var(--muted-foreground); }
 .settings-account-management [data-slot=account-rename-input] { min-width: 0; max-width: 100%; }

@@ -206,7 +206,7 @@ function AgentsForm({
             : 'The model preselected in the composer for each runner. Auto lets the runner decide per task.'
         }
       >
-        <div className="flex flex-col gap-4">{runnerEntries(runners).map(renderModel)}</div>
+        <div data-slot="agents-model-rows" className="flex flex-col gap-2.5">{runnerEntries(runners).map(renderModel)}</div>
       </Field>
 
       <Field

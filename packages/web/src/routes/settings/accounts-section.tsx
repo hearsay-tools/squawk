@@ -169,7 +169,7 @@ function AgentsPane({ data, runners }: { data: AgentProfilesResponse; runners: R
       {/* Every agent gets a card, including one that cannot carry a second login: the card is
           where its install state lives, and hiding OpenCode would just move the question
           "is OpenCode set up?" somewhere else. */}
-      <div data-slot="agent-cards" className="flex flex-col gap-4">
+      <div data-slot="agent-cards" className="flex flex-col gap-3">
         {runners.runners.map((entry) => (
           <AgentCard
             key={entry.id}

@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react'
 
+/** The label over one control inside a settings form: the same small medium-weight foreground
+ *  type on every Settings page, so Prompt templates, Resources and Projects read like Workflows. */
+export const SETTINGS_LABEL_CLASS = 'text-xs font-medium text-foreground'
+
 /**
  * One labelled settings row — title, one-line hint, control(s).
  *

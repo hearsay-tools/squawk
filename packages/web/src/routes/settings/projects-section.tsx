@@ -29,7 +29,7 @@ import { toast } from '@/components/ui/toaster'
 import { allProjectTags, suggestTags } from '@/lib/project-tags'
 import { cn } from '@/lib/utils'
 import { RemoveProjectDialog, useProjectRemoval } from './remove-project'
-import { SettingsField } from './settings-field'
+import { SETTINGS_LABEL_CLASS, SettingsField } from './settings-field'
 import { SaveRow } from './save-cue'
 
 /**
@@ -380,7 +380,7 @@ function ProjectRow({
         {/* The row is a vertical card with its column headers hidden, so the control carries its
             own visible label. The select's accessible name starts with the same words. */}
         <label data-slot="project-max-parallel-field" className="flex flex-col gap-1.5">
-          <span className="text-[12px] text-muted-foreground">Max parallel tasks</span>
+          <span className={SETTINGS_LABEL_CLASS}>Max parallel tasks</span>
           <MaxParallelSelect project={project} workspaceMax={workspaceMax} />
         </label>
       </td>
