@@ -8,7 +8,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AutomationStore } from '../../automations/store.ts';
 import { createRunner } from '../../core/runner-registry.ts';
 import { sealTestRunners } from '../../core/runner-registry.testkit.ts';
@@ -23,6 +23,8 @@ import { createApp } from '../../server/server.ts';
 import { registerProject, removeProject } from '../../workspace/projects.ts';
 import { WorkspaceSemaphore } from '../../workspace/semaphore.ts';
 import { createMcpHttpRoute, MCP_MAX_BODY_BYTES } from './http.ts';
+import { createOrchestratorMcpServer } from './tools.ts';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import '../../built-in-run-slots.testkit.ts';
 import '../../delegation/worker-executions.testkit.ts';
 
@@ -363,21 +365,42 @@ describe('Streamable HTTP /api/v1/mcp auth matrix and lifecycle (hearsay-tools/s
       const id = started.data.id as string;
 
       const ac = new AbortController();
-      const response = await fetch(`${cockpit.origin}/api/v1/mcp`, {
-        method: 'POST',
-        headers: { ...MCP_HEADERS, authorization: `Bearer ${created.token}` },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 42,
-          method: 'tools/call',
-          params: { name: 'task_wait', arguments: { project: cockpit.projectA, ids: [id], timeoutSeconds: 60 } },
-        }),
-        signal: ac.signal,
+      let pollCount = 0;
+      let resolvePolled!: () => void;
+      const twoPolls = new Promise<void>((resolve) => { resolvePolled = resolve; });
+      const origListSummaries = cockpit.storeA.queries.listRunSummaries.bind(cockpit.storeA.queries);
+      const listRunsSpy = vi.spyOn(cockpit.storeA.queries, 'listRunSummaries').mockImplementation((...args) => {
+        pollCount += 1;
+        if (pollCount >= 2) resolvePolled();
+        return origListSummaries(...args);
       });
-      expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toContain('text/event-stream');
-      setTimeout(() => ac.abort(new Error('client disconnected')), 80);
-      await expect(response.text()).rejects.toThrow();
+      try {
+        const response = await fetch(`${cockpit.origin}/api/v1/mcp`, {
+          method: 'POST',
+          headers: { ...MCP_HEADERS, authorization: `Bearer ${created.token}` },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 42,
+            method: 'tools/call',
+            params: { name: 'task_wait', arguments: { project: cockpit.projectA, ids: [id], timeoutSeconds: 60 } },
+          }),
+          signal: ac.signal,
+        });
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toContain('text/event-stream');
+        await twoPolls;
+        ac.abort(new Error('client disconnected'));
+        await expect(response.text()).rejects.toThrow();
+
+        // Allow disconnect cleanup to propagate over loopback, then prove server-side polling ceased.
+        // Real time is needed here because the live HTTP server and 25 ms poll loop run on real timers.
+        await new Promise((resolve) => setTimeout(resolve, 60)); // bound: settle TCP FIN cleanup
+        const countAfterDisconnect = pollCount;
+        await new Promise((resolve) => setTimeout(resolve, 150)); // bound: 6x 25 ms pollMs proves no further polls fire
+        expect(pollCount).toBe(countAfterDisconnect);
+      } finally {
+        listRunsSpy.mockRestore();
+      }
 
       // Server remains healthy and responsive immediately after client abort.
       const followUp = parseToolResult(await client.callTool({
@@ -390,6 +413,27 @@ describe('Streamable HTTP /api/v1/mcp auth matrix and lifecycle (hearsay-tools/s
       await client.close();
     }
   }, 20_000);
+
+  it('rejects project: "all" on task_list even if allowedProject were literally "all"', async () => {
+    const server = createOrchestratorMcpServer({
+      origin: cockpit.origin,
+      version: '0.0.0-test',
+      allowedProject: 'all',
+    });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'all-scope-guard', version: '1.0.0' });
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const res = parseToolResult(await client.callTool({
+        name: 'task_list',
+        arguments: { project: 'all' },
+      }));
+      expect(res.isError).toBe(true);
+      expect(res.data).toMatchObject({ code: 'forbidden' });
+    } finally {
+      await Promise.all([client.close(), server.close()]);
+    }
+  });
 
   it('derives returned task URLs from public proxy headers in hosted mode and ignores forwarded headers locally', async () => {
     const created = createMcpToken({ port: cockpit.port, name: 'proxy-origin', home: testHome() });
