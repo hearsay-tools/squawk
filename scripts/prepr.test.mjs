@@ -332,11 +332,11 @@ test('the lint fallback line names why it ran and carries the lint verdict', () 
 });
 
 test('a passing lint run keeps the baselines it lowered in the report, so the commit is not missed', () => {
-  const out = 'lowered: packages/cezar/src/file-length.baseline.json: a.ts: pinned at 1500, now 1480. Commit the baseline\nlint: repository checks passed\n';
-  assert.equal(loweredNotes(out), '\n  - lowered: packages/cezar/src/file-length.baseline.json: a.ts: pinned at 1500, now 1480. Commit the baseline');
+  const out = 'lowered: packages/cezar/src/file-length.baseline: a.ts: pinned at 1500, now 1480. Commit the pin files\nlint: repository checks passed\n';
+  assert.equal(loweredNotes(out), '\n  - lowered: packages/cezar/src/file-length.baseline: a.ts: pinned at 1500, now 1480. Commit the pin files');
   assert.equal(loweredNotes('lint: repository checks passed\n'), '');
   const clean = lintFallbackLine({ unfinished: 1 }, ok(out));
-  assert.match(clean.text, /^- pass: lint: .+`npm run lint`\n  - lowered: packages\/cezar\/src\/file-length\.baseline\.json: a\.ts/);
+  assert.match(clean.text, /^- pass: lint: .+`npm run lint`\n  - lowered: packages\/cezar\/src\/file-length\.baseline: a\.ts/);
 });
 
 test('fallbackLines runs focused tests, node:test readers and lint, and reports their failures', async () => {

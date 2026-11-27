@@ -1,24 +1,26 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { gitSync } from '../git-command.ts';
 import { baselineMode, printLowered, type BaselineMode } from './baseline-mode.ts';
 
 /**
  * Source files over 1,000 lines are pinned at their current length (hearsay-tools/cezarion#1800).
  *
- * A pinned file may not grow, and no other file may pass the limit. The baseline only shrinks: a local
- * `npm run lint` lowers the pin of a file that got smaller (`lint/baseline-mode.ts`), CI fails a lowering
- * that was not committed, and `.github/scripts/baseline-growth.cjs` refuses a pull request that raises one.
- * To start over, delete the baseline and run `FILE_LENGTH_UPDATE=1 npm run lint`. It pins what is over the
- * limit then. `node packages/cezar/src/lint/file-length.ts headroom <paths>` prints the lines a file has left.
+ * A pinned file may not grow, and no other file may pass the limit. Each pin is its own file,
+ * `packages/cezar/src/file-length.baseline/<source path>.json` holding `{ "lines": <n> }`, so two pull requests that
+ * change different files never edit adjacent lines and merge in GitHub's merge queue (hearsay-tools/squawk#4362).
+ * The pins only shrink: a local `npm run lint` lowers the pin of a file that got smaller and deletes the pin of a
+ * file at or under the limit (`lint/baseline-mode.ts`), CI fails a lowering that was not committed, and
+ * `.github/scripts/baseline-growth.cjs` refuses a pull request that raises or adds a pin. With no pins at all,
+ * `FILE_LENGTH_UPDATE=1 npm run lint` pins what is over the limit. `node packages/cezar/src/lint/file-length.ts
+ * headroom <paths>` prints the lines a file has left.
  *
  * Counted: every tracked `*.ts`, `*.tsx`, `*.mjs` and `*.cjs` under `packages/`, except tests,
  * test kits, browser specs, `test/` directories and fixtures. Length is the newline count, as `wc -l`.
  */
 const repo = join(import.meta.dirname, '../../../..');
-const baselinePath = join(import.meta.dirname, '../file-length.baseline.json');
-
-const baselineName = 'packages/cezar/src/file-length.baseline.json';
+export const PINS = 'packages/cezar/src/file-length.baseline';
+export const LIMIT = 1000;
 const MAKE_ROOM = 'Make room by a verbatim move of whole functions to a sibling module; never join lines or squeeze statements to fit';
 
 const COUNTED = /\.(ts|tsx|mjs|cjs)$/;
@@ -27,11 +29,8 @@ export const isCounted = (path: string): boolean => COUNTED.test(path) && !EXCLU
 export const lineCount = (text: string): number => text.split('\n').length - 1;
 const lengthOf = (lengths: Record<string, number>, path: string): number => lengths[path] ?? 0;
 
-export interface Baseline {
-  $comment: string;
-  limit: number;
-  files: Record<string, number>;
-}
+/** Each pinned source path with its pin. */
+export type Pins = Record<string, number>;
 
 function sourceLengths(): Record<string, number> {
   const listed = gitSync(['ls-files', '-z', '--', 'packages'], { cwd: repo, maxBuffer: 16 << 20 });
@@ -43,80 +42,87 @@ function sourceLengths(): Record<string, number> {
   );
 }
 
-const readBaseline = (file = baselinePath): Baseline => JSON.parse(readFileSync(file, 'utf8')) as Baseline;
+/** The pin in one pin file, or undefined when the file is not `{ "lines": <whole number> }`. */
+function pinIn(text: string): number | undefined {
+  try {
+    const value: unknown = JSON.parse(text);
+    if (typeof value !== 'object' || value === null || Object.keys(value).join() !== 'lines') return undefined;
+    const { lines } = value as { lines: unknown };
+    return Number.isSafeInteger(lines) ? (lines as number) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The pins under `dir`, and a problem for each file there that is not a valid pin. A missing directory has no pins. */
+export function readPins(dir: string): { pins: Pins; invalid: string[] } {
+  const pins: Pins = {};
+  const invalid: string[] = [];
+  const files = existsSync(dir) ? readdirSync(dir, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile()) : [];
+  for (const entry of files) {
+    const path = relative(dir, join(entry.parentPath, entry.name)).split(sep).join('/');
+    const pin = path.endsWith('.json') ? pinIn(readFileSync(join(dir, path), 'utf8')) : undefined;
+    if (pin === undefined) invalid.push(`${PINS}/${path}:1 file-length: A pin file is <source path>.json holding { "lines": <whole number> }`);
+    else pins[path.slice(0, -'.json'.length)] = pin;
+  }
+  return { pins, invalid: invalid.sort() };
+}
 
 /**
- * `unpinned`: a file over the limit that the baseline lacks. `grown`: a pinned file longer than its pin.
+ * `unpinned`: a file over the limit that has no pin. `grown`: a pinned file longer than its pin.
  * `stale`: a pin above the file's length, or for a file that is gone or at the limit or under it. The
- * baseline must shrink to match, or the ratchet would let the file grow back.
+ * pins must shrink to match, or the ratchet would let the file grow back.
  */
-export function compareLengths(lengths: Record<string, number>, baseline: Baseline) {
-  const over = Object.entries(lengths).filter(([, lines]) => lines > baseline.limit);
+export function compareLengths(lengths: Record<string, number>, pins: Pins) {
+  const over = Object.entries(lengths).filter(([, lines]) => lines > LIMIT);
   return {
-    unpinned: over.filter(([path]) => !(path in baseline.files)).map(([path, lines]) => `${path}: ${lines} lines, over the limit of ${baseline.limit}`),
-    grown: over.filter(([path, lines]) => lines > (baseline.files[path] ?? Infinity)).map(([path, lines]) => `${path}: ${lines} lines, pinned at ${baseline.files[path]}`),
-    stale: Object.entries(baseline.files)
-      .filter(([path, pin]) => lengthOf(lengths, path) < pin || lengthOf(lengths, path) <= baseline.limit)
+    unpinned: over.filter(([path]) => !(path in pins)).map(([path, lines]) => `${path}: ${lines} lines, over the limit of ${LIMIT}`),
+    grown: over.filter(([path, lines]) => lines > (pins[path] ?? Infinity)).map(([path, lines]) => `${path}: ${lines} lines, pinned at ${pins[path]}`),
+    stale: Object.entries(pins)
+      .filter(([path, pin]) => lengthOf(lengths, path) < pin || lengthOf(lengths, path) <= LIMIT)
       .map(([path, pin]) => `${path}: pinned at ${pin}, now ${lengths[path] ?? 'gone'}`),
   };
 }
 
 /** Lower every pin to the file's length and drop the pins that no longer apply. Never adds or raises one. */
-export function pinnedLengths(lengths: Record<string, number>, baseline: Baseline): Record<string, number> {
-  const files = Object.entries(baseline.files)
-    .filter(([path]) => lengthOf(lengths, path) > baseline.limit)
-    .map(([path, pin]) => [path, Math.min(pin, lengths[path] ?? pin)] as const);
-  return Object.fromEntries(files.sort(([a], [b]) => a.localeCompare(b)));
+export function pinnedLengths(lengths: Record<string, number>, pins: Pins): Pins {
+  return Object.fromEntries(Object.entries(pins)
+    .filter(([path]) => lengthOf(lengths, path) > LIMIT)
+    .map(([path, pin]) => [path, Math.min(pin, lengths[path] ?? pin)]));
 }
 
-function writeBaseline(file: string, limit: number, files: Record<string, number>): void {
-  const baseline: Baseline = {
-    $comment:
-      'Non-test source files over 1,000 lines, pinned at their length when the ratchet landed (hearsay-tools/cezarion#1800). ' +
-      'A pin only shrinks: npm run lint lowers it when a file got smaller; commit this file then. ' +
-      'A new file over the limit is a failure, not an entry. Rules: docs/sdlc/ci.md.',
-    limit,
-    files,
-  };
-  writeFileSync(file, `${JSON.stringify(baseline, null, 2)}\n`);
-}
+const pinFile = (dir: string, path: string): string => join(dir, `${path}.json`);
 
-/** Lower the pins, or pin everything over the limit when there is no baseline yet. */
-function updateBaseline(file: string, lengths: Record<string, number>, limit = 1000): void {
-  if (existsSync(file)) {
-    const baseline = readBaseline(file);
-    writeBaseline(file, baseline.limit, pinnedLengths(lengths, baseline));
-    return;
+/** Write `next` over `previous`: rewrite each changed pin file and delete each dropped one with its empty folders. */
+function writePins(dir: string, previous: Pins, next: Pins): void {
+  for (const path of Object.keys(previous).filter((path) => !(path in next))) {
+    rmSync(pinFile(dir, path));
+    for (let folder = dirname(pinFile(dir, path)); folder.startsWith(`${dir}${sep}`) && readdirSync(folder).length === 0; folder = dirname(folder)) rmdirSync(folder);
   }
-  const over = Object.entries(lengths).filter(([, lines]) => lines > limit);
-  writeBaseline(file, limit, Object.fromEntries(over.sort(([a], [b]) => a.localeCompare(b))));
-}
-
-/** Lower the pins of files that got smaller, and say which. */
-function lowerPins(file: string, lengths: Record<string, number>, notify: (line: string) => void): void {
-  const baseline = readBaseline(file);
-  const { stale } = compareLengths(lengths, baseline);
-  if (stale.length === 0) return;
-  writeBaseline(file, baseline.limit, pinnedLengths(lengths, baseline));
-  notify(`${baselineName}: ${stale.join('; ')}. Commit the baseline`);
-}
-
-/** The length budget for `lengths` against the baseline at `file`, after `mode` updated it. */
-export function lengthProblems(lengths: Record<string, number>, mode: BaselineMode, notify: (line: string) => void, file = baselinePath): string[] {
-  if (mode === 'write') updateBaseline(file, lengths);
-  if (!existsSync(file)) {
-    return [`${baselineName}:1 file-length: Write the first baseline: FILE_LENGTH_UPDATE=1 npm run lint`];
+  for (const [path, lines] of Object.entries(next).filter(([path, lines]) => previous[path] !== lines)) {
+    mkdirSync(dirname(pinFile(dir, path)), { recursive: true });
+    writeFileSync(pinFile(dir, path), `${JSON.stringify({ lines })}\n`);
   }
-  if (mode === 'lower') lowerPins(file, lengths, notify);
-  const { unpinned, grown, stale } = compareLengths(lengths, readBaseline(file));
+}
+
+/** The length budget for `lengths` against the pins in `dir`, after `mode` updated them. */
+export function lengthProblems(lengths: Record<string, number>, mode: BaselineMode, notify: (line: string) => void, dir = join(repo, PINS)): string[] {
+  const { pins, invalid } = readPins(dir);
+  if (invalid.length > 0) return invalid;
+  const fresh = mode === 'write' && Object.keys(pins).length === 0;
+  const next = fresh ? Object.fromEntries(Object.entries(lengths).filter(([, lines]) => lines > LIMIT)) : pinnedLengths(lengths, pins);
+  const { stale } = compareLengths(lengths, pins);
+  if (mode !== 'report' && (fresh || stale.length > 0)) writePins(dir, pins, next);
+  if (mode === 'lower' && stale.length > 0) notify(`${PINS}: ${stale.join('; ')}. Commit the pin files`);
+  const { unpinned, grown, stale: left } = compareLengths(lengths, mode === 'report' ? pins : next);
   const report = (entry: string, fix: string): string => {
     const at = entry.indexOf(':');
     return `${entry.slice(0, at)}:1 file-length: ${entry.slice(at + 2)}. ${fix}`;
   };
   return [
-    ...unpinned.map((entry) => report(entry, `${MAKE_ROOM}. Do not add the file to the baseline`)),
+    ...unpinned.map((entry) => report(entry, `${MAKE_ROOM}. Do not add a pin for the file`)),
     ...grown.map((entry) => report(entry, `${MAKE_ROOM}. Then npm run lint lowers the pin`)),
-    ...stale.map((entry) => report(entry, `The file got smaller: run npm run lint locally, which lowers the pin, and commit ${baselineName}`)),
+    ...left.map((entry) => report(entry, `The file got smaller: run npm run lint locally, which lowers or deletes the pin, and commit ${PINS}/`)),
   ];
 }
 
@@ -129,12 +135,12 @@ export function fileLengthProblems(mode: BaselineMode = baselineMode(process.env
  * One line per path: its length, its pin or the limit, and the lines left. A path under a test path is
  * measured as production, because it counts once it leaves that path; a path that does not exist yet has 0 lines.
  */
-export function headroomLines(paths: string[], lengthOf: (path: string) => number | undefined, baseline: Baseline): string[] {
+export function headroomLines(paths: string[], lengthOf: (path: string) => number | undefined, pins: Pins): string[] {
   return paths.map((path) => {
     const lines = lengthOf(path);
-    const pin = baseline.files[path];
-    const left = (pin ?? baseline.limit) - (lines ?? 0);
-    const budget = pin === undefined ? `limit ${baseline.limit}` : `pinned at ${pin}`;
+    const pin = pins[path];
+    const left = (pin ?? LIMIT) - (lines ?? 0);
+    const budget = pin === undefined ? `limit ${LIMIT}` : `pinned at ${pin}`;
     const room = left >= 0 ? `${left} lines left` : `${-left} lines over`;
     const note = !path.startsWith('packages/') || !COUNTED.test(path) ? '; not counted: only .ts, .tsx, .mjs and .cjs files under packages/ count'
       : EXCLUDED.test(path) ? '; a test path, not counted now, measured as production for a move out of it'
@@ -155,6 +161,6 @@ if (import.meta.main) {
     process.exitCode = 2;
   } else {
     const relativePaths = paths.map((path) => relative(repo, resolve(path)));
-    for (const line of headroomLines(relativePaths, readLength, readBaseline())) console.log(line);
+    for (const line of headroomLines(relativePaths, readLength, readPins(join(repo, PINS)).pins)) console.log(line);
   }
 }

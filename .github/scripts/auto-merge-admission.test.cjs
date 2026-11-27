@@ -53,7 +53,7 @@ for (const [relative, why] of [
   ['scripts/test-package.mjs', 'gate or test harness'],
   ['packages/cezar/src/lint/run.ts', 'lint gate'],
   ['packages/cezar/src/lint/home-readers.baseline.json', 'lint gate'],
-  ['packages/cezar/src/file-length.baseline.json', 'lint gate'],
+  ['packages/cezar/src/file-length.baseline/packages/a/long.ts.json', 'lint gate'],
   ['packages/web/src/test/unit-wait-discipline.baseline.json', 'lint gate'],
   ['packages/web/e2e/fetch-setup.mjs', 'gate or test harness'],
   ['packages/web/e2e/wait-support.ts', 'gate or test harness'],
@@ -100,7 +100,7 @@ const pins = (comment, files) => `${JSON.stringify({ $comment: comment, limit: 1
 const sites = (entries) => `${JSON.stringify({ entries }, null, 2)}\n`;
 
 for (const [label, relative, before, after] of [
-  ['lowering one pin and dropping another', 'packages/cezar/src/file-length.baseline.json',
+  ['lowering one pin and dropping another', 'packages/cezar/src/test-wait-discipline.baseline.json',
     pins('Pins.', { 'a.ts': 1200, 'b.ts': 1100 }), pins('Pins.', { 'a.ts': 1150 })],
   ['dropping a site', 'packages/cezar/src/lint/home-readers.baseline.json',
     sites([{ file: 'a.ts', calls: 2 }, { file: 'b.ts', calls: 1 }]), sites([{ file: 'a.ts', calls: 1 }])],
@@ -119,7 +119,7 @@ for (const [label, before, after] of [
   ['dropping a field from a site', '{ "$comment": "Pins.", "sites": [{ "file": "a.ts", "count": 2 }] }\n',
     '{ "$comment": "Pins.", "sites": [{ "file": "a.ts" }] }\n'],
 ]) test(`a ratchet baseline change ${label} requires owner review`, t => {
-  const relative = 'packages/cezar/src/file-length.baseline.json';
+  const relative = 'packages/cezar/src/test-wait-discipline.baseline.json';
   const result = checkChange(t, relative, before, after);
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.ok(result.stdout.includes(`lint gate: ${relative}`), result.stdout);
@@ -132,7 +132,7 @@ test('path rules name each guarded file, file mode change and new baseline', asy
     file('.oxlintrc.json'),
     file('packages/cezar/src/lint/run.test.ts', { dels: [] }),
     file('packages/cezar/src/lint/new-rule.baseline.json', { status: 'A', dels: [] }),
-    file('packages/cezar/src/file-length.baseline.json', { adds: [], lowers: true }),
+    file('packages/cezar/src/file-length.baseline/packages/a/long.ts.json', { adds: [], lowers: true }),
     file('docs/run.sh', { newMode: '100755' }),
     file('docs/link', { newMode: '120000' }),
     file('README.md'),

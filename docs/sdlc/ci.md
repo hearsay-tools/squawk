@@ -666,8 +666,8 @@ node .ai/skills/check-code-quality/scripts/complexity-gate.mjs --base origin/mai
 For an owner-approved increase, the owner adds the `baseline-growth` label. `.github/workflows/rerun-label-gates.yml` then re-runs the failed jobs automatically (waiting first if CI is still running); if it does not, re-run the failed `complexity-gate` job manually. An agent never adds the label. Auto-merge has no complexity check of its own.
 CRAP is not part of this gate; CI reports it without failing (§ CRAP report for changed functions).
 
-**File length.** `npm run lint` pins every non-test source file over 1,000 lines in
-`packages/cezar/src/file-length.baseline.json`. `npm run prepr` runs the budget even when Squeal supplies oxlint results. No unit test
+**File length.** `npm run lint` pins every non-test source file over 1,000 lines with one pin file,
+`packages/cezar/src/file-length.baseline/<source path>.json` holding `{ "lines": N }`. `npm run prepr` runs the budget even when Squeal supplies oxlint results. No unit test
 runs this repository-wide check. It fails when a pinned file grows and when another file passes 1,000 lines.
 Make room by a verbatim move of whole functions to a sibling module; never join lines to fit. Print a
 file's lines left before you plan a change to it:
@@ -676,7 +676,8 @@ file's lines left before you plan a change to it:
 node packages/cezar/src/lint/file-length.ts headroom <path>...
 ```
 
-When a file gets smaller, a local `npm run lint` or `npm run prepr` lowers its pin and says so.
+When a file gets smaller, a local `npm run lint` or `npm run prepr` lowers its pin and says so. A file at or
+under the limit loses its pin file. Commit the pin files the run changed.
 Commit the baseline with the change. CI writes nothing and fails a pin that was not lowered
 ([lint.md § Shrink-only baselines](lint.md#shrink-only-baselines)). A run only lowers pins and drops entries. The `Reject baseline growth` step refuses a raised pin
 or a new entry, and the same `baseline-growth` label approves one. A pin that only follows its
@@ -1552,25 +1553,18 @@ its head SHA and fails closed.
 
 Rows that "cannot happen" at k=1 are why the serial queue never needed them.
 
-### Local ratchet baseline merges
+### Conflict-free ratchet records
 
-Run `npm run setup:merge-drivers` once per clone to register the `cezar-ratchet`
-Git merge driver in repository-local config. Linked worktrees share that config.
-Dependency installation does not register it. Setup refuses to replace a different
-existing definition. Node must be on PATH when Git merges.
+GitHub's merge queue runs no custom merge driver, so a record two pull requests both change must not
+share a file, or a line next to another record. File-length pins and equivalent mutants are stored one
+file per source file: `packages/cezar/src/file-length.baseline/<source path>.json` and
+`.github/mutants/equivalent/<source path>.json` (hearsay-tools/squawk#4362). Two pull requests then
+conflict only when they change the record of the same source file.
 
-The attributes cover `packages/cezar/src/file-length.baseline.json`.
-The driver takes the lower numeric pin or site count, matching AST sites by
-`(file, rule, site)`. It keeps additions, and preserves a removal against an
-unchanged entry. A removal against a modified entry, conflicting metadata,
-duplicate AST identities or unsupported JSON leaves a conflict for manual
-resolution. Output keeps the existing schema with stable key ordering.
+`baseline-growth.cjs` reads the pin directory as one ratchet keyed by source path: a raised pin or a
+new pin file is growth and needs the owner's `baseline-growth` label, and a deleted pin file is a dropped
+entry. A pin file renamed with the source file it pins is not growth. Auto-merge takes a lowered or
+deleted pin file and sends an added one to the owner. The other `*.baseline.json` files stay single files.
 
-This merge does not approve baseline growth. Existing CI growth and stale-entry
-checks still apply; combined source changes can require another baseline refresh.
-Only the owner can approve growth through the existing `baseline-growth` policy.
-GitHub does not run this custom driver: resolve server-side conflicts with a local
-merge and push. Clones without setup use Git's ordinary merge behavior.
-
-Remove registration with `git config --local --unset-all merge.cezar-ratchet.driver`.
-This affects developer Git operations only; it adds no cockpit runtime setting.
+A clone that registered the removed `cezar-ratchet` merge driver can drop it with
+`git config --local --unset-all merge.cezar-ratchet.driver`.
