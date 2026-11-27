@@ -39,10 +39,8 @@ import {
   requestRunSummaries,
   waitForRuns,
   type LogSnapshot,
-  type WaitEntry,
-  type WaitMode,
+  type WaitForRunsOptions,
   type WaitResult,
-  type WaitUntil,
 } from './watch.ts';
 
 /**
@@ -410,27 +408,10 @@ export async function getTaskDiff(cockpit: Cockpit, input: GetTaskDiffInput): Pr
   };
 }
 
-export interface WaitForTasksInput {
-  ids: string[];
-  mode: WaitMode;
-  until: WaitUntil;
-  timeoutMs: number;
-  pollMs?: number | undefined;
-  signal?: AbortSignal | undefined;
-  onHeartbeat?: ((elapsedMs: number, entries: readonly WaitEntry[]) => void | Promise<void>) | undefined;
-  heartbeatMs?: number | undefined;
-}
+export type WaitForTasksInput = WaitForRunsOptions & { ids: string[] };
 
-export function waitForTasks(cockpit: Cockpit, input: WaitForTasksInput): Promise<WaitResult> {
-  return waitForRuns(cockpit, input.ids, {
-    mode: input.mode,
-    until: input.until,
-    timeoutMs: input.timeoutMs,
-    pollMs: input.pollMs,
-    signal: input.signal,
-    onHeartbeat: input.onHeartbeat,
-    heartbeatMs: input.heartbeatMs,
-  });
+export function waitForTasks(cockpit: Cockpit, { ids, ...options }: WaitForTasksInput): Promise<WaitResult> {
+  return waitForRuns(cockpit, ids, options);
 }
 
 export async function stopTask(cockpit: Cockpit, id: string, signal?: AbortSignal): Promise<{ id: string; cancelled: boolean }> {

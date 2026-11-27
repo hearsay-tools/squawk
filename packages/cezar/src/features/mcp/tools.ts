@@ -183,6 +183,31 @@ async function invokeTaskStart(rawArgs: unknown, ctx: ToolCallContext) {
   };
 }
 
+function idActionTool(
+  name: string,
+  description: string,
+  run: (cockpit: Awaited<ReturnType<typeof resolveProjectCockpit>>, id: string, signal: AbortSignal) => Promise<Record<string, unknown>>,
+): ToolEntry {
+  return {
+    definition: {
+      name,
+      description,
+      inputSchema: {
+        type: 'object',
+        required: ['project', 'id'],
+        additionalProperties: false,
+        properties: { project: PROJECT_PROP, id: TASK_ID_PROP },
+      },
+    },
+    invoke: async (rawArgs, ctx) => {
+      const args = taskIdInputSchema.parse(rawArgs ?? {});
+      const cockpit = await resolveProjectCockpit(ctx.origin, args.project, { fetch: ctx.fetch, signal: ctx.signal });
+      const result = await run(cockpit, args.id, ctx.signal);
+      return { project: cockpit.projectId, ...result };
+    },
+  };
+}
+
 const TOOLS: readonly ToolEntry[] = [
   {
     definition: {
@@ -397,60 +422,9 @@ const TOOLS: readonly ToolEntry[] = [
       };
     },
   },
-  {
-    definition: {
-      name: 'task_stop',
-      description: 'Cancel a running or queued task.',
-      inputSchema: {
-        type: 'object',
-        required: ['project', 'id'],
-        additionalProperties: false,
-        properties: { project: PROJECT_PROP, id: TASK_ID_PROP },
-      },
-    },
-    invoke: async (rawArgs, ctx) => {
-      const args = taskIdInputSchema.parse(rawArgs ?? {});
-      const cockpit = await resolveProjectCockpit(ctx.origin, args.project, { fetch: ctx.fetch, signal: ctx.signal });
-      const result = await stopTask(cockpit, args.id, ctx.signal);
-      return { id: result.id, project: cockpit.projectId, cancelled: result.cancelled };
-    },
-  },
-  {
-    definition: {
-      name: 'task_finish',
-      description: 'Close a waiting task session as done.',
-      inputSchema: {
-        type: 'object',
-        required: ['project', 'id'],
-        additionalProperties: false,
-        properties: { project: PROJECT_PROP, id: TASK_ID_PROP },
-      },
-    },
-    invoke: async (rawArgs, ctx) => {
-      const args = taskIdInputSchema.parse(rawArgs ?? {});
-      const cockpit = await resolveProjectCockpit(ctx.origin, args.project, { fetch: ctx.fetch, signal: ctx.signal });
-      const result = await finishTask(cockpit, args.id, ctx.signal);
-      return { id: result.id, project: cockpit.projectId, finished: result.finished };
-    },
-  },
-  {
-    definition: {
-      name: 'task_archive',
-      description: 'Archive a task to hide it from default listings.',
-      inputSchema: {
-        type: 'object',
-        required: ['project', 'id'],
-        additionalProperties: false,
-        properties: { project: PROJECT_PROP, id: TASK_ID_PROP },
-      },
-    },
-    invoke: async (rawArgs, ctx) => {
-      const args = taskIdInputSchema.parse(rawArgs ?? {});
-      const cockpit = await resolveProjectCockpit(ctx.origin, args.project, { fetch: ctx.fetch, signal: ctx.signal });
-      const result = await archiveTask(cockpit, args.id, true, ctx.signal);
-      return { id: result.id, project: cockpit.projectId, archived: result.archived };
-    },
-  },
+  idActionTool('task_stop', 'Cancel a running or queued task.', (cockpit, id, signal) => stopTask(cockpit, id, signal)),
+  idActionTool('task_finish', 'Close a waiting task session as done.', (cockpit, id, signal) => finishTask(cockpit, id, signal)),
+  idActionTool('task_archive', 'Archive a task to hide it from default listings.', (cockpit, id, signal) => archiveTask(cockpit, id, true, signal)),
   {
     definition: {
       name: 'task_list',
