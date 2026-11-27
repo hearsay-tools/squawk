@@ -88,7 +88,7 @@ HEAD must still print the head SHA that the round's task named; else run the
 round on the new commits. Then send the release request for that SHA; push and
 open the PR only after the coordinator's reply. Run the round again on the new
 commits after any later code change. A round on a pushed head while the PR is open: mark it
-with node .github/scripts/pre-pr-review.cjs open|blocked|clean --head <sha> --pr <n>
+with node .github/scripts/pre-pr-review.cjs open|blocked|clean --pr <n>
 (.ai/skills/auto-merge/SKILL.md § Show an open review round on the PR). Never add
 the PR to the merge queue or remove it. A push refused with GH006 (the PR is
 queued) goes to the coordinator as a request; do not dequeue and do not push again. Commit attribution follows your runner's

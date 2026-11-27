@@ -9,14 +9,14 @@
 //     ready, every required check on the live head passes and no thread is open.
 //   - Any other state moves them to In progress: a new head, a pending or red
 //     check, an open thread, a draft, or an open pre-PR review round (the
-//     `pre-pr-review` commit status is pending or failure; pre-pr-review.cjs).
+//     `pre-pr-review` PR label is present; pre-pr-review.cjs).
 // Human draft/ready flips arrive as their own events and resync the board.
 
 const { reader, pages, positive, validSha, VERIFY } = require('./queue-ci-proof.cjs');
 const { listReviewThreads } = require('./review-threads.cjs');
 const { signalTarget } = require('./review-signal.cjs');
 const { DEFAULT_FLOOR, countApiCalls, checkFloor } = require('./api-budget.cjs');
-const { REVIEW_CONTEXT } = require('./pre-pr-review.cjs');
+const { REVIEW_LABEL } = require('./pre-pr-review.cjs');
 
 const PASSING = new Set(['success', 'skipped', 'neutral']);
 const BOARD = { progress: 'In progress', review: 'In review' };
@@ -66,11 +66,6 @@ function evaluateChecks({ required, checkRuns, statuses = [] }) {
     else if (state) result.failing.push(name);
     else result.missing.push(name);
   }
-  // The review round is not a required check: absent or success leaves readiness
-  // to the required checks, pending or failure holds it.
-  const review = required.includes(REVIEW_CONTEXT) ? undefined : states.get(REVIEW_CONTEXT);
-  if (review === 'pending') result.pending.push(REVIEW_CONTEXT);
-  else if (review === 'failure' || review === 'error') result.failing.push(REVIEW_CONTEXT);
   result.ready = !result.pending.length && !result.failing.length && !result.missing.length;
   return result;
 }
@@ -169,14 +164,20 @@ async function syncBoard({ projectGithub, owner, repo, pullNumber, status, log,
   }
 }
 
+function hasReviewLabel(pr) {
+  return Array.isArray(pr?.labels) && pr.labels.some(label => label?.name === REVIEW_LABEL);
+}
+
 // One board decision: In review only when the PR is ready, every required
-// check on the live head passes and no review thread is open.
-function boardStatus({ checks, resolved, draft }) {
-  return checks?.ready && resolved && !draft ? BOARD.review : BOARD.progress;
+// check on the live head passes, no review thread is open, and no pre-PR
+// review round holds the PR.
+function boardStatus({ checks, resolved, draft, reviewOpen = false }) {
+  return checks?.ready && resolved && !draft && !reviewOpen ? BOARD.review : BOARD.progress;
 }
 
 const TARGET_LIMIT = 4;
 const PULL_ACTIONS = new Set(['opened', 'reopened', 'synchronize', 'ready_for_review', 'converted_to_draft']);
+const LABEL_ACTIONS = new Set(['labeled', 'unlabeled']);
 const recovery = reason => new Error(`${reason}; dispatch with pr_number for manual recovery`);
 function associationNumbers(pulls) {
   if (!Array.isArray(pulls) || pulls.length > TARGET_LIMIT
@@ -197,14 +198,6 @@ async function workflowTarget(read, payload, fullName) {
   if (!numbers.length) throw recovery('Missing native CI PR association');
   return numbers;
 }
-// A `pre-pr-review` status names a head; its open PRs are the targets. Any other
-// status context selects nothing and reads nothing.
-async function statusTarget(read, payload) {
-  if (payload.context !== REVIEW_CONTEXT || !validSha(payload.sha)) return [];
-  const pulls = await read('GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls', { commit_sha: payload.sha, per_page: 100 });
-  if (!Array.isArray(pulls)) throw recovery('Malformed commit PR association');
-  return associationNumbers(pulls.filter(pr => pr?.state === 'open' && pr.head?.sha === payload.sha));
-}
 // The PR numbers an event names. The event is only a wake hint: each job reads
 // the live PR itself.
 async function eventTarget(read, eventName, payload, fullName) {
@@ -216,9 +209,11 @@ async function eventTarget(read, eventName, payload, fullName) {
   }
   if (eventName === 'pull_request_target') {
     const number = payload.pull_request?.number;
-    return PULL_ACTIONS.has(payload.action) && positive(number) ? [number] : [];
+    if (!positive(number)) return [];
+    if (PULL_ACTIONS.has(payload.action)) return [number];
+    if (LABEL_ACTIONS.has(payload.action) && payload.label?.name === REVIEW_LABEL) return [number];
+    return [];
   }
-  if (eventName === 'status') return statusTarget(read, payload);
   if (eventName !== 'workflow_run') return [];
   if (payload.workflow_run?.name !== 'Review signal') return workflowTarget(read, payload, fullName);
   const signal = await signalTarget(read, payload, fullName);
@@ -286,7 +281,7 @@ async function syncPull({ github, projectGithub = null, owner, repo, pullNumber,
     log(`PR ${pr.number}: required checks unavailable; board sync skipped.`);
     return 'checks-unavailable';
   }
-  const resolved = checks.ready && !pr.draft && await threadsResolved(read, owner, repo, pr, log);
+  const resolved = checks.ready && !pr.draft && !hasReviewLabel(pr) && await threadsResolved(read, owner, repo, pr, log);
   let final;
   try { final = await read('GET /repos/{owner}/{repo}/pulls/{pull_number}', { pull_number: pr.number }); }
   catch {
@@ -294,8 +289,9 @@ async function syncPull({ github, projectGithub = null, owner, repo, pullNumber,
     return 'pull-unavailable';
   }
   if (!sameLivePull(final, pr, fullName)) return 'changed';
-  const status = boardStatus({ checks, resolved, draft: final.draft });
-  log(`PR ${final.number}: board follows ${status} (checks=${checks.ready}, threads resolved=${resolved}, draft=${final.draft}).`);
+  const reviewOpen = hasReviewLabel(final);
+  const status = boardStatus({ checks, resolved, draft: final.draft, reviewOpen });
+  log(`PR ${final.number}: board follows ${status} (checks=${checks.ready}, threads resolved=${resolved}, draft=${final.draft}, review=${reviewOpen}).`);
   await syncBoard({ projectGithub, owner, repo, pullNumber: pr.number, status, log });
   return status;
 }
@@ -309,6 +305,7 @@ function countTokens(tokens) {
 
 module.exports = {
   BOARD,
+  hasReviewLabel,
   requiredCheckNames,
   latestByName,
   evaluateChecks,

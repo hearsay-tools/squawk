@@ -1,4 +1,4 @@
-import type { TokenUsage } from '@hearsay-tools/squawk/plugin';
+import type { TokenUsage } from '../ui-events.ts';
 
 /** The usage of every prompt one logical turn carried. */
 export function addUsage(total: TokenUsage | undefined, usage: TokenUsage): TokenUsage {

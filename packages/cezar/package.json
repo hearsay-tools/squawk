@@ -17,6 +17,7 @@
     "./plugin/model-settings": "./dist/plugin/model-settings.js",
     "./plugin/managed-cli": "./dist/plugin/managed-cli.js",
     "./plugin/pi-rpc": "./dist/plugin/pi-rpc.js",
+    "./plugin/acp": "./dist/plugin/acp.js",
     "./package.json": "./package.json"
   },
   "files": [
