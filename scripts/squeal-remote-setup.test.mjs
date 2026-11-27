@@ -183,8 +183,8 @@ test('squeal-remote-setup downloads pinned agent-browser when PATH holds another
   assert.match(run.stderr, /ready: .*agent-browser 9\.9\.9/);
 });
 
-async function startBuildStubServer(t, { failBuild = false } = {}) {
-  const seen = { createBody: null, uploadAuth: null, uploadBytes: 0, startCalled: false, logOffsets: [] };
+async function startBuildStubServer(t, { failBuild = false, failUploadStatus = null, uploadPath = '/upload/signed' } = {}) {
+  const seen = { createAuth: null, createBody: null, uploadAuth: null, uploadBytes: 0, startCalled: false, logOffsets: [] };
   const server = createServer((req, res) => {
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
@@ -192,21 +192,22 @@ async function startBuildStubServer(t, { failBuild = false } = {}) {
       const body = Buffer.concat(chunks);
       const url = new URL(req.url, 'http://127.0.0.1');
       if (req.method === 'POST' && url.pathname === '/v1/template-builds') {
+        seen.createAuth = req.headers.authorization ?? null;
         seen.createBody = JSON.parse(body.toString('utf8'));
         res.writeHead(201, { 'content-type': 'application/json' });
         res.end(JSON.stringify({
           id: 'tb_0123456789abcdef0123',
           name: seen.createBody.name,
           status: 'created',
-          upload_url: `http://127.0.0.1:${server.address().port}/upload/signed`,
+          upload_url: `http://127.0.0.1:${server.address().port}${uploadPath}`,
         }));
         return;
       }
-      if (req.method === 'PUT' && url.pathname === '/upload/signed') {
+      if (req.method === 'PUT' && `${url.pathname}${url.search}` === uploadPath) {
         seen.uploadAuth = req.headers.authorization ?? null;
         seen.uploadBytes = body.length;
-        res.writeHead(200);
-        res.end();
+        res.writeHead(failUploadStatus ?? 200);
+        res.end(failUploadStatus ? 'SignatureDoesNotMatch' : '');
         return;
       }
       if (req.method === 'POST' && url.pathname === '/v1/template-builds/tb_0123456789abcdef0123/start') {
@@ -259,6 +260,7 @@ test('publishTemplate packs Dockerfile at archive root, uploads without auth hea
     pollIntervalMs: 1,
     onLog: (chunk) => logs.push(chunk),
   });
+  assert.equal(seen.createAuth, 'Bearer test-token');
   assert.equal(seen.createBody.name, 'squawk-runner');
   assert.equal(seen.uploadBytes, seen.createBody.size_bytes);
   assert.equal(seen.uploadAuth, null, 'presigned upload URL must never receive Authorization header');
@@ -287,4 +289,103 @@ test('publishTemplate surfaces build_failed reason from Agent37 API', async (t) 
     }),
     /build_failed.*apt-get exited 100/,
   );
+});
+
+test('publishTemplate keeps API token off curl argv and redacts it on curl transport failure', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'cez-curl-fail-api-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const argvLog = join(dir, 'argv.txt');
+  const stubCurl = join(dir, 'curl');
+  const secretToken = 'a37_live_super_secret_api_key_987654';
+  writeFileSync(stubCurl, `#!/bin/sh
+printf '%s\\n' "$*" > "${argvLog}"
+cat >/dev/null
+printf 'curl: (7) Failed to connect with Authorization: Bearer ${secretToken}\\n' >&2
+exit 7
+`, { mode: 0o755 });
+
+  await assert.rejects(
+    () => publishTemplate({
+      repoRoot,
+      apiBaseUrl: 'http://127.0.0.1:9',
+      authToken: secretToken,
+      pollIntervalMs: 1,
+      onLog: () => {},
+      curlBin: stubCurl,
+    }),
+    (err) => {
+      assert.match(err.message, /POST \/v1\/template-builds failed \(curl exited 7/);
+      assert.ok(!err.message.includes(secretToken), `API token leaked in error: ${err.message}`);
+      return true;
+    },
+  );
+  const seenArgv = readFileSync(argvLog, 'utf8');
+  assert.ok(!seenArgv.includes(secretToken), `API token leaked in curl argv: ${seenArgv}`);
+});
+
+test('publishTemplate keeps presigned upload URL off curl argv and redacts it on upload failure', async (t) => {
+  const secretUploadPath = '/upload/signed-secret-bucket-path-xyz';
+  const secretSig = 'sig_secret_value_abcdef123456';
+  const secretToken = 'a37_live_upload_test_key_123456';
+  const { baseUrl } = await startBuildStubServer(t, {
+    failUploadStatus: 403,
+    uploadPath: `${secretUploadPath}?X-Amz-Signature=${secretSig}`,
+  });
+
+  // 1. Real curl failing with HTTP 403 on presigned PUT URL
+  await assert.rejects(
+    () => publishTemplate({
+      repoRoot,
+      apiBaseUrl: baseUrl,
+      authToken: secretToken,
+      pollIntervalMs: 1,
+      onLog: () => {},
+    }),
+    (err) => {
+      assert.match(err.message, /PUT template build archive failed \(curl exited 22/);
+      assert.ok(!err.message.includes(secretUploadPath), `upload path leaked: ${err.message}`);
+      assert.ok(!err.message.includes(secretSig), `upload signature leaked: ${err.message}`);
+      assert.ok(!err.message.includes(secretToken), `API token leaked: ${err.message}`);
+      return true;
+    },
+  );
+
+  // 2. Stub curl recording argv on PUT and echoing signed URL to stderr before exiting 7
+  const dir = mkdtempSync(join(tmpdir(), 'cez-curl-fail-upload-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const argvLog = join(dir, 'put-argv.txt');
+  const realCurl = commandPath('curl');
+  const wrapperCurl = join(dir, 'curl');
+  writeFileSync(wrapperCurl, `#!/bin/sh
+case " $* " in
+  *" -X PUT "*)
+    printf '%s\\n' "$*" > "${argvLog}"
+    cfg=$(cat)
+    printf 'curl: (7) Failed to connect: %s\\n' "$cfg" >&2
+    exit 7
+    ;;
+esac
+exec "${realCurl}" "$@"
+`, { mode: 0o755 });
+
+  await assert.rejects(
+    () => publishTemplate({
+      repoRoot,
+      apiBaseUrl: baseUrl,
+      authToken: secretToken,
+      pollIntervalMs: 1,
+      onLog: () => {},
+      curlBin: wrapperCurl,
+    }),
+    (err) => {
+      assert.match(err.message, /PUT template build archive failed \(curl exited 7/);
+      assert.ok(!err.message.includes(secretUploadPath), `upload path leaked: ${err.message}`);
+      assert.ok(!err.message.includes(secretSig), `upload signature leaked: ${err.message}`);
+      assert.ok(!err.message.includes(secretToken), `API token leaked: ${err.message}`);
+      return true;
+    },
+  );
+  const putArgv = readFileSync(argvLog, 'utf8');
+  assert.ok(!putArgv.includes(secretUploadPath), `upload URL leaked in curl argv: ${putArgv}`);
+  assert.ok(!putArgv.includes(secretSig), `upload signature leaked in curl argv: ${putArgv}`);
 });

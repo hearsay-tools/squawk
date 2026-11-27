@@ -2,16 +2,14 @@
 // Builds and publishes the `squawk-runner` Agent37 workspace template from `.ai/squeal-runner/`
 // using Agent37's cloud build API (`POST /v1/template-builds` -> presigned PUT -> start -> poll).
 // Uses `curl` so host `HTTPS_PROXY` authentication works without extra dependencies.
-import { execFile, execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { parseArgs, promisify } from 'node:util';
+import { parseArgs } from 'node:util';
 import { readTestEnvInputs } from './test-env-inputs.mjs';
-
-const execFileAsync = promisify(execFile);
 
 const DEFAULT_API_BASE = 'https://api.agent37.com';
 const DEFAULT_TEMPLATE_NAME = 'squawk-runner';
@@ -51,15 +49,112 @@ function isLoopbackUrl(rawUrl) {
   return host === '127.0.0.1' || host === 'localhost' || host === '::1';
 }
 
-async function curlJson({ method, url, authToken, body }) {
+function formatCurlConfigValue(value) {
+  if (/[\r\n\0]/.test(value)) {
+    throw new Error('Invalid control character in curl configuration value');
+  }
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function collectSecretFragments(values) {
+  const fragments = [];
+  for (const value of values) {
+    if (typeof value !== 'string' || value.length === 0) continue;
+    fragments.push(value);
+    try {
+      const parsed = new URL(value);
+      if (parsed.pathname && parsed.pathname.length > 1) fragments.push(parsed.pathname);
+      if (parsed.search && parsed.search.length > 1) fragments.push(parsed.search);
+      for (const paramValue of parsed.searchParams.values()) {
+        if (paramValue.length >= 6) fragments.push(paramValue);
+      }
+    } catch {
+      // Not a URL; raw token string is already included.
+    }
+  }
+  return [...new Set(fragments)].sort((a, b) => b.length - a.length);
+}
+
+function sanitizeDiagnostic(rawText, secrets) {
+  let clean = String(rawText ?? '');
+  for (const secret of collectSecretFragments(secrets)) {
+    clean = clean.split(secret).join('[redacted]');
+  }
+  clean = clean
+    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/https?:\/\/\S+/gi, '[redacted-url]')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean.slice(0, 200);
+}
+
+function runCurl({ label, args, stdinConfig, secrets = [], maxStdoutBytes = 16 * 1024 * 1024, curlBin = 'curl' }) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(curlBin, ['--config', '-', ...args], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const stdoutChunks = [];
+    const stderrChunks = [];
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let settled = false;
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      rejectPromise(err);
+    };
+    child.stdout.on('data', (chunk) => {
+      stdoutBytes += chunk.length;
+      if (stdoutBytes > maxStdoutBytes) {
+        child.kill('SIGKILL');
+        fail(new Error(`${label} failed: curl stdout exceeded ${maxStdoutBytes} bytes`));
+        return;
+      }
+      stdoutChunks.push(chunk);
+    });
+    child.stderr.on('data', (chunk) => {
+      if (stderrBytes >= 64 * 1024) return;
+      const take = chunk.subarray(0, 64 * 1024 - stderrBytes);
+      stderrBytes += take.length;
+      stderrChunks.push(take);
+    });
+    child.stdin.on('error', () => {
+      // Ignore EPIPE when curl exits before consuming stdin.
+    });
+    child.on('error', (err) => {
+      fail(new Error(`${label} failed: unable to start curl (${err.code ?? 'spawn_error'})`));
+    });
+    child.on('close', (code, signal) => {
+      if (settled) return;
+      settled = true;
+      if (code === 0) {
+        resolvePromise(Buffer.concat(stdoutChunks).toString('utf8'));
+        return;
+      }
+      const stderrText = sanitizeDiagnostic(Buffer.concat(stderrChunks).toString('utf8'), secrets);
+      const status = signal ? `killed by ${signal}` : `exited ${code ?? 'unknown'}`;
+      const detail = stderrText ? `: ${stderrText}` : '';
+      rejectPromise(new Error(`${label} failed (curl ${status}${detail})`));
+    });
+    child.stdin.end(stdinConfig);
+  });
+}
+
+async function curlJson({ label, method, url, authToken, body, curlBin }) {
   const args = ['-sS', '-X', method, '-w', '\n%{http_code}'];
   if (isLoopbackUrl(url)) args.push('--noproxy', '*');
-  if (authToken) args.push('-H', `Authorization: Bearer ${authToken}`);
   if (body !== undefined) {
     args.push('-H', 'Content-Type: application/json', '--data-binary', JSON.stringify(body));
   }
-  args.push(url);
-  const { stdout: output } = await execFileAsync('curl', args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+  const configLines = [`url = ${formatCurlConfigValue(url)}`];
+  if (authToken) configLines.push(`header = ${formatCurlConfigValue(`Authorization: Bearer ${authToken}`)}`);
+  const output = await runCurl({
+    label,
+    args,
+    stdinConfig: `${configLines.join('\n')}\n`,
+    secrets: authToken ? [authToken] : [],
+    curlBin,
+  });
   const splitAt = output.lastIndexOf('\n');
   const status = Number(output.slice(splitAt + 1).trim());
   const rawBody = output.slice(0, splitAt);
@@ -74,12 +169,18 @@ async function curlJson({ method, url, authToken, body }) {
   return { status, body: parsed };
 }
 
-async function uploadArchive(uploadUrl, archivePath) {
-  // Presigned PUT URL is a bearer credential: send no Authorization header and never log it.
+async function uploadArchive(uploadUrl, archivePath, curlBin) {
+  // Presigned PUT URL is a bearer credential: pass via stdin config, send no Authorization header, and never log it.
   const args = ['--fail-with-body', '-sS', '-X', 'PUT', '-H', 'Expect:', '--data-binary', `@${archivePath}`];
   if (isLoopbackUrl(uploadUrl)) args.push('--noproxy', '*');
-  args.push(uploadUrl);
-  await execFileAsync('curl', args, { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+  await runCurl({
+    label: 'PUT template build archive',
+    args,
+    stdinConfig: `url = ${formatCurlConfigValue(uploadUrl)}\n`,
+    secrets: [uploadUrl],
+    maxStdoutBytes: 4 * 1024 * 1024,
+    curlBin,
+  });
 }
 
 function requireStatus(step, response, expectedStatuses) {
@@ -98,6 +199,7 @@ export async function publishTemplate({
   pollIntervalMs = POLL_INTERVAL_MS,
   timeoutMs = BUILD_TIMEOUT_MS,
   onLog = (chunk) => process.stdout.write(chunk),
+  curlBin = 'curl',
 } = {}) {
   const version = assertPinnedAgentBrowserMatch(repoRoot);
   const contextDir = join(repoRoot, '.ai/squeal-runner');
@@ -109,23 +211,27 @@ export async function publishTemplate({
     const created = requireStatus(
       'POST /v1/template-builds',
       await curlJson({
+        label: 'POST /v1/template-builds',
         method: 'POST',
         url: `${base}/v1/template-builds`,
         authToken,
         body: { name, size_bytes: sizeBytes, description },
+        curlBin,
       }),
       [200, 201],
     );
     if (!created?.id || !created?.upload_url) {
       throw new Error('POST /v1/template-builds returned no id or upload_url');
     }
-    await uploadArchive(created.upload_url, archivePath);
+    await uploadArchive(created.upload_url, archivePath, curlBin);
     requireStatus(
       `POST /v1/template-builds/${created.id}/start`,
       await curlJson({
+        label: `POST /v1/template-builds/${created.id}/start`,
         method: 'POST',
         url: `${base}/v1/template-builds/${created.id}/start`,
         authToken,
+        curlBin,
       }),
       [200, 201, 202],
     );
@@ -136,6 +242,7 @@ export async function publishTemplate({
       pollIntervalMs,
       timeoutMs,
       onLog,
+      curlBin,
     });
     return { buildId: created.id, version, template: result.template };
   } finally {
@@ -143,16 +250,18 @@ export async function publishTemplate({
   }
 }
 
-async function pollBuildLogs({ base, buildId, authToken, pollIntervalMs, timeoutMs, onLog }) {
+async function pollBuildLogs({ base, buildId, authToken, pollIntervalMs, timeoutMs, onLog, curlBin }) {
   const deadline = Date.now() + timeoutMs;
   let offset = 0;
   while (true) {
     const chunk = requireStatus(
       `GET /v1/template-builds/${buildId}/logs`,
       await curlJson({
+        label: `GET /v1/template-builds/${buildId}/logs`,
         method: 'GET',
         url: `${base}/v1/template-builds/${buildId}/logs?offset=${offset}`,
         authToken,
+        curlBin,
       }),
       [200],
     );
