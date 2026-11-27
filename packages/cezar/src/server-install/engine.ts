@@ -2,6 +2,7 @@ import { commandText } from '../home/command.ts';
 import type { Home } from '../home/home.ts';
 import { loadWorkspaceConfig } from '../workspace/config.ts';
 import { disableRemoteSettings, isGranted, readRemoteSettings } from '../remote-settings.ts';
+import { clearMcpTokensForPort, listMcpTokens } from '../mcp-tokens.ts';
 import { acquireLock, deleteServerState, isResolved, loadServerState, saveServerState } from './state.ts';
 import { StepAborted, StepCancelled, StepSkipped, defaultRunner } from './steps.ts';
 import { createAutoUi, createClackUi } from './ui.ts';
@@ -143,6 +144,23 @@ async function withdrawRemoteSettings(ctx: InstallContext, port: number, why: st
   ctx.ui.info(commandText(`Withdrew the remote settings grant for port ${port} (${why}). \`cez remote-settings enable --port ${port}\` grants it again.`));
 }
 
+/**
+ * MCP bearer tokens also bind a port (hearsay-tools/squawk#4402). Withdraw them on uninstall and
+ * fresh installs on that port so a replacement cockpit starts with no inherited credentials.
+ */
+async function withdrawMcpTokens(ctx: InstallContext, port: number, why: string, when = true): Promise<void> {
+  if (!when) return;
+  const state = listMcpTokens(ctx.home, port);
+  if (state.tokens.length === 0 && !state.issue) return;
+  if (ctx.dryRun) {
+    ctx.ui.info(`DRY RUN — would remove MCP bearer tokens for port ${port} (${why}).`);
+    return;
+  }
+  if (clearMcpTokensForPort(port, ctx.home)) {
+    ctx.ui.info(commandText(`Removed MCP bearer tokens for port ${port} (${why}). \`cez mcp token create --port ${port}\` creates a new token.`));
+  }
+}
+
 function setupInstallRecord(state: ServerState, strategy: PlatformStrategy, opts: RunOptions): boolean {
   if (state.platform && state.platform !== strategy.id) {
     throw new PreflightError(
@@ -268,8 +286,9 @@ export async function runInstall(strategy: PlatformStrategy, opts: RunOptions): 
     const freshInstall = setupInstallRecord(state, strategy, opts);
 
     await strategy.preflight(ctx); // throws PreflightError to refuse politely
-    // A grant left on this port belongs to a cockpit that is gone; a completed install keeps its own.
+    // A grant or MCP token file left on this port belongs to a cockpit that is gone; a completed install keeps its own.
     await withdrawRemoteSettings(ctx, state.primaryPort, 'a new install on this port', freshInstall);
+    await withdrawMcpTokens(ctx, state.primaryPort, 'a new install on this port', freshInstall);
 
     const steps = strategy.steps(ctx);
     const knownIds = new Set(steps.map((s) => s.id));
@@ -327,6 +346,7 @@ export async function runUninstall(strategy: PlatformStrategy, opts: RunOptions)
       if (proceed !== true) return { status: 'cancelled', state };
     }
     await withdrawRemoteSettings(ctx, state.primaryPort, 'uninstalling this cockpit');
+    await withdrawMcpTokens(ctx, state.primaryPort, 'uninstalling this cockpit');
 
     // Reverse order: undo the last-created first. `failed` outcomes are undone
     // too — the step may have created artifacts before failing, and every undo

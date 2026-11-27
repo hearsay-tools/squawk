@@ -17,9 +17,9 @@ import { assertNoMigration } from './migration-guard.ts';
 /** A path-derived reader preserves APIs that already accept a resolved Home path (ADR 0059). */
 export function homeFileRoot(path: string): string {
   const parent = dirname(path);
-  // An explicit CEZ_HOME may itself be named remote-settings or server-instances.
+  // An explicit CEZ_HOME may itself be named remote-settings, mcp-tokens or server-instances.
   try { if (readInstallMarker(parent)) return parent; } catch { return parent; }
-  return ['remote-settings', 'server-instances'].includes(basename(parent)) ? dirname(parent) : parent;
+  return ['remote-settings', 'mcp-tokens', 'server-instances'].includes(basename(parent)) ? dirname(parent) : parent;
 }
 
 /** Registry files only. No ambient paths, no user settings, no layout selection. */
@@ -35,7 +35,7 @@ export class HomeStore {
 
   private lockRoot(path: string): string {
     if (typeof this.home !== 'string') {
-      if ([this.home.config, this.home.remoteSettings].includes(path)) return this.home.config;
+      if ([this.home.config, this.home.remoteSettings, this.home.mcpTokens].includes(path)) return this.home.config;
       if ([this.home.state, this.home.serverInstances].includes(path)) return this.home.state;
     }
     return this.journal(path).root;
