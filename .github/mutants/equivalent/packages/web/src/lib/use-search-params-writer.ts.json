@@ -1,0 +1,9 @@
+[
+  {
+    "function": "useSearchParamsWriter",
+    "mutator": "ConditionalExpression",
+    "original": "writerSeq !== undefined",
+    "replacement": "true",
+    "reason": "The check narrows writerSeq for TypeScript; undefined <= latestSeq is already false, so removing this check changes no runtime behavior."
+  }
+]

@@ -22,7 +22,7 @@ function evaluate(value, ctx) {
 }
 function shell(job, overrides = {}) {
   const env = { PATH: process.env.PATH, BASH_ENV: '/dev/null', CANCELLED: 'false', EVENT_NAME: 'pull_request_target',
-    PR_NUMBER: '', PREFLIGHT_RESULT: 'success', QUEUE_ADMISSION_RESULT: 'skipped', CLASSIFY_RESULT: 'success',
+    PR_NUMBER: '', PREFLIGHT_RESULT: 'success', QUEUE_ADMISSION_RESULT: 'skipped', CLASSIFY_RESULT: 'success', LABEL_GATES_RESULT: 'success',
     SURFACE_RESULT: 'success', COMPLEXITY_RESULT: 'success', CLONE_RESULT: 'success', COMPLEXITY_GATE_RESULT: 'success',
     CLONE_GATE_RESULT: 'success', TYPECHECK_RESULT: 'success', UNIT_TESTS_RESULT: 'success', BUILD_AND_PACKAGE_RESULT: 'success',
     VITEST_RESULT: 'success', COCKPIT_BROWSER_RESULT: 'success', CHANGE_SURFACE: 'full-matrix', BUMP_PR: 'false',
@@ -126,8 +126,13 @@ test('heavy PR jobs require immutable test inputs, while non-PR jobs tolerate th
 
 test('preflight requires all applicable cheap gates and permits only exact queue proof typecheck reuse', () => {
   assert.equal(shell('preflight').status, 0);
-  for (const key of ['CLASSIFY_RESULT', 'SURFACE_RESULT', 'COMPLEXITY_RESULT', 'CLONE_RESULT', 'TYPECHECK_RESULT']) {
+  for (const key of ['CLASSIFY_RESULT', 'LABEL_GATES_RESULT', 'SURFACE_RESULT', 'COMPLEXITY_RESULT', 'CLONE_RESULT', 'TYPECHECK_RESULT']) {
     for (const result of ['failure', 'skipped', 'cancelled', '']) assert.notEqual(shell('preflight', { [key]: result }).status, 0);
+  }
+  assert.equal(shell('preflight', { EVENT_NAME: 'merge_group', LABEL_GATES_RESULT: 'skipped' }).status, 0);
+  assert.equal(shell('verify', { EVENT_NAME: 'merge_group', QUEUE_ADMISSION_RESULT: 'success', LABEL_GATES_RESULT: 'skipped' }).status, 0);
+  for (const result of ['failure', 'skipped', 'cancelled', '']) {
+    assert.notEqual(shell('verify', { EVENT_NAME: 'pull_request_target', LABEL_GATES_RESULT: result }).status, 0, result);
   }
   assert.equal(shell('preflight', { EVENT_NAME: 'push', PROOF_VERIFIED: 'true', TYPECHECK_RESULT: 'skipped' }).status, 0);
   assert.notEqual(shell('preflight', { PROOF_VERIFIED: 'true', TYPECHECK_RESULT: 'skipped' }).status, 0);

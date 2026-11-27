@@ -83,7 +83,7 @@ function evaluate(expression, ctx) {
 }
 function shell(command, env = {}) {
   return spawnSync('bash', ['-eu', '-c', command], { encoding: 'utf8', env: { PATH: process.env.PATH,
-    CANCELLED: 'false', PREFLIGHT_RESULT: 'success', QUEUE_ADMISSION_RESULT: 'success', EVENT_NAME: 'merge_group', CLASSIFY_RESULT: 'success', SURFACE_RESULT: 'success', COMPLEXITY_GATE_RESULT: 'success', CLONE_GATE_RESULT: 'success',
+    CANCELLED: 'false', PREFLIGHT_RESULT: 'success', QUEUE_ADMISSION_RESULT: 'success', EVENT_NAME: 'merge_group', CLASSIFY_RESULT: 'success', LABEL_GATES_RESULT: 'skipped', SURFACE_RESULT: 'success', COMPLEXITY_GATE_RESULT: 'success', CLONE_GATE_RESULT: 'success',
     TYPECHECK_RESULT: 'success', UNIT_TESTS_RESULT: 'success', BUILD_AND_PACKAGE_RESULT: 'success', VITEST_RESULT: 'success',
     COCKPIT_BROWSER_RESULT: 'success', CHANGE_SURFACE: 'full-matrix', BUMP_PR: 'false',
     VERIFIED_SHA: 'a'.repeat(40), PROOF_RESULT: 'success', PROOF_VERIFIED: 'false', PROOF_SOURCE: '', GITHUB_STEP_SUMMARY: '/dev/null', ...env } });

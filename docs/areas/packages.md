@@ -37,17 +37,22 @@ A move that keeps every name passes the quality gates with no label:
 - `check-clones.cjs` carries a clone that moved with its code.
 - `Reject baseline growth` accepts a `*.baseline.json` entry or key that only follows its file to
   the new path. The old path must be gone, and the change must add the new one. Any other change to
-  a baseline still needs the owner's `baseline-growth` label.
+  a baseline still needs the owner's `baseline-growth` label. A per-file pin, such as
+  `packages/cezar/src/file-length.baseline/<source path>.json` or
+  `.github/mutants/equivalent/<source path>.json`, follows its file when the move renames it with
+  `git mv` to the new source path.
 
 These files name a source file by its path. Rewrite each one that names the old path in the same
 commit. `node scripts/readers.mjs --moved <old-path> <new-path>` lists every JSON pin that names
-it, and the readers of the old path:
+it, and the readers of the old path. A per-file record names its source file by its own path,
+`<directory>/<source path>.json`; the sweep lists each one with the path to rename it to
+(`git mv`):
 
 | File | What it pins |
 | --- | --- |
 | `.github/mutants/targets.json` | Mutation targets, keyed by file, with the functions they guard |
-| `.github/mutants/equivalent.json` | Equivalent mutants, by file and function |
-| `packages/cezar/src/file-length.baseline.json` | The length of each file over 1,000 lines |
+| `.github/mutants/equivalent/<source path>.json` | Equivalent mutants of one source file, by function (a per-file record) |
+| `packages/cezar/src/file-length.baseline/<source path>.json` | `{ "lines": N }`: the pin of one file over 1,000 lines (a per-file record) |
 | `packages/cezar/src/lint/layer-import.baseline.json` | Core-to-feature imports, by `file` and `target` |
 | `packages/cezar/src/lint/layers.json` | The layer of each path |
 | `packages/cezar/src/lint/*.baseline.json` and the other `*.baseline.json` files | Lint and wait-discipline allowances, by file |

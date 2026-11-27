@@ -112,7 +112,7 @@ test('trusted PR gate uses live labels and head blobs, and refuses changed metad
   await checkPullRequest(input);
   const failure = failures.pop();
   assert.match(failure, /number grew/);
-  assert.match(failure, /add the baseline-growth label, then re-run the failed classify-pr job/);
+  assert.match(failure, /add the baseline-growth label \(CI re-runs the failed pr-label-gates job automatically, or re-run it manually\)/);
   pr.labels = [{ name: 'baseline-growth' }];
   await checkPullRequest(input);
   assert.equal(failures.length, 0);

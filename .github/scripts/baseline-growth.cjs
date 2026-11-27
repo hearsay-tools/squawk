@@ -182,7 +182,7 @@ async function checkPullRequest({ github, context, core, cwd = process.cwd() }) 
   const { pr, head, mergeBase } = resolved;
   const allowGrowth = pr.labels.some(label => label.name === 'baseline-growth');
   const reasons = checkBaselineGrowth({ cwd, base: mergeBase, head, allowGrowth });
-  if (reasons.length) core.setFailed(`${reasons.join('\n')}\nFor an owner-approved increase, add the baseline-growth label, then re-run the failed classify-pr job. Deletion readers and invalid JSON must still be fixed. A pin that only follows a file this change moved needs no label: keep its other fields (docs/areas/packages.md § Moving a source file).`);
+  if (reasons.length) core.setFailed(`${reasons.join('\n')}\nFor an owner-approved increase, add the baseline-growth label (CI re-runs the failed pr-label-gates job automatically, or re-run it manually). Deletion readers and invalid JSON must still be fixed. A pin that only follows a file this change moved needs no label: keep its other fields (docs/areas/packages.md § Moving a source file).`);
   else core.info(allowGrowth ? 'Baseline growth approved by label; owner merge required.' : 'Baseline ratchets did not grow.');
 }
 

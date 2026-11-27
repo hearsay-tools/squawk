@@ -1,0 +1,10 @@
+[
+  {
+    "function": "(module)",
+    "mutator": "StringLiteral",
+    "original": "'unseen'",
+    "replacement": "\"\"",
+    "reason": "isUnseen never matches, so this reserved rung is unreachable.",
+    "site": "(run) => isUnseen(run) ? "
+  }
+]

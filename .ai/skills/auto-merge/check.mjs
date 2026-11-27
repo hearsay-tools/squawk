@@ -30,7 +30,7 @@ const LINT_CASES = 'packages/cezar/src/lint/{blank,server-wait-*,test-wait-disci
 export const NEVER = [
   { why: 'gate or test harness', globs: [
     '.github/workflows/**', '.github/codex/**', '.github/schemas/**', '.github/actionlint.yaml',
-    '.github/scripts/{baseline-growth*,test-budget*,change-surface,change-surface-readers,queue-ci-proof,pr-test-proof,pr-test-input,review-threads,review-signal,pr-readiness,pre-pr-review,require-e2e-passed,release-*,pr-snapshot,ci-test-sequencer,cockpit-test-sequencer,vitest-rerun-reset,merge-queue-admission,merge-recommendation*}.*',
+    '.github/scripts/{baseline-growth*,test-budget*,rerun-label-gates*,change-surface,change-surface-readers,queue-ci-proof,pr-test-proof,pr-test-input,review-threads,review-signal,pr-readiness,pre-pr-review,require-e2e-passed,release-*,pr-snapshot,ci-test-sequencer,cockpit-test-sequencer,vitest-rerun-reset,merge-queue-admission,merge-recommendation*}.*',
     '.github/scripts/{check-clones,check-spec-status,check-citations,change-coupling,api-budget,missing-patches,merge-vitest-coverage,failure-diagnostics,vitest-worker-count,vitest-coverage-tests,vitest-file-duration}.*',
     '.github/scripts/{*.workflow,auto-merge-gates,auto-merge-admission,auto-merge-arm}.test.cjs', '.github/actions/**',
     '**/vitest.config.ts', '**/vitest.setup.ts',

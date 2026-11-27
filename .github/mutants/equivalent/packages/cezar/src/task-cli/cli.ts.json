@@ -1,0 +1,44 @@
+[
+  {
+    "function": "execute",
+    "mutator": "ConditionalExpression",
+    "original": "default:\n      return usageError(`unknown operation '${name}'`);",
+    "replacement": "default:",
+    "reason": "Unreachable exhaustiveness default kept for the type checker; parseOperation refuses every name not handled by execute."
+  },
+  {
+    "function": "execute",
+    "mutator": "StringLiteral",
+    "original": "`unknown operation '${name}'`",
+    "replacement": "``",
+    "reason": "Unreachable exhaustiveness default kept for the type checker; parseOperation refuses every name not handled by execute."
+  },
+  {
+    "function": "nonNegativeInt",
+    "mutator": "ConditionalExpression",
+    "original": "typeof value !== 'string'",
+    "replacement": "false",
+    "reason": "parseArgs supplies string or undefined for numeric flags; the string check narrows for TypeScript and any non-string still fails the integer pattern."
+  },
+  {
+    "function": "parseOperation",
+    "mutator": "StringLiteral",
+    "original": "'invalid arguments'",
+    "replacement": "\"\"",
+    "reason": "node:util parseArgs throws Error; the unknown catch fallback exists only for TypeScript safety."
+  },
+  {
+    "function": "positiveInt",
+    "mutator": "ConditionalExpression",
+    "original": "typeof value !== 'string'",
+    "replacement": "false",
+    "reason": "parseArgs supplies string or undefined for numeric flags; the string check narrows for TypeScript and any non-string still fails the integer pattern."
+  },
+  {
+    "function": "start",
+    "mutator": "StringLiteral",
+    "original": "'all'",
+    "replacement": "\"\"",
+    "reason": "Start waits on one run, so all and any other non-any string have the same completion test and exit code."
+  }
+]

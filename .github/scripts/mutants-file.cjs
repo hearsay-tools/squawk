@@ -8,7 +8,7 @@ const os = require('node:os');
 const { promisify } = require('node:util');
 const { sliceSource } = require('./mutants-report.cjs');
 const { runStryker, restoreTree } = require('./mutants-run.cjs');
-const { EQUIVALENT_FILE, readEquivalent, matchesEntry, sourceSite } = require('./mutants-equivalent.cjs');
+const { EQUIVALENT_DIR, readEquivalent, matchesEntry, sourceSite } = require('./mutants-equivalent.cjs');
 const { namedRanges, functionRanges, functionOf, duplicateNames } = require('./mutants-functions.cjs');
 const TARGETS = require('../mutants/targets.json');
 const { USAGE, sourceFile, storedArgs, preflight, validateOutput, scoringEvidence } = require('./mutants-file-results.cjs');
@@ -313,7 +313,7 @@ async function measureInScratch(opts, deps, signal, { baseline, head, source }) 
     const consumer = opts.file.startsWith('packages/contract/')
       ? await runConsumers(opts, deps, cwd, first, signal, env) : { report: first };
     const { report, consumers } = consumer;
-    const equivalent = readEquivalent(path.join(cwd, EQUIVALENT_FILE), { readFileSync: deps.read });
+    const equivalent = deps.readEquivalent(path.join(cwd, EQUIVALENT_DIR));
     const result = { ...measure(report, opts.file, head, ranges, TARGETS, equivalent.entries), warning: equivalent.warning, ...(consumers ? { consumers } : {}) };
     if (baseline) result.comparison = compareResults(baseline, result);
     if (opts.out) deps.write(opts.out, `${JSON.stringify(result, null, 2)}\n`);
@@ -372,6 +372,7 @@ function defaultDeps() {
     removeReport: cwd => fs.rmSync(path.join(cwd, REPORT), { force: true }),
     ranges: functionRanges,
     read: file => fs.readFileSync(file, 'utf8'),
+    readEquivalent: dir => readEquivalent(dir),
     readJson: file => JSON.parse(fs.readFileSync(file, 'utf8')),
     write: (file, text) => fs.writeFileSync(file, text),
     removeScratch: cwd => fs.rmSync(cwd, { recursive: true, force: true }),
@@ -386,7 +387,7 @@ function runStored(opts, deps) {
   if (opts.rescore) {
     const before = results[0];
     const evidence = scoringEvidence(before);
-    const equivalent = readEquivalent(EQUIVALENT_FILE, { readFileSync: deps.read });
+    const equivalent = deps.readEquivalent(EQUIVALENT_DIR);
     result = { ...measure(evidence.report, before.file, before.head, evidence.ranges, TARGETS, equivalent.entries),
       warning: equivalent.warning, rescored: true, ...(before.consumers ? { consumers: before.consumers } : {}) };
     deps.log(summary(result));

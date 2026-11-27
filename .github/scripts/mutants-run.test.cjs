@@ -219,12 +219,12 @@ test('run keeps a near miss with the same text but another mutator', async () =>
   assert.equal(artifactOf(h).packages[0].counts.equivalent, undefined);
 });
 
-test('missing and empty equivalent files keep the run artifact and summary unchanged', async () => {
+test('missing and empty equivalent record directories keep the run artifact and summary unchanged', async () => {
   const baseline = harness();
   await main(['run'], env, baseline.deps);
-  for (const readFileSync of [() => '[]', () => { throw Object.assign(new Error('missing'), { code: 'ENOENT' }); }]) {
+  for (const readdirSync of [() => [], () => { throw Object.assign(new Error('missing'), { code: 'ENOENT' }); }]) {
     const h = harness();
-    h.deps.readEquivalent = () => readEquivalent('fixture', { readFileSync });
+    h.deps.readEquivalent = () => readEquivalent('fixture', { readdirSync });
     await main(['run'], env, h.deps);
     assert.equal(h.files.get('mutation-evidence/mutants.json'), baseline.files.get('mutation-evidence/mutants.json'));
     assert.equal(h.files.get('summary'), baseline.files.get('summary'));
@@ -232,11 +232,11 @@ test('missing and empty equivalent files keep the run artifact and summary uncha
   }
 });
 
-test('an unreadable equivalent file warns in the artifact and log but still posts the summary', async () => {
+test('an unreadable equivalent record directory warns in the artifact and log but still posts the summary', async () => {
   const h = harness();
   const logs = [];
   h.deps.log = text => logs.push(text);
-  h.deps.readEquivalent = () => readEquivalent('denied', { readFileSync() { throw Object.assign(new Error('permission denied'), { code: 'EACCES' }); } });
+  h.deps.readEquivalent = () => readEquivalent('denied', { readdirSync() { throw Object.assign(new Error('permission denied'), { code: 'EACCES' }); } });
   assert.equal(await main(['run'], env, h.deps), 0);
   const artifact = validateArtifact(artifactOf(h));
   assert.match(artifact.warning, /permission denied/);
