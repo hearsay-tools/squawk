@@ -1,9 +1,5 @@
-/* Automations route overrides: guarantee unified PageHeader typography, gold --action primary
- * buttons, and flush nested section headings (After Done / Task access) with no fieldset notch. */
-[data-route='automations'] > header h1 {
-  font-weight: 600;
-  line-height: 1.2;
-}
+/* Automations route styles: gold --action primary buttons and flush nested section headings
+ * (After Done / Task access) with no fieldset notch. Header typography is owned by PageShell. */
 
 /* Enabled only: a disabled primary keeps the Button's shared dimmed-gold disabled look (as Start
  * task on New task does), so an empty form never shows a live gold submit. */

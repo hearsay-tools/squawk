@@ -1,12 +1,13 @@
+import './automations.css'
 import { useEffect, useRef, useState } from 'react'
 import type { AutomationListEntry } from '@open-mercato/cezar-api-client'
 
 import { deleteAutomation } from '@/api/client'
+import { ReadingPage } from '@/components/page-shell'
 import { Button } from '@/components/ui/button'
 import { dayTime, onceResolved } from '@/lib/automation-format'
 import { Link } from '@/lib/project-router'
 import { InlineLog } from './log'
-import { PageFrame } from './page-frame'
 
 /**
  * An archived one-time schedule (hearsay-tools/cezarion#1465): a record, not a form. It shows what
@@ -49,8 +50,15 @@ export function ArchivedAutomation({ automation, timeZone, onDeleted }: { automa
     ['Effort', automation.task.effort],
   ]
   return (
-    <PageFrame title={automation.name} subtitle="Archived one-time schedule. It cannot change; delete it when you no longer need the record.">
-      <div className="grid min-w-0 max-w-3xl gap-5">
+    <ReadingPage
+      route="automations"
+      density="sparse"
+      header={{
+        title: automation.name,
+        subtitle: 'Archived one-time schedule. It cannot change; delete it when you no longer need the record.',
+      }}
+    >
+      <div className="grid min-w-0 gap-5">
         <section className="min-w-0 rounded-xl border bg-card p-4">
           <p className="text-sm break-words">
             <span>{archive.outcome === 'launched' ? 'Started its task.' : 'Cancelled — no task was started.'}</span>
@@ -96,6 +104,6 @@ export function ArchivedAutomation({ automation, timeZone, onDeleted }: { automa
           {error ? <p role="alert" className="text-sm break-words text-destructive">{error}</p> : null}
         </div>
       </div>
-    </PageFrame>
+    </ReadingPage>
   )
 }

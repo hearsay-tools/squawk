@@ -1,26 +1,21 @@
+import * as React from 'react'
 import type { ReactNode } from 'react'
+import { useQueryClient, type InfiniteData } from '@tanstack/react-query'
 
-import type { RunSummary } from '@open-mercato/cezar-api-client'
+import type { ArchivedRunsResponse, RunSummary } from '@open-mercato/cezar-api-client'
 
+import { queryKeys, useArchivedRuns } from '@/api/queries'
+import { useRunCacheWriter } from '@/api/use-run-cache-writer'
+import { PlusIcon } from '@/components/design-icons'
+import { PageShellActionButton, PageShellSparseFooter, pageShellDensity } from '@/components/page-shell'
+import { Button } from '@/components/ui/button'
 import type { AttentionTone } from '@/lib/attention'
-import type { BucketLabel, ListView } from '@/lib/task-groups'
+import { Link } from '@/lib/project-router'
+import { ARCHIVED_WINDOW, listCounts, type BucketLabel, type ListView } from '@/lib/task-groups'
 import { runnerDisplayName, useRunners } from '@/api/runners'
 import { groupTone } from '@/lib/task-origin'
 import { cn } from '@/lib/utils'
-
-/**
- * The page header of the two task lists: the title with the primary action on its row, and the
- * subtitle below. On a phone the action stays on the title row, so it costs no row of its own.
- */
-export function TaskPageHeader({ title, subtitle, action }: { title: string; subtitle: ReactNode; action: ReactNode }) {
-  return (
-    <div data-slot="page-header" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 pt-3 md:pt-7">
-      <h1 className="col-start-1 row-start-1 min-w-0 truncate text-[24px] leading-[1.2] font-semibold tracking-tight text-foreground md:text-[28px]">{title}</h1>
-      <div className="col-start-2 row-start-1 flex justify-end md:row-span-2 md:self-start">{action}</div>
-      <p className="col-span-2 row-start-2 text-[13px] text-muted-foreground max-md:hidden md:col-span-1">{subtitle}</p>
-    </div>
-  )
-}
+import type { ArchivedPages } from './tasks-overview'
 
 /**
  * A status group heading's dot. Finished holds successful and failed tasks alike, so its heading
@@ -116,4 +111,91 @@ export function BranchChip({ branch }: { branch: string }) {
 /** A runner's name as its definition in `GET /api/v1/runners` gives it; the id until the list answers. */
 export function RunnerName({ runner }: { runner: string }) {
   return runnerDisplayName(useRunners().data, runner)
+}
+
+export function tasksOverviewHeader(projectName: string | undefined, detailedTable: boolean) {
+  return {
+    title: 'Project tasks',
+    subtitle: (
+      <>
+        {projectName ? `${projectName} · ` : ''}
+        {detailedTable
+          ? 'Every resource column shown. Fold columns without losing the saved view.'
+          : 'Review runs, pull requests and resource usage.'}
+      </>
+    ),
+    hideSubtitleOnMobile: true,
+    primaryAction: (
+      <PageShellActionButton asChild variant="primary" data-slot="new-task-inline">
+        <Link to="/new"><PlusIcon aria-hidden="true" />New task</Link>
+      </PageShellActionButton>
+    ),
+  }
+}
+
+export function tasksOverviewSparseFooter(ready: boolean, visibleCount: number, view: ListView, needle: string) {
+  if (!ready || visibleCount <= 0 || needle !== '') return undefined
+  return (
+    <PageShellSparseFooter
+      summary={`${visibleCount} ${view} ${visibleCount === 1 ? 'task' : 'tasks'} in this project.`}
+      actions={
+        <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
+          <Link to="/new">Start another task</Link>
+        </Button>
+      }
+    />
+  )
+}
+
+export function tasksOverviewDensity(runs: RunSummary[] | undefined, visibleCount: number) {
+  return runs === undefined ? 'full' : pageShellDensity(visibleCount)
+}
+
+export function tasksOverviewRootProps(detailedTable: boolean) {
+  return { 'data-presentation': detailedTable ? 'resources' : 'summary' }
+}
+
+/** How long the Archived tab waits after a keystroke before it asks the server to search. */
+const ARCHIVED_SEARCH_DEBOUNCE_MS = 150
+
+/**
+ * The Archived tab's reach past the run list's window (#864). The list carries the newest
+ * `ARCHIVED_WINDOW` archived tasks; when it holds that many there may be older ones, so the tab
+ * reads the server's pages (the first one overlaps the window, which is what lets the next one
+ * add rows rather than repeat them). A search on that tab asks the server too, debounced, since
+ * the matches can be anywhere in the history.
+ */
+export function useArchivedPages(runs: readonly RunSummary[] | undefined, view: ListView): {
+  pages: ArchivedPages | undefined
+  total: number | undefined
+  search: (needle: string) => void
+} {
+  useRunCacheWriter()
+  const queryClient = useQueryClient()
+  const [typed, setTyped] = React.useState('')
+  const [needle, setNeedle] = React.useState('')
+  React.useEffect(() => {
+    const timer = setTimeout(() => setNeedle(typed), ARCHIVED_SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [typed])
+  const windowFull = runs !== undefined && listCounts(runs).archived >= ARCHIVED_WINDOW
+  const { data, isError, isPlaceholderData, hasNextPage, isFetchingNextPage, fetchNextPage, refetch } = useArchivedRuns(needle, view === 'archived' && (needle !== '' || windowFull))
+  const loaded = data?.pages
+  const pages = React.useMemo<ArchivedPages | undefined>(() => (loaded || isError ? {
+    runs: (loaded ?? []).flatMap((page) => page.runs),
+    // `placeholderData` keeps the previous text's pages on screen while the next ones load.
+    query: isPlaceholderData ? null : needle,
+    hasMore: hasNextPage,
+    loading: isFetchingNextPage,
+    // A failed first page has nothing to continue from, so retrying it is a refetch.
+    onLoadMore: () => void (loaded ? fetchNextPage() : refetch()),
+    failed: isError,
+  } : undefined), [loaded, isError, isPlaceholderData, needle, hasNextPage, isFetchingNextPage, fetchNextPage, refetch])
+  // Only the unfiltered total counts all archived tasks; a search total counts matches.
+  const unfiltered = needle === ''
+    ? loaded
+    : queryClient.getQueryData<InfiniteData<ArchivedRunsResponse>>(queryKeys.runs.archived(''))?.pages
+  const plainHasMore = unfiltered === undefined ? undefined : unfiltered.at(-1)?.nextCursor != null
+  const enrichedPages = React.useMemo(() => pages && { ...pages, plainHasMore }, [pages, plainHasMore])
+  return { pages: enrichedPages, total: unfiltered?.[0]?.total, search: setTyped }
 }

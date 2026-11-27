@@ -36,6 +36,27 @@ export function statusStyleProblems(file: string, source: string): string[] {
   return offenders;
 }
 
+/** Route stylesheets must not override PageShell width, gutter, or header button sizing. */
+export function pageShellStyleProblems(file: string, source: string): string[] {
+  if (!file.startsWith('packages/web/src/routes/') || !file.endsWith('.css')) return [];
+  const input = guardianFile(file, source);
+  if (!input || input.ext !== '.css') return [];
+  const offenders: string[] = [];
+  const css = input.lines.join('\n').replace(/\/\*[\s\S]*?\*\//g, '');
+  const shellSlot = /data-slot=["']page-shell(?:-(?:frame|header|header-title|header-actions))?["']/;
+  const shellProp = /--page-shell-(?:max-w|gutter)|(?:^|[;\s])(?:max-width|max-inline-size|width|inline-size|padding(?:-(?:inline|block|left|right|top|bottom|inline-start|inline-end|block-start|block-end))?|margin-inline(?:-(?:start|end))?|margin-left|margin-right|height|min-height|max-height|block-size|min-block-size|max-block-size|font-size)\s*:/;
+  const routeRoot = /(?:^|,)\s*\[data-route=[^\]]+\](?:\[[^\]]+\])*\s*(?:,|$)/;
+  const routeRootProp = /(?:^|[;\s])(?:max-width|max-inline-size|padding-inline(?:-(?:start|end))?|padding-left|padding-right|margin-inline(?:-(?:start|end))?|margin-left|margin-right)\s*:/;
+  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = match[1]!.trim(), body = match[2]!;
+    if ((shellSlot.test(selector) && shellProp.test(body))
+        || (routeRoot.test(selector) && routeRootProp.test(body))) {
+      offenders.push(`${file}: ${selector.replace(/\s+/g, ' ')} page-shell-style: PageShell owns shell width, gutter, and header sizing → hearsay-tools/squawk#4373`);
+    }
+  }
+  return offenders;
+}
+
 /** Same guardian rules and messages for the CSS files outside oxlint's language set. */
 export function guardianCssProblems(root = repoRoot): string[] {
   const files = ['src', 'e2e'].flatMap((dir) => guardianCssFiles(root, `packages/web/${dir}`));
@@ -44,6 +65,7 @@ export function guardianCssProblems(root = repoRoot): string[] {
     return [
       ...guardianFindings(file, source).map((finding) => `${file}:${finding.line}:${(finding.column ?? 0) + 1} cez/design-guardian: ${finding.message}`),
       ...statusStyleProblems(file, source).map((problem) => `${problem} status-style: StatusDot and Pill own their look → hearsay-tools/cezarion#2422`),
+      ...pageShellStyleProblems(file, source),
     ];
   });
 }

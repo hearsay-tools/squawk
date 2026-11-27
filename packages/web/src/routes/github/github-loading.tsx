@@ -1,6 +1,7 @@
 import { LoaderCircleIcon } from 'lucide-react'
 
 import { CenteredState } from '@/components/centered-state'
+import { TablePage } from '@/components/page-shell'
 
 /**
  * The GitHub tab's loading state, in its own module ON PURPOSE (same rule as ThreadLoading):
@@ -10,13 +11,13 @@ import { CenteredState } from '@/components/centered-state'
  */
 export function GithubLoading() {
   return (
-    <div data-route="github" className="flex min-h-full flex-col">
+    <TablePage route="github" density="sparse" flushPadding>
       <CenteredState
         icon={<LoaderCircleIcon className="motion-safe:animate-spin" />}
         tone="neutral"
         title="Loading GitHub…"
         subtitle="Fetching open issues and pull requests."
       />
-    </div>
+    </TablePage>
   )
 }

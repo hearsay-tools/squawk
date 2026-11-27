@@ -151,9 +151,36 @@ it('takes the main area at medium width and steps back with Conversation', () =>
   openConversation()
   openReport()
   const control = '[data-slot="report-bar"] button[aria-label="Conversation"]'
-  const sample = waitForSettledSample<{ text: string; width: number; paneWidth: number }>(browser, `(() => ({ text: document.querySelector('${control}').textContent, width: document.querySelector('[data-slot="task-split"]').getBoundingClientRect().width, paneWidth: document.querySelector('${READER}').getBoundingClientRect().width }))()`)
+  const sample = waitForSettledSample<{
+    text: string
+    width: number
+    paneWidth: number
+    collapsed: boolean
+    headerVisible: boolean
+    headerHeight: number
+    cardVisible: boolean
+  }>(
+    browser,
+    `(() => {
+      const header = document.querySelector('[data-route="task-thread"] [data-slot="run-header"]');
+      const card = document.querySelector('${CARD}');
+      return {
+        text: document.querySelector('${control}').textContent,
+        width: document.querySelector('[data-slot="task-split"]').getBoundingClientRect().width,
+        paneWidth: document.querySelector('${READER}').getBoundingClientRect().width,
+        collapsed: document.querySelector('[data-slot="task-main"]')?.hasAttribute('data-collapsed') ?? false,
+        headerVisible: header ? header.checkVisibility({ visibilityProperty: true }) : false,
+        headerHeight: header ? Math.round(header.getBoundingClientRect().height) : 0,
+        cardVisible: card ? card.checkVisibility({ visibilityProperty: true }) : false,
+      };
+    })()`,
+  )
   expect(sample.text).toContain('Conversation')
   expect(Math.abs(sample.width - sample.paneWidth)).toBeLessThanOrEqual(1)
+  expect(sample.collapsed).toBe(true)
+  expect(sample.headerVisible).toBe(true)
+  expect(sample.headerHeight).toBeGreaterThan(20)
+  expect(sample.cardVisible).toBe(false)
   browser.click(control)
   expectReturned()
   browser.setViewport(1440, 900)
@@ -315,3 +342,36 @@ it.each([360, 1440])('opens and closes a report from the agent sheet at %ipx', w
   browser.click(BACK)
   browser.waitForFunction(`document.querySelector('${FRAME}') === null && !new URLSearchParams(location.search).has('report') && document.activeElement === document.querySelector('[data-agent-id="toolu_task_a_1"]')`)
 }, 120_000)
+
+it('drops the Reports split preview at 768px tablet width and fits Open reader unclipped at 1440px', () => {
+  browser.setViewport(768, 900)
+  browser.goto(`${base}/p/${projectId}/reports`)
+  browser.waitForFunction(`document.querySelector('[data-slot="report-row"]') !== null`)
+  const tablet = waitForSettledSample<{ hasPane: boolean; hasCue: boolean; overflow: boolean }>(
+    browser,
+    `(() => ({
+      hasPane: document.querySelector('[data-slot="reports-preview-pane"]') !== null,
+      hasCue: document.querySelector('[data-slot="report-open-cue"]') !== null,
+      overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+    }))()`,
+  )
+  expect(tablet).toEqual({ hasPane: false, hasCue: true, overflow: false })
+
+  browser.setViewport(1440, 640)
+  browser.waitForFunction(`document.querySelector('[data-slot="reports-preview-open"]') !== null && document.querySelector('[data-slot="reports-preview-pane"] ${FRAME}') !== null`)
+  const desktop = waitForSettledSample<{ fits: boolean; frameFits: boolean; overflow: boolean }>(
+    browser,
+    `(() => {
+      const pane = document.querySelector('[data-slot="reports-preview-pane"]').getBoundingClientRect();
+      const open = document.querySelector('[data-slot="reports-preview-open"]').getBoundingClientRect();
+      const frame = document.querySelector('[data-slot="reports-preview-pane"] ${FRAME}').getBoundingClientRect();
+      return {
+        fits: open.width > 40 && open.left >= pane.left - 1 && open.right <= pane.right + 1,
+        frameFits: frame.height > 100 && frame.bottom <= pane.bottom + 1,
+        overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      };
+    })()`,
+  )
+  expect(desktop).toEqual({ fits: true, frameFits: true, overflow: false })
+  browser.setViewport(1440, 900)
+})

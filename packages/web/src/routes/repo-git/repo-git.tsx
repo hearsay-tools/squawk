@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router'
 import { useRepo, useRepoBranches } from '@/api/queries'
 import type { RepoInfo, RepoResponse } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
+import { PageShell, pageShellDensity, type PageShellTemplate } from '@/components/page-shell'
 import { useIsDesktop } from '@/lib/use-desktop'
 
 import { GitScreen } from './git-screen'
@@ -35,6 +36,10 @@ import { WorktreesPanel } from './worktrees-panel'
  *
  * Every section is a URL, so each deep-links and survives a refresh.
  */
+function gitSectionTemplate(section: GitSection): PageShellTemplate {
+  return section === 'main' || section === 'changes' ? 'Split' : 'Table'
+}
+
 export function RepoGitRoute({ section, index = false }: {
   section: GitSection
   /** The bare `/git` route: a phone shows the Git screen there unless `?view=repo`. */
@@ -43,6 +48,7 @@ export function RepoGitRoute({ section, index = false }: {
   const repo = useRepo()
   const isDesktop = useIsDesktop()
   const [params] = useSearchParams()
+  const template = gitSectionTemplate(section)
 
   // A phone's bare /git is the Git screen; Recently on main is `?view=repo`. Every other section
   // and deep link keeps its URL, and desktop never shows the screen.
@@ -52,58 +58,66 @@ export function RepoGitRoute({ section, index = false }: {
   if (repo.isPending) return <RepoGitLoading />
   if (repo.isError) {
     return (
-      <div data-route="repo-git" className="flex min-h-full flex-col">
-        <RepoBackLink />
+      <PageShell template={template} route="repo-git" density="empty" beforeHeader={<RepoBackLink />}>
         <CenteredState
           icon={<TriangleAlertIcon size={16} />}
           tone="danger"
           title="Could not load the repository"
           subtitle={repo.error.message}
         />
-      </div>
+      </PageShell>
     )
   }
   const info = repo.data.info
   if (!info) {
     return (
-      <div data-route="repo-git" className="flex min-h-full flex-col">
-        <RepoBackLink />
+      <PageShell template={template} route="repo-git" density="empty" beforeHeader={<RepoBackLink />}>
         <CenteredState
           icon={<GitBranchIcon size={16} />}
           tone="neutral"
           title="Not a git repository"
           subtitle={`Squawk is running outside a git repository — start it inside one to browse changes, commits and branches.`}
         />
-      </div>
+      </PageShell>
     )
   }
   return <RepoView repo={repo.data} info={info} section={section} />
 }
 
 function RepoView({ repo, info, section }: { repo: RepoResponse; info: RepoInfo; section: GitSection }) {
-  return (
-    <div data-route="repo-git" data-git-section={section} className="flex min-h-full flex-col">
-      <RepoBackLink />
-      <header
-        data-slot="repo-header"
-        className="flex flex-wrap items-start justify-between gap-4 px-4 pt-7 pb-5 md:px-9"
-      >
-        <div className="min-w-0">
-          <h1 className="text-[26px] leading-[1.2] font-semibold tracking-tight text-foreground md:text-[28px]">
-            {gitSectionLabel(section, info.branch)}
-          </h1>
-          <p data-slot="repo-meta" className="mt-1 text-[13px] text-muted-foreground">
-            <SectionMeta repo={repo} info={info} section={section} />
-          </p>
-        </div>
-      </header>
+  const template = gitSectionTemplate(section)
+  const branches = useRepoBranches()
+  const sectionCount = section === 'main'
+    ? repo.log.length
+    : section === 'changes'
+      ? repo.status.length
+      : section === 'branches'
+        ? allBranchNames(repo, branches.data?.branches).length
+        : section === 'not-landed'
+          ? (branches.data?.branches.filter((b) => b.class === 'not-landed' || b.class === 'orphan').length ?? 0)
+          : 4
+  const density = section === 'not-landed' && branches.isPending ? 'full' : pageShellDensity(sectionCount)
 
+  return (
+    <PageShell
+      template={template}
+      route="repo-git"
+      density={density}
+      rootProps={{ 'data-git-section': section }}
+      beforeHeader={<RepoBackLink />}
+      header={{
+        title: gitSectionLabel(section, info.branch),
+        headerSlot: 'repo-header',
+        subtitle: <SectionMeta repo={repo} info={info} section={section} />,
+        subtitleSlot: 'repo-meta',
+      }}
+    >
       {section === 'main' ? (
         <RepoCommitsSection repo={repo} info={info} />
       ) : section === 'not-landed' ? (
         <RepoNotLandedSection />
       ) : section === 'cleanup' ? (
-        <div data-slot="repo-cleanup" className="flex flex-col gap-4 px-4 pt-0 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pb-9">
+        <div data-slot="repo-cleanup" className="flex flex-col gap-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:pb-0">
           <WorktreesPanel />
           <CleanupBranchesCard base={repo.baseBranch ?? info.branch} />
         </div>
@@ -112,7 +126,7 @@ function RepoView({ repo, info, section }: { repo: RepoResponse; info: RepoInfo;
       ) : (
         <RepoChangesSection />
       )}
-    </div>
+    </PageShell>
   )
 }
 

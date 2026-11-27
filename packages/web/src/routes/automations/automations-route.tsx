@@ -1,16 +1,18 @@
+import './automations.css'
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import { ZapIcon } from '@/components/design-icons'
 
 import { useAutomationsAvailability } from '@/lib/capabilities'
 import { CenteredState } from '@/components/centered-state'
+import { TablePage } from '@/components/page-shell'
 import { Button } from '@/components/ui/button'
 import { Link, useNavigate } from '@/lib/project-router'
 import { ArchivedAutomation } from './archived-view'
 import { AutomationEditor } from './editor'
 import { AutomationsList } from './automations-list'
 import { AutomationLogScreen } from './log'
-import { PageFrame, PageState } from './page-frame'
+import { PageState } from './page-frame'
 import { useAutomations } from './use-automations'
 
 export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'edit' | 'log' }) {
@@ -34,16 +36,16 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
   // gated server — and a submit inside that window POSTs straight into a 409.
   if (availability === 'unknown') {
     return (
-      <div data-route="automations" className="flex min-h-full flex-col px-4 py-7 md:px-9">
+      <TablePage route="automations" density="empty">
         <PageState text="Loading automations…" />
-      </div>
+      </TablePage>
     )
   }
 
   // Before every mode branch, so all four `/automations*` routes degrade the same way.
   if (availability === 'unavailable') {
     return (
-      <div data-route="automations" className="flex min-h-full flex-col px-4 py-7 md:px-9">
+      <TablePage route="automations" density="empty">
         <CenteredState
           icon={<ZapIcon />}
           tone="neutral"
@@ -51,7 +53,7 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
           subtitle={`This server does not run schedules, poll GitHub or launch tasks from them. Unset CEZ_AUTOMATIONS or set it to 1 and restart Squawk to turn automations on.`}
           heading="h2"
         />
-      </div>
+      </TablePage>
     )
   }
 
@@ -65,14 +67,31 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
   // failed REFRESH with data already in hand must not tear the screen down under an open draft.
   if (!data) {
     return error
-      ? <PageFrame title="Automations" subtitle="Could not load automations."><div className="grid justify-items-start gap-3"><PageState text={error} /><Button variant="outline" onClick={() => void refresh()}>Retry</Button></div></PageFrame>
-      : <div data-route="automations" className="flex min-h-full flex-col px-4 py-7 md:px-9"><PageState text="Loading automations…" /></div>
+      ? (
+        <TablePage route="automations" density="empty" header={{ title: 'Automations', subtitle: 'Could not load automations.' }}>
+          <div className="grid justify-items-start gap-3">
+            <PageState text={error} />
+            <Button variant="outline" onClick={() => void refresh()}>Retry</Button>
+          </div>
+        </TablePage>
+      )
+      : (
+        <TablePage route="automations" density="empty">
+          <PageState text="Loading automations…" />
+        </TablePage>
+      )
   }
 
   const forge = { available: data.available, ...(data.reason ? { reason: data.reason } : {}) }
   if (mode === 'new') return <AutomationEditor forge={forge} timeZone={data.timeZone} onSaved={saved} />
   if (mode === 'edit') {
-    if (!found) return <PageFrame title="Automation not found" subtitle="This automation may have been removed."><Button asChild variant="outline"><Link to="/automations">Back to automations</Link></Button></PageFrame>
+    if (!found) {
+      return (
+        <TablePage route="automations" density="empty" header={{ title: 'Automation not found', subtitle: 'This automation may have been removed.' }}>
+          <Button asChild variant="outline"><Link to="/automations">Back to automations</Link></Button>
+        </TablePage>
+      )
+    }
     if (found.archived) return <ArchivedAutomation automation={found} timeZone={data.timeZone} onDeleted={saved} />
     return <AutomationEditor key={`${found.id}:${reloadToken}`} automation={found} forge={forge} timeZone={data.timeZone} onSaved={saved} onReload={() => void refresh().then(() => setReloadToken((token) => token + 1))} />
   }

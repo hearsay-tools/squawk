@@ -1,10 +1,7 @@
 /* Confirmed cezarion.pen 56a71a27: scoped Skills / Workflows geometry. */
-[data-route="skills"] h1, [data-route="workflows"] h1 { line-height: 1.5; }
 [data-route="skills"] :is([data-slot="skills-list"], [data-slot="skills-detail"]),
 [data-route="workflows"] :is([data-slot="wb-main"], [data-slot="wb-aside"], [data-slot="wb-auto-panel"], [data-slot="wb-import-panel"]) { border-radius: 10px; }
 [data-slot="skills-section"] > header a { gap: 8px; }
-[data-slot="skills-refresh"] { gap: 8px; padding-inline: 12px; border-radius: 8px; color: var(--foreground); }
-[data-slot="skills-refresh"] svg { width: 16px; height: 16px; }
 [data-slot="skill-row"] { min-height: 0; gap: 10px; }
 [data-slot="skill-row"] [data-slot="skill-source"] { line-height: 1.5; }
 [data-slot="skill-row"] > span:nth-child(2) { font-size: 11px; line-height: 1.65; }
@@ -40,15 +37,12 @@
 [data-slot="wb-import-error"] { order: 1; margin-block-start: 16px; font-size: 12px; }
 @media (max-width: 767px) {
   [data-route="skills"], [data-route="workflows"] { padding-block-end: 32px; }
-  [data-route="workflows"] > header { align-items: flex-start; flex-direction: column; }
   [data-slot="skills-section"] > header a { padding-inline: 14px; gap: 10px; }
   [data-slot="wb-import-panel"] { position: fixed; inset-block: 57px auto; inset-inline: 0; max-height: calc(100dvh - 57px); overflow-y: auto; z-index: 50; }
 }
 @container (max-width: 649px) {
   [data-slot="skill-row"][aria-current="page"] { background: transparent; border-color: var(--border); }
 }
-[data-route="skills"] h1, [data-route="workflows"] h1 { line-height: 1.2; letter-spacing: -.7px; }
-[data-route="skills"] header p, [data-route="workflows"] header p { line-height: 1.6; color: var(--muted-foreground); }
 [data-slot="skill-row"]::before { display: none; }
 [data-slot="skill-row"]:has([data-source="team"]) > span:first-child > span { font-weight: 500; line-height: 1.6; }
 [data-slot="skill-row"] [data-source="team"] { font-weight: 400; }
@@ -76,7 +70,7 @@
 }
 [data-slot="skills-section"] > header a { font-size: 13px; font-weight: 600; }
 .sw-detail-source, [data-slot="wb-step-grip"] span { background: var(--task-brand-selected); }
-[data-route="workflows"] button { font-size: 12px; font-weight: 500; border-radius: 8px; }
+[data-route="workflows"] [data-slot="page-shell-body"] button { font-size: 12px; font-weight: 500; border-radius: 8px; }
 :is([data-slot="wb-import-panel"], [data-slot="wb-add-dialog"], .sw-workflow-confirm) button { font-size: 12px; font-weight: 400; border-radius: 8px; }
 .sw-workflow-confirm [data-slot="alert-dialog-title"] { line-height: 1.6; }
 .sw-workflow-confirm [data-slot="alert-dialog-description"] { font-size: 13px; line-height: 1.6; }
@@ -142,11 +136,10 @@
 [data-slot="wb-load"] label { line-height: 16px; }
 /* Use separate selectors: a mixed :is() would lend the most specific member's
    weight to every control and prevent the border compensation from winning. */
-[data-slot="wb-new"], [data-slot="wb-save"], [data-slot="wb-auto-run"] { gap: 8px; padding-inline: 12px; }
+[data-slot="wb-auto-run"] { gap: 8px; padding-inline: 12px; }
 [data-slot="wb-actions"] button, [data-slot="wb-main"] > button,
 [data-slot="wb-step"] > div:last-child button, [data-slot="wb-auto-cancel"],
 [data-slot="wb-yaml-toggle"] { gap: 8px; padding-inline: 11px; }
-[data-slot="skills-refresh"] { padding-inline: 11px; }
 [data-slot="skills-section"] > header a { gap: 10px; padding-inline: 13px; min-height: 43px; height: 43px; position: relative; }
 [data-slot="skills-section"] > header a::after { content: ''; position: absolute; inset-block: -.5px; inset-inline: 0; }
 [data-slot="skill-row"] > span:first-child { font-size: 13px; line-height: 21px; }

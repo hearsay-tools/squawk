@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import type { PreviewClientMessage, PreviewServer, PreviewServerMessage } from '@open-mercato/cezar-api-client'
 import type { PreviewHandlers, PreviewTransport } from '@/api/preview-socket'
+import { ReadingPage } from '@/components/page-shell'
 
 const sockets: Array<{ handlers: PreviewHandlers; send: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> }> = []
 
@@ -607,10 +610,10 @@ function Harness({ open, session = false, port = 5173, servers }: { open: boolea
   }, [])
   return (
     <PreviewSplit run={servers ? ({ ...runRecord, previewServers: servers } as never) : run} state={state}>
-      <div data-route="task-thread">
+      <ReadingPage route="task-thread" density="full" flushPadding>
         <header data-slot="run-header">header</header>
         <div data-testid="transcript">transcript</div>
-      </div>
+      </ReadingPage>
     </PreviewSplit>
   )
 }
@@ -640,7 +643,17 @@ describe('PreviewSplit', () => {
     // Design 02: the title, tabs and Preview toggle stay above the pane; only the body steps aside.
     expect(main.hasAttribute('hidden')).toBe(false)
     expect(main.hasAttribute('data-collapsed')).toBe(true)
-    expect(main.contains(screen.getByText('header'))).toBe(true)
+    const header = screen.getByText('header')
+    const transcript = screen.getByTestId('transcript')
+    expect(main.contains(header)).toBe(true)
+    // Verify the shipped preview.css collapse rule hides the transcript while keeping ReadingPage's
+    // frame, body wrapper, and RunHeader visible.
+    const previewCss = readFileSync(resolve(import.meta.dirname, 'preview.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const collapseHideMatch = previewCss.match(/(\[data-slot='task-main'\]\[data-collapsed\][^{]+)\{\s*display:\s*none;\s*\}/)
+    expect(collapseHideMatch, 'preview.css must declare the task-main collapse hide rule').not.toBeNull()
+    const collapseHideSelector = collapseHideMatch![1]!.trim()
+    expect(header.closest(collapseHideSelector)).toBeNull()
+    expect(transcript.matches(collapseHideSelector)).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Session' }))
     expect(main.hasAttribute('data-collapsed')).toBe(false)
     // The pane stays mounted, so the stream and the browser survive the glance at the conversation.

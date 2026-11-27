@@ -1,5 +1,5 @@
-/* All composer geometry belongs here; available content width decides the split. */
-[data-slot='new-task-layout'] { container: new-task-layout / inline-size; padding-inline: 16px; }
+/* All composer geometry belongs here; available content width decides the split. PageShell owns gutter. */
+[data-slot='new-task-layout'] { container: new-task-layout / inline-size; }
 .new-task-composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -136,10 +136,6 @@
 .new-task-editor textarea { min-block-size: 96px; padding-block: 0; padding-inline: 0; color: var(--muted-foreground); }
 @media (min-width: 768px) {
   [data-route='new'] .new-task-editor textarea { min-block-size: 180px; padding-block: 18px 0; line-height: 1.6; }
-}
-
-@media (min-width: 768px) {
-  [data-slot='new-task-layout'] { padding-inline: 36px; }
 }
 
 [data-route='new'] [data-slot='run-mode-note'] { margin-block-start: 2px; }

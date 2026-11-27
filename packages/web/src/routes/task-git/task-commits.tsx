@@ -11,6 +11,7 @@ import { queryKeys, useRun, useRunCommit, useRunCommits } from '@/api/queries'
 import type { ApiRun, ChangedFile, DiffStat, RunCommit } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { Diff, type DiffHandle, type DiffMode } from '@/components/diff'
+import { pageShellDensity, ReadingPage } from '@/components/page-shell'
 import { ChangeCounts } from '@/components/diff/change-counts'
 import { DiffStatLabel } from '@/components/diff-stat'
 import { CommitDiffPanel } from '@/components/diff/commit-diff-panel'
@@ -43,7 +44,7 @@ function CommitsView({ run }: { run: ApiRun }) {
   const firstSha = commits.data?.commits[0]?.sha
 
   return (
-    <div data-route="task-commits" className="flex min-h-full flex-col">
+    <ReadingPage route="task-commits" density={pageShellDensity(commits.data?.commits.length ?? 0)} flushPadding>
       <RunHeader run={run} tab="commits" />
       {sha ? (
         <CommitDiffView runId={run.id} sha={sha} />
@@ -74,7 +75,7 @@ function CommitsView({ run }: { run: ApiRun }) {
       ) : (
         <CommitsWorkspace run={run} commits={commits.data.commits} selectedSha={firstSha} />
       )}
-    </div>
+    </ReadingPage>
   )
 }
 

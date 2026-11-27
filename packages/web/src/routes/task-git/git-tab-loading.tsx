@@ -4,6 +4,7 @@ import { Link } from '@/lib/project-router'
 
 import { ApiError } from '@/api/client'
 import { CenteredState } from '@/components/centered-state'
+import { ReadingPage } from '@/components/page-shell'
 import { Button } from '@/components/ui/button'
 
 /** The git tabs these states stand in for — never Session, never an item tab (#692). */
@@ -16,14 +17,14 @@ type GitTab = 'changes' | 'files' | 'commits'
  */
 export function GitTabLoading({ tab }: { tab: GitTab }) {
   return (
-    <div data-route={`task-${tab}`} className="flex min-h-full flex-col">
+    <ReadingPage route={`task-${tab}`} density="sparse" flushPadding>
       <CenteredState
         icon={<LoaderCircleIcon className="motion-safe:animate-spin" />}
         tone="neutral"
         title={tab === 'changes' ? 'Loading changes…' : 'Loading files…'}
         subtitle="Fetching the run record."
       />
-    </div>
+    </ReadingPage>
   )
 }
 
@@ -33,7 +34,7 @@ export function GitTabLoading({ tab }: { tab: GitTab }) {
 export function GitTabLoadError({ tab, error }: { tab: GitTab | 'github-item'; error: Error }) {
   const notFound = error instanceof ApiError && error.status === 404
   return (
-    <div data-route={`task-${tab}`} className="flex min-h-full flex-col">
+    <ReadingPage route={`task-${tab}`} density="empty" flushPadding>
       <CenteredState
         icon={notFound ? <SearchXIcon /> : <TriangleAlertIcon size={16} />}
         tone={notFound ? 'neutral' : 'danger'}
@@ -49,6 +50,6 @@ export function GitTabLoadError({ tab, error }: { tab: GitTab | 'github-item'; e
           </Button>
         }
       />
-    </div>
+    </ReadingPage>
   )
 }

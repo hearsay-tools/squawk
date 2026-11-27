@@ -8,6 +8,7 @@ import { queryKeys, useHealth, useRepo, useRun, useRunChanges } from '@/api/quer
 import type { ApiRun, ChangedFile } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { canPreviewMarkdown, Diff, type DiffHandle, type DiffMode } from '@/components/diff'
+import { pageShellDensity, ReadingPage } from '@/components/page-shell'
 import { toast } from '@/components/ui/toaster'
 import { gitActionPolicy, type GitActionId } from '@/lib/git-actions'
 import { useIsDesktop } from '@/lib/use-desktop'
@@ -152,7 +153,7 @@ function ChangesView({ run }: { run: ApiRun }) {
   }
 
   return (
-    <div data-route="task-changes" className="flex min-h-full flex-col">
+    <ReadingPage route="task-changes" density={pageShellDensity(files.length)} flushPadding>
       <RunHeader run={run} tab="changes" />
 
       <GitToolbar
@@ -193,7 +194,7 @@ function ChangesView({ run }: { run: ApiRun }) {
       </ChangesState>
 
       <CommitDialog run={run} open={commitOpen} onOpenChange={setCommitOpen} />
-    </div>
+    </ReadingPage>
   )
 }
 

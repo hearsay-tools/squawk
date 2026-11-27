@@ -6,7 +6,13 @@ import { TaskListItems, TaskListFocusBoundary } from '@/components/task-list-ite
 import { runAddress } from '@/api/run-address'
 import { useRunCacheWriter } from '@/api/use-run-cache-writer'
 import './task-lists.css'
-import { Dash, TaskPageHeader, ViewTab, fullTime, headingTone, taskTitleClass } from './task-list-parts'
+import { Dash, ViewTab, fullTime, headingTone, taskTitleClass } from './task-list-parts'
+import {
+  PageShellActionButton,
+  PageShellSparseFooter,
+  TablePage,
+  pageShellDensity,
+} from '@/components/page-shell'
 import { useMutation } from '@tanstack/react-query'
 import { ArchiveRestoreIcon, EyeIcon, EyeOffIcon } from 'lucide-react'
 import { ArchiveIcon, PlusIcon, SearchIcon, SlidersHorizontalIcon } from '@/components/design-icons'
@@ -182,6 +188,35 @@ function useIndexedRunMutation<V extends { task: GlobalTask }>({
   })
 }
 
+function globalTasksHeader(groupBy: GroupBy, bootProject: string | undefined) {
+  return {
+    title: 'All tasks',
+    subtitle: groupBy === 'none'
+      ? 'Every project. One place to review what your agents have shipped.'
+      : 'Filter across projects and act on each run without opening the session.',
+    hideSubtitleOnMobile: true,
+    primaryAction: (
+      <PageShellActionButton asChild variant="primary" data-slot="new-task-inline">
+        <Link to={scopeTo(bootProject ?? 'default', '/new')}><PlusIcon aria-hidden="true" />New task</Link>
+      </PageShellActionButton>
+    ),
+  }
+}
+
+function globalTasksSparseFooter(ready: boolean, visibleCount: number, filtered: boolean, bootProject: string | undefined) {
+  if (!ready || visibleCount <= 0 || filtered) return undefined
+  return (
+    <PageShellSparseFooter
+      summary={`Showing ${visibleCount} ${visibleCount === 1 ? 'task' : 'tasks'} across registered projects.`}
+      actions={
+        <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
+          <Link to={scopeTo(bootProject ?? 'default', '/new')}>Start a task</Link>
+        </Button>
+      }
+    />
+  )
+}
+
 export function GlobalTasksRoute() {
   const { expandedRuns, toggleExpandedRun } = useTaskListExpansion()
   const projects = useProjects()
@@ -300,11 +335,28 @@ export function GlobalTasksRoute() {
     </div>
   )
 
+  const density = index.data === undefined ? 'full' : pageShellDensity(visible.length)
+
   return (
-    <TaskListFocusBoundary layout={groupBy} revision={groups} visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, filterDetailsOpen])} data-route="global-tasks" data-presentation={groupBy === 'none' ? 'summary' : 'cards'} data-filter-details={filterDetailsOpen} className="flex min-h-full flex-col gap-3 px-4 pb-6 md:px-9 md:pb-9">
-      <header className="flex shrink-0 flex-col gap-2.5">
-        <TaskPageHeader title="All tasks" subtitle={groupBy === 'none' ? 'Every project. One place to review what your agents have shipped.' : 'Filter across projects and act on each run without opening the session.'}
-          action={<Button asChild variant="primary" data-slot="new-task-inline" className="min-h-11"><Link to={scopeTo(projects.data?.bootProject ?? 'default', '/new')}><PlusIcon aria-hidden="true" />New task</Link></Button>} />
+    <TablePage
+      route="global-tasks"
+      density={density}
+      headerSpacing="compact"
+      rootProps={{
+        'data-presentation': groupBy === 'none' ? 'summary' : 'cards',
+        'data-filter-details': String(filterDetailsOpen),
+      }}
+      bodyClassName="gap-3"
+      header={globalTasksHeader(groupBy, projects.data?.bootProject)}
+      sparseFooter={globalTasksSparseFooter(index.data !== undefined, visible.length, hasActiveFilters(filters), projects.data?.bootProject)}
+    >
+      <TaskListFocusBoundary
+        layout={groupBy}
+        revision={groups}
+        visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, filterDetailsOpen])}
+        className="flex min-w-0 flex-1 flex-col gap-3"
+      >
+      <div className="flex shrink-0 flex-col gap-2.5">
         <div className="flex items-center gap-6 border-b border-border">
           <ViewTab view="active" current={view} onSelect={setView} count={tabCounts.active}>
             Active
@@ -332,7 +384,7 @@ export function GlobalTasksRoute() {
           </Button>
         </div>
         <TaskOriginRow origin={origin} counts={originTotals} automations={automations} onChange={setOrigin} labels={statusGroups.map((group) => group.label)} onSetAll={folds.setAll} />
-      </header>
+      </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-3">
         <FilterBar
@@ -383,7 +435,8 @@ export function GlobalTasksRoute() {
         <OtherProjects registry={registry} />
 
       </div>
-    </TaskListFocusBoundary>
+      </TaskListFocusBoundary>
+    </TablePage>
   )
 }
 

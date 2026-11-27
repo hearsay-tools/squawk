@@ -3,7 +3,7 @@ import { queryScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 
 import { queryKeys, useRepo } from '@/api/queries'
 import { RefreshCwIcon } from '@/components/design-icons'
-import { SCREEN_LIST_BODY_CLASS, SCREEN_LIST_TITLE_CLASS } from '@/components/nav-row-styles'
+import { PageShellActionButton, TablePage } from '@/components/page-shell'
 import { cn } from '@/lib/utils'
 
 import { GitCheckoutBlock } from './git-checkout-block'
@@ -28,34 +28,42 @@ export function GitScreen() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.worktrees })
   }
   return (
-    <div data-route="repo-git" data-slot="git-screen" className={SCREEN_LIST_BODY_CLASS}>
-      <div className="mb-[16px] flex items-center gap-[8px]">
-        <h1 className={cn(SCREEN_LIST_TITLE_CLASS, 'min-w-0 flex-1')}>Git</h1>
-        <button
-          type="button"
-          data-slot="git-screen-refresh"
-          aria-label="Refresh the repository"
-          title="Refresh the repository"
-          disabled={refreshing}
-          onClick={refresh}
-          className="-my-2 -mr-[10px] flex size-11 shrink-0 items-center justify-center rounded-md text-soft-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60"
-        >
-          <RefreshCwIcon size={17} aria-hidden="true" className={cn('size-[17px]', refreshing && 'motion-safe:animate-spin')} />
-        </button>
+    <TablePage
+      route="repo-git"
+      density={data?.info ? 'full' : 'empty'}
+      headerSpacing="compact"
+      header={{
+        title: 'Git',
+        secondaryActions: (
+          <PageShellActionButton
+            type="button"
+            variant="ghost"
+            data-slot="git-screen-refresh"
+            aria-label="Refresh the repository"
+            title="Refresh the repository"
+            disabled={refreshing}
+            onClick={refresh}
+          >
+            <RefreshCwIcon size={17} aria-hidden="true" className={cn('size-[17px]', refreshing && 'motion-safe:animate-spin')} />
+          </PageShellActionButton>
+        ),
+      }}
+    >
+      <div data-slot="git-screen">
+        {data?.info ? (
+          <div className="mb-[16px]">
+            <GitCheckoutBlock key={scope} scope={scope} repo={data} info={data.info} variant="screen" />
+          </div>
+        ) : repo.isPending ? (
+          <p data-slot="git-screen-loading" role="status" className="mb-[16px] px-[10px] text-[13px] text-soft-foreground">Loading the checkout…</p>
+        ) : repo.isError ? (
+          <p data-slot="git-screen-error" role="alert" className="mb-[16px] px-[10px] text-[13px] text-danger">Could not load the repository: {repo.error.message}</p>
+        ) : (
+          <p data-slot="git-screen-not-git" className="mb-[16px] px-[10px] text-[13px] text-soft-foreground">Not a git repository.</p>
+        )}
+        {/* Same rule as the sidebar: the sections wait for the checkout so they never shift under a tap. */}
+        {repo.isPending ? null : <GitSectionList branch={data?.info?.branch ?? null} counts={counts} variant="screen" />}
       </div>
-      {data?.info ? (
-        <div className="mb-[16px]">
-          <GitCheckoutBlock key={scope} scope={scope} repo={data} info={data.info} variant="screen" />
-        </div>
-      ) : repo.isPending ? (
-        <p data-slot="git-screen-loading" role="status" className="mb-[16px] px-[10px] text-[13px] text-soft-foreground">Loading the checkout…</p>
-      ) : repo.isError ? (
-        <p data-slot="git-screen-error" role="alert" className="mb-[16px] px-[10px] text-[13px] text-danger">Could not load the repository: {repo.error.message}</p>
-      ) : (
-        <p data-slot="git-screen-not-git" className="mb-[16px] px-[10px] text-[13px] text-soft-foreground">Not a git repository.</p>
-      )}
-      {/* Same rule as the sidebar: the sections wait for the checkout so they never shift under a tap. */}
-      {repo.isPending ? null : <GitSectionList branch={data?.info?.branch ?? null} counts={counts} variant="screen" />}
-    </div>
+    </TablePage>
   )
 }

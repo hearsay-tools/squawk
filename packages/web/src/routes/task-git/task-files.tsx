@@ -9,6 +9,7 @@ import { ApiError } from '@/api/client'
 import { useArtifact, useFileLink, useRun, useRunFile, useArtifacts } from '@/api/queries'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
+import { ReadingPage } from '@/components/page-shell'
 import { RunHeader } from '../task-thread/run-header'
 import { TaskFileScope } from '../task-thread/task-file-scope'
 import { LinkedFilePreview } from './linked-file-preview'
@@ -55,7 +56,7 @@ function FilesView({ run }: { run: ApiRun }) {
   const refused = root.isError && root.error instanceof ApiError && root.error.status === 409
   const previewSettled = usePreviewSettled(run.id, selected, artifactId, conflict)
   const memory = useFilesViewMemory(run.id, !root.isPending && previewSettled)
-  return <div data-route="task-files" className="flex min-h-full flex-col">
+  return <ReadingPage route="task-files" density={filesDensity(root.isError)} flushPadding>
     <RunHeader run={run} tab="files" />
     <form className="flex min-w-0 gap-2 px-4 pt-[22px] md:px-9" onSubmit={event => { event.preventDefault(); if (filePath.trim()) select('path', filePath.trim()) }}>
       <label className="relative min-w-0 flex-1">
@@ -68,14 +69,32 @@ function FilesView({ run }: { run: ApiRun }) {
       <aside ref={memory.tree} data-slot="files-tree-pane" className="w-full shrink-0 rounded-xl border border-border bg-card p-3.5 md:sticky md:top-[var(--diff-sticky-top)] md:max-h-[calc(100dvh_-_64px_-_var(--diff-sticky-top)_-_1rem)] md:w-60 md:overflow-y-auto md:overscroll-contain lg:w-72">
         <h2 className="sr-only">Worktree files</h2>
         {root.isPending ? <p data-slot="files-loading" className="py-4 text-xs">Loading files…</p> : root.isError ? <CenteredState icon={refused ? <FolderTreeIcon /> : <TriangleAlertIcon size={16} />} tone={refused ? 'neutral' : 'danger'} heading="h2" title={refused ? 'No files to browse' : 'Could not load the files'} subtitle={root.error.message} /> : <FolderMemoryContext.Provider value={memory.folders}><FilesTree runId={run.id} selected={selected} onSelect={path => select('path', path)} /></FolderMemoryContext.Provider>}
-        <section className="mt-4 border-t border-border pt-3" aria-label="Published artifacts">
-          <h2 className="text-sm font-medium">Published artifacts</h2>
-          {artifacts.isPending ? <p className="py-2 text-xs">Loading published files…</p> : artifacts.isError ? <p role="alert" className="py-2 text-xs">Could not load published files.</p> : artifacts.data.artifacts.length === 0 ? <p className="py-2 text-xs text-muted-foreground">No published files yet.</p> : <ul>{artifacts.data.artifacts.map(artifact => <li key={artifact.id}><button type="button" data-slot="artifact-row" aria-current={artifact.id === artifactId ? 'true' : undefined} className="group flex min-h-11 w-full items-center gap-2 rounded px-2 py-2 text-left text-xs text-foreground hover:bg-muted focus-visible:ring-2 aria-[current=true]:bg-muted aria-[current=true]:font-medium" onClick={() => select('artifact', artifact.id)}><FileTextIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 wrap-anywhere underline-offset-2 group-hover:underline">{artifact.name}</span><ChevronRightIcon size={16} aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground group-hover:text-foreground" /></button></li>)}</ul>}
-          <Button variant="outline" size="sm" data-action="refresh-artifacts" className="mt-2 max-md:h-11 no-hover:h-11" onClick={() => void artifacts.refetch()}><RefreshCwIcon aria-hidden="true" />Refresh published files</Button>
-        </section>
+        <PublishedArtifactsSection artifacts={artifacts} artifactId={artifactId} onSelect={id => select('artifact', id)} />
       </aside>
       {conflict ? <p role="alert" className="p-4">Invalid file link: choose either a path or a published artifact.</p> : selected !== null || artifactId !== null || root.isSuccess ? <LinkedFilePreview runId={run.id} path={selected} artifactId={artifactId} worktreePath={run.worktreePath} /> : null}
     </div>
     <p className="px-4 pb-6 text-xs text-muted-foreground md:px-9">Browsing files is read-only. Worktree contents may differ from your main checkout. Published files are snapshots.</p>
-  </div>
+  </ReadingPage>
+}
+
+function filesDensity(isError: boolean) {
+  return isError ? 'empty' : 'full'
+}
+
+function PublishedArtifactsSection({
+  artifacts,
+  artifactId,
+  onSelect,
+}: {
+  artifacts: ReturnType<typeof useArtifacts>
+  artifactId: string | null
+  onSelect: (id: string) => void
+}) {
+  return (
+    <section className="mt-4 border-t border-border pt-3" aria-label="Published artifacts">
+      <h2 className="text-sm font-medium">Published artifacts</h2>
+      {artifacts.isPending ? <p className="py-2 text-xs">Loading published files…</p> : artifacts.isError ? <p role="alert" className="py-2 text-xs">Could not load published files.</p> : artifacts.data.artifacts.length === 0 ? <p className="py-2 text-xs text-muted-foreground">No published files yet.</p> : <ul>{artifacts.data.artifacts.map(artifact => <li key={artifact.id}><button type="button" data-slot="artifact-row" aria-current={artifact.id === artifactId ? 'true' : undefined} className="group flex min-h-11 w-full items-center gap-2 rounded px-2 py-2 text-left text-xs text-foreground hover:bg-muted focus-visible:ring-2 aria-[current=true]:bg-muted aria-[current=true]:font-medium" onClick={() => onSelect(artifact.id)}><FileTextIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 wrap-anywhere underline-offset-2 group-hover:underline">{artifact.name}</span><ChevronRightIcon size={16} aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground group-hover:text-foreground" /></button></li>)}</ul>}
+      <Button variant="outline" size="sm" data-action="refresh-artifacts" className="mt-2 max-md:h-11 no-hover:h-11" onClick={() => void artifacts.refetch()}><RefreshCwIcon aria-hidden="true" />Refresh published files</Button>
+    </section>
+  )
 }

@@ -1,16 +1,22 @@
+import './automations.css'
 import { onLiveReconcile } from '@/api/live-coordinator'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { automationEventSchema, automationLogResultSchema, type AutomationLogRecord, type AutomationLogResult } from '@open-mercato/cezar-api-client/contract/automations'
 
 import { retryAutomationReceipt, getAutomationLog } from '@/api/client'
 import { onWorkspaceEvent } from '@/api/global-events'
+import {
+  PageShellActionButton,
+  ReadingPage,
+  pageShellDensity,
+} from '@/components/page-shell'
 import { Pill } from '@/components/pill'
 import type { StatusDotTone } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { logTime } from '@/lib/automation-format'
 import { Link } from '@/lib/project-router'
-import { PageFrame, PageState } from './page-frame'
+import { PageState } from './page-frame'
 
 const TONE: Record<AutomationLogResult, StatusDotTone> = {
   launched: 'success',
@@ -123,7 +129,19 @@ export function AutomationLogScreen({ automationId, automationName, timeZone, re
   )
   const hasEvents = (records ?? []).some((record) => record.event)
   return (
-    <PageFrame title="Execution log" subtitle={automationName ?? 'Automation activity'} action={<Button variant="outline" asChild><Link to="/automations">Back to automations</Link></Button>}>
+    <ReadingPage
+      route="automations"
+      density={records ? pageShellDensity(visible.length) : 'full'}
+      header={{
+        title: 'Execution log',
+        subtitle: automationName ?? 'Automation activity',
+        secondaryActions: (
+          <PageShellActionButton variant="outline" asChild>
+            <Link to="/automations">Back to automations</Link>
+          </PageShellActionButton>
+        ),
+      }}
+    >
       {error && !records ? (
         <div className="grid justify-items-start gap-3"><PageState text={error} /><Button variant="outline" onClick={() => void refresh()}>Retry</Button></div>
       ) : !records ? <PageState text="Loading execution log…" /> : records.length === 0 ? <PageState text="Nothing has run yet." /> : (
@@ -137,7 +155,7 @@ export function AutomationLogScreen({ automationId, automationName, timeZone, re
             : <LogRows records={visible} all={records} timeZone={timeZone} onRetried={() => void refresh()} readOnly={readOnly} />}
         </div>
       )}
-    </PageFrame>
+    </ReadingPage>
   )
 }
 

@@ -6,6 +6,7 @@ import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/ru
 import { AddProjectDialog } from '@/components/add-project-dialog'
 import { CloneProjectDialog } from '@/components/clone-project-dialog'
 import { CreateProjectDialog } from '@/components/create-project-dialog'
+import { FormPage, pageShellDensity } from '@/components/page-shell'
 import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
@@ -180,19 +181,22 @@ export function WorkspaceToolsRoute() {
     }
   }
 
+  const checksCount = health.data?.checks.length ?? 4
   return (
-    <div data-route="workspace-tools" className="w-full space-y-5 px-4 pt-7 pb-9 md:px-9">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-[26px] font-semibold tracking-tight leading-[1.2] text-foreground md:text-[28px]">Workspace tools</h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">Add projects and inspect local workspace CLI diagnostics.</p>
-        </div>
-      </header>
+    <FormPage
+      route="workspace-tools"
+      density={health.data ? pageShellDensity(checksCount) : 'full'}
+      bodyClassName="gap-5"
+      header={{
+        title: 'Workspace tools',
+        subtitle: 'Add projects and inspect local workspace CLI diagnostics.',
+      }}
+    >
       <AddProjectSection health={health} projects={projects} repository={repository} onAction={setProjectAction} />
       <ToolsDiagnosticsSection health={health} runners={runners} copying={copying} onCopy={copyDiagnostics} />
       {projectAction === 'new' ? <CreateProjectDialog open onOpenChange={(open) => { if (!open) setProjectAction(null) }} /> : null}
       {projectAction === 'local' ? <AddProjectDialog open onOpenChange={(open) => { if (!open) setProjectAction(null) }} /> : null}
       {projectAction === 'clone' ? <CloneProjectDialog open onOpenChange={(open) => { if (!open) setProjectAction(null) }} /> : null}
-    </div>
+    </FormPage>
   )
 }

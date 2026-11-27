@@ -83,3 +83,26 @@ it('latches a failed deep-page restore at the top and leaves Load more as a manu
   expect(fixture.fetch.mock.calls.map(call => call[0])).toEqual([0, 1, 1])
   client.clear()
 })
+
+it('restores scroll position and selection after opening the reader from the preview pane', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/p/shop/reports?q=preview-restore']}><Routes>
+    <Route path="/p/:projectId/reports" element={<ReportsRoute />} />
+    <Route path="/p/:projectId/tasks/:id/report" element={<Reader />} />
+  </Routes></MemoryRouter></QueryClientProvider>)
+  await screen.findByRole('link', { name: 'Report 0' })
+  fireEvent.click(screen.getByRole('button', { name: 'Load more reports' }))
+  await screen.findByRole('link', { name: 'Report deep' })
+  const list = document.querySelector<HTMLDivElement>('[data-slot="reports-list"]')!
+  list.scrollTop = 1400
+  fireEvent.click(screen.getByRole('button', { name: 'Preview Report deep' }))
+  fireEvent.click(document.querySelector<HTMLAnchorElement>('[data-slot="reports-preview-open"]')!)
+  await screen.findByRole('button', { name: 'Reader Back' })
+  fireEvent.click(screen.getByRole('button', { name: 'Reader Back' }))
+  await waitFor(() => {
+    const restored = document.querySelector<HTMLDivElement>('[data-slot="reports-list"]')!
+    expect(restored.scrollTop).toBe(1400)
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Report deep' }))
+  })
+  client.clear()
+})

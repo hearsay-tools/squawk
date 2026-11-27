@@ -6,18 +6,33 @@ import { DESKTOP_MEDIA_QUERY, useIsDesktop } from '@/lib/use-desktop'
 import { useRunCacheWriter } from '@/api/use-run-cache-writer'
 import { projectAddress } from '@/api/run-address'
 import './task-lists.css'
-import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCheckIcon, ChevronsLeftIcon, ChevronsRightIcon, Clock3Icon, CoinsIcon, DollarSignIcon, ListChecksIcon, LinkIcon, MemoryStickIcon, MoreHorizontalIcon, PencilIcon, SearchXIcon } from 'lucide-react'
 import { ArchiveIcon, CpuIcon, FileDiffIcon, GitBranchIcon, PlusIcon, SearchIcon, WorkflowIcon } from '@/components/design-icons'
 import * as React from 'react'
 import { Link, useNavigate } from '@/lib/project-router'
 import { archiveFinished, markAllRunsSeen, patchRun } from '@/api/client'
 import { useRunUsage } from '@/api/global-events'
-import { queryKeys, useArchivedRuns, useAutomationNames, useHealth, usePinRun, useProjects, useProjectRepoBase, useReferenceProjectId, useRuns } from '@/api/queries'
-import type { ArchivedRunsResponse, RunSummary } from '@open-mercato/cezar-api-client'
+import { queryKeys, useAutomationNames, useHealth, usePinRun, useProjects, useProjectRepoBase, useReferenceProjectId, useRuns } from '@/api/queries'
+import type { RunSummary } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { DiffStatLabel } from '@/components/diff-stat'
-import { BranchChip, Dash, RunnerName, TaskPageHeader, ViewTab, fullTime, headingTone, ResultCount, taskTitleClass } from './task-list-parts'
+import {
+  BranchChip,
+  Dash,
+  ResultCount,
+  RunnerName,
+  ViewTab,
+  fullTime,
+  headingTone,
+  taskTitleClass,
+  tasksOverviewDensity,
+  tasksOverviewHeader,
+  tasksOverviewRootProps,
+  tasksOverviewSparseFooter,
+  useArchivedPages,
+} from './task-list-parts'
+import { TablePage } from '@/components/page-shell'
 import { DirectionalUsage, directionalUsageLabel } from '@/components/directional-usage'
 import { TitleEditInput } from '@/components/editable-title'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -108,6 +123,7 @@ export type ArchivedPages = {
  * same data, only the framing changes (mockup `tasks-home.html`, mobile section).
  */
 const noAutomationName = () => undefined
+
 export function TasksOverview({
   runs,
   view,
@@ -195,7 +211,7 @@ export function TasksOverview({
   const [detailedTable, setDetailedTable] = React.useState(false)
   const desktop = useIsDesktop()
   const { expandedRuns, toggleExpandedRun } = useTaskListExpansion()
-  const headerRef = React.useRef<HTMLElement>(null)
+  const headerRef = React.useRef<HTMLDivElement>(null)
   const all = React.useMemo(() => runs ?? [], [runs])
   const derived = React.useMemo(() => deriveProjectTaskGroups({ all, view, query, origin, archivedPages, archivedTotal, automationName }), [all, view, query, origin, archivedPages, archivedTotal, automationName])
   const { groups, needle } = derived
@@ -210,11 +226,25 @@ export function TasksOverview({
   // drop the task at the top of the active list by a click that looked like it did nothing.
   const pinToggle = view === 'archived' ? undefined : onTogglePin
   return (
-    <TaskTitleEditorProvider runs={archivedPages ? [...all, ...archivedPages.runs] : all} onRename={onRename}><TaskListFocusBoundary layout={`${desktop}:${detailedTable}`} revision={groups} visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, expandedColumns])} data-route="tasks" data-presentation={detailedTable ? 'resources' : 'summary'} className="flex min-h-full flex-col gap-3 px-4 pb-6 md:px-9 md:pb-9">
+    <TaskTitleEditorProvider runs={archivedPages ? [...all, ...archivedPages.runs] : all} onRename={onRename}>
+      <TablePage
+        route="tasks"
+        density={tasksOverviewDensity(runs, derived.visibleCount)}
+        headerSpacing="compact"
+        rootProps={tasksOverviewRootProps(detailedTable)}
+        bodyClassName="gap-3"
+        header={tasksOverviewHeader(projectName, detailedTable)}
+        sparseFooter={tasksOverviewSparseFooter(runs !== undefined, derived.visibleCount, view, needle)}
+      >
+        <TaskListFocusBoundary
+          layout={`${desktop}:${detailedTable}`}
+          revision={groups}
+          visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, expandedColumns])}
+          className="flex min-w-0 flex-1 flex-col gap-3"
+        >
       {/* One set of search/view controls across breakpoints keeps query and selection intact.
           Mobile places search above the list filters. */}
-      <header ref={headerRef} className="flex shrink-0 flex-col gap-2.5">
-        <TasksHeading projectName={projectName} detailedTable={detailedTable} />
+      <div ref={headerRef} className="flex shrink-0 flex-col gap-2.5">
         <div className="flex gap-6 border-b border-border">
           <ViewTab view="active" current={view} onSelect={onViewChange} count={derived.activeCount}>
             Active
@@ -258,7 +288,7 @@ export function TasksOverview({
         />
         </div>
         <TaskOriginRow origin={origin} counts={derived.originTotals} automations={automations} onChange={setOrigin} labels={groups.map((group) => group.label)} onSetAll={folds.setAll} />
-      </header>
+      </div>
       <div className="flex min-w-0 flex-1 flex-col">
         {runs === undefined ? (
           <TasksLoading error={error} onRetry={onRetry} />
@@ -290,7 +320,9 @@ export function TasksOverview({
         )}
         {view === 'archived' && archivedPages ? <ArchivedOlder pages={archivedPages} /> : null}
       </div>
-    </TaskListFocusBoundary></TaskTitleEditorProvider>
+        </TaskListFocusBoundary>
+      </TablePage>
+    </TaskTitleEditorProvider>
   )
 }
 /** Hands the search text to the page; the page calls `written` with each trimmed text its
@@ -325,12 +357,6 @@ function useUrlQuery(urlQuery: string, onQueryChange: TasksQueryWriter | undefin
     onQueryChange?.(query, (written) => { sent.current.push(written) })
   }, [onQueryChange, query])
   return [query, setQuery] as const
-}
-function TasksHeading({ projectName, detailedTable }: { projectName?: string | undefined; detailedTable: boolean }) {
-  return (
-    <TaskPageHeader title="Project tasks" subtitle={<>{projectName ? `${projectName} · ` : ''}{detailedTable ? 'Every resource column shown. Fold columns without losing the saved view.' : 'Review runs, pull requests and resource usage.'}</>}
-      action={<Button asChild variant="primary" data-slot="new-task-inline" className="min-h-11"><Link to="/new"><PlusIcon aria-hidden="true" />New task</Link></Button>} />
-  )
 }
 /** Use the caller's URL origin when present; otherwise keep page state, starting at All. An
  *  Automations origin reads as All while automations are off. */
@@ -1530,48 +1556,3 @@ function useTasksUrlState() {
 }
 
 const QUERY_DEBOUNCE_MS = 250
-
-/** How long the Archived tab waits after a keystroke before it asks the server to search. */
-const ARCHIVED_SEARCH_DEBOUNCE_MS = 150
-
-/**
- * The Archived tab's reach past the run list's window (#864). The list carries the newest
- * `ARCHIVED_WINDOW` archived tasks; when it holds that many there may be older ones, so the tab
- * reads the server's pages (the first one overlaps the window, which is what lets the next one
- * add rows rather than repeat them). A search on that tab asks the server too, debounced, since
- * the matches can be anywhere in the history.
- */
-function useArchivedPages(runs: readonly RunSummary[] | undefined, view: ListView): {
-  pages: ArchivedPages | undefined
-  total: number | undefined
-  search: (needle: string) => void
-} {
-  useRunCacheWriter()
-  const queryClient = useQueryClient()
-  const [typed, setTyped] = React.useState('')
-  const [needle, setNeedle] = React.useState('')
-  React.useEffect(() => {
-    const timer = setTimeout(() => setNeedle(typed), ARCHIVED_SEARCH_DEBOUNCE_MS)
-    return () => clearTimeout(timer)
-  }, [typed])
-  const windowFull = runs !== undefined && listCounts(runs).archived >= ARCHIVED_WINDOW
-  const { data, isError, isPlaceholderData, hasNextPage, isFetchingNextPage, fetchNextPage, refetch } = useArchivedRuns(needle, view === 'archived' && (needle !== '' || windowFull))
-  const loaded = data?.pages
-  const pages = React.useMemo<ArchivedPages | undefined>(() => (loaded || isError ? {
-    runs: (loaded ?? []).flatMap((page) => page.runs),
-    // `placeholderData` keeps the previous text's pages on screen while the next ones load.
-    query: isPlaceholderData ? null : needle,
-    hasMore: hasNextPage,
-    loading: isFetchingNextPage,
-    // A failed first page has nothing to continue from, so retrying it is a refetch.
-    onLoadMore: () => void (loaded ? fetchNextPage() : refetch()),
-    failed: isError,
-  } : undefined), [loaded, isError, isPlaceholderData, needle, hasNextPage, isFetchingNextPage, fetchNextPage, refetch])
-  // Only the unfiltered total counts all archived tasks; a search total counts matches.
-  const unfiltered = needle === ''
-    ? loaded
-    : queryClient.getQueryData<InfiniteData<ArchivedRunsResponse>>(queryKeys.runs.archived(''))?.pages
-  const plainHasMore = unfiltered === undefined ? undefined : unfiltered.at(-1)?.nextCursor != null
-  const enrichedPages = React.useMemo(() => pages && { ...pages, plainHasMore }, [pages, plainHasMore])
-  return { pages: enrichedPages, total: unfiltered?.[0]?.total, search: setTyped }
-}

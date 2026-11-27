@@ -1,3 +1,4 @@
+import './automations.css'
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import type { AutomationDefinition, AutomationKind, Runner } from '@open-mercato/cezar-api-client'
 
@@ -6,6 +7,7 @@ import { useConfig, useRunnerModels, useWorkflows } from '@/api/queries'
 import { runnerPickerLabel, useResolvedRunner, useRunners } from '@/api/runners'
 import { CpuIcon, TerminalIcon, WorkflowIcon } from '@/components/design-icons'
 import { CompletionControls } from '@/components/completion-controls'
+import { FormPage, PageShellActionButton } from '@/components/page-shell'
 import { TaskAccessControls } from '@/components/task-access-controls'
 import { SegmentedControl } from '@/components/facet-filter'
 import { PickerPill, PickerPillGroup, UnavailableRunnerLinks } from '@/components/picker-pill'
@@ -22,7 +24,6 @@ import { fromDefinition, toCreateBody, toUpdateBody, type AutomationDraft } from
 import { GithubFields, historySentence, pollSentence } from './editor-github-fields'
 import { ScheduleFields } from './editor-schedule-fields'
 import { NextRunsPreview } from './next-runs-preview'
-import { PageFrame } from './page-frame'
 
 type Section = 'name' | 'when' | 'run' | 'enable' | 'form'
 type Failure = { section: Section; message: string; conflict?: boolean }
@@ -243,34 +244,13 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
   }
 
   const formId = useId()
-  // Like Start task on New task: nothing to save until the two required fields hold text.
-  const missing = !draft.name.trim() ? 'Name' : !draft.prompt.trim() ? 'Prompt' : ''
-  const saveHint = saveHintOf(draft)
   const saveHintId = useId()
-  const saveLabel = automation ? 'Save changes' : draft.enabled ? 'Save and enable' : 'Save paused'
   const isSchedule = draft.kind === 'schedule'
   return (
-    <PageFrame
-      title={automation ? 'Edit automation' : 'New automation'}
-      subtitle="Define when it runs and the ordinary task it launches."
-      action={
-        <div className="grid justify-items-start gap-1.5 sm:justify-items-end">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" asChild><Link to="/automations">Cancel</Link></Button>
-            <Button
-              type="submit"
-              form={formId}
-              variant="primary"
-              disabled={saving || missing !== ''}
-              title={missing ? `${missing} is required` : undefined}
-              aria-describedby={saveHint ? saveHintId : undefined}
-            >
-              {saving ? 'Saving…' : saveLabel}
-            </Button>
-          </div>
-          {saveHint ? <p id={saveHintId} data-slot="automation-save-hint" className="text-xs text-muted-foreground">{saveHint}</p> : null}
-        </div>
-      }
+    <FormPage
+      route="automations"
+      density={draft.name.trim() === '' && draft.prompt.trim() === '' ? 'sparse' : 'full'}
+      header={automationEditorHeader({ automation, draft, formId, saveHintId, saving })}
     >
       <form id={formId} className="automation-editor grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_320px] md:items-start" onSubmit={submit}>
         <div className="grid min-w-0 gap-3.5">
@@ -330,7 +310,7 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
           <CopyAsCliCard draft={draft} />
         </aside>
       </form>
-    </PageFrame>
+    </FormPage>
   )
 }
 
@@ -338,6 +318,51 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
 function saveHintOf(draft: AutomationDraft): string {
   const fields = [!draft.name.trim() && 'a name', !draft.prompt.trim() && 'a prompt'].filter(Boolean)
   return fields.length ? `Add ${fields.join(' and ')} to save.` : ''
+}
+
+function automationEditorHeader({
+  automation,
+  draft,
+  formId,
+  saveHintId,
+  saving,
+}: {
+  automation: AutomationDefinition | undefined
+  draft: AutomationDraft
+  formId: string
+  saveHintId: string
+  saving: boolean
+}) {
+  // Like Start task on New task: nothing to save until the two required fields hold text.
+  const missing = !draft.name.trim() ? 'Name' : !draft.prompt.trim() ? 'Prompt' : ''
+  const saveHint = saveHintOf(draft)
+  const saveLabel = automation ? 'Save changes' : draft.enabled ? 'Save and enable' : 'Save paused'
+  return {
+    title: automation ? 'Edit automation' : 'New automation',
+    subtitle: 'Define when it runs and the ordinary task it launches.',
+    status: saveHint ? (
+      <p id={saveHintId} data-slot="automation-save-hint" className="text-xs text-muted-foreground">
+        {saveHint}
+      </p>
+    ) : undefined,
+    secondaryActions: (
+      <PageShellActionButton type="button" variant="outline" asChild>
+        <Link to="/automations">Cancel</Link>
+      </PageShellActionButton>
+    ),
+    primaryAction: (
+      <PageShellActionButton
+        type="submit"
+        form={formId}
+        variant="primary"
+        disabled={saving || missing !== ''}
+        title={missing ? `${missing} is required` : undefined}
+        aria-describedby={saveHint ? saveHintId : undefined}
+      >
+        {saving ? 'Saving…' : saveLabel}
+      </PageShellActionButton>
+    ),
+  }
 }
 
 /** Workflow / runner / model, from the composer's own sources. An unset runner or model means

@@ -51,12 +51,9 @@
 .settings-panel [data-slot="agent-config-file"] { width: 100%; border: 1px solid var(--border); padding-block: 10px; padding-inline: 12px; color: var(--foreground); }
 .settings-panel [data-slot="agent-config-file"][data-selected=true] { border-color: var(--accent-strong); color: var(--accent-text); }
 
-/* S01–S13: the Settings shell owns this rhythm, independent of the task reading width. */
-.settings-route { padding: 0; gap: 0; }
-/* Desktop: the header is the board's full-bleed "Main header" (16/28 padding, rule below); the body keeps the board's 28px. */
-.settings-route-header { gap: 0; }
-.settings-route-body { gap: 24px; padding-block: 8px 28px; padding-inline: 36px; max-width: 56rem; width: 100%; }
-/* Agent config is a split view (file list + editor), like Git and GitHub: it takes the full width. */
+/* PageShell owns gutter and header geometry; settings interiors cap single-column cards at 56rem. */
+.settings-route-body { gap: 24px; padding-block: 0; padding-inline: 0; max-width: 56rem; width: 100%; }
+/* Agent config uses the Split template (file list + editor): full width inside SplitPage. */
 .settings-route[data-route=settings-agent-config] .settings-route-body { max-width: none; }
 .settings-section-picker { position: relative; width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
 .settings-section-picker summary { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding-block: 12px; padding-inline: 14px; list-style: none; cursor: pointer; font-size: 14px; }
@@ -96,11 +93,7 @@
 .settings-panel .settings-option-row label > span { display: none; }
 .settings-panel .settings-form-actions { display: flex; flex-wrap: wrap; gap: 12px; border-block-start: 1px solid var(--border); padding-block-start: 20px; }
 @media (max-width: 767px) {
-  .settings-route { padding-block: 28px 32px; padding-inline: 16px; gap: 24px; }
-  .settings-route-header { padding: 0; }
-  .settings-route-header h1 { line-height: 1.2; letter-spacing: -0.01em; }
-  .settings-route-header > p { display: none; }
-  .settings-route-body { gap: 20px; padding: 0; max-width: none; }
+  .settings-route-body { gap: 20px; max-width: none; }
   .settings-panel { padding: 16px; }
   .settings-panel button:not([role=switch]):not([data-slot=project-tag-suggestion]):not([data-slot=prompt-template-skill-chip]) { min-height: 44px; }
   .settings-panel [data-slot=agent-config-agents] { flex-wrap: wrap; }
@@ -164,16 +157,7 @@
 
 .settings-panel [data-slot=settings-config-editor] > [data-slot=agent-config-editor-frame] { margin-block-start: 8px; }
 
-/* The index frames retain their explanatory heading; section drill-ins use the quieter title. */
-.settings-route[data-route=settings] .settings-route-header > p,
-.settings-route[data-route=settings-global] .settings-route-header > p { display: block; }
-.settings-route[data-route=settings] .settings-route-header h1,
-.settings-route[data-route=settings-global] .settings-route-header h1 { font-weight: 600; }
-.settings-route[data-route=settings-global] [data-slot=settings-index] a > span:nth-child(2) > span:first-child { font-weight: 400; }
-.settings-route[data-route=settings-global] [data-slot=settings-index] a > span:nth-child(2) > span + span { margin-block-start: 8px; }
-.settings-route[data-route=settings-global] [data-slot=settings-index] + p { display: none; }
 @media (max-width: 767px) {
-  .settings-route { gap: 16px; }
   .settings-route[data-route=settings] [data-slot=settings-index] { gap: 0; margin-block-start: 0; border: 1px solid var(--border); border-block-start: 0; border-radius: 0 0 10px 10px; padding-block: 12px; padding-inline: 16px; background: var(--card); }
   .settings-route[data-route=settings] [data-slot=settings-index] a { border: 0; border-radius: 0; padding-block: 16px; padding-inline: 0; }
   .settings-route[data-route=settings] [data-slot=settings-index] a > span:first-child,
@@ -243,15 +227,6 @@
 .settings-panel .settings-field > .settings-select:has(> select:is([data-slot="resources-max-parallel"], [data-slot="resources-max-monitoring"])) { width: 8rem; }
 .settings-panel .settings-resource-controls input[data-slot="resources-memory-limit"], .settings-panel .settings-resource-controls input[data-slot="resources-monitoring-wake-interval"] { flex: none; width: 9rem; }
 .settings-panel [data-slot="resources-composer-defaults"] select { width: 16rem; max-width: 100%; }
-
-/* Unified page header (pass-3 contract): the same 28px title and gutter every route uses. */
-@media (max-width: 767px) { .settings-route-header { padding: 0; } }
-.settings-route-header h1 { font-size: 26px; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em; }
-.settings-route-header > p { margin-block-start: 4px; font-size: 13px; }
-@media (min-width: 768px) {
-  .settings-route-header { padding-inline: 36px; padding-block: 28px 20px; }
-  .settings-route-header h1 { font-size: 28px; }
-}
 
 /* Archive-on-merge reads as one more settings card: the same 14px regular title and hint rhythm. */
 .settings-panel [data-slot=archive-on-merge-field] > div:first-child > label { font-size: 14px; font-weight: 400; }
