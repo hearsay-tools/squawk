@@ -1,0 +1,9 @@
+[
+  {
+    "function": "sameOrigin",
+    "mutator": "BlockStatement",
+    "original": "{\n    return false;\n  }",
+    "replacement": "{}",
+    "reason": "Both callers use the result only for truthiness; an invalid URL returning undefined instead of false selects the same fallback."
+  }
+]

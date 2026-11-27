@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const m = require('./mutants-file.cjs');
+const { readEquivalent } = require('./mutants-equivalent.cjs');
 const root = path.resolve(__dirname, '../..');
 const mutant = (overrides = {}) => ({ status: 'Survived', mutator: 'StringLiteral', original: "'hello'", replacement: "''", function: 'guard', kind: 'Value', ...overrides });
 
@@ -124,7 +125,8 @@ function fakeDeps(file = 'packages/contract/src/sample.ts') {
     command: async (bin, args, cwd, signal, env) => { calls.push([bin, ...args]); calls.push(['command-env', cwd, env]); },
     stryker: async (...args) => { calls.push(['stryker', args[0], args[3]]); return { outcome: 'exited', code: 0 }; },
     readReport: () => report(file), reset: cwd => calls.push(['reset', cwd]), removeReport: () => calls.push(['remove-report']),
-    ranges: () => [], read: file => file.endsWith('equivalent.json') ? '[]' : "import { x } from '@open-mercato/cezar-contract/sample';",
+    ranges: () => [], read: () => "import { x } from '@open-mercato/cezar-contract/sample';",
+    readEquivalent: () => ({ entries: [], warning: '' }),
     readJson: () => ({ vitest: { configFile: 'vitest.stryker.config.ts', pool: 'forks' }, reporters: ['json'], inPlace: true, timeoutMS: 30000 }), write: (file, text) => calls.push(['write', file, text]),
     removeScratch: dir => calls.push(['remove-scratch', dir]), log: text => calls.push(['log', text]),
     queue: async (queued, signal, log) => { calls.push(['queue', queued, typeof log]); return { track: group => calls.push(['track', group]), release: () => calls.push(['leave-queue']) }; },
@@ -376,31 +378,36 @@ test('a matched guard equivalent passes its guard; same source in another functi
   assert.equal(other.guards[0].pass, false);
 });
 
-test('command keeps missing and empty equivalent lists behavior and warns on invalid lists', async () => {
+test('command reads the checkout records, keeps missing and empty records behavior and warns on invalid records', async t => {
   const file = 'packages/contract/src/sample.ts';
   const run = async contents => {
-    const { deps } = fakeDeps(file);
-    deps.read = name => {
-      if (!name.endsWith('equivalent.json')) return '';
-      if (contents === undefined) throw Object.assign(new Error('missing'), { code: 'ENOENT' });
-      return contents;
-    };
-    return m.runMeasurement(m.parseArgs([file]), deps);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'equivalent-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const records = path.join(dir, 'equivalent');
+    if (contents !== undefined) {
+      fs.mkdirSync(path.join(records, path.dirname(file)), { recursive: true });
+      fs.writeFileSync(path.join(records, `${file}.json`), contents);
+    }
+    const { deps, calls } = fakeDeps(file);
+    deps.readEquivalent = checkoutDir => { calls.push(['equivalent', checkoutDir]); return readEquivalent(records); };
+    const result = await m.runMeasurement(m.parseArgs([file]), deps);
+    assert.deepEqual(calls.filter(c => c[0] === 'equivalent'), [['equivalent', '/cache/scratch/checkout/.github/mutants/equivalent']]);
+    return result;
   };
   const missing = await run(undefined);
-  const empty = await run('[]');
-  assert.deepEqual(missing, empty);
-  assert.equal(empty.equivalentCount, 0);
-  assert.equal(empty.warning, '');
-  const invalid = await run('{');
-  assert.deepEqual(invalid.counts, empty.counts);
-  assert.match(invalid.warning, /Could not read equivalent mutants/);
-  assert.match(m.summary(invalid), /Could not read equivalent mutants/);
-  const matched = await run(JSON.stringify([equivalentEntry()]));
+  assert.equal(missing.equivalentCount, 0);
+  assert.equal(missing.warning, '');
+  const { file: ignored, ...entry } = equivalentEntry();
+  for (const contents of ['{', '[]', JSON.stringify([equivalentEntry()])]) {
+    const invalid = await run(contents);
+    assert.deepEqual(invalid.counts, missing.counts);
+    assert.match(invalid.warning, /Could not read equivalent mutants/);
+    assert.match(m.summary(invalid), /Could not read equivalent mutants/);
+  }
+  const matched = await run(JSON.stringify([entry]));
   assert.equal(matched.equivalentCount, 1);
   assert.equal(matched.survivors.length, 0);
 });
-
 
 test('comparison and equivalent stale checks preserve exact source text, including literal whitespace', () => {
   const file = 'packages/contract/src/sample.ts';

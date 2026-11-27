@@ -13,7 +13,7 @@ const saved = () => m.measure(report, file, 'original-head', ranges);
 function storedDeps(inputs) {
   const writes = [];
   const logs = [];
-  return { writes, logs, readJson: name => { if (!(name in inputs)) throw Error('missing input'); return inputs[name]; }, read: () => '[]', validateOutput: () => {}, write: (...args) => writes.push(args), log: line => logs.push(line) };
+  return { writes, logs, readJson: name => { if (!(name in inputs)) throw Error('missing input'); return inputs[name]; }, readEquivalent: () => ({ entries: [], warning: '' }), validateOutput: () => {}, write: (...args) => writes.push(args), log: line => logs.push(line) };
 }
 
 test('stored modes parse independently and reject measurement flags', () => {
@@ -98,10 +98,12 @@ test('rescore applies current equivalents and guard targets without losing missi
   const before = m.measure(guardedReport, guarded, 'head', named, {});
   const entry = { file: guarded, function: 'validateFlags', mutator: 'BooleanLiteral', original: 'true', replacement: 'false', reason: 'fixture equivalent' };
   const deps = storedDeps({ before });
-  deps.read = () => JSON.stringify([entry]);
+  const dirs = [];
+  deps.readEquivalent = dir => { dirs.push(dir); return { entries: [entry], warning: '' }; };
   await m.cli(['--rescore', 'before', '--out', 'after'], deps, new EventEmitter());
   const result = JSON.parse(deps.writes[0][1]);
   assert.equal(result.equivalentCount, 1);
+  assert.equal(dirs[0], '.github/mutants/equivalent');
   assert.equal(result.guards.find(g => g.name === 'validateFlags').pass, true);
   assert.equal(result.guards.find(g => g.name === 'positiveInt').found, false);
   assert.equal(result.rawCounts.survived, 1);

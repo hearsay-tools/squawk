@@ -1,0 +1,9 @@
+[
+  {
+    "function": "DeleteBranchDialog",
+    "mutator": "ConditionalExpression",
+    "original": "entry",
+    "replacement": "true",
+    "reason": "The disabled button only dispatches a click when matches is true, which implies a non-null entry; this check remains for TypeScript narrowing."
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "function": "mergeCheckState",
+    "mutator": "StringLiteral",
+    "original": "''",
+    "replacement": "\"Stryker was here!\"",
+    "reason": "Any fallback text outside the passing, failing and pending lists maps to unknown, the same as the empty string, so a check without a conclusion, state or status stays unknown."
+  },
+  {
+    "function": "mergePrUnknownBlocker",
+    "mutator": "StringLiteral",
+    "original": "''",
+    "replacement": "\"Stryker was here!\"",
+    "reason": "An absent merge state status must not match CLEAN or HAS_HOOKS; any fallback text outside that list, empty or not, keeps the pull request unconfirmed."
+  }
+]

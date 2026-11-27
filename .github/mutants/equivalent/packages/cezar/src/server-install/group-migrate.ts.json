@@ -1,0 +1,16 @@
+[
+  {
+    "function": "Group.instances",
+    "mutator": "StringLiteral",
+    "original": "'utf8'",
+    "replacement": "\"\"",
+    "reason": "readFileSync with an empty encoding returns the same bytes as a Buffer, and the only reader, loadServerState, passes the result to JSON.parse, which decodes a Buffer as UTF-8; every server record parses to the same state."
+  },
+  {
+    "function": "Group.member",
+    "mutator": "StringLiteral",
+    "original": "''",
+    "replacement": "\"Stryker was here!\"",
+    "reason": "The lookup gets this text only for a record with no platform. The production lookup, getStrategy, is keyed by platform ids, so neither the empty string nor any other non-id text has a strategy, and the refusal names the platform unknown either way."
+  }
+]

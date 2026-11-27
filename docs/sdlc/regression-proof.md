@@ -171,7 +171,7 @@ node .github/scripts/mutants-file.cjs --rescore final.json --out rescored.json
 These stored-result modes run no installs, builds, tests or mutants. Rescore applies the current
 counting rules, targets and equivalent entries to the original outcomes and source evidence;
 it preserves the measured HEAD and consumer failures and marks the output as rescored.
-A result made before a change to `.github/mutants/targets.json` or `.github/mutants/equivalent.json` is
+A result made before a change to `.github/mutants/targets.json` or a record under `.github/mutants/equivalent/` is
 rescored with `--rescore` before any guard is read from it.
 New version-2 results include the complete scoring evidence. Older results without that evidence
 can still be compared, but rescore rejects them with a request to measure again. Rescore does not
