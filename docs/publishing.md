@@ -324,8 +324,8 @@ performs this setup once:
 2. Grant **Repository permissions → Pull requests → Read and write**. Metadata
    read is automatic. Leave other permissions unset; this App does not push
    commits, publish packages, post checks, or bypass branch rules.
-3. Install the App on `hearsay-tools`, selecting only `cezarion`.
-4. In [Actions repository variables](https://github.com/hearsay-tools/cezarion/settings/variables/actions),
+3. Install the App on `hearsay-tools`, selecting only `squawk`.
+4. In [Actions repository variables](https://github.com/hearsay-tools/squawk/settings/variables/actions),
    add `RELEASE_APP_CLIENT_ID` using the App's Client ID (`Iv…`), which is
    different from its numeric App ID, and `RELEASE_APP_BOT_LOGIN` using the
    exact App slug plus `[bot]` (for example, `cezarion-release[bot]`).
@@ -333,7 +333,7 @@ performs this setup once:
    not its display name. The workflow checks it against the minted token's App.
 5. Generate a private key on the App settings page. Put the entire PEM, including
    its BEGIN/END lines, in repository secret `RELEASE_APP_PRIVATE_KEY` under
-   [Actions repository secrets](https://github.com/hearsay-tools/cezarion/settings/secrets/actions).
+   [Actions repository secrets](https://github.com/hearsay-tools/squawk/settings/secrets/actions).
    Do not put the key in chat, source control, or a repository variable.
 
 Optional permissions for the CI control plane. **PR Readiness**
@@ -545,36 +545,42 @@ not dry-run.
 
 ## One-time admin setup
 
-On **npmjs.com**, signed in as the account that owns the `@wjarka` scope:
+On **npmjs.com**, signed in as an account with maintainer access to
+`@hearsay-tools/squawk`, `@wjarka/cezarion`, and `cezarion`:
 
-1. Both published names already exist (`v0.11.0` created them). A user scope
-   belongs to the npm account of the same name, so `@wjarka/*` needs no org
-   and no team setup.
-2. For **each** of `@wjarka/cezarion` and `cezarion`: Settings → *Trusted
-   Publisher* → GitHub Actions, then:
-   - Organization or user: `wjarka`
-   - Repository: `cezar`
+1. All three published names already exist: `@hearsay-tools/squawk` (under the
+   `@hearsay-tools` npm organization) and the deprecation-window compatibility
+   packages `@wjarka/cezarion` and `cezarion`.
+2. For **each** of `@hearsay-tools/squawk`, `@wjarka/cezarion`, and `cezarion`:
+   Settings → *Trusted Publisher* → GitHub Actions, then:
+   - Organization or user: `hearsay-tools`
+   - Repository: `squawk`
    - Workflow filename: `release.yml` (filename only, including the extension)
    - Environment name: `production` (must match `release.yml`'s `environment:`)
-    - Allowed actions: `npm publish`
-   npm does not verify this form when you save it; a mismatch only shows up as
-   `E404` (`404 Not Found - PUT https://registry.npmjs.org/<name> - Not found`)
-   on the next stable release, not `ENEEDAUTH`. The package can already exist;
-   npm still answers 404 when this workflow is not a trusted publisher for it.
-   Configure both packages **before** the next `Release` run — that job no
-   longer carries a token, so a missing publisher is a failed publish, not a
-   dry run. A mid-set failure is recoverable: re-dispatch the **same** bump
-   (`patch` if that is what failed). Already-published `name@version` pairs
-   are skipped so the remaining name, the GitHub Release, and the bump PR can
-   finish. Do not dispatch `existing` while git still holds the pre-bump
-   version — that republishes the old version, not the one already on the
-   scoped name.
+   - Allowed actions: `npm publish`
+   npm does not verify this form when you save it, and it matches the
+   repository by `owner/repo` string rather than numeric GitHub repository ID.
+   A mismatch — including after a GitHub repository rename (such as moving from
+   `hearsay-tools/cezarion` to `hearsay-tools/squawk`,
+   `hearsay-tools/squawk#4405`) — only shows up as `E404`
+   (`404 Not Found - PUT https://registry.npmjs.org/<name> - Not found`) on the
+   next `Release` run, with no `Signed provenance statement` line, not
+   `ENEEDAUTH`. The package can already exist; npm still answers 404 when this
+   workflow is not a trusted publisher for it.
+   Configure all three packages **before** the next `Release` run — the
+   publishing jobs carry no token, so a missing or stale publisher is a failed
+   publish, not a dry run. A mid-set failure is recoverable: re-dispatch the
+   **same** bump (`patch` if that is what failed). Already-published
+   `name@version` pairs are skipped so the remaining names, the GitHub Release,
+   and the bump PR can finish. Do not dispatch `existing` while git still holds
+   the pre-bump version — that republishes the old version, not the one already
+   on the published names.
 3. Keep a **granular access token** for the channels OIDC cannot cover
    (snapshots, nightlies, `npm dist-tag rm`). *Read and write*, **selected
-   packages** `cezarion` and `@wjarka/cezarion` only — both names exist, so
-   "all packages" / "able to create" is no longer needed. Set an expiry per
-   your policy (CI fails loudly with `E401`/`E404`/`EOTP` when it is wrong
-   or lapses).
+   packages** `@hearsay-tools/squawk`, `@wjarka/cezarion`, and `cezarion` only
+   — all three names exist, so "all packages" / "able to create" is no longer
+   needed. Set an expiry per your policy (CI fails loudly with
+   `E401`/`E404`/`EOTP` when it is wrong or lapses).
    - **Tick "Bypass two-factor authentication (2FA)"** under the token's
      *Security settings*. A granular token is NOT exempt from 2FA by default —
      the bypass is an explicit opt-in checkbox, and without it an account that

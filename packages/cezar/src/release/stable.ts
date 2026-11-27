@@ -103,3 +103,20 @@ export function resolveReleaseTarget(
   if (line && !version.startsWith(`${line}.`)) return { error: `dist-tag "${distTag}" names another version line than ${version}.` };
   return { version, distTag, exactPins: candidate };
 }
+
+/** Diagnostic printed when an OIDC `npm publish` fails without the version on the registry.
+ *  npm swallows OIDC token-exchange failures at default log level and answers `E404`, including
+ *  after a GitHub repository rename, so naming the expected Trusted Publisher settings saves
+ *  operators from debugging a misleading 404. */
+export function formatOidcPublishHint(
+  packageName: string,
+  version: string,
+  context: { repository?: string | undefined; workflowRef?: string | undefined } = {},
+): string {
+  const repo = context.repository?.trim();
+  const workflowFile = /\/([^/@]+)@/.exec(context.workflowRef ?? '')?.[1] ?? 'release.yml';
+  const target = repo
+    ? `repository ${repo}, workflow ${workflowFile}, environment production`
+    : `workflow ${workflowFile}, environment production`;
+  return `release: OIDC publish of ${packageName}@${version} failed. If npm returned E404, check Settings -> Trusted Publisher on npmjs.com for ${packageName}: it must match ${target} (update it after a GitHub repository rename). See docs/publishing.md#one-time-admin-setup.`;
+}

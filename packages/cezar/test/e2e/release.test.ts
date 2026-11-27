@@ -389,6 +389,56 @@ if (args[0] === 'publish' && JSON.parse(readFileSync('package.json', 'utf8')).na
         npm_execpath: stub,
         NPM_STUB_LOG: log,
       }),
+      (err: NodeJS.ErrnoException & { stderr?: string }) => {
+        assert.doesNotMatch(err.stderr ?? '', /Trusted Publisher/);
+        return true;
+      },
+    );
+    const output = await readFile(join(root, 'github-output.txt'), 'utf8');
+    assert.doesNotMatch(output, /^published=true$/m);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('an OIDC publish failure prints a Trusted Publisher diagnostic hint before aborting', { timeout: 120_000 }, async () => {
+  const root = await makeFixture('0.1.5');
+  try {
+    await writeFile(join(root, 'github-output.txt'), '');
+    const stub = join(root, 'npm-cli.js');
+    const log = join(root, 'npm-stub.log');
+    await writeFile(
+      stub,
+      `const { appendFileSync, readFileSync } = require('node:fs');
+const args = process.argv.slice(2);
+appendFileSync(process.env.NPM_STUB_LOG, \`\${process.cwd()} \${args.join(' ')}\\n\`);
+if (args[0] === 'view') process.exit(1);
+if (args[0] === 'publish' && JSON.parse(readFileSync('package.json', 'utf8')).name === '@hearsay-tools/squawk') {
+  process.stderr.write('npm error code E404\\n');
+  process.stderr.write('404 Not Found - PUT https://registry.npmjs.org/@hearsay-tools%2fsquawk - Not found\\n');
+  process.exit(1);
+}
+`,
+    );
+    await assert.rejects(
+      runScript(root, ['patch'], {
+        NODE_AUTH_TOKEN: '',
+        GITHUB_ACTIONS: 'true',
+        GITHUB_REPOSITORY: 'hearsay-tools/squawk',
+        GITHUB_WORKFLOW_REF: 'hearsay-tools/squawk/.github/workflows/release.yml@refs/heads/main',
+        ACTIONS_ID_TOKEN_REQUEST_URL: 'https://example.invalid/oidc',
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'fake-oidc',
+        RELEASE_VERSION: '0.1.6-rc.1',
+        RELEASE_DIST_TAG: 'next',
+        npm_execpath: stub,
+        NPM_STUB_LOG: log,
+      }),
+      (err: NodeJS.ErrnoException & { stderr?: string }) => {
+        assert.match(err.stderr ?? '', /OIDC publish of @hearsay-tools\/squawk@0\.1\.6-rc\.1 failed/);
+        assert.match(err.stderr ?? '', /Trusted Publisher/);
+        assert.match(err.stderr ?? '', /repository hearsay-tools\/squawk, workflow release\.yml, environment production/);
+        return true;
+      },
     );
     const output = await readFile(join(root, 'github-output.txt'), 'utf8');
     assert.doesNotMatch(output, /^published=true$/m);
