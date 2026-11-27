@@ -15,14 +15,14 @@ import {
 import type { GitAction, GitActionBar, GitActionId } from '@/lib/git-actions'
 import { cn, isHttpUrl } from '@/lib/utils'
 
-import { BranchChip, DiffViewToggles, MarkdownPreviewToggle } from './diff-controls'
+import { BranchChip, DiffViewToggles, MarkdownPreviewToggle, WrapToggle } from './diff-controls'
 
 /**
  * The Changes tab's toolbar (spec #390). Deliberately DUMB about git: it renders whatever
  * `gitActionPolicy` returned — primary CTA, secondary buttons, overflow menu — plus the
- * branch chip, the animated aggregate ± stat, and the local view toggles (unified/split,
- * wrap; hidden below `md`, where unified+wrap is forced; the Markdown preview switch at every
- * width, when the parent passes `onPreviewChange`). Every disabled action shows the
+ * branch chip, the animated aggregate ± stat, and the local view toggles (unified/split
+ * ≥md only, where phones force unified; wrap at every width; the Markdown preview switch at
+ * every width, when the parent passes `onPreviewChange`). Every disabled action shows the
  * policy's own reason as its tooltip. No git conditionals live here — that is the policy
  * module's contract.
  */
@@ -64,22 +64,24 @@ export function GitToolbar({
         {stat ? <AnimatedDiffStat stat={stat} /> : null}
       </span>
 
-      {/* Its own row item, not one more button in the group below: at 360px the group already
+      {/* Its own row item, not more buttons in the group below: at 360px the group already
           fills a line, and one 44px button more pushed the overflow menu off the screen. As a
           sibling it wraps up beside the branch chip instead; on a desktop it sits right before
-          the group. */}
-      {onPreviewChange ? (
-        <span className="ml-auto flex items-center">
-          <MarkdownPreviewToggle preview={preview} onPreviewChange={onPreviewChange} />
+          the group. Phones get the wrap switch here too, since the group's toggles are ≥md. */}
+      <span className={cn('ml-auto flex items-center gap-1.5', !onPreviewChange && 'md:hidden')}>
+        <span className="flex md:hidden">
+          <WrapToggle wrap={wrap} onWrapChange={onWrapChange} />
         </span>
-      ) : null}
+        {onPreviewChange ? <MarkdownPreviewToggle preview={preview} onPreviewChange={onPreviewChange} /> : null}
+      </span>
 
       {/* Below md the action row takes a full line of its own and spans the content gutter
           edge to edge: the buttons share the width, the overflow menu closes it flush right,
           so the row lines up with the branch chip above and the Changed files card below. */}
       <span className={cn('flex items-center gap-2 max-md:w-full', !onPreviewChange && 'md:ml-auto')}>
         {/* View toggles — layout preferences, not git actions, so not the policy's business.
-            Hidden below md: phones force unified+wrap (the parent owns that rule). */}
+            Hidden below md: phones force unified (the parent owns that rule), and their wrap
+            switch sits beside the branch chip above. */}
         <span className="hidden items-center gap-1.5 md:flex">
           <DiffViewToggles mode={mode} wrap={wrap} onModeChange={onModeChange} onWrapChange={onWrapChange} />
         </span>

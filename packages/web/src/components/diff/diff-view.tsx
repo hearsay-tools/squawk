@@ -585,7 +585,7 @@ function HunkHeaderRow({ hunk, wrap }: { hunk: Hunk; wrap: boolean }) {
       data-slot="diff-hunk"
       title={wrap ? undefined : hunk.header}
       className={cn(
-        'border-y border-border/70 bg-muted/60 px-4 py-0.5 text-muted-foreground',
+        'border-y border-border/70 bg-muted/60 px-4 py-0.5 text-muted-foreground max-sm:px-2',
         wrap ? 'break-words whitespace-pre-wrap' : 'truncate',
       )}
     >
@@ -621,7 +621,7 @@ function LineContent({ cell, tokens, wrap }: { cell: DiffCell; tokens: SynToken[
   const segments = overlaySegments(tokens, cell.spans, cell.line.text)
   const markClass = cell.line.kind === 'add' ? 'bg-diff-add-strong' : 'bg-diff-del-strong'
   return (
-    <span className={cn('min-w-0 flex-1 pr-4', wrap ? 'break-words whitespace-pre-wrap' : 'whitespace-pre')}>
+    <span className={cn('min-w-0 flex-1 pr-4 max-sm:pr-1.5', wrap ? 'break-words whitespace-pre-wrap' : 'whitespace-pre')}>
       {segments.map((segment, index) => (
         <span
           key={index}
@@ -637,12 +637,22 @@ function LineContent({ cell, tokens, wrap }: { cell: DiffCell; tokens: SynToken[
   )
 }
 
-function Gutter({ value }: { value: number | undefined }) {
+/** A line-number cell. Below `sm` (a phone held upright) it narrows to 28px with a 4px gap,
+ *  so the code column keeps the width a long line needs to wrap in a few rows, not six. */
+function Gutter({ value, className }: { value: number | undefined; className?: string }) {
   return (
-    <span className="w-10 shrink-0 pr-2 text-right text-muted-foreground tabular-nums select-none">
+    <span
+      data-slot="diff-gutter"
+      className={cn('w-10 shrink-0 pr-2 text-right text-muted-foreground tabular-nums select-none max-sm:w-7 max-sm:pr-1', className)}
+    >
       {value ?? ''}
     </span>
   )
+}
+
+/** The +/− marker column: 16px, 12px below `sm` (see `Gutter`). */
+function Marker({ kind }: { kind: HunkLine['kind'] }) {
+  return <span className="w-4 shrink-0 text-muted-foreground select-none max-sm:w-3">{MARKER[kind]}</span>
 }
 
 function UnifiedRowView({
@@ -661,9 +671,12 @@ function UnifiedRowView({
   const { line } = row.cell
   return (
     <div data-slot="diff-line" data-line={line.kind} className={cn('flex', LINE_BG[line.kind])}>
-      <Gutter value={line.oldLine} />
-      <Gutter value={line.newLine} />
-      <span className="w-4 shrink-0 text-muted-foreground select-none">{MARKER[line.kind]}</span>
+      {/* Below `sm` one number column, not two: the new line's number, or the old one on a
+          deleted line (the − marker says which). Two gutters ate a quarter of a 390px screen. */}
+      <Gutter value={line.oldLine} className="max-sm:hidden" />
+      <Gutter value={line.newLine} className="max-sm:hidden" />
+      <Gutter value={line.newLine ?? line.oldLine} className="sm:hidden" />
+      <Marker kind={line.kind} />
       <LineContent cell={row.cell} tokens={tokensFor(line)} wrap={wrap} />
     </div>
   )
@@ -713,7 +726,7 @@ function SplitCell({
       className={cn('flex min-w-0 overflow-x-auto', LINE_BG[line.kind], side === 'new' && 'border-l border-border/70')}
     >
       <Gutter value={side === 'old' ? line.oldLine : line.newLine} />
-      <span className="w-4 shrink-0 text-muted-foreground select-none">{MARKER[line.kind]}</span>
+      <Marker kind={line.kind} />
       <LineContent cell={cell} tokens={tokensFor(line)} wrap={wrap} />
     </div>
   )

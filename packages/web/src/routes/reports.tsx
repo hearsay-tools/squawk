@@ -8,7 +8,7 @@ import { SearchIcon } from '@/components/design-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Link } from '@/lib/project-router'
-import { shortAge, withAgo } from '@/lib/format'
+import { shortAge } from '@/lib/format'
 import { reportTitle } from '@/lib/report-title'
 import { useSearchParamsWriter } from '@/lib/use-search-params-writer'
 import './reports.css'
@@ -117,7 +117,7 @@ export function ReportsRoute() {
                       <span className="min-w-0 truncate">{reportTitle(report)}</span>
                     </Link>
                   </h2>
-                  {/* Line two: the source task, then when it was published ("Published 37s ago"). */}
+                  {/* Line two: the source task, then when it was published ("Published · 37s"). */}
                   <div className="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
                     <Link
                       className="reports-task min-w-0 truncate text-xs text-muted-foreground no-underline hover:text-foreground hover:underline"
@@ -153,8 +153,10 @@ export function ReportsRoute() {
   )
 }
 
-/** "Published 37s ago" / "Published just now": a bare "37s" does not say what it measures. */
+/** "Published · 37s" / "Published just now": the word says what a bare "37s" measures, and the
+ *  age keeps the compact form every other list in the cockpit uses (no trailing "ago"). */
 function publishedAge(createdAt: string): string {
   const age = shortAge(createdAt)
-  return age ? `Published ${withAgo(age)}` : ''
+  if (!age) return ''
+  return age === 'just now' ? 'Published just now' : `Published · ${age}`
 }

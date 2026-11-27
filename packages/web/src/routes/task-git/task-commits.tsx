@@ -1,14 +1,17 @@
 import { FileCodeIcon, GitCommitHorizontalIcon, TriangleAlertIcon } from '@/components/design-icons'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useParams } from 'react-router'
+import { useQueries } from '@tanstack/react-query'
 
 import { Link } from '@/lib/project-router'
 
 import { ApiError } from '@/api/client'
-import { useRun, useRunChanges, useRunCommit, useRunCommits } from '@/api/queries'
-import type { ApiRun, RunCommit } from '@open-mercato/cezar-api-client'
+import { getRunCommit } from '@/api/client-runs'
+import { queryKeys, useRun, useRunCommit, useRunCommits } from '@/api/queries'
+import type { ApiRun, ChangedFile, DiffStat, RunCommit } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
-import { Diff, type DiffMode } from '@/components/diff'
+import { Diff, type DiffHandle, type DiffMode } from '@/components/diff'
+import { ChangeCounts } from '@/components/diff/change-counts'
 import { DiffStatLabel } from '@/components/diff-stat'
 import { CommitDiffPanel } from '@/components/diff/commit-diff-panel'
 import { useIsDesktop } from '@/lib/use-desktop'
@@ -86,11 +89,12 @@ function CommitsWorkspace({
   selectedSha: string | undefined
 }) {
   const activeCommit = useRunCommit(run.id, selectedSha)
+  const commitStats = useCommitStats(run.id, commits)
+  const diffRef = useRef<DiffHandle | null>(null)
   const desktop = useIsDesktop()
   const [mode, setMode] = useState<DiffMode>('unified')
   const [wrap, setWrap] = useState(true)
   const effectiveMode: DiffMode = desktop ? mode : 'unified'
-  const effectiveWrap = desktop ? wrap : true
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 px-4 py-5 md:px-9 lg:flex-row lg:items-start">
@@ -108,10 +112,17 @@ function CommitsWorkspace({
             ...commit,
             shaLabel: commit.sha.slice(0, 8),
             href: `/tasks/${run.id}/commits/${commit.sha}`,
-            stat: commit.sha === selectedSha ? activeCommit.data?.stat : undefined,
+            stat: commitStats.get(commit.sha),
           }))}
         />
-        <TaskChangedFiles run={run} />
+        {selectedSha && activeCommit.data && activeCommit.data.files.length > 0 ? (
+          <CommitFiles
+            runId={run.id}
+            sha={selectedSha}
+            files={activeCommit.data.files}
+            onPick={(path) => diffRef.current?.scrollToPath(path)}
+          />
+        ) : null}
       </div>
 
       {selectedSha ? (
@@ -149,7 +160,7 @@ function CommitsWorkspace({
                     ) : null}
                   </p>
                 </div>
-                <span className="hidden shrink-0 items-center gap-1.5 md:flex">
+                <span className="flex shrink-0 items-center gap-1.5">
                   <DiffViewToggles mode={mode} wrap={wrap} onModeChange={setMode} onWrapChange={setWrap} />
                 </span>
               </div>
@@ -164,9 +175,10 @@ function CommitsWorkspace({
               ) : (
                 <div className="p-4 [--diff-sticky-top:0px] md:[--diff-sticky-top:1rem]">
                   <Diff
+                    viewRef={diffRef}
                     files={activeCommit.data.files}
                     mode={effectiveMode}
-                    wrap={effectiveWrap}
+                    wrap={wrap}
                     loadFileText={(path) => loadWorktreeText(run.id, path)}
                     totals={false}
                     className="min-w-0"
@@ -197,20 +209,65 @@ function CommitDiffView({ runId, sha }: { runId: string; sha: string }) {
   )
 }
 
-/** Reuses the task diff payload; paths lead to the existing structured Changes view. */
-function TaskChangedFiles({ run }: { run: ApiRun }) {
-  const changes = useRunChanges(run.id, engineOwnsRun(run))
-  if (changes.isPending) return <p className="mt-4 text-xs text-muted-foreground">Loading changed files…</p>
-  if (changes.isError) return <p role="status" className="mt-4 text-xs text-danger">Could not load changed files: {changes.error.message}</p>
-  if (changes.data.files.length === 0) return null
-  return <section data-slot="task-commit-files" className="mt-4 rounded-xl border border-border bg-card p-4">
-    <h2 className="mb-2 text-sm font-semibold text-foreground">{changes.data.files.length} changed files</h2>
-    <ul className="space-y-1">
-      {changes.data.files.map(file => <li key={file.path}>
-        <Link to={`/tasks/${run.id}/changes`} className="flex min-h-11 items-center gap-2 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
-          <FileCodeIcon size={16} aria-hidden="true" className="size-[15px] shrink-0" /><span className="break-all">{file.path}</span>
+/** Up to this many commits, every list row fetches its commit to show its ± stat. A longer
+ *  list shows the numbers only for commits already in the query cache (opened this session). */
+const COMMIT_STAT_FETCH_MAX = 12
+
+/** Each commit's ± stat for its list row, through the same query the commit view reads. */
+function useCommitStats(runId: string, commits: RunCommit[]): Map<string, DiffStat> {
+  const fetchAll = commits.length <= COMMIT_STAT_FETCH_MAX
+  const results = useQueries({
+    queries: commits.map((commit) => ({
+      queryKey: queryKeys.runs.commit(runId, commit.sha),
+      queryFn: ({ signal }: { signal: AbortSignal }) => getRunCommit(runId, commit.sha, { signal }),
+      enabled: fetchAll,
+      retry: false,
+    })),
+  })
+  const stats = new Map<string, DiffStat>()
+  results.forEach((result, index) => {
+    const sha = commits[index]?.sha
+    if (sha && result.data?.stat) stats.set(sha, result.data.stat)
+  })
+  return stats
+}
+
+/** The selected commit's own files with their ± counts. A row scrolls the diff beside it to that
+ *  file; the heading's link leads to the whole task's Changes view. */
+function CommitFiles({ runId, sha, files, onPick }: {
+  runId: string
+  sha: string
+  files: ChangedFile[]
+  onPick: (path: string) => void
+}) {
+  return (
+    <section data-slot="task-commit-files" className="mt-4 rounded-xl border border-border bg-card p-4">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="text-sm font-semibold text-foreground">
+          {files.length} {files.length === 1 ? 'file' : 'files'} in{' '}
+          <span className="font-mono text-[13px] font-medium" title={sha}>{sha.slice(0, 8)}</span>
+        </h2>
+        <Link to={`/tasks/${runId}/changes`} className="text-xs text-muted-foreground hover:text-foreground">
+          All task changes ›
         </Link>
-      </li>)}
-    </ul>
-  </section>
+      </div>
+      <ul className="space-y-1">
+        {files.map((file) => (
+          <li key={file.path}>
+            <button
+              type="button"
+              data-slot="task-commit-file"
+              title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
+              onClick={() => onPick(file.path)}
+              className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <FileCodeIcon size={16} aria-hidden="true" className="size-[15px] shrink-0" />
+              <span className="min-w-0 flex-1 break-all">{file.path}</span>
+              <ChangeCounts adds={file.adds} dels={file.dels} className="font-mono text-[11px]" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
 }

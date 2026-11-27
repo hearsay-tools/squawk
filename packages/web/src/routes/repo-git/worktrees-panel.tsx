@@ -235,7 +235,7 @@ function WorktreeRow({
     <li data-slot="worktree-row" data-run={worktree.runId} className="flex min-h-[44px] items-center gap-[12px] border-b border-border px-[14px] py-[4px] last:border-0">
       <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
         <span className="truncate text-[12.5px] text-foreground" title={worktree.title}>{worktree.title}</span>
-        <span className="truncate font-mono text-[10.5px] text-soft-foreground">
+        <span className="truncate font-mono text-[11px] text-soft-foreground">
           {worktree.branch ?? worktree.runId.slice(0, 8)} · {status}
           <span className="md:hidden"> · {state.label}</span>
         </span>

@@ -94,17 +94,17 @@ export function GithubFields({ draft, onChange, disabledReason }: { draft: Autom
             {LIST_FILTERS.map((filter) => (
               <div key={filter.key} className="grid min-w-0 gap-2">
                 <Label htmlFor={`automation-filter-${filter.key}`}>{filter.label}</Label>
-                <Input id={`automation-filter-${filter.key}`} placeholder="comma separated" value={csv(draft.filters[filter.key])} onChange={(event) => setList(filter.key, event.target.value)} />
+                <Input id={`automation-filter-${filter.key}`} className="border-border" placeholder="comma separated" value={csv(draft.filters[filter.key])} onChange={(event) => setList(filter.key, event.target.value)} />
                 {filter.hint ? <p className="text-xs text-muted-foreground">{filter.hint}</p> : null}
               </div>
             ))}
             <div className="grid min-w-0 gap-2">
               <Label htmlFor="automation-filter-lookback">Look back (days)</Label>
-              <Input id="automation-filter-lookback" type="number" min={1} value={draft.filters.lookbackDays} onChange={(event) => setFilter({ lookbackDays: Math.max(1, Number(event.target.value) || 1) })} />
+              <Input id="automation-filter-lookback" className="border-border" type="number" min={1} value={draft.filters.lookbackDays} onChange={(event) => setFilter({ lookbackDays: Math.max(1, Number(event.target.value) || 1) })} />
             </div>
             <div className="grid min-w-0 gap-2">
               <Label htmlFor="automation-filter-max">Max records per check</Label>
-              <Input id="automation-filter-max" type="number" min={1} value={draft.filters.maxRecords} onChange={(event) => setFilter({ maxRecords: Math.max(1, Number(event.target.value) || 1) })} />
+              <Input id="automation-filter-max" className="border-border" type="number" min={1} value={draft.filters.maxRecords} onChange={(event) => setFilter({ maxRecords: Math.max(1, Number(event.target.value) || 1) })} />
             </div>
           </div>
         </CollapsibleContent>

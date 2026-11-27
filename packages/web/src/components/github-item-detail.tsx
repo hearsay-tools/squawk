@@ -34,7 +34,7 @@ export function LabelChip({ label, color, plain = false }: { label: string; colo
       data-slot="gh-label"
       data-label={label}
       style={plain ? undefined : labelChipStyle(color)}
-      className={plain ? "text-[11px] font-normal text-muted-foreground" : "rounded-full border px-1.5 py-px text-[12px] font-medium"}
+      className={plain ? "text-xs font-normal text-muted-foreground" : "rounded-full border px-1.5 py-px text-[12px] font-medium"}
     >
       {label}
     </span>
@@ -785,7 +785,7 @@ function ThreadEntry({ comment }: { comment: GithubComment }) {
   )
 }
 
-/** A 16 px comment avatar. Falls back to a letter block when no URL is known or the image fails to
+/** A 20 px comment avatar. Falls back to a letter block when no URL is known or the image fails to
  *  load (private-repo attachments, deleted avatars) — never a broken-image glyph. */
 function Avatar({ url, login }: { url?: string | undefined; login: string }) {
   const [failed, setFailed] = useState(false)
@@ -794,12 +794,12 @@ function Avatar({ url, login }: { url?: string | undefined; login: string }) {
       <img
         src={url}
         alt=""
-        width={16}
-        height={16}
+        width={20}
+        height={20}
         loading="lazy"
         onError={() => setFailed(true)}
         data-slot="gh-avatar"
-        className="size-4 shrink-0 rounded-full"
+        className="size-5 shrink-0 rounded-full"
       />
     )
   }
@@ -807,7 +807,7 @@ function Avatar({ url, login }: { url?: string | undefined; login: string }) {
     <span
       data-slot="gh-avatar-fallback"
       aria-hidden="true"
-      className="flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-semibold text-muted-foreground uppercase"
+      className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground uppercase"
     >
       {login.slice(0, 1) || '?'}
     </span>

@@ -50,8 +50,10 @@ export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
 
   return (
     <section aria-labelledby="copy-as-cli-heading" data-slot="copy-as-cli" className="min-w-0 max-w-full overflow-hidden rounded-xl border bg-card px-4 py-3.5">
-      <div className="flex min-h-8 min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-        <h2 id="copy-as-cli-heading" className="text-[13px] font-medium text-muted-foreground">Copy as CLI</h2>
+      {/* One row at the 320px aside width: heading, the fold toggle, and Copy flush right. The
+          toggle gives way (truncates) before Copy would drop to a second line. */}
+      <div className="flex min-h-8 min-w-0 flex-nowrap items-center gap-x-1.5">
+        <h2 id="copy-as-cli-heading" className="shrink-0 text-[13px] font-medium text-muted-foreground">Copy as CLI</h2>
         <Button
           type="button"
           variant="ghost"
@@ -59,14 +61,14 @@ export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
           data-slot="copy-as-cli-toggle"
           aria-expanded={open}
           aria-controls={boxId}
-          className="max-md:h-11 no-hover:h-11"
+          className="min-w-0 gap-1 px-1.5 text-[12px] font-medium max-md:h-11 no-hover:h-11"
           onClick={() => setOpen((value) => !value)}
         >
-          {open ? 'Hide command' : 'Show command'}
+          <span className="truncate">{open ? 'Hide command' : 'Show command'}</span>
           <ChevronDownIcon aria-hidden="true" className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
         </Button>
-        <Button type="button" variant="outline" size="sm" className="ms-auto max-md:h-11 no-hover:h-11" onClick={() => void copy()}>
-          {state === 'copied' ? <CheckIcon aria-hidden="true" /> : <CopyIcon aria-hidden="true" />}
+        <Button type="button" variant="outline" size="sm" className="ms-auto gap-1.5 px-2 text-[12px] font-medium max-md:h-11 no-hover:h-11" onClick={() => void copy()}>
+          {state === 'copied' ? <CheckIcon aria-hidden="true" className="size-3.5" /> : <CopyIcon aria-hidden="true" className="size-3.5" />}
           {state === 'copied' ? 'Copied' : 'Copy'}
         </Button>
       </div>

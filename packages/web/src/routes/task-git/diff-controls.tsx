@@ -8,8 +8,9 @@ import { cn } from '@/lib/utils'
 /**
  * The diff view's local controls, extracted from the Changes toolbar (R5 1.7) so the repo
  * view renders the SAME unified/split + wrap toggles and branch chip rather than a fork.
- * Layout preferences, not git actions — no policy involvement. Callers own the "hidden
- * below md" wrapper, because phones force unified+wrap and hide these entirely.
+ * Layout preferences, not git actions — no policy involvement. Below `md` the unified/split
+ * group hides itself (phones force unified: a 390px screen has no room for two columns), but
+ * the wrap switch stays, so a phone reader can still trade wrapped rows for a side scroll.
  */
 export function DiffViewToggles({
   mode,
@@ -28,7 +29,7 @@ export function DiffViewToggles({
         data-slot="diff-mode-toggle"
         role="group"
         aria-label="Diff layout"
-        className="inline-flex items-center rounded-lg border border-border bg-card p-0.5"
+        className="inline-flex items-center rounded-lg border border-border bg-card p-0.5 max-md:hidden"
       >
         <ModeButton current={mode} value="unified" onModeChange={onModeChange} />
         <ModeButton current={mode} value="split" onModeChange={onModeChange} />
@@ -66,10 +67,9 @@ export function WrapToggle({ wrap, onWrapChange, className = 'size-11 rounded-lg
 
 /**
  * The Markdown preview switch (hearsay-tools/cezarion#1012): every previewable Markdown file in
- * the diff at once, and pressing it clears the per-file choices made in the cards. NOT one of
- * the ≥md-only toggles above: phones force unified+wrap because a 360px screen has no room for
- * split, but a rendered document reads better there than anywhere, so callers render this one
- * at every width. Callers render it only when the diff holds a file `canPreviewMarkdown`
+ * the diff at once, and pressing it clears the per-file choices made in the cards. Like the
+ * wrap switch it shows at every width: a rendered document reads better on a phone than
+ * anywhere. Callers render it only when the diff holds a file `canPreviewMarkdown`
  * accepts, so the button never sits there doing nothing.
  */
 export function MarkdownPreviewToggle({

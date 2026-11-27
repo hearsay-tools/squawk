@@ -263,7 +263,7 @@ function BranchClassLabel({ entry }: { entry: RepoBranchEntry }) {
     <span
       data-slot="branch-class"
       className={cn(
-        'shrink-0 rounded-[4px] border px-[5px] py-[1px] text-[10.5px] leading-[14px]',
+        'shrink-0 rounded-[4px] border px-1.5 py-px text-[11px] leading-4 font-medium',
         entry.class === 'active' ? 'border-status-running/40 text-status-running'
           : entry.class === 'not-landed' || entry.class === 'orphan' ? 'border-inbox-count-foreground/40 text-inbox-count-foreground'
           : 'border-border text-soft-foreground',

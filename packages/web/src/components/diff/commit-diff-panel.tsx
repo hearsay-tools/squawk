@@ -34,18 +34,19 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
   const refused = commit.isError && commit.error instanceof ApiError && commit.error.status === 409
 
   const effectiveMode: DiffMode = desktop ? mode : 'unified'
-  const effectiveWrap = desktop ? wrap : true
 
   return (
     <section data-slot={slot} data-sha={sha} className={className}>
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-border px-4 py-2 md:px-9">
+      {/* Both dividers sit inside the content gutter (a margin, not padding), so they line up
+          with the diff cards below instead of running to the window edge. */}
+      <div className="mx-4 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-border py-2 md:mx-9">
         <Button asChild variant="ghost" size="sm" data-slot="commit-back">
           <Link to={backTo}>
             <ArrowLeftIcon size={16} aria-hidden="true" />
             {backLabel}
           </Link>
         </Button>
-        <span className="ml-auto hidden items-center gap-1 md:flex">
+        <span className="ml-auto flex items-center gap-1">
           <DiffViewToggles mode={mode} wrap={wrap} onModeChange={setMode} onWrapChange={setWrap} />
         </span>
       </div>
@@ -64,7 +65,7 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
         />
       ) : (
         <>
-          <div data-slot="commit-meta" className="border-b border-border px-4 py-3 md:px-9">
+          <div data-slot="commit-meta" className="mx-4 border-b border-border py-3 md:mx-9">
             <h2 className="text-sm font-semibold">{commit.data.subject}</h2>
             <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
               <span>{commit.data.author}</span>
@@ -74,7 +75,8 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
               <span className="font-mono select-all" title={commit.data.sha}>{commit.data.sha.slice(0, 8)}</span>
               {/* The stat belongs to the commit, so it ends the commit's own line (as in the task's
                   Commits tab), not the back link's. */}
-              <span data-slot="commit-stat" className="ml-0.5"><DiffStatLabel stat={commit.data.stat} /></span>
+              <span aria-hidden="true">·</span>
+              <span data-slot="commit-stat"><DiffStatLabel stat={commit.data.stat} /></span>
             </p>
           </div>
           {commit.data.files.length === 0 ? (
@@ -87,7 +89,7 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
             />
           ) : (
             <div className={diffClassName}>
-              <Diff files={commit.data.files} mode={effectiveMode} wrap={effectiveWrap} totals={false} className="min-w-0" />
+              <Diff files={commit.data.files} mode={effectiveMode} wrap={wrap} totals={false} className="min-w-0" />
             </div>
           )}
         </>

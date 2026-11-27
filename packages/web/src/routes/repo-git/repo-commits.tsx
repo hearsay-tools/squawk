@@ -25,7 +25,7 @@ import { useGitCheckout } from './use-git-checkout'
  * `<Diff>` facade as everything else. A row names where the commit came from when the server knows
  * (`source`: the PR and the task, linking to the task) and says "no task found" when it does
  * not. When the base is behind its upstream, an Incoming bar offers the pull first. Same mobile
- * rule: unified+wrap forced below `md`.
+ * rule: unified forced below `md`, wrap still switchable.
  */
 export function RepoCommitsSection({ repo, info }: { repo: RepoResponse; info: RepoInfo }) {
   const { sha } = useParams<{ sha: string }>()

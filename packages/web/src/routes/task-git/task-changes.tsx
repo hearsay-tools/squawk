@@ -28,9 +28,9 @@ import { GitToolbar } from './git-toolbar'
  * the git action toolbar (rendered VERBATIM from `gitActionPolicy` — the rules live there),
  * the collapsible file tree, and the `<Diff>` facade over `GET /api/runs/:id/changes`.
  *
- * Below `md` the view forces unified+wrap (spec: "unified+wrap forced <md") and hides the
- * tree — the per-file sticky headers carry the file names, and a 360px phone has no honest
- * room for a second column.
+ * Below `md` the view forces unified (wrap stays the reader's switch) and folds the tree
+ * into a disclosure bar — the per-file sticky headers carry the file names, and a 360px phone
+ * has no honest room for a second column.
  */
 export function TaskChangesRoute() {
   const { id } = useParams<{ id: string }>()
@@ -141,9 +141,8 @@ function ChangesView({ run }: { run: ApiRun }) {
   const tree = useMemo(() => buildFileTree(files), [files])
   const hasMarkdown = useMemo(() => files.some(canPreviewMarkdown), [files])
 
-  // Phones force the readable combination; the toggles only exist ≥md (toolbar hides them).
+  // Phones force unified (the split toggle only exists ≥md); wrap is theirs to switch.
   const effectiveMode: DiffMode = desktop ? mode : 'unified'
-  const effectiveWrap = desktop ? wrap : true
 
   // Through the facade's handle, not the DOM: past `diff-scroll.ts`'s threshold the diff is
   // virtualized and the picked file may not be mounted to scroll to.
@@ -162,7 +161,7 @@ function ChangesView({ run }: { run: ApiRun }) {
         branch={run.branch}
         stat={changes.data?.stat}
         mode={effectiveMode}
-        wrap={effectiveWrap}
+        wrap={wrap}
         preview={preview}
         onModeChange={setMode}
         onWrapChange={setWrap}
@@ -186,7 +185,7 @@ function ChangesView({ run }: { run: ApiRun }) {
           selectFile={selectFile}
           diffRef={diffRef}
           effectiveMode={effectiveMode}
-          effectiveWrap={effectiveWrap}
+          effectiveWrap={wrap}
           preview={preview}
           localHandoff={health.data?.capabilities.localHandoff}
           onOpenInApp={openImage.mutate}

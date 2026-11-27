@@ -19,7 +19,7 @@ import { AnimatedDiffStat } from '../task-git/git-toolbar'
  * toggles. No git action bar here: committing on the main tree is the CLI's business; the
  * cockpit's commit/push flows belong to task worktrees (task-changes.tsx).
  *
- * Below `md` the same rule as the task tab applies: unified+wrap forced, tree stacked above the diff — the
+ * Below `md` the same rule as the task tab applies: unified forced, wrap still switchable, tree stacked above the diff — the
  * per-file sticky headers carry the names.
  */
 export function RepoChangesSection() {
@@ -40,7 +40,6 @@ export function RepoChangesSection() {
   const hasMarkdown = useMemo(() => files.some(canPreviewMarkdown), [files])
 
   const effectiveMode: DiffMode = desktop ? mode : 'unified'
-  const effectiveWrap = desktop ? wrap : true
 
   // Through the facade's handle, not the DOM — see the task Changes tab's note.
   const selectFile = (path: string) => {
@@ -79,8 +78,9 @@ export function RepoChangesSection() {
             <span className="ml-auto flex items-center gap-2">
               {/* Every width, like the task toolbar's — see `MarkdownPreviewToggle`. */}
               {hasMarkdown ? <MarkdownPreviewToggle preview={preview} onPreviewChange={setPreview} /> : null}
-              {/* Same rule as the task toolbar: these toggles exist ≥md only — phones force unified+wrap. */}
-              <span className="hidden items-center gap-1.5 md:flex">
+              {/* Same rule as the task toolbar: unified/split exists ≥md only (phones force
+                  unified); the wrap switch stays at every width. */}
+              <span className="flex items-center gap-1.5">
                 <DiffViewToggles mode={mode} wrap={wrap} onModeChange={setMode} onWrapChange={setWrap} />
               </span>
             </span>
@@ -99,7 +99,7 @@ export function RepoChangesSection() {
               files={files}
               viewRef={diffRef}
               mode={effectiveMode}
-              wrap={effectiveWrap}
+              wrap={wrap}
               // No file route serves the main checkout, so the preview shows the patch's new side
               // and no image: `loadFileText` and `imageSrc` stay unwired here.
               preview={preview}

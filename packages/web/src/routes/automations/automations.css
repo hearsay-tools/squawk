@@ -5,7 +5,9 @@
   line-height: 1.2;
 }
 
-[data-route='automations'] [data-slot='button'][data-variant='primary'] {
+/* Enabled only: a disabled primary keeps the Button's shared neutral disabled look (as Start task
+ * on New task does), so an empty form never shows a live gold submit. */
+[data-route='automations'] [data-slot='button'][data-variant='primary']:not(:disabled) {
   background: var(--action);
   color: var(--action-foreground);
   font-weight: 600;

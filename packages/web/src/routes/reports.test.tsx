@@ -62,7 +62,7 @@ describe('Reports shelf', () => {
     const report = screen.getByRole('link', { name: 'Income' })
     expect(report.getAttribute('href')).toBe('/p/shop/tasks/source/report?artifact=abc')
     const time = document.querySelector('[data-slot="report-row"] time')
-    expect(time?.textContent).toMatch(/^Published (?:just now|(?:\d+[smd]|\d+h(?: \d+m)?) ago)$/)
+    expect(time?.textContent).toMatch(/^Published (?:just now|· (?:\d+[smd]|\d+h(?: \d+m)?))$/)
     expect(time?.getAttribute('title')).toBeTruthy()
     expect(time?.getAttribute('title')).not.toBe(createdAt)
     fireEvent.click(report)

@@ -4,9 +4,9 @@ import { MemoryRouter } from 'react-router'
 import { WorkspaceToolsRoute } from './workspace-tools'
 import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
-const mocks = vi.hoisted(() => ({ refetch: vi.fn(), copy: vi.fn(), allAvailable: false, hint: 'Install the Codex CLI' }))
+const mocks = vi.hoisted(() => ({ refetch: vi.fn(), copy: vi.fn(), allAvailable: false, hint: 'Install the Codex CLI', version: '0.9' }))
 vi.mock('@/api/queries', () => ({
-  useHealth: () => ({ data: { version: '1.2.3', repoRoot: '/local/repo', checks: [{ name: 'git', available: true, version: '2.50' }, mocks.allAvailable ? { name: 'codex', available: true, version: '0.9' } : { name: 'codex', available: false, hint: mocks.hint }], capabilities: {} }, refetch: mocks.refetch, isFetching: false, isError: false }),
+  useHealth: () => ({ data: { version: '1.2.3', repoRoot: '/local/repo', checks: [{ name: 'git', available: true, version: '2.50' }, mocks.allAvailable ? { name: 'codex', available: true, version: mocks.version } : { name: 'codex', available: false, hint: mocks.hint }], capabilities: {} }, refetch: mocks.refetch, isFetching: false, isError: false }),
   useProjects: () => ({ data: { projectsDir: '/local/projects' } }),
 }))
 vi.mock('@/api/runners', async (importOriginal) => {
@@ -16,7 +16,7 @@ vi.mock('@/api/runners', async (importOriginal) => {
 vi.mock('@/components/add-project-dialog', () => ({ AddProjectDialog: () => <div role="dialog" aria-label="Choose local folder" /> }))
 vi.mock('@/components/clone-project-dialog', () => ({ CloneProjectDialog: () => <div role="dialog" aria-label="Clone repository" /> }))
 vi.mock('@/components/create-project-dialog', () => ({ CreateProjectDialog: () => <div role="dialog" aria-label="New project" /> }))
-afterEach(() => { cleanup(); vi.clearAllMocks(); mocks.allAvailable = false; mocks.hint = 'Install the Codex CLI'; vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.clearAllMocks(); mocks.allAvailable = false; mocks.hint = 'Install the Codex CLI'; mocks.version = '0.9'; vi.unstubAllGlobals() })
 
 describe('Workspace tools', () => {
   it('opens all three project flows from the shared workspace page', () => {
@@ -67,6 +67,19 @@ describe('Workspace tools', () => {
     render(<MemoryRouter><WorkspaceToolsRoute /></MemoryRouter>)
     expect(screen.queryByRole('link', { name: /Set up/ })).toBeNull()
     expect(screen.getByRole('link', { name: 'Tool settings ›' })).toBeTruthy()
+  })
+
+  it('shows a dry-run version as a calm pill with the raw string in its tooltip', () => {
+    mocks.allAvailable = true
+    mocks.version = 'mock (HSQ_DRY_RUN=1)'
+    const { container } = render(<MemoryRouter><WorkspaceToolsRoute /></MemoryRouter>)
+    const codex = container.querySelector('[data-slot="tool-row"][data-tool="codex"]')!
+    const pill = codex.querySelector('[data-slot="tool-dry-run"]')
+    expect(pill?.textContent).toBe('Dry run')
+    expect(pill?.getAttribute('title')).toBe('mock (HSQ_DRY_RUN=1)')
+    expect(codex.textContent).not.toContain('HSQ_DRY_RUN')
+    // A real version still reads inline.
+    expect(container.querySelector('[data-slot="tool-row"][data-tool="git"]')?.textContent).toContain('Installed· 2.50')
   })
 
   it('renders backticked CLI commands as code chips and capitalizes leading Install', () => {

@@ -80,6 +80,7 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
 
   return (
     <PageFrame
+      tabbed
       title="Automations"
       subtitle={`Schedules and GitHub checks run while Squawk is open.`}
       action={<Button variant="primary" asChild><Link to="/automations/new"><PlusIcon aria-hidden="true" className="size-4" />New automation</Link></Button>}

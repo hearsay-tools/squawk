@@ -66,6 +66,9 @@ function renderCommits(run: ApiRun, commits: RunCommitsResponse) {
     if (path === '/api/v1/runs/r1') return json(run)
     if (path === '/api/v1/runs/r1/commits') return json(commits)
     if (path === `/api/v1/runs/r1/commit/${'a'.repeat(40)}`) return json(COMMIT_DETAIL)
+    if (path === `/api/v1/runs/r1/commit/${'b'.repeat(40)}`) {
+      return json({ ...COMMIT_DETAIL, sha: 'b'.repeat(40), subject: 'Start the task', stat: { adds: 7, dels: 0, files: 1 } })
+    }
     if (path === '/api/v1/runs/r1/changes') return json(CHANGES)
     if (path === '/api/v1/run-summaries') return json([])
     return json({})
@@ -93,7 +96,15 @@ describe('the Commits tab route', () => {
     expect(previewText).toContain('2h·aaaaaaaa')
     expect(previewText).toContain('+3')
     expect(previewText).toContain('−1')
-    await waitFor(() => expect(screen.getByRole('heading', { name: '1 changed files' })).toBeTruthy())
+    // The file list is the selected commit's own, each row with its ± counts.
+    await waitFor(() => expect(screen.getByRole('heading', { name: '1 file in aaaaaaaa' })).toBeTruthy())
+    const fileRow = document.querySelector('[data-slot="task-commit-file"]')
+    expect(fileRow?.textContent).toContain('notes.md')
+    expect(fileRow?.querySelector('[data-slot="change-counts"]')?.textContent).toBe('+3 −1')
+    expect(screen.getByRole('link', { name: 'All task changes ›' }).getAttribute('href')).toBe('/tasks/r1/changes')
+    // Every commit row carries its ± stat, not only the selected one.
+    const secondRow = document.querySelector(`[data-slot="task-commits"] a[href="/tasks/r1/commits/${'b'.repeat(40)}"]`)
+    await waitFor(() => expect(secondRow?.textContent).toContain('+7'))
   })
 
   // A usage-limit hold has no session, so the engine does not own it (`engineOwnsRun`): the tab

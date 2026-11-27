@@ -292,7 +292,7 @@ export function GithubRoute({
     // The route ends with one scrollport-height workspace, with no bottom padding:
     // at maximum page scroll its tabs align with main's top without sticky overlap.
     // Phone stays stacked document-flow. (#523)
-    <div ref={layout.routeRef} data-route="github" className="flex min-h-full flex-col gap-3 px-4 pt-7 pb-[calc(90px+env(safe-area-inset-bottom))] md:gap-5 md:px-9 md:pt-7 md:pb-4">
+    <div ref={layout.routeRef} data-route="github" className="flex min-h-full flex-col gap-2.5 px-4 pt-7 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pt-7 md:pb-4">
       <GithubMasthead view={view} activeFilter={activeFilter} isDesktop={isDesktop} rawFilterParam={rawFilterParam} n={n} gh={gh} />
       <div ref={layout.workspaceRef} data-slot="gh-workspace" data-stacked={layout.panesStacked} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:h-[calc(var(--gh-workspace-height,calc(100dvh-4rem))-1rem)] md:flex-none md:gap-5">
         <header data-slot="gh-header" className="flex shrink-0 flex-col gap-3 bg-background md:gap-4">

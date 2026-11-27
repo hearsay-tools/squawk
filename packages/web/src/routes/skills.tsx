@@ -86,7 +86,7 @@ function RunnerSwitch({ runner, onChange }: { runner: Runner; onChange: (runner:
     <div role="group" aria-label="Runner" className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-border bg-muted/60 p-1">
       {runners.runners.map((entry) => (
         <button key={entry.id} type="button" aria-pressed={entry.id === runner} onClick={() => onChange(entry.id)}
-          className="h-8 shrink-0 rounded-md border border-transparent px-3 text-[13px] font-medium text-muted-foreground transition-colors focus-visible:outline-2 aria-pressed:border-border aria-pressed:bg-card aria-pressed:font-semibold aria-pressed:text-foreground aria-pressed:shadow-xs pointer-hover:text-foreground max-md:h-11">
+          className="h-8 shrink-0 rounded-md border border-transparent px-3 text-[13px] font-normal text-muted-foreground transition-colors focus-visible:outline-2 aria-pressed:border-border aria-pressed:bg-card aria-pressed:font-semibold aria-pressed:text-foreground aria-pressed:shadow-xs pointer-hover:text-foreground max-md:h-11">
           {canonicalRunnerName(entry.id, formatRunnerLabel(runnerDisplayName(runners, entry.id)))}
         </button>
       ))}

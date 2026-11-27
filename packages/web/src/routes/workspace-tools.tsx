@@ -9,7 +9,7 @@ import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { Link as RouterLink } from 'react-router'
-import { TOOL_LINK_CLASS, TOOL_SETTINGS_PATH, toolHint, toolSetupPath, toolStateLabel, toolTone } from '@/lib/tool-status'
+import { TOOL_SETTINGS_PATH, toolHint, toolSetupPath, toolStateLabel, toolTone } from '@/lib/tool-status'
 import { githubRepoBase } from '@/lib/tasks-table'
 import { canonicalRunnerName } from './settings/agent-descriptors'
 
@@ -62,6 +62,25 @@ function toolDisplayName(name: string, runners: RunnersResponse | undefined): { 
   return { label: canonicalRunnerName(name, formatRunnerLabel(entry.displayName)), isAgent: true }
 }
 
+/** A dry-run server reports every agent CLI as `mock (HSQ_DRY_RUN=1)`. That is a mode, not a
+ *  version, so the row says "Dry run" in a calm pill and keeps the raw string in its tooltip. */
+const DRY_RUN_VERSION = /DRY_RUN=1\b/
+
+function ToolVersion({ version }: { version: string | undefined }) {
+  if (!version) return null
+  if (DRY_RUN_VERSION.test(version)) {
+    return (
+      <span data-slot="tool-dry-run" title={version} className="shrink-0 rounded-full border border-border px-2 py-px text-[11px] font-medium text-muted-foreground">
+        Dry run
+      </span>
+    )
+  }
+  return <span className="min-w-0 break-words">· {version}</span>
+}
+
+/** The compact outline button the page's links wear, so they read as the controls they are. */
+const TOOL_ACTION_CLASS = 'h-8 text-xs font-medium max-md:h-11 no-hover:h-11'
+
 /** The Add project launchers: active project context (local folder, repository, checkout folder)
  *  and the three ways to add one. */
 function AddProjectSection({ health, projects, repository, onAction }: {
@@ -110,7 +129,9 @@ function ToolsDiagnosticsSection({ health, runners, copying, onCopy }: {
           <h2 id="tools-heading" className="text-base font-semibold text-foreground">Tools diagnostics</h2>
           <p className="mt-1 text-[13px] leading-[1.5] text-muted-foreground">Check the tools available to this local workspace.</p>
         </div>
-        <RouterLink to={TOOL_SETTINGS_PATH} data-slot="tools-settings" className={TOOL_LINK_CLASS}>Tool settings ›</RouterLink>
+        <Button asChild variant="outline" size="sm" className={TOOL_ACTION_CLASS}>
+          <RouterLink to={TOOL_SETTINGS_PATH} data-slot="tools-settings">Tool settings ›</RouterLink>
+        </Button>
       </div>
       {health.isError ? <p role="alert" className="text-sm text-destructive">Could not refresh tool diagnostics. Recheck to retry.</p> : null}
       {!health.data && !health.isError ? <p role="status" className="text-sm text-muted-foreground">Checking installed tools…</p> : null}
@@ -121,11 +142,18 @@ function ToolsDiagnosticsSection({ health, runners, copying, onCopy }: {
           return <div key={check.name} data-slot="tool-row" data-tool={check.name} data-available={check.available} className="grid grid-cols-1 gap-x-4 gap-y-1 py-3 sm:grid-cols-[160px_minmax(0,1fr)] sm:items-center">
             <dt className="flex items-center gap-2.5">
               <StatusDot tone={toolTone(check)} />
-              <span className={tool.isAgent ? 'text-[13px] font-medium text-foreground' : 'font-mono text-[13px] font-medium text-foreground'}>{tool.label}</span>
+              {/* 14px semibold, as on the Settings agent cards: at 13px medium, Poppins merges the
+                  dot of "i" into its stem and "Pi" reads as "PI". */}
+              <span className={tool.isAgent ? 'text-[14px] font-semibold text-foreground' : 'font-mono text-[13px] font-semibold text-foreground'}>{tool.label}</span>
             </dt>
-            <dd className="flex min-w-0 items-center gap-x-3 text-muted-foreground">
-              <span className="min-w-0 break-words">{toolStateLabel(check)}{check.version ? ` · ${check.version}` : ''}</span>
-              {check.available ? null : <RouterLink to={toolSetupPath(check.name)} data-slot="tool-setup" className={`${TOOL_LINK_CLASS} ml-auto shrink-0`}>Set up ›</RouterLink>}
+            <dd className="flex min-w-0 items-center gap-x-1.5 text-muted-foreground">
+              <span className="shrink-0">{toolStateLabel(check)}</span>
+              <ToolVersion version={check.version} />
+              {check.available ? null : (
+                <Button asChild variant="outline" size="sm" className={`${TOOL_ACTION_CLASS} ml-auto`}>
+                  <RouterLink to={toolSetupPath(check.name)} data-slot="tool-setup">Set up ›</RouterLink>
+                </Button>
+              )}
             </dd>
             {hint ? <dd data-slot="tool-hint" className="min-w-0 break-words text-xs leading-relaxed text-muted-foreground sm:col-start-2">{renderToolHint(hint)}</dd> : null}
           </div>

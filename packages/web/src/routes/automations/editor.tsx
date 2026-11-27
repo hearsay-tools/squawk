@@ -127,7 +127,7 @@ function TaskFields({ draft, patch, saving, automation }: {
           value={draft.prompt}
           onChange={(event) => patch({ prompt: event.target.value })}
           rows={3}
-          className="[field-sizing:fixed] min-h-[88px] resize-none bg-background"
+          className="[field-sizing:fixed] min-h-[88px] resize-none border-border bg-background"
           required
         />
         <p className="text-xs break-words text-muted-foreground">
@@ -271,7 +271,7 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
           <Section title="Name" hideLegend section="name" failure={failure}>
             <div className="grid gap-1.5">
               <Label htmlFor="automation-name" className="text-sm font-semibold text-foreground">Name</Label>
-              <Input id="automation-name" value={draft.name} placeholder="Daily dependency audit" onChange={(event) => patch({ name: event.target.value })} required />
+              <Input id="automation-name" className="border-border" value={draft.name} placeholder="Daily dependency audit" onChange={(event) => patch({ name: event.target.value })} required />
             </div>
           </Section>
 

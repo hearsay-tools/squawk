@@ -646,7 +646,7 @@ function StepCardHeading({
         {...gripProps}
       >
         {/* The handle says the card moves before anyone tries to drag it. */}
-        <GripVerticalIcon aria-hidden="true" className="size-3.5 opacity-60 transition-opacity group-hover/grip:opacity-100" />
+        <GripVerticalIcon aria-hidden="true" className="size-4 opacity-70 transition-opacity group-hover/grip:opacity-100" />
         <span className="rounded bg-accent-strong/10 px-2 py-1 font-mono text-[12px] text-link-foreground">{String(index + 1).padStart(2, '0')}</span>
       </button>
       <div className="min-w-0 flex-1 break-words text-sm font-medium [overflow-wrap:anywhere]">{title}</div>

@@ -229,22 +229,22 @@ function NotLandedActions({ entry, onDelete }: { entry: RepoBranchEntry; onDelet
       () => toast('Could not copy the branch name', { tone: 'danger' }),
     )
 
-  const button = 'inline-flex h-[28px] shrink-0 items-center gap-[5px] rounded-[6px] px-[10px] text-[12px] font-medium text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 [&>svg]:size-[12px]'
+  const button = 'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm px-2.5 text-[12.5px] font-medium text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 [&>svg]:size-[12px]'
   return (
     <>
       {entry.runId ? (
-        <Link to={`/tasks/${entry.runId}`} data-action="not-landed-open" className={cn(button, 'hidden border border-border hover:bg-muted md:inline-flex')}>
+        <Link to={`/tasks/${entry.runId}`} data-action="not-landed-open" className={cn(button, 'hidden border border-border bg-card hover:bg-muted md:inline-flex')}>
           Open task
         </Link>
       ) : null}
       {canCreatePr ? (
-        <button type="button" data-action="not-landed-create-pr" disabled={draftPr.isPending} onClick={() => draftPr.mutate()} className={cn(button, 'hidden border border-border hover:bg-muted md:inline-flex')}>
+        <button type="button" data-action="not-landed-create-pr" disabled={draftPr.isPending} onClick={() => draftPr.mutate()} className={cn(button, 'hidden border border-border bg-card hover:bg-muted md:inline-flex')}>
           <GitPullRequestCreateIcon aria-hidden="true" />
           {draftPr.isPending ? 'Creating…' : 'Draft PR'}
         </button>
       ) : null}
       {orphan ? (
-        <button type="button" data-action="not-landed-copy" onClick={copyBranch} className={cn(button, 'hidden border border-border hover:bg-muted md:inline-flex')}>
+        <button type="button" data-action="not-landed-copy" onClick={copyBranch} className={cn(button, 'hidden border border-border bg-card hover:bg-muted md:inline-flex')}>
           <CopyIcon aria-hidden="true" />
           Copy branch
         </button>
@@ -253,7 +253,7 @@ function NotLandedActions({ entry, onDelete }: { entry: RepoBranchEntry; onDelet
         <DropdownMenuTrigger
           data-action="not-landed-more"
           aria-label={`More actions for ${entry.name}`}
-          className="flex size-[28px] shrink-0 items-center justify-center rounded-[6px] text-soft-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:size-11"
+          className="flex size-8 shrink-0 items-center justify-center rounded-sm text-soft-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:size-11"
         >
           <EllipsisIcon aria-hidden="true" className="size-[14px]" />
         </DropdownMenuTrigger>
