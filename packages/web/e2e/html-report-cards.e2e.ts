@@ -357,18 +357,21 @@ it('drops the Reports split preview at 768px tablet width and fits Open reader u
   )
   expect(tablet).toEqual({ hasPane: false, hasCue: true, overflow: false })
 
-  browser.setViewport(1440, 900)
-  browser.waitForFunction(`document.querySelector('[data-slot="reports-preview-open"]') !== null`)
-  const desktop = waitForSettledSample<{ fits: boolean; overflow: boolean }>(
+  browser.setViewport(1440, 640)
+  browser.waitForFunction(`document.querySelector('[data-slot="reports-preview-open"]') !== null && document.querySelector('[data-slot="reports-preview-pane"] ${FRAME}') !== null`)
+  const desktop = waitForSettledSample<{ fits: boolean; frameFits: boolean; overflow: boolean }>(
     browser,
     `(() => {
       const pane = document.querySelector('[data-slot="reports-preview-pane"]').getBoundingClientRect();
       const open = document.querySelector('[data-slot="reports-preview-open"]').getBoundingClientRect();
+      const frame = document.querySelector('[data-slot="reports-preview-pane"] ${FRAME}').getBoundingClientRect();
       return {
         fits: open.width > 40 && open.left >= pane.left - 1 && open.right <= pane.right + 1,
+        frameFits: frame.height > 100 && frame.bottom <= pane.bottom + 1,
         overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
       };
     })()`,
   )
-  expect(desktop).toEqual({ fits: true, overflow: false })
+  expect(desktop).toEqual({ fits: true, frameFits: true, overflow: false })
+  browser.setViewport(1440, 900)
 })

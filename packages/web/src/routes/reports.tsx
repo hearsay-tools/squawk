@@ -339,7 +339,7 @@ function ReportPreviewBody({ report }: { report: Report }) {
     <HtmlReportFrame
       html={data.content}
       title={reportTitle(report)}
-      className="min-h-[420px] flex-1"
+      className="min-h-0 flex-1"
     />
   )
 }
