@@ -505,7 +505,6 @@ function triggerFor({ source, ready, offersWorkflows, onPick, skillLabel }: {
       }}
       className={cn(
         chipClass,
-        'font-mono text-[11px]',
         source === null
           ? 'text-muted-foreground'
           : 'rounded-r-none border-r-0 border-foreground/60 pr-1.5 font-semibold text-foreground',

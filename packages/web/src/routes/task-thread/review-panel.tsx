@@ -32,10 +32,10 @@ import { useFinishRun } from './use-finish-run'
  */
 export function ReviewPanel({ run }: { run: ApiRun }) {
   return (
-    <section data-slot="review-panel" aria-label="Review the changes" className="flex flex-col gap-3">
+    <section data-slot="review-panel" aria-label="Review the changes" className="flex flex-col gap-2.5">
       <div
         data-slot="review-banner"
-        className="flex flex-col gap-3 rounded-md border border-accent-strong/30 bg-accent-strong/10 px-3.5 py-2.5"
+        className="flex flex-col gap-2 rounded-md border border-accent-strong/30 bg-accent-strong/10 px-3.5 py-2"
       >
         <div className="flex min-w-0 items-start gap-2.5">
           <EyeIcon className="size-4 shrink-0 text-accent-icon" aria-hidden="true" />
@@ -192,7 +192,7 @@ function ReviewActions({ run }: { run: ApiRun }) {
         data-slot="review-notes"
         aria-label="Notes for the agent"
         placeholder="Notes for the agent — what should change?"
-        rows={2}
+        rows={1}
         value={notes}
         onChange={(event) => setNotes(event.target.value)}
         onKeyDown={(event) => {
@@ -213,7 +213,7 @@ function ReviewActions({ run }: { run: ApiRun }) {
             submitNotes()
           }
         }}
-        className="min-h-[52px] text-base md:text-[13px]"
+        className="min-h-11 text-base md:text-[13px]"
       />
       {manual !== null ? <ManualMergeLine command={manual} /> : null}
     </div>

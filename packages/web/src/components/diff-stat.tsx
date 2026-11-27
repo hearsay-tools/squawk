@@ -61,7 +61,9 @@ export function DiffStatLabel({
       {...(compact && !caveat ? { 'aria-label': counts } : {})}
       title={caveat ?? counts}
       className={cn(
-        'font-mono text-xs font-semibold tabular-nums',
+        // `font-mono!`: a surface may restyle weight or wrapping, never the family, so ± stats
+        // read the same in tables, the review gate and the Changes toolbar.
+        'font-mono! text-xs font-semibold tabular-nums',
         stat.repointed && 'cursor-help underline decoration-dotted underline-offset-2',
         className
       )}

@@ -730,7 +730,9 @@ function ThreadComposer({
   return (
     <Composer
       {...threadSkillContext(run, continuable, continueAction)}
-      onStop={runActionFlags(run, workersLive).cancel ? stopAction.stop : undefined}
+      // A pending ask pauses the agent: nothing is running, so an idle Stop square beside Send
+      // only crowds the reply.
+      onStop={runActionFlags(run, workersLive).cancel && !needsAnswer ? stopAction.stop : undefined}
       onFinish={
         offersComposerFinish(run)
           ? () => finishAction.mutateAsync().catch(() => undefined)

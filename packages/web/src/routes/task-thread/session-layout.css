@@ -14,6 +14,11 @@
 .session-composer [data-slot='follow-up-model-pill'] { min-height: 44px; }
 .session-composer [data-slot='follow-up-model-pill'] > svg:last-child { margin-inline-start: auto; }
 .session-composer [data-slot='composer-submit-row'] { grid-column: 2; grid-row: 2; margin: 0; flex: none; }
+/* Review gate: the folded engine summary joins the tool row, so the composer is one row shorter. */
+.session-composer [data-slot='composer-toolbar']:has([data-folded]) { grid-template-columns: auto minmax(0, 1fr) auto; }
+.session-composer [data-slot='composer-toolbar']:has([data-folded]) > [data-slot='session-controls'] { grid-column: 2; grid-row: 1; align-self: center; }
+.session-composer [data-slot='composer-toolbar']:has([data-folded]) > [data-slot='composer-footer-start'] { grid-column: 1; grid-row: 1; }
+.session-composer [data-slot='composer-toolbar']:has([data-folded]) > [data-slot='composer-submit-row'] { grid-column: 3; grid-row: 1; }
 [data-slot='run-actions-menu'] [role^='menuitem'] { min-height: 44px; }
 /* #478/#460: desktop starts at 768px, but a resized 420px sidebar can leave the dock
  * only 348px. Query the dock itself so the pill tracks share its actual width. */

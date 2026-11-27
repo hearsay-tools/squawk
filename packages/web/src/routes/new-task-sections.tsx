@@ -14,6 +14,7 @@ import type { RepoResponse } from '@open-mercato/cezar-api-client'
 import { CompletionControls } from '@/components/completion-controls'
 import { TaskAccessControls } from '@/components/task-access-controls'
 import { PickerPill, PickerPillGroup, RunnerPill } from '@/components/picker-pill'
+import { SWITCH_THUMB_COLORS, SWITCH_TRACK_COLORS } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toaster'
 import { submitShortcutHint } from '@/lib/use-submit-shortcut'
 import { webhookLabel, webhookNames, type TaskWebhookTarget } from '@/lib/webhook'
@@ -247,26 +248,18 @@ export function ComposerFooterEnd({
   )
 }
 
-/** The track of a settings toggle, drawn like the shared Switch: the accent fill when on; when off,
- *  a pale track whose knob is grey on the dark theme and a white knob with a hairline on the light one. */
+/** The track of a settings toggle, drawn with the shared Switch's own colour strings: the same
+ *  `data-state` keys pick the same track and thumb in both themes. */
 function ToggleTrack({ on }: { on: boolean }) {
+  const state = on ? 'checked' : 'unchecked'
   return (
     <span
       aria-hidden="true"
       data-slot="toggle-track"
-      className={cn(
-        'flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5',
-        on ? 'border-accent-strong bg-accent-strong' : 'border-muted-foreground/60 bg-muted [.light_&]:border-muted-foreground/35',
-      )}
+      data-state={state}
+      className={cn('flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5', SWITCH_TRACK_COLORS)}
     >
-      <span
-        className={cn(
-          'size-[18px] rounded-full',
-          on
-            ? 'ml-auto bg-accent-strong-foreground'
-            : 'bg-muted-foreground [.light_&]:border [.light_&]:border-muted-foreground/30 [.light_&]:bg-card [.light_&]:shadow-sm',
-        )}
-      />
+      <span data-state={state} className={cn('size-[18px] rounded-full', on && 'ml-auto', SWITCH_THUMB_COLORS)} />
     </span>
   )
 }

@@ -447,6 +447,29 @@ describe('ThreadView', () => {
     expect(document.querySelector('[data-slot="follow-up-engine"]')).not.toBeNull()
   })
 
+  it('at the review gate the engine pills fold into one summary line that opens them', async () => {
+    renderView(
+      <ThreadView
+        run={run('review', {
+          runner: 'claude',
+          steps: [
+            { id: 'task', name: 'Do the task', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0, sessionId: 's-1' },
+          ],
+        })}
+        thread={reduceThread(EVENTS)}
+      />,
+    )
+    const summary = await screen.findByRole('button', { name: /^Agent settings: Claude Code · / })
+    expect(summary.getAttribute('aria-expanded')).toBe('false')
+    expect(document.querySelector('[data-slot="follow-up-model-pill"]')).toBeNull()
+    fireEvent.click(summary)
+    const model = document.querySelector<HTMLElement>('[data-slot="follow-up-model-pill"]')
+    expect(model).not.toBeNull()
+    expect(document.querySelector('[data-slot="follow-up-engine-summary"]')).toBeNull()
+    // Focus follows into the pickers, so the keyboard user does not land on <body>.
+    expect(document.querySelector('[data-slot="follow-up-engine"]')?.contains(document.activeElement)).toBe(true)
+  })
+
   it('closed but resumable → the action row holds exactly Continue; Archive stays in the header (#281)', async () => {
     const steps = [
       { id: 'task', name: 'Do the task', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0, sessionId: 's-1' },
@@ -1539,6 +1562,16 @@ describe('composer execution actions (#201)', () => {
     fireEvent.change(textarea, { target: { value: 'next instructions' } })
     await waitFor(() => expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(false))
     expect(screen.getByRole('button', { name: 'Stop' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('omits the idle Stop while a pending ask waits for a reply', async () => {
+    const thread = reduceThread([line(1, 'ask.requested', {
+      requestId: 'pending-choice',
+      questions: [{ header: 'Checks', question: 'Where should checks run?', options: [{ label: 'Main' }, { label: 'Every branch' }] }],
+    })])
+    renderView(<ThreadView run={run('waiting', { waits: [openHumanWait(1)] } as unknown as Partial<ApiRun>)} thread={thread} />)
+    await screen.findByRole('textbox', { name: 'Reply to the agent' })
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
   })
 
   it('requeues a stopped unstarted task through the same composer Continue action', async () => {
