@@ -48,5 +48,6 @@
     }
   },
   "rejectedAgentInput": "keeps-session",
-  "systemPromptOnResume": "in-thread"
+  "systemPromptOnResume": "in-thread",
+  "postParkChildFrames": "shown"
 }

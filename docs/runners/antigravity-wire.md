@@ -138,14 +138,14 @@ entity was not found.\n"`, and a broken custom agent as `"\n⚠ failed to constr
 | `transport` | `stdio` | same | every `cli-*` fixture |
 | `sessionIdSource` | `native` | same | `session/new` returns an agent UUID (`cli-handshake.ndjson`) |
 | `systemPromptOnResume` | `resent` | **changes**: the prompt is saved with the session, and a resent one is added to the saved one, not put in its place. Neither value names this exactly. Resending duplicates the prompt, which is the case `in-thread` guards against: with `in-thread`, Squawk does not resend the skill prefix on a same-session resume. A changed prompt cannot replace the saved one; hearsay-tools/squawk#4060 chooses the value. | A plain `session/resume` in a new process answered the secret word; the word was only in the `session/new` request (`cli-resume-without-system-prompt.ndjson`). A resume that sent a different prompt answered both words, "ORCA-3, ORCA-4" (`cli-resume-changed-system-prompt.ndjson`). |
-| `inputDelivery.mode` | `steer` | same, with a new acknowledgement order | A second `session/prompt` during a command ends the **first** prompt with `end_turn` 4 ms later. The running work goes on, and the second prompt's response ends the turn; the answer obeyed the steer (`cli-midturn-prompt.ndjson`). 1.5.0 answered the steer early instead. |
+| `inputDelivery.mode` | `steer` | same, with a new acknowledgement order and permission-wait rejection | A second `session/prompt` during a command ends the **first** prompt with `end_turn` 4 ms later. The running work goes on, and the second prompt's response ends the turn; the answer obeyed the steer (`cli-midturn-prompt.ndjson`). 1.5.0 answered the steer early instead. If the running prompt is waiting for a permission or question answer, CLI 1.5.14 rejects the steer with an ACP RPC error instead of accepting it (hearsay-tools/squawk#4181). |
 | `inputDelivery.consumption` | `unobservable` | same | no frame echoes the steer |
 | `inputDelivery.acknowledgement` | `response` | same field, other prompt: the steer's response is the end of the turn. A prompt that opens a turn has no response before the turn ends, so Squawk takes that turn's first agent update as its acknowledgement, and the response only for a turn without one. | `cli-midturn-prompt.ndjson`, `cli-prompt-command.ndjson` |
 | `inputDelivery.humanInputAtTurnEnd` | `held-when-late` | not probed on the CLI | — |
 | `nativePermission` | `in-turn` | **changes to `after-turn`** | A background command finished 10 s after `end_turn`; the agent then ran `echo after-bg` and sent `session/request_permission` with no prompt open (`cli-permission-after-turn.ndjson`). |
 | `nativeAsk` | `answerable` | answerable, by another route | `ask_question` is a `tool_call` (title `Run ask_question`, `rawInput.questions[{question, options, is_multi_select}]`). The question comes as `agent_message_chunk` text ("- [1] (Recommended) Red"), and the prompt ends with `end_turn` while the call is `pending`. The next `session/prompt` is the answer: the call completes in that prompt (`cli-interaction-question.ndjson`). No `session/request_permission`, no `interaction_` id. |
-| `nativeSubagents` | `turn-held` | **`none`** since hearsay-tools/squawk#4098: Squawk denies the subagent tools | `invoke_subagent` completes at once and the child runs as a separate conversation (`brain/<child id>/`, `cli-subagent.ndjson`). A child's permission requests never reach the ACP client, so each command it needs approved times out after 60 s (see [Native subagents and tool results](#native-subagents-and-tool-results-hearsay-toolssquawk4098-hearsay-toolssquawk4099)). |
-| `childWork` | `none` | same | child calls carry no link to `invoke_subagent` (`cli-subagent.ndjson`) |
+| `nativeSubagents` | `turn-held` | **`turn-held`** since CLI 1.5.15/1.5.16 (hearsay-tools/squawk#4197; was `none` on 1.5.14) | CLI 1.5.15 keeps `session/prompt` open while subagents run until the parent handles their replies, and CLI 1.5.16 forwards child permission requests to the ACP client (`cli-subagent-1.5.18.ndjson`). |
+| `childWork` | `none` | **`nested`** since CLI 1.5.16 (hearsay-tools/squawk#4197) | Forwarded child tool calls carry `toolCallId: "<childId>:<callId>"`, parent transcripts link `invoke_subagent` to `<childId>`, and `brain/<childId>/` transcripts carry non-prompting child steps (`cli-subagent-1.5.18.ndjson`, `cli-subagent-1.5.18.child.transcript.jsonl`). |
 | `hookEvents` | `none` | **`reported`** (via transcript) | The ACP wire carries no hook frame, but the CLI writes injected hook messages (`SessionStart`, `PreInvocation`, `PostInvocation`, `UserPromptSubmit`, `Stop`) to `transcript_full.jsonl` as `SYSTEM_MESSAGE` rows with `source: "SYSTEM_SDK"` (`cli-hooks.transcript.jsonl`). Internal CLI reminders use `source: "SYSTEM"` and are ignored. |
 | `humanPromptHold` | `acknowledgement` | same | no consumption signal |
 | `nativeTimerTool` | `null` | **changes to `schedule`** | `/schedule in 20 seconds: …` sent `tool_call` `Run schedule` (`rawInput {DurationSeconds, Prompt}`) and the turn ended. 20 s later, with no prompt open, the call completed and the agent streamed "TIMER-FIRED" (`cli-schedule-timer.ndjson`). The timer wakes an idle session. |
@@ -257,8 +257,7 @@ and `swarm_pane`.
 ### Parity exemptions to revisit
 
 - D3 (native cross-session messaging): the CLI has `send_message` and `manage_subagents`,
-  between a parent and its subagents. Squawk denies both with the other subagent tools
-  (hearsay-tools/squawk#4098), so the session still has no cross-session tool.
+  between a parent and its own subagents only; it has no tool that messages another session.
 - `plan.updated with entries`: `plan` is now a mode and a command; no ACP `plan` frame was
   seen, but it was not probed.
 
@@ -289,17 +288,61 @@ hearsay-tools/squawk#4060 maps the CLI frames as follows. The fixtures' expected
    (`systemPromptOnResume: 'in-thread'`).
 8. `_meta.antigravity.disabledTools` and `eagerMcpServers` are no longer sent: the CLI ignores
    the first, does not know the second, and `run_workflow` writes no skill into the workspace.
-9. Every session gets `--add-dir <session temp>/squawk-antigravity-guard`. Its `.agents/hooks.json`
-   holds a `PreToolUse` hook that denies `invoke_subagent`, `define_subagent`, `manage_subagents`,
-   `send_message`, `run_workflow` and `swarm` by whole name. The folder is outside the checkout
-   and goes with the session's temp folder.
-10. A read, MCP or subagent tool whose completed update carries no result gets its output from
+9. Native subagents are enabled (since CLI 1.5.16, hearsay-tools/squawk#4197). `invoke_subagent`
+   stays `running` as `Task: <Role>` (`subagent_type: <TypeName>`) until it is stopped via
+   `manage_subagents` or the parent turn completes; child `send_message` deliveries
+   (`sender=<childId>` in the parent transcript) update its output without prematurely closing the
+   task or child transcript tailer. Forwarded child calls (`<childId>:<callId>`) correlate by
+   explicit `conversationId` binding (reparenting early parallel calls with `late: true`) and
+   recover missing MCP/read outputs from `brain/<childId>/.system_generated/logs/transcript_full.jsonl`;
+   non-prompting child steps from that transcript emit under `parentItemId` without duplicating ACP
+   wire calls.
+10. A read, MCP or failed subagent tool whose completed update carries no result gets its output from
     the session's transcript row, as an `item.updated` of the completed card marked `late: true`.
     Nudge accounting ignores it: it is a display update, not the agent's reply. Injected native
     hook messages (`SYSTEM_MESSAGE` rows with `source: "SYSTEM_SDK"`, prefixed with
     `The following system message was injected by a <Event> hook:`) are read from the same
     transcript and emitted as `item.completed` `UiHookItem` events; internal `source: "SYSTEM"`
-    reminders are ignored.
+    reminders are ignored except child `[Message] ... sender=<childId>` delivery rows.
+11. Mid-turn `session/prompt` steers are rejected by CLI 1.5.14 while the running prompt waits for
+    a permission or question answer (`Can't add this prompt to session <session-id>: the running
+    prompt is waiting for a permission or question answer; answer it or send session/cancel, then
+    send this prompt again`, hearsay-tools/squawk#4181). While an ACP permission stays open,
+    `AntigravitySession.sendAgentMessage` returns `false` and invokes `onAgentInputReady` after the
+    permission response is written to the wire, and `sendMessage` defers behind the open permission.
+    When an in-flight steer races on the full-duplex pipe with an unread `session/request_permission`
+    (including auto-approved permissions) or `ask_question` and receives that rejection,
+    `AntigravitySession` keeps the running prompt's turn ownership intact, defers the steer, and
+    retries it once the permission or question settles (or when the turn ends) instead of failing
+    delivery or closing the session. Unrelated ACP RPC rejections on `session/prompt` still fail
+    delivery.
+
+### Native subagents on CLI 1.5.18 (hearsay-tools/squawk#4197)
+
+Measured live on Linux x86-64 on 2026-11-26 with Antigravity CLI `1.5.18` (also the current
+`linux_amd64` updater manifest version, `1.5.18-6386224290725888`) and a personal Google sign-in,
+no shim, in `default` mode:
+
+- **Permission forwarding (CLI 1.5.16 fix):** Both `self` and `research` subagents forward
+  `session/request_permission` (and form prompts/questions) to the ACP client under the parent's
+  `sessionId`. Every forwarded child tool call carries `toolCallId: "<childConversationId>:<rawToolCallId>"`
+  (for example `7bb3c467-2cb1-4fdc-a962-db063faac0e6:call_17336341270670134121`). Approving the
+  request runs the command immediately (`echo sub-ok`, `sleep 6 && echo slow-ok`, `cat alpha.txt`)
+  with no 60-second timeout, and Squawk's `permissionPolicy` enforces the step's `toolGrant`,
+  `bashAllowlist`, and `HSQ_APPROVAL_GATE=1` on child calls.
+- **Turn-held lifecycle (CLI 1.5.15 fix):** `session/prompt` stays open after the parent emits its
+  initial `"Started..."` text while non-daemon subagents run, across background wake-ups, returning
+  `stopReason: "end_turn"` with combined token usage only after the subagent finishes and the parent
+  answers (`cli-subagent-1.5.18.ndjson`).
+- **Child work and transcript correlation:** On ACP, `invoke_subagent` still completes immediately
+  with no `rawOutput`/`content`, and ACP forwards only child tools that prompt the client. The
+  parent's `transcript_full.jsonl` holds the spawned `{"conversationId": "<childId>"}` JSON in the
+  `invoke_subagent` result row and `[Message] ... sender=<childId>` when the child replies. The
+  child's `brain/<childId>/.system_generated/logs/transcript_full.jsonl` holds all non-prompting
+  steps (`read_file`, `send_message`, `thinking`, and assistant replies;
+  `cli-subagent-1.5.18.child.transcript.jsonl`). Squawk therefore removed `subagent-guard.ts`,
+  switched `ANTIGRAVITY_FACTS` to `nativeSubagents: 'turn-held'` and `childWork: 'nested'`, and
+  nests both ACP-forwarded and child-transcript items under `parentItemId`.
 
 ### Native subagents and tool results (hearsay-tools/squawk#4098, hearsay-tools/squawk#4099)
 
@@ -404,7 +447,8 @@ what the mapper makes of the frames.
 | `cli-midturn-prompt.ndjson` | A second prompt while a command runs: the first prompt ends early, the second carries the turn |
 | `cli-cancel.ndjson` | `session/cancel` during a command, then a working turn |
 | `cli-interaction-question.ndjson` | `ask_question` as text with `end_turn`, then the next prompt as the answer |
-| `cli-subagent.ndjson` | `invoke_subagent`, `manage_subagents`, `send_message` and the child's command |
+| `cli-subagent.ndjson` | CLI 1.5.14 `invoke_subagent`, `manage_subagents` (`kill`), `send_message` and the parent inspecting child transcripts |
+| `cli-subagent-1.5.18.ndjson` | CLI 1.5.18 live turn-held subagent with forwarded child `session/request_permission` (`<childId>:<callId>`) and combined `end_turn` usage; `cli-subagent-1.5.18.child.transcript.jsonl` holds the child's full transcript (`read_file`, `run_command`, `send_message`, reasoning and reply) |
 | `cli-tool-output.ndjson` | A read, an MCP result, the same read again, an MCP `isError` result and an `invoke_subagent` denied by Squawk's hook; no completed update carries a result. Recorded with a Google sign-in, no shim. `cli-tool-output.transcript.jsonl` is the session's transcript; `cli-tool-output.outputs.json` the output Squawk reads from it for each call |
 | `cli-hooks.transcript.jsonl` | Scrubbed live `SYSTEM_SDK` `SYSTEM_MESSAGE` rows (`SessionStart` and `PreInvocation` hooks) plus an internal `SYSTEM` reminder row; `cli-hooks.expected.json` holds the `UiHookItem` events Squawk maps from it |
 | `cli-background-command.ndjson` | A background command; its completion and the agent's text arrive after the turn |

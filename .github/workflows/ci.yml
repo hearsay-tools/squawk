@@ -205,47 +205,11 @@ jobs:
           # One commit. A depth of 0 fetches every branch and tag, about six times
           # main's own history, and took up to 3.5 minutes on a busy host.
           fetch-depth: 1
-      # The baseline check measures from the merge base of the workflow commit and
+      # The patch check measures from the merge base of the workflow commit and
       # the PR head, so it needs their history; other events read none.
-      - name: Fetch the history the baseline check compares
-        if: github.event_name == 'pull_request_target' || steps['resolve-dispatch'].outputs.valid == 'true'
+      - name: Fetch the history the patch check compares
+        if: github.event_name == 'pull_request_target'
         run: git fetch --no-tags --unshallow origin "$GITHUB_SHA"
-      # Required through classify-pr -> verify, including docs/infra-only PRs.
-      # Only trusted base code runs here; the head is read from Git as data.
-      - name: Reject baseline growth
-        if: github.event_name == 'pull_request_target' || steps['resolve-dispatch'].outputs.valid == 'true'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          # pull_request_target runs this workflow from the base branch tip (context.sha), but the
-          # checkout above is the event's base.sha, which GitHub does not move when the branch
-          # advances: load the gate from the workflow's own commit. A dispatch runs at the
-          # dispatched PR head, so it loads the gate from the checked-out trusted base instead.
-          script: |
-            const fs = require('node:fs');
-            const path = require('node:path');
-            const { execFileSync } = require('node:child_process');
-            const gate = path.join(process.env.RUNNER_TEMP, 'baseline-growth.cjs');
-            const trusted = context.eventName === 'pull_request_target' ? context.sha : 'HEAD';
-            fs.writeFileSync(gate, execFileSync('git', ['show', `${trusted}:.github/scripts/baseline-growth.cjs`]));
-            const { checkPullRequest } = require(gate);
-            await checkPullRequest({ github, context, core });
-      # Net test lines against the merge base (docs/sdlc/ci.md § Test line budget). Same trust
-      # rules as the baseline check: the workflow commit's own scripts, the head read as Git data.
-      - name: Check the test line budget
-        if: github.event_name == 'pull_request_target' || steps['resolve-dispatch'].outputs.valid == 'true'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const fs = require('node:fs');
-            const path = require('node:path');
-            const { execFileSync } = require('node:child_process');
-            const trusted = context.eventName === 'pull_request_target' ? context.sha : 'HEAD';
-            // test-budget.cjs requires baseline-growth.cjs from its own directory.
-            for (const file of ['.github/scripts/baseline-growth.cjs', '.github/scripts/test-budget.cjs']) {
-              fs.writeFileSync(path.join(process.env.RUNNER_TEMP, path.basename(file)), execFileSync('git', ['show', `${trusted}:${file}`]));
-            }
-            const { checkPullRequest } = require(path.join(process.env.RUNNER_TEMP, 'test-budget.cjs'));
-            await checkPullRequest({ github, context, core });
       - name: Require GitHub patches for changed text files
         if: github.event_name == 'pull_request_target'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -315,8 +279,74 @@ jobs:
           fi
           node .github/scripts/release-bump-pr.cjs
 
+  # Label-approved PR policy ratchets: baseline-growth and test-budget.
+  # Kept separate from classify-pr so re-running a failed label gate (manually
+  # or through rerun-label-gates.yml) re-runs only this job, preflight and verify,
+  # never the eight Vitest shards that depend on classify-pr.outputs.bump_pr.
+  pr-label-gates:
+    name: Check baseline growth and test budget
+    if: ${{ github.event_name == 'pull_request_target' || (github.event_name == 'workflow_dispatch' && inputs.pr_number != '') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - *resolve-dispatch
+      - name: Check out trusted base
+        id: checkout
+        if: github.event_name == 'pull_request_target' || steps['resolve-dispatch'].outputs.valid == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || steps['resolve-dispatch'].outputs.base_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      # The baseline and test-budget checks measure from the merge base of the
+      # workflow commit and the PR head, so they need their history.
+      - name: Fetch the history the baseline check compares
+        id: history
+        if: github.event_name == 'pull_request_target' || steps['resolve-dispatch'].outputs.valid == 'true'
+        run: git fetch --no-tags --unshallow origin "$GITHUB_SHA"
+      # Required through pr-label-gates -> preflight / verify, including docs/infra-only PRs.
+      # Only trusted base code runs here; the head is read from Git as data.
+      - name: Reject baseline growth
+        if: github.event_name == 'pull_request_target' || steps['resolve-dispatch'].outputs.valid == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          # pull_request_target runs this workflow from the base branch tip (context.sha), but the
+          # checkout above is the event's base.sha, which GitHub does not move when the branch
+          # advances: load the gate from the workflow's own commit. A dispatch runs at the
+          # dispatched PR head, so it loads the gate from the checked-out trusted base instead.
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const { execFileSync } = require('node:child_process');
+            const gate = path.join(process.env.RUNNER_TEMP, 'baseline-growth.cjs');
+            const trusted = context.eventName === 'pull_request_target' ? context.sha : 'HEAD';
+            fs.writeFileSync(gate, execFileSync('git', ['show', `${trusted}:.github/scripts/baseline-growth.cjs`]));
+            const { checkPullRequest } = require(gate);
+            await checkPullRequest({ github, context, core });
+      # Net test lines against the merge base (docs/sdlc/ci.md § Test line budget). Same trust
+      # rules as the baseline check: the workflow commit's own scripts, the head read as Git data.
+      # Runs even if Reject baseline growth failed so the PR surfaces both label failures together.
+      - name: Check the test line budget
+        if: (!cancelled() && steps.checkout.outcome == 'success' && steps.history.outcome == 'success') && (github.event_name == 'pull_request_target' || steps['resolve-dispatch'].outputs.valid == 'true')
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const { execFileSync } = require('node:child_process');
+            const trusted = context.eventName === 'pull_request_target' ? context.sha : 'HEAD';
+            // test-budget.cjs requires baseline-growth.cjs from its own directory.
+            for (const file of ['.github/scripts/baseline-growth.cjs', '.github/scripts/test-budget.cjs']) {
+              fs.writeFileSync(path.join(process.env.RUNNER_TEMP, path.basename(file)), execFileSync('git', ['show', `${trusted}:${file}`]));
+            }
+            const { checkPullRequest } = require(path.join(process.env.RUNNER_TEMP, 'test-budget.cjs'));
+            await checkPullRequest({ github, context, core });
+
   # Function complexity ratchet (hearsay-tools/cezarion#1800). Like the baseline-growth
-  # step in classify-pr, it runs trusted code and reads the pull request head as Git
+  # step in pr-label-gates, it runs trusted code and reads the pull request head as Git
   # data: the head is fetched, never checked out, so no head code runs here.
   # `github.sha` is the workflow's own commit, the current tip of the base branch on
   # pull_request_target. The event's `base.sha` is the tip from when the PR opened, and
@@ -668,7 +698,7 @@ jobs:
   # side; verify requires both.
   preflight:
     name: Review preflight
-    needs: [queue-proof, change-surface, classify-pr, complexity-gate, clone-gate, typecheck]
+    needs: [queue-proof, change-surface, classify-pr, pr-label-gates, complexity-gate, clone-gate, typecheck]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -680,6 +710,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ inputs.pr_number }}
           CLASSIFY_RESULT: ${{ needs.classify-pr.result }}
+          LABEL_GATES_RESULT: ${{ needs.pr-label-gates.result }}
           SURFACE_RESULT: ${{ needs.change-surface.result }}
           COMPLEXITY_RESULT: ${{ needs.complexity-gate.result }}
           CLONE_RESULT: ${{ needs.clone-gate.result }}
@@ -690,6 +721,7 @@ jobs:
           # GitHub reports a needed job it never created as `abandoned`. Re-run failed jobs
           # cannot recreate it (docs/sdlc/ci.md § Re-running a failed job).
           for need in "Classify PR shape=$CLASSIFY_RESULT" \
+            "Check baseline growth and test budget=$LABEL_GATES_RESULT" \
             "Classify pull request change surface=$SURFACE_RESULT" \
             "Check function complexity=$COMPLEXITY_RESULT" \
             "Check new code clones=$CLONE_RESULT" \
@@ -702,6 +734,11 @@ jobs:
           test "$CANCELLED" = false
           test "$CLASSIFY_RESULT" = success
           test "$SURFACE_RESULT" = success
+          if [ "$EVENT_NAME" = pull_request_target ] || { [ "$EVENT_NAME" = workflow_dispatch ] && [ -n "${PR_NUMBER:-}" ]; }; then
+            test "$LABEL_GATES_RESULT" = success
+          else
+            test "$LABEL_GATES_RESULT" = success -o "$LABEL_GATES_RESULT" = skipped
+          fi
           if [ "$EVENT_NAME" = pull_request_target ] || [ "$EVENT_NAME" = merge_group ] || { [ "$EVENT_NAME" = workflow_dispatch ] && [ -z "$PR_NUMBER" ]; }; then
             test "$COMPLEXITY_RESULT" = success
             test "$CLONE_RESULT" = success
@@ -1010,7 +1047,7 @@ jobs:
       # with its exit code (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
         if: github.event_name == 'merge_group'
-        uses: hearsay-tools/squeal/ci@7d2ce9ab71a97b8e818dea393fe303abc1679fd5 # v0.1.611
+        uses: hearsay-tools/squeal/ci@846c3a8069d2941eb5e63f590fd11047442202eb # v0.1.641
 
       - name: Run server and cockpit unit suites with Squeal recording
         id: record
@@ -1141,7 +1178,7 @@ jobs:
       # Squeal's action also sets SQUEAL_NODE_TEST_REPORTER for the steps below, also when
       # Squeal cannot run; the reporter then writes nothing (hearsay-tools/squeal spec 018 D23).
       - name: Set up Squeal
-        uses: hearsay-tools/squeal/ci@7d2ce9ab71a97b8e818dea393fe303abc1679fd5 # v0.1.611
+        uses: hearsay-tools/squeal/ci@846c3a8069d2941eb5e63f590fd11047442202eb # v0.1.641
 
       # The commands of test:unit:package and test:unit:scripts, whose flags squeal.config.json's
       # nodeTest entries repeat, with Squeal's reporter beside the default one. The output and
@@ -1183,7 +1220,7 @@ jobs:
   # docs/sdlc/ci.md § Squeal shared results.
   squeal-export:
     name: Export Squeal shared results
-    needs: [vitest, squeal-node-test]
+    needs: [vitest, squeal-node-test, cockpit-browser]
     if: >-
       !cancelled() && github.event_name == 'merge_group' && needs.vitest.result == 'success'
     runs-on: ubuntu-24.04
@@ -1226,7 +1263,7 @@ jobs:
       # Squeal's action, as in the shards; a refusal or crash of the Squeal command is a
       # warning (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
-        uses: hearsay-tools/squeal/ci@7d2ce9ab71a97b8e818dea393fe303abc1679fd5 # v0.1.611
+        uses: hearsay-tools/squeal/ci@846c3a8069d2941eb5e63f590fd11047442202eb # v0.1.641
 
       - name: Download Squeal parts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -1243,13 +1280,39 @@ jobs:
           name: squeal-parts-node-test
           path: ${{ runner.temp }}/squeal-parts-node-test
 
+      # Browser parts join when all eight cockpit-browser shards passed and uploaded parts;
+      # without them the export still publishes the Vitest and node:test results.
+      - name: Download Squeal browser parts
+        if: needs['cockpit-browser'].result == 'success'
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: squeal-parts-browser-shard-*
+          path: ${{ runner.temp }}/squeal-parts-browser
+
       - name: Export Squeal results
         run: |
           set -- "$RUNNER_TEMP"/squeal-parts/squeal-parts-shard-*
           for suite in package scripts; do
             if [ -d "$RUNNER_TEMP/squeal-parts-node-test/$suite" ]; then set -- "$@" "$RUNNER_TEMP/squeal-parts-node-test/$suite"; fi
           done
-          squeal ci export --parts "$@" --out "$RUNNER_TEMP/squeal-results.json.gz"
+          browser_dirs=()
+          for n in 1 2 3 4 5 6 7 8; do
+            dir="$RUNNER_TEMP/squeal-parts-browser/squeal-parts-browser-shard-$n"
+            if [ -d "$dir" ] && [ -n "$(find "$dir" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+              browser_dirs+=("$dir")
+            fi
+          done
+          if [ "${#browser_dirs[@]}" -eq 8 ]; then
+            squeal ci export --parts "$@" "${browser_dirs[@]}" --out "$RUNNER_TEMP/squeal-results.json.gz"
+            if [ ! -s "$RUNNER_TEMP/squeal-results.json.gz" ]; then
+              rm -f "$RUNNER_TEMP/squeal-results.json.gz"
+              echo "::warning::Squeal export with browser parts wrote no file; retrying without browser parts."
+              squeal ci export --parts "$@" --out "$RUNNER_TEMP/squeal-results.json.gz"
+            fi
+          else
+            squeal ci export --parts "$@" --out "$RUNNER_TEMP/squeal-results.json.gz"
+          fi
 
       # An export that writes nothing warns and exits 0. The job then passes with no upload and
       # no publish, so its run stays successful (hearsay-tools/squawk#3701).
@@ -1305,7 +1368,7 @@ jobs:
       # Squeal's action, as in the shards; a refusal or crash of the Squeal command is a
       # warning (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
-        uses: hearsay-tools/squeal/ci@7d2ce9ab71a97b8e818dea393fe303abc1679fd5 # v0.1.611
+        uses: hearsay-tools/squeal/ci@846c3a8069d2941eb5e63f590fd11047442202eb # v0.1.641
 
       - name: Download Squeal results
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -1624,13 +1687,29 @@ jobs:
           cache: ${{ hashFiles('pnpm-lock.yaml') != '' && 'pnpm' || 'npm' }}
           cache-dependency-path: ${{ hashFiles('pnpm-lock.yaml') != '' && 'pnpm-lock.yaml' || 'package-lock.json' }}
 
-      - name: Run cockpit browser E2E
-        id: e2e
-        # In a merge group a failed first run does not fail the job: the rerun below decides.
-        continue-on-error: ${{ github.event_name == 'merge_group' }}
-        run: &browser-shard |
+      - name: Run cockpit browser E2E (unrecorded)
+        id: e2e_plain
+        if: github.event_name != 'merge_group'
+        run: |
           set -o pipefail
           npm run test:e2e -- --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee e2e.log
+          node .github/scripts/require-e2e-passed.cjs < e2e.log
+
+      - name: Set up Squeal
+        if: github.event_name == 'merge_group'
+        uses: hearsay-tools/squeal/ci@846c3a8069d2941eb5e63f590fd11047442202eb # v0.1.641
+
+      - name: Run cockpit browser E2E
+        id: e2e
+        if: github.event_name == 'merge_group'
+        # In a merge group a failed first run does not fail the job: the rerun below decides.
+        continue-on-error: ${{ github.event_name == 'merge_group' }}
+        env:
+          PARTS_DIR: squeal-parts-browser
+        run: &browser-shard |
+          set -o pipefail
+          sh .ai/scripts/test-env-up.sh
+          squeal ci record --out "$RUNNER_TEMP/$PARTS_DIR" -- npm run test:e2e -- --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee e2e.log
           node .github/scripts/require-e2e-passed.cjs < e2e.log
 
       # The rerun clears each spec's old failure bundles, so the first run's ship first.
@@ -1664,7 +1743,24 @@ jobs:
       - name: Rerun cockpit browser E2E
         id: e2e-rerun
         if: github.event_name == 'merge_group' && steps.e2e.outcome == 'failure'
+        env:
+          PARTS_DIR: squeal-parts-browser-rerun
         run: *browser-shard
+
+      - name: Upload Squeal parts
+        # A status function: without one GitHub adds success(), and a shard whose tests failed
+        # would lose its parts. After a rerun only its parts upload: `squeal ci export` refuses
+        # two parts for one shard. When Squeal could not run there are no parts: the upload fails
+        # and continues on error.
+        if: "!cancelled() && github.event_name == 'merge_group'"
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: squeal-parts-browser-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/${{ steps['e2e-rerun'].outcome == 'skipped' && 'squeal-parts-browser' || 'squeal-parts-browser-rerun' }}/
+          if-no-files-found: error
+          retention-days: 3
+          overwrite: true
 
       # A red spec writes `.ai/qa/failures/<spec>/<test>-<n>/` (screenshot, snapshot, probe)
       # through the e2e seam (#408). Ship it so the flake can be read instead of guessed at;
@@ -1702,7 +1798,7 @@ jobs:
   # never reads their results.
   verify:
     name: Unit, build, E2E, and package
-    needs: [queue-proof, change-surface, classify-pr, complexity-gate, clone-gate, typecheck, preflight, unit-tests, build-and-package, vitest, cockpit-browser, queue-admission, squeal-export, squeal-publish]
+    needs: [queue-proof, change-surface, classify-pr, pr-label-gates, complexity-gate, clone-gate, typecheck, preflight, unit-tests, build-and-package, vitest, cockpit-browser, queue-admission, squeal-export, squeal-publish]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -1718,7 +1814,9 @@ jobs:
           PROOF_SOURCE: ${{ needs.queue-proof.outputs.source }}
           VERIFIED_SHA: ${{ github.sha }}
           EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ inputs.pr_number }}
           CLASSIFY_RESULT: ${{ needs.classify-pr.result }}
+          LABEL_GATES_RESULT: ${{ needs['pr-label-gates'].result }}
           SURFACE_RESULT: ${{ needs.change-surface.result }}
           CLONE_GATE_RESULT: ${{ needs['clone-gate'].result }}
           COMPLEXITY_GATE_RESULT: ${{ needs['complexity-gate'].result }}
@@ -1739,6 +1837,7 @@ jobs:
             "Validate reviewed queue entry=$QUEUE_ADMISSION_RESULT" \
             "Verify exact queue CI evidence=$PROOF_RESULT" \
             "Classify PR shape=$CLASSIFY_RESULT" \
+            "Check baseline growth and test budget=$LABEL_GATES_RESULT" \
             "Classify pull request change surface=$SURFACE_RESULT" \
             "Check new code clones=$CLONE_GATE_RESULT" \
             "Check function complexity=$COMPLEXITY_GATE_RESULT" \
@@ -1759,6 +1858,11 @@ jobs:
           fi
           test "$CLASSIFY_RESULT" = success
           test "$SURFACE_RESULT" = success
+          if [ "$EVENT_NAME" = pull_request_target ] || { [ "$EVENT_NAME" = workflow_dispatch ] && [ -n "${PR_NUMBER:-}" ]; }; then
+            test "$LABEL_GATES_RESULT" = success
+          else
+            test "$LABEL_GATES_RESULT" = success -o "$LABEL_GATES_RESULT" = skipped
+          fi
           # The complexity ratchet runs on pull requests, merge groups and bare dispatches.
           # Other events skip it, and a pull request or a merge group may never skip it.
           if [ "$EVENT_NAME" = pull_request_target ] || [ "$EVENT_NAME" = merge_group ]; then

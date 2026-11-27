@@ -292,7 +292,7 @@ export class StepLoop {
     // `dropActive` retires the entry on every terminal path, so the set still cleans itself up.
     const finishHeld = this.host.executionBlockedByRootFinish(run);
     if (!finishHeld && (this.line.isForced(runId) ||
-      !atTaskHead.heldAccount(run, runner, () => this.context.semaphore.accountHolds()))) return false;
+      !atTaskHead.heldAccount(run, runner, () => this.context.semaphore.accountHolds(), this.context))) return false;
     state?.liveSession.releaseRepoRoot?.();
     if (state) { state.liveSession.clearRepoRootRelease(); clearAutosaveTimer(state); }
     this.line.enqueueJob(runId, atTaskHead.requeueJob(workflow, input, startAt));

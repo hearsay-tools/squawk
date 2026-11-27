@@ -1,6 +1,8 @@
+import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { importClosure } from '../lint/import-closure.testkit.ts';
+import { HARNESS_PARITY_ROWS_FILE } from './harness-parity-rows.testkit.ts';
 
 /**
  * Squeal reruns every test whose import closure holds an edited file. The adapter-level parity kit
@@ -33,6 +35,13 @@ describe('the harness parity kits', () => {
   // so their runner files load no engine; `harness-parity.test.ts` pins that each runner file
   // imports only its part's kit (hearsay-tools/cezarion#3242, hearsay-tools/squawk#4177).
   it.each(['startup', 'contract', 'session', 'pending-request-seam'].map(part => `core/harness-parity-${part}.cells.testkit.ts`))('keeps the workflow engine out of the seam-tier part kit %s', (kit) => {
+    expect(engineFilesIn(kit)).toEqual([]);
+  });
+
+  // A part whose bodies drive the engine registers its cells from an engine-free rows module, and the
+  // inventory collects every part's rows through them, so a guard that reads which rows register
+  // reruns on no engine edit (hearsay-tools/squawk#3962).
+  it.each([...readdirSync(join(src, 'core')).filter(file => HARNESS_PARITY_ROWS_FILE.test(file)).map(file => `core/${file}`), 'core/harness-parity-inventory.testkit.ts'])('keeps the workflow engine out of the name-only registration %s', (kit) => {
     expect(engineFilesIn(kit)).toEqual([]);
   });
 

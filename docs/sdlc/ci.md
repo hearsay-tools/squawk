@@ -331,7 +331,7 @@ exactly the `engines.node` minimum (Node 24.21.0). Every job installs Node witho
 - The required typecheck job uses `blacksmith-2vcpu-ubuntu-2404` (2 vCPU, 8 GB) for PRs and manual dispatches, and `ubuntu-24.04` for pushes and merge groups. It runs pinned workflow lint, issue-citation checking and `npm run typecheck` for all change surfaces, including docs, infrastructure and release bumps. It uses the minimum-Node setup.
 - Two unit jobs on `ubuntu-24.04` run package unit tests and repository script tests from source on exactly Node 24.21.0. Each installs dependencies and runs beside build/package.
 - The build/package job on `ubuntu-24.04` runs on exactly Node 24.21.0. It runs the full application build, packaged CLI E2E typecheck and tests, and release-package dry-run packing. Only the packaged tests and their typecheck read build output. The packaged tests install the tarball, start the CLI and exercise the SQLite run store on the minimum supported Node version.
-- Eight cockpit browser E2E shards on GitHub-hosted `ubuntu-latest` each provision the `agent-browser` provider, build and start their own test environment, and run `npm run test:e2e -- --allow-skip --shard=N/8`. Every shard rejects skipped or failed `TEST_E2E_STATUS` logs.
+- Eight cockpit browser E2E shards on GitHub-hosted `ubuntu-latest` each provision the `agent-browser` provider, build and start their own test environment, and run `npm run test:e2e -- --allow-skip --shard=N/8`. In merge groups the same command runs under `squeal ci record` after `sh .ai/scripts/test-env-up.sh` (§ Squeal shared results), with no change to the test command or exit code. Every shard rejects skipped or failed `TEST_E2E_STATUS` logs.
 
 The separate typecheck uses Blacksmith's 3,000 monthly x64 2-vCPU equivalent
 minutes. A seven-day sample projects about 2,833 PR/dispatch typecheck jobs per
@@ -658,8 +658,7 @@ head. Reproduce a run from the repository root:
 node .ai/skills/check-code-quality/scripts/complexity-gate.mjs --base origin/main --head HEAD
 ```
 
-For an owner-approved increase, the owner adds the `baseline-growth` label, then re-runs the failed
-`complexity-gate` job. An agent never adds the label. Auto-merge has no complexity check of its own.
+For an owner-approved increase, the owner adds the `baseline-growth` label. `.github/workflows/rerun-label-gates.yml` then re-runs the failed jobs automatically (waiting first if CI is still running); if it does not, re-run the failed `complexity-gate` job manually. An agent never adds the label. Auto-merge has no complexity check of its own.
 CRAP is not part of this gate; CI reports it without failing (§ CRAP report for changed functions).
 
 **File length.** `npm run lint` pins every non-test source file over 1,000 lines in
@@ -716,13 +715,7 @@ is at or under +400. The pre-PR review reads the section: a reason that does not
 or a behavior an existing test already covers, is a finding. An agent never adds the `test-budget`
 label.
 
-**In CI.** The `Check the test line budget` step in `classify-pr` runs right after
-`Reject baseline growth`, on the same events. Like that step, it runs the workflow commit's own
-`.github/scripts/test-budget.cjs` and reads the head from Git objects, so no head code runs and a
-pull request cannot change its own budget. The step summary prints the net count, the threshold
-that applies and each counted file with its added and removed lines. `verify` requires
-`classify-pr`. The body and labels are read live, but an edited body or a new label does not start
-CI: add the section or the label, then re-run the failed `classify-pr` job.
+**In CI.** The `pr-label-gates` job (`Check baseline growth and test budget`) runs `Reject baseline growth` and `Check the test line budget` on pull requests and dispatched release PRs, separate from `classify-pr` so re-running a failed label gate does not re-run the eight Vitest shards. Both steps run the workflow commit's own `.github/scripts/baseline-growth.cjs` and `.github/scripts/test-budget.cjs` and read the head from Git objects, so no head code runs and a pull request cannot change its own budget. The step summary prints the net count, the threshold that applies and each counted file with its added and removed lines. `preflight` and `verify` require `pr-label-gates` on pull requests. The body and labels are read live. Adding `test-budget` or `baseline-growth` triggers `.github/workflows/rerun-label-gates.yml`, which re-runs the failed jobs on the PR head's latest native CI run automatically (waiting up to 20 minutes if that run is still in progress). Editing the PR body alone does not trigger a rerun: after adding or editing `## Test budget` without adding a label, re-run the failed `pr-label-gates` job manually.
 
 **Locally.** `npm run prepr` prints the same count for the committed branch against `origin/main`.
 It reports and never fails on the budget, because the body and labels do not exist yet. To judge a
@@ -814,9 +807,10 @@ To reproduce a report locally from a downloaded coverage artifact, see the skill
 `squeal-export`, `squeal-publish` and `squeal-ref-check` are normal, non-required
 shared-results jobs. They are not trials.
 
-Merge groups publish their Vitest and node:test results for Squeal, so a new worktree at a
-main commit can import those passes instead of running the same test files again
-(hearsay-tools/squeal spec 018, D8, D9, D13, D17 and, for node:test, D22 to D29).
+Merge groups publish their Vitest, cockpit browser E2E and node:test results for Squeal,
+so a new worktree at a main commit can import those passes instead of running the same test
+files again (hearsay-tools/squeal spec 018, D8, D9, D13, D17 and, for node:test, D22 to
+D29).
 
 - Every job that runs Squeal sets it up with Squeal's GitHub Action after its Node setup:
   `uses: hearsay-tools/squeal/ci@<commit> # v<version>`, pinned to a full commit SHA like
@@ -830,6 +824,16 @@ main commit can import those passes instead of running the same test files again
   are the shard's own. The part files upload as `squeal-parts-shard-N`, kept 3 days. When
   Squeal cannot run, the shard runs the plain command with a warning and uploads no parts.
   Other events run the command exactly as before.
+- In a merge group, each `Cockpit browser E2E shard N/8` job boots its test environment
+  with `sh .ai/scripts/test-env-up.sh` before recording so `pnpm install`, `build-e2e.sh`,
+  and the detached server stay outside the recorder and `node_modules` is present when
+  Squeal instruments Vitest. It then runs `npm run test:e2e -- --allow-skip --shard=N/8`
+  under `squeal ci record --out "$RUNNER_TEMP/squeal-parts-browser" --`. The command's
+  output, exit code and `require-e2e-passed.cjs` gate stay unchanged. The part files upload
+  as `squeal-parts-browser-shard-N`, kept 3 days. When Squeal cannot run, the shard runs
+  the plain command with a warning and uploads no parts. Other events run the command
+  without Squeal. Chrome's binary version is not in Squeal's key (accepted in
+  hearsay-tools/squawk#3980).
 - In a merge group, the `Record node:test for Squeal` job (`squeal-node-test`) runs the
   package and script unit suites once more, on the `.node-version` developers use, each
   under `squeal ci record --out "$RUNNER_TEMP/squeal-parts-node-test/<suite>" --`. Each
@@ -845,17 +849,23 @@ main commit can import those passes instead of running the same test files again
   24.21.0 stays as it is; this job is not in the merge-queue roster, and `verify` waits for
   it only through `squeal-export`.
 - A shard that reruns after a failed first run (§ Rerun of a failed queue shard) records
-  the rerun into `$RUNNER_TEMP/squeal-parts-rerun`, and only those parts upload. Each shard
-  so has one complete part, which `squeal ci export` needs: it refuses two parts for one
-  shard or one file.
-- The `Export Squeal results` job (`squeal-export`) runs after all eight shards pass in a
-  merge group, with `contents: read` and no stored credentials. It checks out
-  `merge_group.head_sha`, installs dependencies, downloads the shards' parts and, when
-  `squeal-node-test` uploaded them, the node:test parts, runs
-  `squeal ci export` and uploads `squeal-results.json.gz` as the `squeal-results` artifact,
-  kept 3 days. It runs the queued code, so it never holds write access. An export that
-  writes no file warns and exits 0; the `Check for the Squeal results file` step then
-  sets the job output `results` to `false`, the upload is skipped and the job passes.
+  the rerun into `$RUNNER_TEMP/squeal-parts-rerun` (Vitest) or
+  `$RUNNER_TEMP/squeal-parts-browser-rerun` (browser), and only those parts upload. Each
+  shard so has one complete part, which `squeal ci export` needs: it refuses two parts for
+  one shard or one file.
+- The `Export Squeal results` job (`squeal-export`) runs after all eight Vitest shards pass
+  in a merge group (waiting for `squeal-node-test` and `cockpit-browser`, without requiring
+  either to pass), with `contents: read` and no stored credentials. It checks out
+  `merge_group.head_sha`, installs dependencies, downloads the Vitest shards' parts, the
+  node:test parts when `squeal-node-test` uploaded them, and the browser parts when
+  `cockpit-browser` passed (`squeal-parts-browser-shard-*`). It passes browser parts to
+  `squeal ci export` only when all eight non-empty shard directories are present, and if an
+  export with browser parts writes no file, warns and retries with Vitest and node:test
+  alone so a failed, skipped or refused browser shard never blocks the Vitest export. It
+  uploads `squeal-results.json.gz` as the `squeal-results` artifact, kept 3 days. It runs
+  the queued code, so it never holds write access. An export that writes no file warns and
+  exits 0; the `Check for the Squeal results file` step then sets the job output `results`
+  to `false`, the upload is skipped and the job passes.
 - The `Publish Squeal shared results` job (`squeal-publish`) is the only job with
   `contents: write`, and it runs no repository code: no install, build or package script. It
   runs only when the export job succeeded and its `results` output is `true`. It
@@ -1270,7 +1280,7 @@ hearsay-tools/cezarion#3290).
 - In a merge group both jobs have a 40-minute limit, room for two runs inside the queue's
   45-minute check timeout. In merge-group runs of 2026-11-11, a Vitest shard's tests took
   up to 16 minutes and a browser shard's up to 13.
-- A Vitest rerun records its own Squeal parts (§ Squeal shared results).
+- Both Vitest and browser reruns record their own Squeal parts (§ Squeal shared results).
 
 `.github/scripts/ci-queue-rerun.workflow.test.cjs` pins the events, the conditions, the
 step order, the rerun's Squeal parts, the artifacts and the time limits.

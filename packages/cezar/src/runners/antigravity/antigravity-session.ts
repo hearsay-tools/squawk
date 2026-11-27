@@ -11,13 +11,22 @@ import { antigravityReadFile } from './client-files.ts';
 import { antigravityUsage } from './usage.ts';
 import { antigravityLaunchArgs } from './launch-args.ts';
 import { logAntigravityFailure, redactAntigravityDiagnostics } from './native-diagnostics.ts';
-import { ANTIGRAVITY_WIRE_HOOKS } from './wire-updates.ts';
-import { writeAntigravitySubagentGuard } from './subagent-guard.ts';
+import { antigravityWireHooks } from './wire-updates.ts';
+import { AntigravitySubagentTracker, parseChildToolCallId } from './subagent-tracker.ts';
+import { AntigravityChildTranscripts } from './subagent-transcript.ts';
 import { AntigravityToolOutputs, antigravityTranscriptPath } from './tool-transcript.ts';
 import { ANTIGRAVITY_MISSING, launchAntigravity, missingAntigravity, type AntigravityLaunch } from './executable.ts';
 import { antigravityQuestion, antigravityAnswer } from './ask-question.ts';
 
 const configSchema = z.array(z.object({ id: z.string(), category: z.string().optional() }).passthrough());
+/** Antigravity CLI 1.5.14 rejects a mid-turn session/prompt while the running prompt waits on a
+ *  permission or question answer (hearsay-tools/squawk#4181). */
+function isPermissionWaitSteerError(error: unknown): boolean {
+  return error instanceof AcpRpcError && /waiting for a permission or question answer/i.test(error.message);
+}
+type DeferredSteer =
+  | { sender: 'user'; content: ContentBlock[]; hold: symbol; release: () => void; epoch: number }
+  | { sender: 'agent'; content: ContentBlock[]; settle: (error?: unknown) => void };
 function contentBlocks(content: readonly ContentBlock[]): Record<string, unknown>[] {
   return content.filter(block => !(content[0]?.type === 'skill' && block.type === 'text' && !block.text)).map(block => {
     if (block.type === 'skill') return { type: 'text', text: `/${block.id}${block.args ? ` ${block.args}` : ''}` };
@@ -58,25 +67,37 @@ export class AntigravitySession implements AgentSession {
   private reportedFailure = false;
   private failedTurn: Extract<UiEvent, { type: 'turn.completed' }> | undefined;
   private readonly humanHolds = new Set<symbol>();
+  private readonly deferredSteers: DeferredSteer[] = [];
+  private retryingDeferred = false;
+  private discardEpoch = 0;
   private configOptions: unknown;
   private autoEnd: NodeJS.Timeout | undefined;
   private term: NodeJS.Timeout | undefined;
   private kill: NodeJS.Timeout | undefined;
   private deadline: NodeJS.Timeout | undefined;
   private readonly limit: number;
+  private readonly subagents = new AntigravitySubagentTracker();
+  private readonly childTranscripts = new AntigravityChildTranscripts(event => this.options.onUiEvent?.(event));
   /** Reads read, MCP and subagent results plus injected hook messages from the CLI transcript; the wire carries none. */
   private readonly toolOutputs = new AntigravityToolOutputs(
     item => this.options.onUiEvent?.({ type: 'item.updated', item, late: true }),
     Date.now,
     hook => this.options.onUiEvent?.({ type: 'item.completed', item: hook }),
+    undefined,
+    {
+      onSpawn: (parentItemId, childId) => {
+        this.subagents.bindChild(parentItemId, childId);
+        this.acp.reparentTools(id => parseChildToolCallId(id)?.childId === childId.toLowerCase(), parentItemId);
+        this.childTranscripts.openChild(childId, parentItemId, antigravityTranscriptPath(this.runtime.geminiDir, childId));
+      },
+      onMessage: (childId, body) => { this.observeSubagentMessage(childId, body); },
+    },
   );
-  /** The native subagent guard could not be written; boot says so. */
-  private guardMissing = false;
   constructor(bin: string | undefined, private readonly spec: AgentRunSpec, private readonly onEvent: ((event: AgentEvent) => void) | undefined,
     private readonly options: SessionOptions, timeoutMs?: number) {
     this.runtime = antigravityEnv(spec);
     this.launch = launchAntigravity(bin) ?? missingAntigravity(this.runtime.temp);
-    this.child = spawnSessionLeader(this.launch.executable, antigravityLaunchArgs(this.runtime.geminiDir, this.guardArgs()), { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
+    this.child = spawnSessionLeader(this.launch.executable, antigravityLaunchArgs(this.runtime.geminiDir), { cwd: spec.cwd, env: this.runtime.env, scope: spec.scope, timings: spec.timings });
     try { if (this.child.pid) this.launch.bindProcess(this.child.pid); }
     catch (error) { this.failure = error instanceof Error ? error : new Error(String(error)); }
     this.descendants = new SessionDescendants(this.child);
@@ -96,10 +117,22 @@ export class AntigravitySession implements AgentSession {
   get pid(): number | undefined { return this.child.pid; }
   get open(): boolean { return this.accepting; }
   get closingQuietly(): boolean { return this.quiet && !this.requestedClose; }
-  /** `--add-dir` for the hook folder that denies native subagent tools (hearsay-tools/squawk#4098). */
-  private guardArgs(): string[] {
-    try { return ['--add-dir', writeAntigravitySubagentGuard(this.runtime.temp)]; }
-    catch { this.guardMissing = true; return []; }
+  private observeSubagentMessage(childId: string, body: string): void {
+    const parentId = this.subagents.recordChildMessage(childId, body);
+    if (parentId && body) this.acp.updateHeldTool(parentId, body);
+    void this.childTranscripts.poll();
+  }
+  private observeWireUpdate(update: Record<string, unknown>): boolean {
+    const id = typeof update.toolCallId === 'string' ? update.toolCallId : '';
+    const child = parseChildToolCallId(id);
+    if (child) {
+      if (typeof update.name === 'string') {
+        this.childTranscripts.recordWireTool(child.childId, id, update.name, update.args ?? update.rawInput);
+      }
+      return true;
+    }
+    this.toolOutputs.observe(update);
+    return true;
   }
   private emit(event: AgentEvent): void {
     if (event.type === 'turn-end' && this.failedTurn) return;
@@ -114,9 +147,10 @@ export class AntigravitySession implements AgentSession {
       backend: 'antigravity', clientInfo: { name: 'squawk', version: '1' }, // ACP usage_update reports context occupancy, not spent tokens.
       event: event => this.acpEvent(event),
       onActivity: () => this.options.onActivity?.(),
+      onPermissionResolved: () => this.onPermissionResolved(),
       uiEvent: event => this.uiEvent(event),
       hooks: {
-        ...ANTIGRAVITY_WIRE_HOOKS,
+        ...antigravityWireHooks(this.subagents),
         selectAuthMethod: hello => this.runtime.env.GEMINI_API_KEY && hello.authMethods.some(method => method.id === 'gemini-api-key') ? 'gemini-api-key' : undefined,
         normalizeUsage: antigravityUsage,
         normalizeOptions: value => { this.configOptions = value; },
@@ -125,7 +159,7 @@ export class AntigravitySession implements AgentSession {
         // The CLI saves the session/new system prompt with the session and appends a resent one,
         // so a resume prepends it to the opening turn instead (systemPromptOnResume 'in-thread').
         sessionParams: method => method === 'new' ? { _meta: { antigravity: { systemPrompt: { append: (this.lostSession ? spec.resumeFallbackSystemPrompt : undefined) ?? spec.systemPrompt ?? '' } } } } : {},
-        filterUpdate: update => { this.toolOutputs.observe(update); return true; },
+        filterUpdate: update => this.observeWireUpdate(update),
       },
     });
   }
@@ -143,9 +177,10 @@ export class AntigravitySession implements AgentSession {
     this.options.onUiEvent?.({ type: 'session.error', message, fatal: false });
   }
   private uiEvent(event: UiEvent): void {
-    if (event.type === 'turn.started') { clearTimeout(this.quietTimer); this.clearAutoEnd(); void this.toolOutputs.poll(); }
+    if (event.type === 'turn.started') { clearTimeout(this.quietTimer); this.clearAutoEnd(); void this.toolOutputs.poll(); void this.childTranscripts.poll(); }
     if (event.type === 'turn.completed') {
       void this.toolOutputs.poll();
+      void this.childTranscripts.poll();
       // The response that ends a turn carries every prompt sent into it: none is held after it.
       this.humanHolds.clear();
       if (event.stopReason === 'error' && !this.quiet && this.failedTurnEnded(event)) return;
@@ -158,6 +193,7 @@ export class AntigravitySession implements AgentSession {
     this.trackItem(event);
     // Work the agent started on its own ended: input and auto-end resume as after a prompt.
     if (event.type === 'turn.completed' && !this.busy) {
+      if (this.open && this.flushDeferredSteers()) return;
       this.armQuietEnd();
       if (this.open) { this.options.onAgentInputReady?.(); this.scheduleAutoEnd(); }
     }
@@ -166,8 +202,27 @@ export class AntigravitySession implements AgentSession {
   private trackItem(event: UiEvent): void {
     if (event.type === 'item.started' && event.item.kind === 'tool' && event.item.name === 'ask_question') this.openAsk(event.item.id, event.item.input);
     if (event.type !== 'item.completed') return;
-    if (event.item.kind === 'tool') this.toolOutputs.completed(event.item);
-    if (event.item.id === this.pendingAsk?.toolCallId) this.pendingAsk = undefined;
+    if (event.item.kind === 'tool') {
+      const child = parseChildToolCallId(event.item.id);
+      if (child) this.childTranscripts.completedWireTool(child.childId, event.item);
+      else this.toolOutputs.completed(event.item);
+      if (event.item.status === 'declined') {
+        const killedChild = this.subagents.childForParent(event.item.id);
+        if (killedChild) void this.childTranscripts.closeChild(killedChild);
+      }
+    }
+    if (event.item.id === this.pendingAsk?.toolCallId) {
+      this.pendingAsk = undefined;
+      this.flushDeferredSteers();
+    }
+  }
+  private onPermissionResolved(): void {
+    if (!this.open || this.acp.hasPendingPermission) return;
+    this.flushDeferredSteers();
+    if (!this.pendingAsk && !this.humanAcks && !this.agentAcks && !this.deferredSteers.length && !this.retryingDeferred) {
+      this.options.onAgentInputReady?.();
+      if (!this.busy && !this.acp.agentWorking) this.scheduleAutoEnd();
+    }
   }
   /** A failed turn is held until the session reports the failure. One the agent started on its
    *  own has no prompt that rejects, so it fails the session here, as a failed prompt does. */
@@ -199,7 +254,6 @@ export class AntigravitySession implements AgentSession {
       else this.emit({ type: 'note', message: `Antigravity model ${this.spec.model ?? '(default)'} ${option ? `does not offer effort ${this.spec.effort}` : 'has no effort setting'}; ignoring requested effort ${this.spec.effort}.` });
     }
     if (!this.open) return;
-    if (this.guardMissing) this.emit({ type: 'note', message: 'Squawk could not write its Antigravity hook folder; native subagent tools stay on for this session.' });
     // The CLI runs read_file with no permission request, so the policy cannot withhold reads.
     const grant = this.spec.toolGrant;
     if (grant.kind !== 'unset' && !grant.tools.includes('Read')) this.emit({ type: 'note', message: 'Antigravity reads files without asking for permission; this step\'s tool grant does not include Read, but it cannot stop native file reads.' });
@@ -244,6 +298,7 @@ export class AntigravitySession implements AgentSession {
       this.inflight--;
       if (this.busy) return;
       if (this.interrupted) this.closeInput();
+      if (this.open && this.flushDeferredSteers()) return;
       if (this.open && this.queue.length) void this.submit(this.queue.shift()!).catch(error => this.fail(error));
       else if (this.open) { this.options.onAgentInputReady?.(); this.scheduleAutoEnd(); }
       this.armQuietEnd();
@@ -251,14 +306,48 @@ export class AntigravitySession implements AgentSession {
   }
   sendMessage(content: ContentBlock[]): boolean {
     if (!this.open || !validSkillMessage(content)) return false;
-    if (this.pendingAsk) content = this.answerAsk(content);
+    const answeringAsk = !!this.pendingAsk;
+    if (answeringAsk) content = this.answerAsk(content);
     if (!this.ready) { this.queue.push(content); return true; }
     const hold = Symbol('human input');
-    this.humanHolds.add(hold); this.humanAcks++;
+    this.humanAcks++;
     let released = false;
     const release = () => { if (!released) { released = true; this.releaseHuman(hold); } };
-    void this.submit(content, release).then(release, error => { release(); this.fail(error); });
+    const entry: Extract<DeferredSteer, { sender: 'user' }> = { sender: 'user', content, hold, release, epoch: this.discardEpoch };
+    if (!answeringAsk && (this.acp.hasPendingPermission || this.deferredSteers.length > 0 || this.retryingDeferred)) {
+      this.deferredSteers.push(entry);
+      return true;
+    }
+    this.dispatchHuman(entry, false);
     return true;
+  }
+  private dispatchHuman(entry: Extract<DeferredSteer, { sender: 'user' }>, fromDeferred: boolean): void {
+    const permSeqAtSend = this.acp.permissionResolutionCount;
+    this.humanHolds.add(entry.hold);
+    let acknowledged = false;
+    const onAck = () => {
+      if (acknowledged) return;
+      acknowledged = true;
+      if (fromDeferred) this.retryingDeferred = false;
+      entry.release();
+      this.flushDeferredSteers();
+    };
+    void this.submit(entry.content, onAck).then(onAck, error => {
+      if (!acknowledged && isPermissionWaitSteerError(error)) {
+        this.humanHolds.delete(entry.hold);
+        if (this.open && this.discardEpoch === entry.epoch) {
+          this.requeueDeferred(entry, fromDeferred, permSeqAtSend);
+          return;
+        }
+        if (fromDeferred) this.retryingDeferred = false;
+        entry.release();
+        this.flushDeferredSteers();
+        return;
+      }
+      if (fromDeferred && !acknowledged) this.retryingDeferred = false;
+      entry.release();
+      this.fail(error);
+    });
   }
   /** The card's answer becomes the next prompt, in the words the CLI's own question offered. */
   private answerAsk(content: ContentBlock[]): ContentBlock[] {
@@ -270,44 +359,120 @@ export class AntigravitySession implements AgentSession {
   private releaseHuman(hold: symbol): void {
     this.humanAcks = Math.max(0, this.humanAcks - 1);
     this.humanHolds.delete(hold);
-    this.options.onAgentInputReady?.();
+    this.flushDeferredSteers();
+    if (this.open) this.options.onAgentInputReady?.();
     if (!this.busy) this.scheduleAutoEnd();
   }
+  private canSendAgentMessage(content: ContentBlock[]): boolean {
+    return this.open && this.ready && !this.humanAcks && !this.agentAcks && !this.pendingAsk
+      && !this.acp.hasPendingPermission && !this.deferredSteers.length && !this.retryingDeferred && validSkillMessage(content);
+  }
   sendAgentMessage(content: ContentBlock[]): false | Promise<void> {
-    if (!this.open || !this.ready || this.humanAcks || this.agentAcks || this.pendingAsk || !validSkillMessage(content)) return false;
+    if (!this.canSendAgentMessage(content)) return false;
     this.agentAcks++;
     return new Promise<void>((resolve, reject) => {
       let settled = false;
       const settle = (error?: unknown) => {
         if (settled) { if (error !== undefined) this.fail(error); return; }
         settled = true;
-        this.agentAcks--; this.options.onAgentInputReady?.(); if (!this.busy) this.scheduleAutoEnd();
+        this.agentAcks--;
+        if (this.open) this.options.onAgentInputReady?.();
+        if (!this.busy) this.scheduleAutoEnd();
         if (error === undefined) resolve();
-        else reject(!this.open && this.requestedClose ? new SessionEndedBeforeAcknowledgement() : error);
+        else reject(!this.open && (this.requestedClose || this.quiet) ? new SessionEndedBeforeAcknowledgement() : error);
       };
-      this.submit(content, () => settle()).then(() => settle(), error => settle(error ?? new Error('Antigravity input failed')));
+      this.dispatchAgent({ sender: 'agent', content, settle }, false);
     });
   }
+  private dispatchAgent(entry: Extract<DeferredSteer, { sender: 'agent' }>, fromDeferred: boolean): void {
+    const permSeqAtSend = this.acp.permissionResolutionCount;
+    let acknowledged = false;
+    const onAck = () => {
+      if (acknowledged) return;
+      acknowledged = true;
+      if (fromDeferred) this.retryingDeferred = false;
+      entry.settle();
+      this.flushDeferredSteers();
+    };
+    this.submit(entry.content, onAck).then(onAck, error => {
+      if (!acknowledged && this.open && isPermissionWaitSteerError(error)) {
+        this.requeueDeferred(entry, fromDeferred, permSeqAtSend);
+        return;
+      }
+      if (fromDeferred && !acknowledged) this.retryingDeferred = false;
+      entry.settle(error ?? new Error('Antigravity input failed'));
+      this.flushDeferredSteers();
+    });
+  }
+  private requeueDeferred(entry: DeferredSteer, fromDeferred: boolean, permSeqAtSend: number): void {
+    if (fromDeferred) {
+      this.retryingDeferred = false;
+      this.deferredSteers.unshift(entry);
+    } else {
+      this.deferredSteers.push(entry);
+    }
+    const readyNow = !this.acp.hasPendingPermission && !this.pendingAsk && (
+      this.acp.permissionResolutionCount > permSeqAtSend || (!this.acp.promptOpen && !this.acp.agentWorking)
+    );
+    if (readyNow) queueMicrotask(() => this.flushDeferredSteers());
+  }
+  private flushDeferredSteers(): boolean {
+    if (!this.open || !this.ready || this.retryingDeferred || this.acp.hasPendingPermission || this.pendingAsk || !this.deferredSteers.length) return false;
+    const next = this.deferredSteers[0]!;
+    if (next.sender === 'agent' && this.humanAcks > this.deferredHumanCount()) return false;
+    this.deferredSteers.shift();
+    this.retryingDeferred = true;
+    if (next.sender === 'user') this.dispatchHuman(next, true);
+    else this.dispatchAgent(next, true);
+    return true;
+  }
   respondPermission(id: string, option: string): boolean { return this.acp.respondPermission(id, option); }
-  discardQueuedMessages(): void { this.queue.length = 0; this.humanHolds.clear(); }
+  discardQueuedMessages(): void {
+    this.discardEpoch++;
+    this.queue.length = 0;
+    this.humanHolds.clear();
+    this.dropDeferredHuman();
+  }
+  private dropDeferredHuman(): void {
+    const dropped: Array<Extract<DeferredSteer, { sender: 'user' }>> = [];
+    for (let i = this.deferredSteers.length - 1; i >= 0; i--) {
+      const entry = this.deferredSteers[i]!;
+      if (entry.sender === 'user') { dropped.push(entry); this.deferredSteers.splice(i, 1); }
+    }
+    for (const entry of dropped) entry.release();
+  }
+  private failDeferredAgents(error?: Error): void {
+    const reason = error ?? this.failure ?? new Error('ACP input/output transport closed');
+    const agents: Array<Extract<DeferredSteer, { sender: 'agent' }>> = [];
+    for (let i = this.deferredSteers.length - 1; i >= 0; i--) {
+      const entry = this.deferredSteers[i]!;
+      if (entry.sender === 'agent') { agents.push(entry); this.deferredSteers.splice(i, 1); }
+    }
+    for (const entry of agents.reverse()) entry.settle(reason);
+  }
+  private deferredHumanCount(): number {
+    let count = 0;
+    for (const entry of this.deferredSteers) if (entry.sender === 'user') count++;
+    return count;
+  }
   // A prompt is held from sendMessage until the first agent work of the turn it opens, or until its
   // response: a steered prompt's response ends the turn that read it. ACP has no consumption signal.
   // Rejection, close and discard also release.
   holdsHumanInput(): boolean { return this.heldHumanInputCount() > 0; }
-  heldHumanInputCount(): number { return this.queue.length + this.humanHolds.size; }
+  heldHumanInputCount(): number { return this.queue.length + this.humanHolds.size + this.deferredHumanCount(); }
   /** A background command or timer can wake the idle session and ask after a done: stay up
    *  AUTO_END_DELAY_MS for that, and end once no turn it opened still runs. */
   endWhenQuiet(): void {
     if (!this.open) return;
     this.quiet = true; this.accepting = false;
-    this.clearAutoEnd(); this.discardQueuedMessages(); this.pendingAsk = undefined;
+    this.clearAutoEnd(); this.discardQueuedMessages(); this.failDeferredAgents(new SessionEndedBeforeAcknowledgement()); this.pendingAsk = undefined;
     this.armQuietEnd();
   }
   private armQuietEnd(): void {
     if (!this.quiet || this.requestedClose) return;
     clearTimeout(this.quietTimer);
-    if (this.busy || this.acp.agentWorking) return;
-    this.quietTimer = setTimeout(() => { if (!this.busy && !this.acp.agentWorking) this.end(); }, AUTO_END_DELAY_MS);
+    if (this.busy || this.acp.agentWorking || this.acp.hasPendingPermission) return;
+    this.quietTimer = setTimeout(() => { if (!this.busy && !this.acp.agentWorking && !this.acp.hasPendingPermission) this.end(); }, AUTO_END_DELAY_MS);
   }
   end(): void {
     if (this.requestedClose) return;
@@ -316,7 +481,8 @@ export class AntigravitySession implements AgentSession {
   }
   private beginClose(): void {
     this.descendants.capture();
-    this.requestedClose = true; this.accepting = false; this.clearAutoEnd(); clearTimeout(this.quietTimer); this.discardQueuedMessages(); this.pendingAsk = undefined;
+    this.requestedClose = true; this.accepting = false; this.clearAutoEnd(); clearTimeout(this.quietTimer);
+    this.discardQueuedMessages(); this.failDeferredAgents(new SessionEndedBeforeAcknowledgement()); this.pendingAsk = undefined;
   }
   private closeInput(): void { this.acp.close(); this.child.stdin.end(); }
   private terminate(): void {
@@ -339,11 +505,15 @@ export class AntigravitySession implements AgentSession {
     this.end();
   }
   private clearAutoEnd(): void { clearTimeout(this.autoEnd); this.autoEnd = undefined; }
+  private canAutoEnd(): boolean {
+    return this.open && !this.busy && !this.acp.agentWorking && !this.humanAcks && !this.agentAcks
+      && !this.acp.hasPendingPermission && !this.queue.length && !this.deferredSteers.length && !this.retryingDeferred;
+  }
   private scheduleAutoEnd(): void {
-    if (!this.open || !this.options.autoEndAfterFirstTurn || this.agentAcks || this.humanAcks || this.autoEnd) return;
+    if (!this.options.autoEndAfterFirstTurn || this.autoEnd || !this.canAutoEnd()) return;
     this.autoEnd = setTimeout(() => {
       this.autoEnd = undefined;
-      if (this.open && !this.busy && !this.acp.agentWorking && !this.humanAcks && !this.queue.length && this.options.shouldAutoEnd?.() !== false) this.end();
+      if (this.canAutoEnd() && this.options.shouldAutoEnd?.() !== false) this.end();
     }, AUTO_END_DELAY_MS);
   }
   private reportFailure(message: string): void {
@@ -355,7 +525,11 @@ export class AntigravitySession implements AgentSession {
   private async settle(boot: Promise<void>): Promise<AgentRunResult> {
     const code = await this.exited;
     await this.toolOutputs.flush();
-    this.accepting = false; this.acp.close(); this.toolOutputs.close(); this.clearAutoEnd(); clearTimeout(this.quietTimer); clearTimeout(this.term); clearTimeout(this.kill); clearTimeout(this.deadline);
+    await this.childTranscripts.flushAll();
+    this.accepting = false;
+    this.discardQueuedMessages();
+    this.failDeferredAgents();
+    this.acp.close(); this.toolOutputs.close(); this.childTranscripts.close(); this.clearAutoEnd(); clearTimeout(this.quietTimer); clearTimeout(this.term); clearTimeout(this.kill); clearTimeout(this.deadline);
     this.descendants.terminate(this.spec.timings?.eofKillGraceMs ?? DEFAULT_RUNNER_TIMINGS.eofKillGraceMs);
     try { this.launch.release(); } catch { /* Pruning drops a lease whose owner process has exited. */ }
     await boot;

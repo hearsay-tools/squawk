@@ -1,5 +1,5 @@
 import type { RunnerFacts } from '@hearsay-tools/squawk/plugin';
-// Live Google Antigravity CLI 1.5.14 probes (hearsay-tools/squawk#4058, hearsay-tools/squawk#4060);
+// Live Google Antigravity CLI 1.5.14–1.5.18 probes (hearsay-tools/squawk#4058, hearsay-tools/squawk#4060, hearsay-tools/squawk#4197);
 // docs/runners/antigravity-wire.md names the fixture behind each value.
 // systemPromptOnResume: the CLI saves the session/new system prompt with the session and appends
 // a resent one, so a resume never resends it; it prepends it to the opening turn, as Codex does.
@@ -7,8 +7,10 @@ import type { RunnerFacts } from '@hearsay-tools/squawk/plugin';
 // acknowledgement: ACP has no turn-start frame and a prompt's response ends its turn, so the first
 // agent work of the turn a prompt opens acknowledges it; a turn without any, its response.
 // nativePermission: a background command or timer wakes the idle session, which then asks.
-// nativeSubagents: a subagent's permission requests never reach the ACP client, so a PreToolUse hook
-// denies the subagent tools (subagent-guard.ts, hearsay-tools/squawk#4098).
+// nativeSubagents: since CLI 1.5.15/1.5.16, ACP keeps session/prompt open across subagent runs
+// and forwards child permission requests to the client (hearsay-tools/squawk#4197).
+// childWork: ACP forwards child prompting tools with `<childId>:<callId>` IDs, and child
+// transcripts hold non-prompting steps; both nest under the spawning invoke_subagent call.
 // hookEvents: the CLI writes injected hook output as SYSTEM_SDK SYSTEM_MESSAGE rows in
 // transcript_full.jsonl (tool-transcript.ts); the ACP wire itself carries no hook frame.
 export const ANTIGRAVITY_FACTS = {
@@ -17,7 +19,7 @@ export const ANTIGRAVITY_FACTS = {
   transport: 'stdio', sessionIdSource: 'native', systemPromptOnResume: 'in-thread',
   inputDelivery: { mode: 'steer', consumption: 'unobservable', acknowledgement: 'response',
     humanInputAtTurnEnd: 'never-held', via: 'second session/prompt while busy' },
-  nativePermission: 'after-turn', nativeAsk: 'answerable', nativeSubagents: 'none',
-  childWork: 'none', hookEvents: 'reported', humanPromptHold: 'acknowledgement',
+  nativePermission: 'after-turn', nativeAsk: 'answerable', nativeSubagents: 'turn-held',
+  childWork: 'nested', hookEvents: 'reported', humanPromptHold: 'acknowledgement',
   nativeTimerTool: 'schedule', costReport: 'per-turn', claudeModelAliases: false, turnStart: 'on-write',
 } as const satisfies RunnerFacts;

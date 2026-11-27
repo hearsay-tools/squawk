@@ -67,6 +67,9 @@
     ]
   },
   "inputs": {
+    "packages/cezar/src/workflows/context-completion-registration-parity.test.ts": [
+      "packages/cezar/src/workflows/session-context-*.ts"
+    ],
     "scripts/plain-node-testkits.test.mjs": [
       "packages/cezar/src/**/*.ts",
       "packages/cezar/scripts/**"

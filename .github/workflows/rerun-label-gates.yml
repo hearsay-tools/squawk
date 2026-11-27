@@ -1,0 +1,58 @@
+name: Rerun label-gated CI checks
+
+# Trusted base control plane: when a maintainer adds `baseline-growth` or
+# `test-budget` to an open pull request, re-run failed jobs on that head's
+# latest native CI run if a matching label-gated step failed. No PR checkout.
+on:
+  pull_request_target:
+    types: [labeled]
+    branches:
+      - main
+      - release/**
+
+permissions: {}
+
+jobs:
+  rerun:
+    name: Rerun failed label-gated CI checks
+    if: github.event.pull_request.state == 'open' && (github.event.label.name == 'baseline-growth' || github.event.label.name == 'test-budget')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    concurrency:
+      group: rerun-label-gates-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check out trusted rerun script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+          sparse-checkout: .github/scripts
+      - name: Rerun failed CI jobs for label
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          retries: 0
+          script: |
+            const { rerunLabelGates } = require('./.github/scripts/rerun-label-gates.cjs');
+            const { countApiCalls } = require('./.github/scripts/api-budget.cjs');
+            const budget = countApiCalls(github);
+            try {
+              const result = await rerunLabelGates({
+                github,
+                ...context.repo,
+                pullNumber: context.payload.pull_request.number,
+                label: context.payload.label.name,
+                log: message => core.info(message),
+              });
+              core.info(JSON.stringify(result));
+              if (result.reason === 'wait-timeout') {
+                core.warning(`Timed out waiting for CI run ${result.runId} to finish. Run \`gh run rerun ${result.runId} --failed\` once it completes.`);
+              }
+            } finally {
+              core.info(budget.summary());
+            }

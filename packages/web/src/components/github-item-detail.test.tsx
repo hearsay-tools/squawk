@@ -1,6 +1,7 @@
 import { githubItemSchema } from '@open-mercato/cezar-api-client/contract/github'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { useLayoutEffect, type ReactNode } from 'react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -562,10 +563,11 @@ describe('PR changed files', () => {
     new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
   const A_HEAD = 'a'.repeat(40)
   const B_HEAD = 'b'.repeat(40)
-  const renderChanges = (client = createQueryClient(), item = PR_42) => render(
+  const renderChanges = (client = createQueryClient(), item = PR_42, probe: ReactNode = null) => render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
         <GithubItemDetail item={item} colors={{}} backLink={null} subNav={{ filter: null, changes: true }} />
+        {probe}
         <Toaster />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -607,6 +609,26 @@ describe('PR changed files', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Select changed file' }), { target: { value: 'docs/guide.md' } })
     await waitFor(() => expect(shownPath()).toBe('docs/guide.md'))
     expect(document.querySelectorAll('[data-slot="diff-file"]')).toHaveLength(1)
+  })
+
+  it('shows the first file and enables Next in the first frame that lists the files', () => {
+    // hearsay-tools/squawk#4328: a layout effect sees the committed DOM before passive effects run,
+    // which is the frame a browser paints when the data lands on a non-sync lane.
+    // The diff engine loads lazily, so a selected file shows "Loading diff…" and none shows "No changes.".
+    const firstFrame: Array<{ files: string | undefined, nextDisabled: boolean | undefined, diff: string | null | undefined }> = []
+    function FirstFrame() {
+      useLayoutEffect(() => {
+        const changes = document.querySelector('[data-slot="gh-pr-changes"]')
+        firstFrame.push({
+          files: changes?.querySelector('strong')?.textContent ?? undefined,
+          nextDisabled: changes?.querySelector('[aria-label="Next file"]')?.hasAttribute('disabled'),
+          diff: changes?.querySelector('[data-slot="diff-loading"], [data-slot="diff-empty"]')?.getAttribute('data-slot'),
+        })
+      }, [])
+      return null
+    }
+    renderChanges(seedChanges(threeFiles()), PR_42, <FirstFrame />)
+    expect(firstFrame).toEqual([{ files: '3 changed files', nextDisabled: false, diff: 'diff-loading' }])
   })
 
   it('filters paths without case sensitivity and keeps a selection only while it matches', async () => {
@@ -689,6 +711,23 @@ describe('PR changed files', () => {
     await screen.findByText('The reviewed revision changed.')
     await waitFor(() => expect(shownPath()).toBe('src/Alpha.ts'))
     expect(refreshUrls.every((url) => url.endsWith('/prs/42/changes?refresh=1'))).toBe(true)
+  })
+
+  it('keeps the filtered file when the filter widens after a head change', async () => {
+    const client = seedChanges(threeFiles())
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL) =>
+      respond(String(input).includes('/changes') ? { ...threeFiles(), headSha: B_HEAD } : MERGE_STATE))
+    renderChanges(client)
+    await waitFor(() => expect(shownPath()).toBe('src/Alpha.ts'))
+    const filter = screen.getByRole('textbox', { name: 'Filter changed files' })
+    fireEvent.change(filter, { target: { value: 'BETA' } })
+    await waitFor(() => expect(shownPath()).toBe('src/beta.ts'))
+    fireEvent.click(within(document.querySelector('[data-slot="gh-pr-changes"]') as HTMLElement).getByRole('button', { name: 'Refresh' }))
+    await screen.findByText('The reviewed revision changed.')
+    expect(shownPath()).toBe('src/beta.ts')
+    fireEvent.change(filter, { target: { value: '' } })
+    await waitFor(() => expect(selectedFile()).toBe('src/beta.ts'))
+    expect(shownPath()).toBe('src/beta.ts')
   })
 
   it('shows an unavailable reason and a failed request instead of an empty diff', async () => {

@@ -116,6 +116,8 @@ export function connectPreview(
     if (!visible) {
       clearTimeout(retryTimer); retryTimer = undefined
       const ws = socket; socket = null; ws?.close()
+      // The pane must not take the closed socket for open: a message sent now would be lost.
+      handlers.onTransport('connecting')
     } else if (!socket) connect()
   })
   handlers.onTransport('connecting')

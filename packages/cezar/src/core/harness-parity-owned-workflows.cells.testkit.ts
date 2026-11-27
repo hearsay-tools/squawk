@@ -9,123 +9,115 @@ import { workerWorkflowHash, type WorkerAccountBinding, type WorkerExecutionIden
 import { plannedWorkflow, skillTaskSteps, type WorkflowDef } from '../workflows/types.ts';
 import { supportsProfiles } from './agent-profiles.ts';
 import { promptFor, waitFor } from './harness-parity-core.testkit.ts';
-import { describeHarnessPart, type HarnessPartScope, probeEnv, readRecording, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
+import { describeHarnessPart, type HarnessPartScope, probeEnv, readRecording, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
+import { ownedWorkflowsGroups, type OwnedWorkflowsCells } from './harness-parity-owned-workflows.rows.testkit.ts';
 import { withOwnedInputRun, withSkillParentRun } from './worker-parity-core.testkit.ts';
 
-export const OWNED_WORKFLOWS_GROUPS = {
-  'owned-workflows'(r: HarnessRegistrar) {
-    const { describeRunners, runners, it } = r;
-    describeRunners('owned-workflows', 'harness parity — owned workflows', () => {
-      for (const backend of runners) {
-        it(`${backend} R13 runs a persisted catalog chain inside the owned worker, check step included (#451)`, async () => {
-          const workflowDef = { name: 'review', source: 'file' as const, path: '.ai/cezar/workflows/review.yaml', steps: [
-            { id: 'inspect', name: 'Inspect', prompt: '{{task}}', runner: backend },
-            // Runs in the worker's own worktree, never the parent checkout.
-            { id: 'verify', command: 'test -f a.txt && test "$(git rev-parse --show-toplevel)" = "$PWD" && printf %s "$PWD" > "$CEZ_PARITY_CWD"' },
-          ] };
-          await withOwnedInputRun(backend, 'cezar-done', async ({ store, manager, repoRoot, runId }) => {
-            const cwdFile = join(repoRoot, 'check-cwd.txt');
-            process.env.CEZ_PARITY_CWD = cwdFile;
-            try {
-              manager.enqueueOwnedRun(runId);
-              await waitFor(() => !manager.isActive(runId), 30_000);
-            } finally { delete process.env.CEZ_PARITY_CWD; }
-            const run = store.getRun(runId)!;
-            expect(run.error).toBeUndefined();
-            expect(run.steps.map(step => ({ id: step.id, kind: step.kind, status: step.status }))).toEqual([
-              { id: 'inspect', kind: STEP_KIND.agent, status: STEP_STATUS.done }, { id: 'verify', kind: STEP_KIND.check, status: STEP_STATUS.done },
-            ]);
-            expect(store.eventLog.readEvents(runId).filter(e => e.type === 'check-output')).toMatchObject([{ stepId: 'verify', exitCode: 0 }]);
-            if (run.delegation?.role !== 'worker') throw new Error('expected worker');
-            expect(readFileSync(cwdFile, 'utf8')).toBe(run.delegation.workspace.path);
-          }, { workflowDef });
-        }, 60_000);
-
-        it(`${backend} R42 spawns from a skill-driven parent without inheriting its skill on the native wire (#778)`, async () => {
-          const name = 'skill-inheritance';
-          await withSkillParentRun(backend, probeEnv(name), async ({ store, manager, repoRoot, runId }) => {
-            const parentRecording = readRecording(repoRoot, name).join('\n');
-            expect(parentRecording).toContain('probe-project');
-            expect(parentRecording).not.toContain('PARENT SKILL BODY 778');
-            expect(parentRecording).toContain('parent extra');
-            await waitFor(() => !manager.isActive(runId), 30_000);
-            const worker = store.getRun(runId)!;
-            expect(worker.error).toBeUndefined();
-            expect(worker.steps.map(step => ({ id: step.id, status: step.status }))).toEqual([{ id: 'task', status: STEP_STATUS.done }]);
-            if (worker.delegation?.role !== 'worker') throw new Error('expected worker');
-            const childRecording = readRecording(worker.delegation.workspace.path, name).join('\n');
-            expect(childRecording).toContain('parent extra');
-            expect(childRecording).not.toContain('probe-project');
-            expect(childRecording).not.toContain('PARENT SKILL BODY 778');
-            expect(worker.systemPrompt).toBe('parent extra');
-          });
-        }, 60_000);
-
-        it(`${backend} R41 runs a --skill worker with its native trigger and no parent skill (#778)`, async () => {
-          const workflowDef = plannedWorkflow(skillTaskSteps('probe-project').map(step => ({ ...step, runner: backend })));
-          const identity: WorkerExecutionIdentity = { kind: 'internal', workflowHash: workerWorkflowHash(workflowDef) };
-          const name = 'worker-skill';
-          await withOwnedInputRun(backend, 'baseline', async ({ store, manager, repoRoot, runId, parentRunId, answer }) => {
-            manager.setSkillCatalog(fixedSkillCatalog([{ id: 'probe-project', name: 'Worker', scope: 'repo', path: join(repoRoot, 'SKILL.md') }]));
-            store.updateRun(parentRunId, { systemPrompt: 'Selected skill: /parent-skill\nPARENT SKILL BODY\nparent extra' });
-            store.updateRun(runId, { systemPrompt: 'parent extra' });
-            manager.enqueueOwnedRun(runId);
-            // The native probe skill returns text without tools. Its parent then asks it to finish.
-            await waitFor(() => store.getRun(runId)?.status === 'waiting', 30_000);
-            expect(store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE'))).toBe(true);
-            await answer(promptFor(backend, 'cezar-done'));
-            await waitFor(() => !manager.isActive(runId), 30_000);
-            const run = store.getRun(runId)!;
-            expect(run.error).toBeUndefined();
-            expect(run.steps.map(step => ({ id: step.id, status: step.status }))).toEqual([{ id: 'task', status: STEP_STATUS.done }]);
-            if (run.delegation?.role !== 'worker') throw new Error('expected worker');
-            // Read the backend mock's argv/requests and stdin in the worker's own cwd.
-            // Normalized events cannot prove that the skill reached the provider.
-            const recording = readRecording(run.delegation.workspace.path, name).join('\n');
-            expect(recording).toContain('probe-project');
-            expect(recording).not.toContain('WORKER SKILL BODY');
-            expect(recording).toContain('parent extra');
-            expect(recording).not.toContain('Selected skill: /parent-skill');
-          }, { workflowDef, identity, env: probeEnv(name) });
-        }, 60_000);
-
-        it(`${backend} R14 runs an accepted mixed-runner chain under per-step identity, each step on its own pinned account (#452)`, async () => {
-          const roster = registeredRunners().map(({ id }) => id);
-          const other = roster[(roster.indexOf(backend) + 1) % roster.length]!;
-          const homes = realpathSync(mkdtempSync(join(tmpdir(), 'cez-parity-accounts-')));
-          // What acceptance captures for a default account: a relocated home for the providers that
-          // have one (never the developer's real login), a bare provider marker for the rest.
-          const binding = (provider: string): WorkerAccountBinding => {
-            if (!supportsProfiles(provider)) return { provider, profileId: 'default' };
-            const homePath = join(homes, provider); mkdirSync(homePath, { recursive: true });
-            return { provider, profileId: 'default', homePath, ...(provider === 'claude' ? { claudeLayout: { kind: 'relocated' } } : {}) };
-          };
-          const workflowDef: WorkflowDef = { name: 'mixed', source: 'file', path: '.ai/cezar/workflows/mixed.yaml', steps: [
-            { id: 'first', prompt: promptFor(backend, 'cezar-done'), runner: backend, agentProfile: 'default' },
-            { id: 'second', prompt: promptFor(other, 'cezar-done'), runner: other, agentProfile: 'default' },
-          ] };
-          const identity: WorkerExecutionIdentity = { kind: 'accepted', account: binding(backend), grants: {}, workflowHash: workerWorkflowHash(workflowDef), steps: [
-            { stepId: 'first', account: binding(backend), grants: {} }, { stepId: 'second', account: binding(other), grants: {} },
-          ] };
-          try {
-            await withOwnedInputRun(backend, 'cezar-done', async ({ store, manager, runId }) => {
-              manager.enqueueOwnedRun(runId);
-              await waitFor(() => !manager.isActive(runId), 30_000);
-              const run = store.getRun(runId)!;
-              expect(run.error).toBeUndefined();
-              // Each step launched on ITS runner under ITS pinned account; the run-level runner is the first step's.
-              expect(run.steps.map(step => ({ id: step.id, status: step.status, backend: step.backend, profileId: step.profileId }))).toEqual([
-                { id: 'first', status: STEP_STATUS.done, backend, profileId: 'default' }, { id: 'second', status: STEP_STATUS.done, backend: other, profileId: 'default' },
-              ]);
-              expect(run.runner).toBe(backend);
-            }, { workflowDef, identity, agentProfile: 'default', extraBackends: [other] });
-          } finally { rmSync(homes, { recursive: true, force: true }); }
-        }, 60_000);
-
-      }
+const OWNED_WORKFLOWS_CELLS: OwnedWorkflowsCells = {
+  R13: backend => async () => {
+    const workflowDef = { name: 'review', source: 'file' as const, path: '.ai/cezar/workflows/review.yaml', steps: [
+      { id: 'inspect', name: 'Inspect', prompt: '{{task}}', runner: backend },
+      // Runs in the worker's own worktree, never the parent checkout.
+      { id: 'verify', command: 'test -f a.txt && test "$(git rev-parse --show-toplevel)" = "$PWD" && printf %s "$PWD" > "$CEZ_PARITY_CWD"' },
+    ] };
+    await withOwnedInputRun(backend, 'cezar-done', async ({ store, manager, repoRoot, runId }) => {
+      const cwdFile = join(repoRoot, 'check-cwd.txt');
+      process.env.CEZ_PARITY_CWD = cwdFile;
+      try {
+        manager.enqueueOwnedRun(runId);
+        await waitFor(() => !manager.isActive(runId), 30_000);
+      } finally { delete process.env.CEZ_PARITY_CWD; }
+      const run = store.getRun(runId)!;
+      expect(run.error).toBeUndefined();
+      expect(run.steps.map(step => ({ id: step.id, kind: step.kind, status: step.status }))).toEqual([
+        { id: 'inspect', kind: STEP_KIND.agent, status: STEP_STATUS.done }, { id: 'verify', kind: STEP_KIND.check, status: STEP_STATUS.done },
+      ]);
+      expect(store.eventLog.readEvents(runId).filter(e => e.type === 'check-output')).toMatchObject([{ stepId: 'verify', exitCode: 0 }]);
+      if (run.delegation?.role !== 'worker') throw new Error('expected worker');
+      expect(readFileSync(cwdFile, 'utf8')).toBe(run.delegation.workspace.path);
+    }, { workflowDef });
+  },
+  R42: backend => async () => {
+    const name = 'skill-inheritance';
+    await withSkillParentRun(backend, probeEnv(name), async ({ store, manager, repoRoot, runId }) => {
+      const parentRecording = readRecording(repoRoot, name).join('\n');
+      expect(parentRecording).toContain('probe-project');
+      expect(parentRecording).not.toContain('PARENT SKILL BODY 778');
+      expect(parentRecording).toContain('parent extra');
+      await waitFor(() => !manager.isActive(runId), 30_000);
+      const worker = store.getRun(runId)!;
+      expect(worker.error).toBeUndefined();
+      expect(worker.steps.map(step => ({ id: step.id, status: step.status }))).toEqual([{ id: 'task', status: STEP_STATUS.done }]);
+      if (worker.delegation?.role !== 'worker') throw new Error('expected worker');
+      const childRecording = readRecording(worker.delegation.workspace.path, name).join('\n');
+      expect(childRecording).toContain('parent extra');
+      expect(childRecording).not.toContain('probe-project');
+      expect(childRecording).not.toContain('PARENT SKILL BODY 778');
+      expect(worker.systemPrompt).toBe('parent extra');
     });
   },
-} satisfies Readonly<Record<string, HarnessGroup>>;
+  R41: backend => async () => {
+    const workflowDef = plannedWorkflow(skillTaskSteps('probe-project').map(step => ({ ...step, runner: backend })));
+    const identity: WorkerExecutionIdentity = { kind: 'internal', workflowHash: workerWorkflowHash(workflowDef) };
+    const name = 'worker-skill';
+    await withOwnedInputRun(backend, 'baseline', async ({ store, manager, repoRoot, runId, parentRunId, answer }) => {
+      manager.setSkillCatalog(fixedSkillCatalog([{ id: 'probe-project', name: 'Worker', scope: 'repo', path: join(repoRoot, 'SKILL.md') }]));
+      store.updateRun(parentRunId, { systemPrompt: 'Selected skill: /parent-skill\nPARENT SKILL BODY\nparent extra' });
+      store.updateRun(runId, { systemPrompt: 'parent extra' });
+      manager.enqueueOwnedRun(runId);
+      // The native probe skill returns text without tools. Its parent then asks it to finish.
+      await waitFor(() => store.getRun(runId)?.status === 'waiting', 30_000);
+      expect(store.eventLog.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE'))).toBe(true);
+      await answer(promptFor(backend, 'cezar-done'));
+      await waitFor(() => !manager.isActive(runId), 30_000);
+      const run = store.getRun(runId)!;
+      expect(run.error).toBeUndefined();
+      expect(run.steps.map(step => ({ id: step.id, status: step.status }))).toEqual([{ id: 'task', status: STEP_STATUS.done }]);
+      if (run.delegation?.role !== 'worker') throw new Error('expected worker');
+      // Read the backend mock's argv/requests and stdin in the worker's own cwd.
+      // Normalized events cannot prove that the skill reached the provider.
+      const recording = readRecording(run.delegation.workspace.path, name).join('\n');
+      expect(recording).toContain('probe-project');
+      expect(recording).not.toContain('WORKER SKILL BODY');
+      expect(recording).toContain('parent extra');
+      expect(recording).not.toContain('Selected skill: /parent-skill');
+    }, { workflowDef, identity, env: probeEnv(name) });
+  },
+  R14: backend => async () => {
+    const roster = registeredRunners().map(({ id }) => id);
+    const other = roster[(roster.indexOf(backend) + 1) % roster.length]!;
+    const homes = realpathSync(mkdtempSync(join(tmpdir(), 'cez-parity-accounts-')));
+    // What acceptance captures for a default account: a relocated home for the providers that
+    // have one (never the developer's real login), a bare provider marker for the rest.
+    const binding = (provider: string): WorkerAccountBinding => {
+      if (!supportsProfiles(provider)) return { provider, profileId: 'default' };
+      const homePath = join(homes, provider); mkdirSync(homePath, { recursive: true });
+      return { provider, profileId: 'default', homePath, ...(provider === 'claude' ? { claudeLayout: { kind: 'relocated' } } : {}) };
+    };
+    const workflowDef: WorkflowDef = { name: 'mixed', source: 'file', path: '.ai/cezar/workflows/mixed.yaml', steps: [
+      { id: 'first', prompt: promptFor(backend, 'cezar-done'), runner: backend, agentProfile: 'default' },
+      { id: 'second', prompt: promptFor(other, 'cezar-done'), runner: other, agentProfile: 'default' },
+    ] };
+    const identity: WorkerExecutionIdentity = { kind: 'accepted', account: binding(backend), grants: {}, workflowHash: workerWorkflowHash(workflowDef), steps: [
+      { stepId: 'first', account: binding(backend), grants: {} }, { stepId: 'second', account: binding(other), grants: {} },
+    ] };
+    try {
+      await withOwnedInputRun(backend, 'cezar-done', async ({ store, manager, runId }) => {
+        manager.enqueueOwnedRun(runId);
+        await waitFor(() => !manager.isActive(runId), 30_000);
+        const run = store.getRun(runId)!;
+        expect(run.error).toBeUndefined();
+        // Each step launched on ITS runner under ITS pinned account; the run-level runner is the first step's.
+        expect(run.steps.map(step => ({ id: step.id, status: step.status, backend: step.backend, profileId: step.profileId }))).toEqual([
+          { id: 'first', status: STEP_STATUS.done, backend, profileId: 'default' }, { id: 'second', status: STEP_STATUS.done, backend: other, profileId: 'default' },
+        ]);
+        expect(run.runner).toBe(backend);
+      }, { workflowDef, identity, agentProfile: 'default', extraBackends: [other] });
+    } finally { rmSync(homes, { recursive: true, force: true }); }
+  },
+};
+
+export const OWNED_WORKFLOWS_GROUPS = ownedWorkflowsGroups(OWNED_WORKFLOWS_CELLS);
 
 /** Register the owned-workflows part's cells for one runner: `harness-<runner>-owned-workflows-parity.test.ts`. */
 export function describeHarnessParity(scope: HarnessPartScope, registration?: HarnessRegistration): void {
