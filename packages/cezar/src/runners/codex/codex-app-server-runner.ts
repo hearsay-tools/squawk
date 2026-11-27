@@ -1138,16 +1138,26 @@ function codexAskQuestions(value: unknown): AskQuestion[] | null {
 }
 
 function userInputAnswers(questions: AskQuestion[], text: string): Record<string, { answers: string[] }> {
-  const lines = text.split(/\r?\n/);
+  const marker = '\n\nAdditional comments:\n';
+  const markerIndex = text.indexOf(marker);
+  const body = markerIndex >= 0 ? text.slice(0, markerIndex) : text;
+  const comment = markerIndex >= 0 ? text.slice(markerIndex + marker.length).trim() : '';
+  const lines = body.split(/\r?\n/);
   const hasStructuredAnswer = questions.some((question) => lines.some((line) => line.startsWith(`${question.header}:`)));
   const answers: Record<string, { answers: string[] }> = {};
+  let lastAnsweredKey: string | undefined;
   for (const [index, question] of questions.entries()) {
     const prefix = `${question.header}:`;
     const matching = lines.find((line) => line.startsWith(prefix));
     const raw = matching?.slice(prefix.length).trim() ?? (!hasStructuredAnswer && index === 0 ? text.trim() : '');
-    answers[question.id ?? String(index)] = {
+    const key = question.id ?? String(index);
+    if (matching !== undefined) lastAnsweredKey = key;
+    answers[key] = {
       answers: raw === '' ? [] : raw.split(',').map((answer) => answer.trim()).filter(Boolean),
     };
+  }
+  if (comment && lastAnsweredKey !== undefined) {
+    answers[lastAnsweredKey]!.answers.push(`Additional comments:\n${comment}`);
   }
   return answers;
 }

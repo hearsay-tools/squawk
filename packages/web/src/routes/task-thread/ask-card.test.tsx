@@ -709,3 +709,19 @@ it('trims an open answer and keeps Send disabled for whitespace', () => {
   fireEvent.click(send)
   expect(mutateAsync).toHaveBeenCalledWith({ text: 'Notes: Keep the parser' })
 })
+
+it('replays structured answers with additional comments without demoting the chosen option to Other', () => {
+  renderAsk({
+    ...twoQuestionAsk,
+    resolved: true,
+    answer: 'Library: Luxon\nStyle: ISO\n\nAdditional comments:\nKeep the bundle small.',
+  })
+  const selected = [...document.querySelectorAll('[data-slot="ask-answers"] [data-selected="true"]')].map(
+    (el) => el.textContent,
+  )
+  expect(selected.some((text) => text?.includes('Luxon'))).toBe(true)
+  expect(selected.some((text) => text?.includes('ISO'))).toBe(true)
+  expect(selected.some((text) => text?.includes('Other'))).toBe(false)
+  expect(screen.getByText('Additional comments')).toBeTruthy()
+  expect(screen.getByText('Keep the bundle small.')).toBeTruthy()
+})
