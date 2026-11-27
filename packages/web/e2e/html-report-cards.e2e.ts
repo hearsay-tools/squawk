@@ -342,3 +342,33 @@ it.each([360, 1440])('opens and closes a report from the agent sheet at %ipx', w
   browser.click(BACK)
   browser.waitForFunction(`document.querySelector('${FRAME}') === null && !new URLSearchParams(location.search).has('report') && document.activeElement === document.querySelector('[data-agent-id="toolu_task_a_1"]')`)
 }, 120_000)
+
+it('drops the Reports split preview at 768px tablet width and fits Open reader unclipped at 1440px', () => {
+  browser.setViewport(768, 900)
+  browser.goto(`${base}/p/${projectId}/reports`)
+  browser.waitForFunction(`document.querySelector('[data-slot="report-row"]') !== null`)
+  const tablet = waitForSettledSample<{ hasPane: boolean; hasCue: boolean; overflow: boolean }>(
+    browser,
+    `(() => ({
+      hasPane: document.querySelector('[data-slot="reports-preview-pane"]') !== null,
+      hasCue: document.querySelector('[data-slot="report-open-cue"]') !== null,
+      overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+    }))()`,
+  )
+  expect(tablet).toEqual({ hasPane: false, hasCue: true, overflow: false })
+
+  browser.setViewport(1440, 900)
+  browser.waitForFunction(`document.querySelector('[data-slot="reports-preview-open"]') !== null`)
+  const desktop = waitForSettledSample<{ fits: boolean; overflow: boolean }>(
+    browser,
+    `(() => {
+      const pane = document.querySelector('[data-slot="reports-preview-pane"]').getBoundingClientRect();
+      const open = document.querySelector('[data-slot="reports-preview-open"]').getBoundingClientRect();
+      return {
+        fits: open.width > 40 && open.left >= pane.left - 1 && open.right <= pane.right + 1,
+        overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      };
+    })()`,
+  )
+  expect(desktop).toEqual({ fits: true, overflow: false })
+})

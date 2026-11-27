@@ -14,6 +14,7 @@ export {
   type PageShellTemplate,
 } from './page-shell'
 export {
+  PAGE_SHELL_SPLIT_MIN_WIDTH,
   PageShellEmptyState,
   PageShellSparseFooter,
   PageShellSplitPane,

@@ -1,5 +1,5 @@
 import { productCommand } from '@/lib/product-name'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { REPORTS_QUERY_MAX } from '@open-mercato/cezar-api-client/contract/reports'
@@ -110,5 +110,47 @@ describe('Reports shelf', () => {
     expect(openReader.getAttribute('href')).toBe('/p/shop/tasks/source-2/report?artifact=r2')
     fireEvent.click(openReader)
     await waitFor(() => expect(screen.getAllByTestId('location')[0]!.textContent).toContain('/tasks/source-2/report?artifact=r2'))
+  })
+
+  it('omits the split preview pane when available content width cannot fit both panes', () => {
+    let observerCallback: ResizeObserverCallback | null = null
+    class StubResizeObserver {
+      constructor(cb: ResizeObserverCallback) { observerCallback = cb }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', StubResizeObserver)
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 372, height: 600, top: 0, left: 0, bottom: 600, right: 372, x: 0, y: 0, toJSON: () => ({}),
+    })
+    try {
+      mocks.useReports.mockReturnValue(result({
+        data: {
+          pages: [{
+            reports: [{ id: 'r1', runId: 'source', title: 'Audit', name: 'audit.html', taskTitle: 'Audit task', createdAt: SAMPLE_CREATED_AT }],
+            total: 1,
+            nextCursor: null,
+          }],
+        },
+      }))
+      mount('/p/shop/reports')
+      expect(document.querySelector('[data-slot="reports-preview-pane"]')).toBeNull()
+      expect(document.querySelector('[data-slot="report-preview-select"]')).toBeNull()
+      expect(document.querySelector('[data-slot="report-open-cue"]')).not.toBeNull()
+
+      act(() => {
+        observerCallback?.(
+          [{ contentRect: { width: 720 } } as ResizeObserverEntry],
+          {} as ResizeObserver,
+        )
+      })
+      expect(document.querySelector('[data-slot="reports-preview-pane"]')).not.toBeNull()
+      expect(document.querySelector('[data-slot="reports-preview-open"]')).not.toBeNull()
+      expect(document.querySelector('[data-slot="report-open-cue"]')).toBeNull()
+    } finally {
+      rectSpy.mockRestore()
+      vi.unstubAllGlobals()
+    }
   })
 })

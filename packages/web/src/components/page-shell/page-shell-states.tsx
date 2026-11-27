@@ -81,6 +81,13 @@ export function PageShellSparseFooter({
 }
 
 /**
+ * Minimum content width (px) required for SplitPage's side-by-side master-detail layout
+ * (280px list + 20px gap + 360px detail pane). Keep aligned with `@container page-shell-split`
+ * in `page-shell.css`.
+ */
+export const PAGE_SHELL_SPLIT_MIN_WIDTH = 660
+
+/**
  * Responsive master-detail layout for `Split` template screens (e.g. Reports list + preview).
  */
 export function PageShellSplitPane({
@@ -93,15 +100,21 @@ export function PageShellSplitPane({
   className?: string | undefined
 }) {
   return (
-    <div data-slot="page-shell-split-pane" className={className}>
-      <div data-slot="page-shell-split-list" className="flex min-h-0 min-w-0 flex-col">
-        {list}
-      </div>
-      {detail ? (
-        <div data-slot="page-shell-split-detail" className="flex min-h-0 min-w-0 flex-col">
-          {detail}
+    <div data-slot="page-shell-split-host" className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div
+        data-slot="page-shell-split-pane"
+        data-has-detail={detail ? 'true' : 'false'}
+        className={className}
+      >
+        <div data-slot="page-shell-split-list" className="flex min-h-0 min-w-0 flex-col">
+          {list}
         </div>
-      ) : null}
+        {detail ? (
+          <div data-slot="page-shell-split-detail" className="flex min-h-0 min-w-0 flex-col">
+            {detail}
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }

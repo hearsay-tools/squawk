@@ -1,6 +1,6 @@
 import { QueryClientContext } from '@tanstack/react-query'
 import { productCommand } from '@/lib/product-name'
-import { useContext, useLayoutEffect, useRef, useState } from 'react'
+import { useContext, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { useLocation, useNavigationType } from 'react-router'
 import { useArtifact } from '@/api/queries'
 import { useReports } from '@/api/reports'
@@ -10,6 +10,7 @@ import { ArrowUpRightIcon, ChevronRightIcon, EyeIcon, FileTextIcon } from 'lucid
 import { SearchIcon } from '@/components/design-icons'
 import { HtmlReportFrame } from '@/components/html-report-frame'
 import {
+  PAGE_SHELL_SPLIT_MIN_WIDTH,
   PageShellEmptyState,
   PageShellSparseFooter,
   PageShellSplitPane,
@@ -36,12 +37,40 @@ function formatFullReportTimestamp(iso: string): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
 
+/**
+ * Tracks whether the Reports content area is wide enough for the side-by-side preview pane
+ * (`PAGE_SHELL_SPLIT_MIN_WIDTH`). Falls back to `useIsDesktop()` when no layout box exists (jsdom).
+ */
+function useSplitPreviewCapacity(hostRef: RefObject<HTMLDivElement | null>): boolean {
+  const desktop = useIsDesktop()
+  const [fits, setFits] = useState(false)
+
+  useLayoutEffect(() => {
+    const el = hostRef.current
+    if (!el) return
+    const sync = (width: number) => {
+      setFits(width > 0 ? width >= PAGE_SHELL_SPLIT_MIN_WIDTH : desktop)
+    }
+    sync(el.getBoundingClientRect().width)
+    if (typeof ResizeObserver !== 'function') return
+    const observer = new ResizeObserver(entries => {
+      const width = entries[0]?.contentRect.width ?? el.getBoundingClientRect().width
+      sync(width)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hostRef, desktop])
+
+  return fits
+}
+
 export function ReportsRoute() {
   const location = useLocation()
   const navigationType = useNavigationType()
   const [params, write] = useSearchParamsWriter()
   const q = (params.get('q') ?? '').slice(0, REPORTS_QUERY_MAX)
   const result = useReports(q)
+  const contentRef = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const restored = useRef('')
   const key = location.pathname + location.search
@@ -54,7 +83,7 @@ export function ReportsRoute() {
     })
   }
   const [previewId, setPreviewId] = useState<string | null>(null)
-  const desktop = useIsDesktop()
+  const showPreview = useSplitPreviewCapacity(contentRef)
 
   useLayoutEffect(() => {
     if (!result.data || restored.current === key) return
@@ -97,6 +126,7 @@ export function ReportsRoute() {
         subtitle: 'Published HTML snapshots from tasks in this project.',
       }}
     >
+      <div ref={contentRef} data-slot="reports-content" className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
       <div className="relative w-full shrink-0">
         <SearchIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -157,10 +187,10 @@ export function ReportsRoute() {
                     <li
                       key={report.id}
                       data-slot="report-row"
-                      data-selected={desktop && isPreviewed ? 'true' : undefined}
+                      data-selected={showPreview && isPreviewed ? 'true' : undefined}
                       className={cn(
                         'reports-row flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors',
-                        desktop && isPreviewed && 'border-accent-strong/60 bg-sidebar-row-selected/40',
+                        showPreview && isPreviewed && 'border-accent-strong/60 bg-sidebar-row-selected/40',
                       )}
                     >
                       <FileTextIcon aria-hidden="true" className="reports-icon mt-0.5 size-4 shrink-0 self-start text-accent-text" />
@@ -193,17 +223,20 @@ export function ReportsRoute() {
                           </time>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        data-slot="report-preview-select"
-                        aria-label={`Preview ${reportTitle(report)}`}
-                        aria-pressed={isPreviewed}
-                        onClick={() => setPreviewId(report.id)}
-                        className="reports-preview-btn hidden min-h-8 min-w-8 shrink-0 items-center justify-center gap-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:inline-flex"
-                      >
-                        <EyeIcon aria-hidden="true" className="size-3.5" />
-                      </button>
-                      <ChevronRightIcon aria-hidden="true" data-slot="report-open-cue" className="reports-cue size-4 shrink-0 text-muted-foreground md:hidden" />
+                      {showPreview ? (
+                        <button
+                          type="button"
+                          data-slot="report-preview-select"
+                          aria-label={`Preview ${reportTitle(report)}`}
+                          aria-pressed={isPreviewed}
+                          onClick={() => setPreviewId(report.id)}
+                          className="reports-preview-btn inline-flex min-h-8 min-w-8 shrink-0 items-center justify-center gap-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                        >
+                          <EyeIcon aria-hidden="true" className="size-3.5" />
+                        </button>
+                      ) : (
+                        <ChevronRightIcon aria-hidden="true" data-slot="report-open-cue" className="reports-cue size-4 shrink-0 text-muted-foreground" />
+                      )}
                     </li>
                   )
                 })}
@@ -223,7 +256,7 @@ export function ReportsRoute() {
             </div>
           }
           detail={
-            desktop && selected ? (
+            showPreview && selected ? (
               <ReportPreviewPane
                 report={selected}
                 restoreKey={key}
@@ -233,6 +266,7 @@ export function ReportsRoute() {
           }
         />
       )}
+      </div>
     </SplitPage>
   )
 }
@@ -251,10 +285,10 @@ function ReportPreviewPane({
     <section
       data-slot="reports-preview-pane"
       aria-label={`Preview of ${reportTitle(report)}`}
-      className="hidden min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card md:flex"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card"
     >
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-semibold text-foreground">{reportTitle(report)}</h2>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {report.taskTitle} · {publishedAge(report.createdAt)}
