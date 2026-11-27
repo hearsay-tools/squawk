@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Link as RouterLink } from 'react-router'
 
 import { StatusDot } from '@/components/status-dot'
+import type { PageShellHeaderProps } from '@/components/page-shell'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 
@@ -52,18 +53,26 @@ function LiveClock({ now, updatedAt, stale }: { now: number; updatedAt: string |
   )
 }
 
-export function ActivityHeader({ name, now, updatedAt, stale = false, children }: { name: string; now?: number | undefined; /** When the server built the snapshot on screen. */ updatedAt?: string | undefined; stale?: boolean; children: ReactNode }) {
-  return (
-    <header data-slot="page-header" className="flex flex-wrap items-start justify-between gap-4 pt-7 pb-1">
-      <div className="min-w-0">
-        <h1 className="truncate text-[26px] md:text-[28px] font-semibold tracking-tight leading-[1.2] text-foreground">
-          Activity <span className="text-muted-foreground">· {name}</span>
-        </h1>
-        {now === undefined ? null : <p className="mt-1"><LiveClock now={now} updatedAt={updatedAt} stale={stale} /></p>}
-      </div>
-      {children}
-    </header>
-  )
+export function activityHeaderProps({
+  name,
+  now,
+  updatedAt,
+  stale = false,
+  scopeSwitch,
+}: {
+  name: string
+  now?: number | undefined
+  /** When the server built the snapshot on screen. */
+  updatedAt?: string | undefined
+  stale?: boolean
+  scopeSwitch: ReactNode
+}): PageShellHeaderProps {
+  return {
+    title: 'Activity',
+    scope: name,
+    subtitle: now === undefined ? undefined : <LiveClock now={now} updatedAt={updatedAt} stale={stale} />,
+    secondaryActions: scopeSwitch,
+  }
 }
 
 /** A chip's count. A new `bump` key replays the bump. */

@@ -91,10 +91,6 @@ export function PlanReview({
 
   return (
     <div data-slot="plan-page">
-      <header data-slot="plan-page-header">
-        <h1>New task / Plan first</h1>
-        <p>Review the proposed chain before launching.</p>
-      </header>
       <div data-slot="plan-canvas">
       <section
         ref={reviewRef}

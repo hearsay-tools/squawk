@@ -48,8 +48,6 @@
 [data-slot="todo-actions"] button { font-weight: 500; padding-block: 10px; padding-inline: 16px; }
 [data-slot="todo-instructions-input"] { background: var(--background); }
 [data-slot="todo-instructions"] > label { font-size: 11px; font-weight: 400; }
-[data-route="automations"] > header > div > div { margin-block-end: 22px; }
-[data-route="automations"] > header p { font-size: 13px; }
 .automation-editor label { font-size: 11px; font-weight: 400; }
 .automation-editor label:has(input[type="checkbox"]) { font-size: 14px; }
 .automation-editor > div:last-child { gap: 12px; }
@@ -63,7 +61,7 @@
 [data-slot="plan-review"] [data-slot="plan-steps"] { padding-block: 0 12px; padding-inline: 24px; }
 [data-slot="plan-review"] [data-slot="plan-step"] { padding: 14px; border-radius: 12px; background: var(--background); }
 [data-slot="plan-review"] [data-slot="dialog-footer"] { padding-block: 12px 24px; padding-inline: 24px; border: 0; }
-[data-route="automations"] [data-slot="button"] { font-size: 12px; font-weight: 400; min-height: 40px; height: auto; padding-block: 10px; padding-inline: 16px; }
+[data-route="automations"] [data-slot="page-shell-body"] [data-slot="button"] { font-size: 12px; font-weight: 400; min-height: 40px; height: auto; padding-block: 10px; padding-inline: 16px; }
 [data-route="automations"] article h2, [data-slot="automation-inline-log"] h2 { font-weight: 400; }
 [data-slot="automation-inline-log"] ol > li { border: 0; border-radius: 0; padding: 0; }
 [data-slot="automation-inline-log"] ol { gap: 16px; }
@@ -134,16 +132,12 @@
 
 /* Design22 keeps review in the page canvas; only Save/Overwrite are modal dialogs. */
 [data-route="new"][data-plan-review="true"] { padding-block-end: 0; }
-[data-slot="plan-page"] { padding: 36px; }
-[data-slot="plan-page-header"] { margin-block-end: 22px; }
-[data-slot="plan-page-header"] h1 { font-size: 28px; font-weight: 400; line-height: 1.5; }
-[data-slot="plan-page-header"] p { margin-block-start: 22px; color: var(--muted-foreground); font-size: 13px; }
+[data-slot="plan-page"] { padding: 0; }
 [data-slot="plan-canvas"] { padding: 36px; border-radius: 12px; background: var(--card-2); }
 [data-slot="plan-review"] { width: 100%; max-width: 680px; margin-inline: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
 [data-slot="plan-review"] [data-slot="plan-steps"] { flex: none; overflow: visible; }
 @media (max-width: 767px) {
   [data-slot="plan-page"], [data-slot="plan-canvas"] { padding: 0; }
-  [data-slot="plan-page-header"] { display: none; }
   [data-slot="plan-canvas"] { background: transparent; }
   [data-slot="plan-review"] { max-width: none; }
 }

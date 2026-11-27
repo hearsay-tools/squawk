@@ -6,6 +6,8 @@ import { ApiError, createRunPr, deleteRepoBranches } from '@/api/client'
 import { queryKeys, useProjectRepoBase, useRepoBranches, useRuns } from '@/api/queries'
 import type { RepoBranchEntry } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
+import { PageShellEmptyState, PageShellSparseFooter } from '@/components/page-shell'
+import { Button } from '@/components/ui/button'
 import { ChangeCounts } from '@/components/diff/change-counts'
 import { BranchKeptReason } from './branch-kept-reason'
 import { CopyIcon, EllipsisIcon, TriangleAlertIcon } from '@/components/design-icons'
@@ -85,7 +87,7 @@ export function RepoNotLandedSection() {
   const [deleting, setDeleting] = useState<RepoBranchEntry | null>(null)
 
   if (branches.isPending) {
-    return <p data-slot="not-landed-loading" role="status" className="px-4 py-5 text-[13px] text-muted-foreground md:px-9">Loading branches…</p>
+    return <p data-slot="not-landed-loading" role="status" className="py-5 text-[13px] text-muted-foreground">Loading branches…</p>
   }
   if (branches.isError) {
     return (
@@ -99,6 +101,7 @@ export function RepoNotLandedSection() {
     )
   }
   const groups = notLandedGroups(branches.data.branches)
+  const totalNotLanded = groups.reduce((sum, group) => sum + group.rows.length, 0)
   const retained = retainedFinishedTasks(branches.data.branches)
   const retainedNote = retained > 0 ? (
     <p data-slot="not-landed-retained" className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
@@ -116,18 +119,26 @@ export function RepoNotLandedSection() {
 
   return (
     <ReferenceStatusProvider projectId={scope} repoBase={repoBase} requests={requests}>
-      <div data-slot="repo-not-landed" className="flex flex-col gap-4 px-4 pt-0 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pb-9">
+      <div data-slot="repo-not-landed" className="flex flex-col gap-4 pb-[calc(90px+env(safe-area-inset-bottom))] md:pb-0">
         {!branches.data.prStateKnown ? <ForgeNote /> : null}
         {retainedNote}
         {groups.length === 0 ? (
-          <CenteredState
+          <PageShellEmptyState
             icon={<GitPullRequestArrowIcon size={16} />}
-            tone="neutral"
-            heading="h2"
             title={retained > 0 ? 'Nothing else waiting to land' : 'Everything landed'}
-            subtitle={retained > 0
-              ? 'Every other finished task\'s commits are on the base branch, or it made none.'
-              : 'Every finished task\'s commits are on the base branch, or it made none.'}
+            description={retained > 0
+              ? "Every other finished task's commits are on the base branch, or it made none."
+              : "Every finished task's commits are on the base branch, or it made none."}
+            actions={
+              <>
+                <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
+                  <Link to={GIT_SECTION_PATH.cleanup}>Check cleanup</Link>
+                </Button>
+                <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
+                  <Link to="/">View tasks</Link>
+                </Button>
+              </>
+            }
           />
         ) : (
           <div className="flex flex-col gap-3">
@@ -157,6 +168,16 @@ export function RepoNotLandedSection() {
               <InfoIcon aria-hidden="true" className="mt-px size-3 shrink-0" />
               Delete a branch from its row's … menu. It confirms and names the commits it drops; nothing here is bulk-deleted.
             </p>
+            {totalNotLanded <= 3 ? (
+              <PageShellSparseFooter
+                summary={`${totalNotLanded} ${totalNotLanded === 1 ? 'branch' : 'branches'} waiting to land. Open a draft PR or inspect worktrees in Cleanup.`}
+                actions={
+                  <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
+                    <Link to={GIT_SECTION_PATH.cleanup}>Open cleanup</Link>
+                  </Button>
+                }
+              />
+            ) : null}
           </div>
         )}
       </div>

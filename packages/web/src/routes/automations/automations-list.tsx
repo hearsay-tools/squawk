@@ -1,3 +1,4 @@
+import './automations.css'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { scheduleLabel } from '@open-mercato/cezar-api-client/contract/automation-schedule'
@@ -7,6 +8,12 @@ import type { AutomationListEntry, AutomationsResponse, OnceStatus } from '@open
 import { cancelAutomation, checkAutomation, getAutomationCheck, runAutomationNow, setAutomationEnabled } from '@/api/client'
 import { CenteredState } from '@/components/centered-state'
 import { GithubIcon, PlusIcon, RefreshCwIcon, ZapIcon } from '@/components/design-icons'
+import {
+  PageShellActionButton,
+  PageShellSparseFooter,
+  TablePage,
+  pageShellDensity,
+} from '@/components/page-shell'
 import { Pill } from '@/components/pill'
 import { Button } from '@/components/ui/button'
 import { dayTime, relativeIn } from '@/lib/automation-format'
@@ -14,7 +21,7 @@ import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 import { eventsSentence } from './event-phrases'
 import { InlineLog } from './log'
-import { PageFrame, PageState } from './page-frame'
+import { PageState } from './page-frame'
 
 /** What a card says under its actions: a progress word, a result, or a refusal. */
 type Note = { text: string; tone: 'info' | 'error'; runId?: string }
@@ -78,12 +85,37 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
   const archivedEntries = all.filter((automation) => Boolean(automation.archived))
   const shown = archived ? archivedEntries : activeEntries
 
+  const density = !data ? 'full' : pageShellDensity(shown.length)
+
   return (
-    <PageFrame
-      tabbed
-      title="Automations"
-      subtitle={`Schedules and GitHub checks run while Squawk is open.`}
-      action={<Button variant="primary" asChild><Link to="/automations/new"><PlusIcon aria-hidden="true" className="size-4" />New automation</Link></Button>}
+    <TablePage
+      route="automations"
+      density={density}
+      headerSpacing="compact"
+      header={{
+        title: 'Automations',
+        subtitle: 'Schedules and GitHub checks run while Squawk is open.',
+        primaryAction: (
+          <PageShellActionButton variant="primary" asChild>
+            <Link to="/automations/new">
+              <PlusIcon aria-hidden="true" className="size-4" />
+              New automation
+            </Link>
+          </PageShellActionButton>
+        ),
+      }}
+      sparseFooter={
+        data && shown.length > 0 && !archived ? (
+          <PageShellSparseFooter
+            summary={`${shown.length} active ${shown.length === 1 ? 'automation' : 'automations'} configured. New automations start paused so you can test filters before enabling them.`}
+            actions={
+              <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
+                <Link to="/automations/new">Add another</Link>
+              </Button>
+            }
+          />
+        ) : undefined
+      }
     >
       {error && !data ? (
         <div className="grid justify-items-start gap-3"><PageState text={error} /><Button variant="outline" onClick={() => void refresh()}>Retry</Button></div>
@@ -156,7 +188,7 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
           )}
         </>
       )}
-    </PageFrame>
+    </TablePage>
   )
 }
 

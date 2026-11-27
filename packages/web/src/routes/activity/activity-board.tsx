@@ -2,6 +2,9 @@ import * as React from 'react'
 import type { ActivityProject, ActivityRequest, ActivityRun } from '@open-mercato/cezar-api-client/contract/activity'
 
 import { cn } from '@/lib/utils'
+import { PageShellEmptyState } from '@/components/page-shell'
+import { Button } from '@/components/ui/button'
+import { Link } from '@/lib/project-router'
 import type { FeedEntry } from './activity-feed'
 import { ActivityCard } from './activity-card'
 import { ActivityLines } from './activity-lines'
@@ -113,7 +116,21 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
     <div className="flex min-w-0 flex-col gap-5">
       <div className="min-w-0">
         {project.tasks.length === 0 ? (
-          <p data-slot="activity-empty" className="py-6 text-[13px] text-muted-foreground">No active work in this project.</p>
+          <PageShellEmptyState
+            slot="activity-empty"
+            title="No active work in this project."
+            description="Start a new task to watch live agents, workers, and peer requests appear on this board."
+            actions={
+              <>
+                <Button variant="primary" size="sm" asChild className="max-md:min-h-11">
+                  <Link to="/new">New task</Link>
+                </Button>
+                <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
+                  <Link to="/">View tasks</Link>
+                </Button>
+              </>
+            }
+          />
         ) : null}
         <div
           ref={hostRef}

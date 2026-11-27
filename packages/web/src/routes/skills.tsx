@@ -5,10 +5,18 @@ import { getRunnerSkills } from '@/api/client'
 import { useResolvedRunner, useRunners } from '@/api/runners'
 import { useAgentAccounts } from '@/api/agent-accounts'
 import { queryKeys, useConfig, useRunnerSkills } from '@/api/queries'
-import { ChevronDownIcon, RefreshCwIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
+import { ChevronDownIcon, RefreshCwIcon, SearchIcon, SparklesIcon, TriangleAlertIcon } from '@/components/design-icons'
+import {
+  PageShellActionButton,
+  PageShellEmptyState,
+  PageShellSparseFooter,
+  TablePage,
+  pageShellDensity,
+} from '@/components/page-shell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toaster'
+import { Link } from '@/lib/project-router'
 import { searchSkills } from '@/lib/skills'
 import { cn } from '@/lib/utils'
 import { groupRunnerSkills, SkillGroups } from './skills-list'
@@ -31,23 +39,48 @@ export function SkillsRoute() {
   const query = useRunnerSkills(storedRunner, account)
   const refresh = useRereadSkills(runner, query.account)
   const skills = query.data ?? []
+  const matches = searchSkills(skills, search)
+  const density = query.isPending ? 'full' : pageShellDensity(matches.length)
   return (
-    <div data-route="skills" className="grid min-h-full w-full grid-cols-1 content-start gap-5 px-4 pt-7 pb-9 md:px-9 max-md:[padding-block-end:5rem]">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-[26px] font-semibold tracking-tight leading-[1.2] text-foreground md:text-[28px]">Skills</h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">The skills each agent loads in this project, as its runner reports them.</p>
-        </div>
-      </header>
+    <TablePage
+      route="skills"
+      density={density}
+      className="max-md:[padding-block-end:5rem]"
+      bodyClassName="gap-5"
+      header={{
+        title: 'Skills',
+        subtitle: 'The skills each agent loads in this project, as its runner reports them.',
+        secondaryActions: (
+          <PageShellActionButton
+            variant="outline"
+            onClick={() => void refresh.run()}
+            disabled={refresh.running || query.isPending}
+            data-slot="skills-refresh"
+          >
+            <RefreshCwIcon aria-hidden="true" className={cn('size-3.5', refresh.running && 'motion-safe:animate-spin')} />
+            Re-read
+          </PageShellActionButton>
+        ),
+      }}
+      sparseFooter={
+        !query.isPending && matches.length > 0 ? (
+          <PageShellSparseFooter
+            summary={`${matches.length} ${matches.length === 1 ? 'skill' : 'skills'} available for this runner. Type / in New task to invoke one, or chain them into a workflow.`}
+            actions={
+              <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
+                <Link to="/workflows">Open workflows</Link>
+              </Button>
+            }
+          />
+        ) : undefined
+      }
+    >
       <div className="flex flex-wrap items-center gap-2">
         <RunnerSwitch runner={runner} onChange={(next) => { setRunner(next); setAccount(null) }} />
         <AccountSelect runner={runner} account={account} onChange={setAccount} />
         <span className="ml-auto text-xs text-muted-foreground" data-slot="skills-count">
           {query.list ? `${skills.length} ${skills.length === 1 ? 'skill' : 'skills'}${query.list.source === 'cache' ? ' · from cache' : ''}` : null}
         </span>
-        <Button variant="outline" size="sm" onClick={() => void refresh.run()} disabled={refresh.running || query.isPending} data-slot="skills-refresh">
-          <RefreshCwIcon aria-hidden="true" className={cn('size-3.5', refresh.running && 'motion-safe:animate-spin')} />Re-read
-        </Button>
       </div>
       <div className="relative">
         <SearchIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -57,17 +90,34 @@ export function SkillsRoute() {
       <SkillNotices query={query} />
       {query.isPending
         ? <p role="status" className="text-xs text-muted-foreground">Loading skills…</p>
-        : <SkillsResult skills={skills} search={search} openId={params.get('skill')} runner={runner} account={query.account ?? null} unchecked={query.unchecked} />}
-    </div>
+        : <SkillsResult skills={skills} matches={matches} search={search} onClearSearch={() => setSearch('')} onRefresh={() => void refresh.run()} openId={params.get('skill')} runner={runner} account={query.account ?? null} unchecked={query.unchecked} />}
+    </TablePage>
   )
 }
 
-function SkillsResult({ skills, search, openId, runner, account, unchecked }: {
-  skills: RunnerSkill[]; search: string; openId: string | null; runner: Runner; account: string | null; unchecked: boolean
+function SkillsResult({ skills, matches, search, onClearSearch, onRefresh, openId, runner, account, unchecked }: {
+  skills: RunnerSkill[]; matches: RunnerSkill[]; search: string; onClearSearch: () => void; onRefresh: () => void; openId: string | null; runner: Runner; account: string | null; unchecked: boolean
 }) {
-  if (skills.length === 0) return unchecked ? null : <p className="text-[13px] text-muted-foreground">No skills reported by this runner and account.</p>
-  const matches = searchSkills(skills, search)
-  if (matches.length === 0) return <p className="text-[13px] text-muted-foreground">No skills match “{search.trim()}”.</p>
+  if (skills.length === 0) {
+    return unchecked ? null : (
+      <PageShellEmptyState
+        icon={<SparklesIcon />}
+        title="No skills reported by this runner and account"
+        description="Add a skill to this repository or your runner home, then re-read to refresh the inventory."
+        actions={<Button variant="outline" className="max-md:min-h-11" onClick={onRefresh}>Re-read skills</Button>}
+      />
+    )
+  }
+  if (matches.length === 0) {
+    return (
+      <PageShellEmptyState
+        icon={<SearchIcon />}
+        title={`No skills match “${search.trim()}”`}
+        description="Try a different keyword or clear the filter to browse every available skill."
+        actions={<Button variant="outline" className="max-md:min-h-11" onClick={onClearSearch}>Clear filter</Button>}
+      />
+    )
+  }
   return <SkillGroups groups={groupRunnerSkills(matches)} openId={openId} searching={search.trim() !== ''} runner={runner} account={account} />
 }
 

@@ -113,6 +113,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'mock-lifecycle-boundary': ['packages/cezar/scripts/mock-boundary.mjs', "function watchdogStall() {}\n"],
   'mock-scenario-boundary': ['packages/cezar/scripts/mock-scenario-violation.mjs', "import { play } from './mock-scenario.mjs';\nconst x = 'mock:hold';\n"],
   'native-mock-source': ['packages/cezar/test/b.test.ts', "const text = readFileSync(adapter.mockBin, 'utf8');\n"],
+  'page-shell-override': ['packages/web/src/routes/shell-override.tsx', 'export function BadRoute() { return <h1>Bad</h1> }\n'],
   'parity-runner-subset': ['packages/cezar/src/core/runner-group-parity.test.ts', "const held = new Set(['opencode', 'omp']);\n"],
   'regex-module-syntax': ['packages/cezar/src/lint/import-scan.testkit.ts', "const imports = /^import\\s+\\{/;\n"],
   'raw-query-setter': ['packages/web/src/c.tsx', "import { useSearchParams } from 'react-router';\nconst [p, setP] = useSearchParams();\n"],
@@ -154,6 +155,8 @@ const APPROVED: Record<string, string> = {
   'packages/web/src/f.ts': "import type { RunRecord } from '@open-mercato/cezar-contract';\ntype T = import('@open-mercato/cezar-api-client').X;\n",
   // native-mock-source: pointing the runner at the real mock.
   'packages/cezar/test/g.test.ts': 'process.env[adapter.binEnv] = adapter.mockBin;\n',
+  // page-shell-override: named PageShell template without width/gutter overrides.
+  'packages/web/src/routes/shell-approved.tsx': 'export function GoodRoute() { return <TablePage route="demo" density="full" className="@container">ok</TablePage> }\n',
   // parity-runner-subset: a one-runner shard, a per-runner reason table, and a group outside a parity file.
   'packages/cezar/src/workflows/waits-one-runner-parity.test.ts': "subagentCells(['pi']);\nconst reasons = [['pi', 'no child wire'], ['omp', 'no child frame']];\n",
   'packages/cezar/src/core/runner-group.test.ts': "for (const backend of ['codex', 'pi']) {}\n",

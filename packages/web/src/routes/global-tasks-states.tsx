@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { TablePage } from '@/components/page-shell'
 import type { GroupBy } from '@/lib/global-tasks'
 import { Link } from 'react-router'
 import { ArchiveIcon, LayersIcon } from '@/components/design-icons'
@@ -72,7 +73,16 @@ export function GlobalTasksLoadError({ groupBy, filterDetailsOpen, message, onRe
   onRetry: () => void
 }) {
   return (
-    <div data-route="global-tasks" data-presentation={groupBy === 'none' ? 'summary' : 'cards'} data-filter-details={filterDetailsOpen} className="flex min-h-full flex-col gap-[22px] px-4 pt-6 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:py-7">
+    <TablePage
+      route="global-tasks"
+      density="empty"
+      rootProps={{
+        'data-presentation': groupBy === 'none' ? 'summary' : 'cards',
+        'data-filter-details': String(filterDetailsOpen),
+      }}
+      className="pb-[calc(90px+env(safe-area-inset-bottom))]"
+      bodyClassName="gap-[22px]"
+    >
       <CenteredState
         icon={<LayersIcon />}
         tone="danger"
@@ -80,7 +90,7 @@ export function GlobalTasksLoadError({ groupBy, filterDetailsOpen, message, onRe
         subtitle={message}
         actions={<Button variant="outline" onClick={onRetry}>Retry</Button>}
       />
-    </div>
+    </TablePage>
   )
 }
 

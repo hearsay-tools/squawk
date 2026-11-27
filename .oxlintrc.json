@@ -28,6 +28,7 @@
     "cez/mock-lifecycle-boundary": "error",
     "cez/mock-scenario-boundary": "error",
     "cez/native-mock-source": "error",
+    "cez/page-shell-override": "error",
     "cez/parity-runner-subset": "error",
     "cez/raw-query-setter": "error",
     "cez/regex-module-syntax": "error",

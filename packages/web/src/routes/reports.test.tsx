@@ -7,6 +7,7 @@ import { ReportsRoute } from './reports'
 
 const mocks = vi.hoisted(() => ({ useReports: vi.fn() }))
 vi.mock('@/api/reports', () => ({ useReports: mocks.useReports }))
+const SAMPLE_CREATED_AT = '2026-11-01T12:00:00Z'
 const refetch = vi.fn()
 const result = (overrides = {}) => ({ isPending: false, isError: false, data: { pages: [{ reports: [], total: 0, nextCursor: null }] }, refetch, ...overrides })
 function Location() { const l = useLocation(); return <div data-testid="location">{l.pathname + l.search}</div> }
@@ -55,8 +56,7 @@ describe('Reports shelf', () => {
   })
 
   it('uses server titles and source-task links, and records the shelf as the reader source', async () => {
-    const createdAt = '2026-11-01T12:00:00Z'
-    mocks.useReports.mockReturnValue(result({ data: { pages: [{ reports: [{ id: 'abc', runId: 'source', title: 'Income', name: 'budget.html', taskTitle: 'Prepare budget', createdAt }] }] } }))
+    mocks.useReports.mockReturnValue(result({ data: { pages: [{ reports: [{ id: 'abc', runId: 'source', title: 'Income', name: 'budget.html', taskTitle: 'Prepare budget', createdAt: SAMPLE_CREATED_AT }] }] } }))
     mount('/p/shop/reports?q=income')
     expect(screen.getByRole('link', { name: 'Prepare budget' }).getAttribute('href')).toBe('/p/shop/tasks/source')
     const report = screen.getByRole('link', { name: 'Income' })
@@ -64,8 +64,30 @@ describe('Reports shelf', () => {
     const time = document.querySelector('[data-slot="report-row"] time')
     expect(time?.textContent).toMatch(/^Published (?:just now|· (?:\d+[smd]|\d+h(?: \d+m)?))$/)
     expect(time?.getAttribute('title')).toBeTruthy()
-    expect(time?.getAttribute('title')).not.toBe(createdAt)
+    expect(time?.getAttribute('title')).not.toBe(SAMPLE_CREATED_AT)
     fireEvent.click(report)
     await waitFor(() => expect(screen.getAllByTestId('location')[0]!.textContent).toContain('/tasks/source/report?artifact=abc'))
+  })
+
+  it('declares SplitPage template and sparse/empty/full density on the reports route', () => {
+    mocks.useReports.mockReturnValue(result())
+    const view = mount('/p/shop/reports')
+    const shell = document.querySelector('[data-slot="page-shell"]')!
+    expect(shell.getAttribute('data-template')).toBe('Split')
+    expect(shell.getAttribute('data-density')).toBe('empty')
+
+    mocks.useReports.mockReturnValue(result({
+      data: {
+        pages: [{
+          reports: [{ id: 'r1', runId: 'source', title: 'Audit', name: 'audit.html', taskTitle: 'Audit task', createdAt: SAMPLE_CREATED_AT }],
+          total: 1,
+          nextCursor: null,
+        }],
+      },
+    }))
+    view.rerender(<MemoryRouter initialEntries={['/p/shop/reports']}><ReportsRoute /></MemoryRouter>)
+    const updated = document.querySelector('[data-slot="page-shell"]')!
+    expect(updated.getAttribute('data-density')).toBe('sparse')
+    expect(document.querySelector('[data-slot="page-shell-sparse-footer"]')?.textContent).toContain('Showing 1 report')
   })
 })

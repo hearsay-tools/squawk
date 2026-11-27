@@ -2,7 +2,7 @@ import './github-layout.css'
 import { useQueryClient } from '@tanstack/react-query'
 import { LoaderCircleIcon } from 'lucide-react'
 import { Virtualizer } from 'virtua'
-import { CheckIcon, CircleDotIcon, ChevronDownIcon, GitPullRequestIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
+import { CheckIcon, ChevronDownIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
 import {
   useEffect,
   useRef,
@@ -50,8 +50,9 @@ import { IssueFilters } from './issue-filters'
 import { allLabels, labelChipStyle } from './github-filter'
 import { GithubFilterScreen } from './github-filter-screen'
 import { GithubLoading } from './github-loading'
-import { GithubMasthead } from './github-masthead'
+import { githubHeaderProps, GithubNothingSelected } from './github-masthead'
 import { GithubRow } from './github-row'
+import { TablePage, pageShellDensity } from '@/components/page-shell'
 import { useGithubListPaging, type GithubListPaging, type GithubPagesQuery } from './github-paging'
 import {
   githubFilterPath, GITHUB_PAGE_SIZE, type GithubFilter,
@@ -233,14 +234,14 @@ export function GithubRoute({
   if (!gh) {
     if (list.isError) {
       return (
-        <div data-route="github" className="flex min-h-full flex-col">
+        <TablePage route="github" density="empty">
           <CenteredState
             icon={<TriangleAlertIcon size={16} />}
             tone="danger"
             title="Could not load GitHub"
             subtitle={list.error.message}
           />
-        </div>
+        </TablePage>
       )
     }
     return <GithubLoading />
@@ -285,14 +286,30 @@ export function GithubRoute({
   }
   const verdict = githubListVerdict(view, filters, sidebar.filterGate, search)
 
+  const density = pageShellDensity(search.items.length + search.searchHits.length)
+
   return (
     // Desktop: the title/repo line stays in document flow so `main` can scroll it away.
     // The route ends with one scrollport-height workspace, with no bottom padding:
     // at maximum page scroll its tabs align with main's top without sticky overlap.
     // Phone stays stacked document-flow. (#523)
-    <div ref={layout.routeRef} data-route="github" className="flex min-h-full flex-col gap-2.5 px-4 pt-7 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pt-7 md:pb-4">
-      <GithubMasthead view={view} activeFilter={activeFilter} isDesktop={isDesktop} rawFilterParam={rawFilterParam} n={n} gh={gh}
-        actions={{ automationsAvailable, refreshing: refresh.isPending, onRefresh }} />
+    <TablePage
+      rootRef={layout.routeRef}
+      route="github"
+      density={density}
+      headerSpacing="compact"
+      className="pb-[calc(90px+env(safe-area-inset-bottom))] md:pb-4"
+      bodyClassName="gap-2.5"
+      header={githubHeaderProps({
+        view,
+        activeFilter,
+        isDesktop,
+        rawFilterParam,
+        n,
+        gh,
+        actions: { automationsAvailable, refreshing: refresh.isPending, onRefresh },
+      })}
+    >
       <div ref={layout.workspaceRef} data-slot="gh-workspace" data-stacked={layout.panesStacked} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:h-[calc(var(--gh-workspace-height,calc(100dvh-4rem))-1rem)] md:flex-none md:gap-5">
         <header data-slot="gh-header" className="flex shrink-0 flex-col gap-3 bg-background md:gap-4">
           <GithubTabs view={view} isDesktop={isDesktop} gh={gh} onSaveView={saveGithubView} />
@@ -339,7 +356,7 @@ export function GithubRoute({
           />
         </div>
       </div>
-    </div>
+    </TablePage>
   )
 }
 
@@ -553,7 +570,7 @@ function GithubUnavailable({ reason, refreshing, onRetry }: {
   onRetry: () => void
 }) {
   return (
-    <div data-route="github" className="flex min-h-full flex-col">
+    <TablePage route="github" density="empty">
       <CenteredState
         icon={<GithubIcon />}
         tone="neutral"
@@ -576,7 +593,7 @@ function GithubUnavailable({ reason, refreshing, onRetry }: {
           Everything else in Squawk works without it.
         </p>
       </CenteredState>
-    </div>
+    </TablePage>
   )
 }
 
@@ -987,26 +1004,6 @@ function GithubExactItemError({ number, exact }: { number: number | null; exact:
         <Button variant="outline" disabled={retryingExact} onClick={retryExact}>
           Retry
         </Button>
-      }
-    />
-  )
-}
-
-/** No item to show: an empty list, or a number the tab cannot find. */
-function GithubNothingSelected({ view, number }: { view: GithubView; number: number | null }) {
-  return (
-    <CenteredState
-      icon={view === 'issues' ? <CircleDotIcon size={16} /> : <GitPullRequestIcon size={16} />}
-      tone="neutral"
-      heading="h2"
-      title={number === null ? 'Nothing selected' : 'Not found'}
-      subtitle={
-        number === null
-          ? `No open ${view === 'issues' ? 'issues' : 'pull requests'} to show.`
-          : // Since #730 a closed or merged item IS reachable — type its number into the
-            // search box and the tab asks GitHub directly — so the honest advice is to
-            // search, not the old "it may be closed" shrug.
-            `#${number} is not among the open ${view === 'issues' ? 'issues' : 'pull requests'}. Search for ${number} above to look it up on GitHub, closed and merged included.`
       }
     />
   )

@@ -1,5 +1,6 @@
 import { CompassIcon } from 'lucide-react'
 import { CenteredState } from '@/components/centered-state'
+import { ReadingPage } from '@/components/page-shell'
 import { Link } from '@/lib/project-router'
 import { Button } from '@/components/ui/button'
 
@@ -8,7 +9,7 @@ import { Button } from '@/components/ui/button'
  *  with a "Back to tasks" action). */
 export function NotFoundRoute() {
   return (
-    <div data-route="not-found" className="flex min-h-full flex-col">
+    <ReadingPage route="not-found" density="empty">
       <CenteredState
         icon={<CompassIcon />}
         tone="neutral"
@@ -20,6 +21,6 @@ export function NotFoundRoute() {
           </Button>
         }
       />
-    </div>
+    </ReadingPage>
   )
 }

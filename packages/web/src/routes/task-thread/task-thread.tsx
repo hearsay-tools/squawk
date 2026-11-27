@@ -29,6 +29,7 @@ import type { RunSummary } from '@open-mercato/cezar-api-client'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { Composer } from '@/components/composer/composer'
+import { ReadingPage } from '@/components/page-shell'
 import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { useKeyboardInsetVar } from '@/lib/keyboard-inset'
@@ -144,7 +145,7 @@ export function TaskThreadRoute() {
   if (run.isError) {
     const notFound = run.error instanceof ApiError && run.error.status === 404
     return (
-      <div data-route="task-thread" className="flex min-h-full flex-col">
+      <ReadingPage route="task-thread" density="empty" flushPadding>
         <CenteredState
           icon={notFound ? <SearchXIcon /> : <MessageSquareTextIcon />}
           tone={notFound ? 'neutral' : 'danger'}
@@ -160,7 +161,7 @@ export function TaskThreadRoute() {
             </Button>
           }
         />
-      </div>
+      </ReadingPage>
     )
   }
 
@@ -370,7 +371,13 @@ export function ThreadView({
   useKeyboardInsetVar(scroll.restickIfStuck)
   const viewportRef = useSessionViewport()
   return (
-    <div ref={viewportRef} data-route="task-thread" data-run-id={run.id} className="flex min-h-full flex-col">
+    <ReadingPage
+      route="task-thread"
+      density={thread.turns.length === 0 ? 'empty' : 'full'}
+      flushPadding
+      rootRef={viewportRef}
+      rootProps={{ 'data-run-id': run.id }}
+    >
       <RunHeader run={run} onMarkedUnread={() => onMarkedUnread?.(run.id)} />
 
       <ThreadTranscript
@@ -436,7 +443,7 @@ export function ThreadView({
           this tail pixel in place makes streamed rows and composer growth settle in the same
           layout pass: the textarea grows upward while the dock's bottom stays put. */}
       <div data-slot="thread-tail-anchor" aria-hidden="true" className="h-px shrink-0 md:hidden" />
-    </div>
+    </ReadingPage>
   )
 }
 

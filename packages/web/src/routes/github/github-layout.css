@@ -24,9 +24,6 @@
   [data-slot='gh-hand'] { padding: 16px; }
   [data-slot='gh-merge-box'] { padding: 16px; }
 }
-.gh-utility { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding-block: 8px; padding-inline: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); font-size: 12px; font-weight: 500; color: var(--foreground); transition: background-color 120ms ease, color 120ms ease; }
-.gh-utility:hover:not(:disabled) { background: var(--muted); }
-.gh-utility:disabled { opacity: .5; }
 [data-slot='gh-hand'] > [data-slot='prompt-template-trigger'] { align-self: flex-start; min-height: 44px; border-radius: 8px; padding-block: 0; padding-inline: 12px; }
 
 @media (max-width: 767px) {
@@ -81,12 +78,8 @@
 /* Desktop workspace header: full-bleed tab rule aligned to the 36px (md:px-9) page gutter,
    active tab underlined with --accent-text, and compact 34px filter toolbar controls. */
 @media (min-width: 768px) {
-  /* The tab row has the Tasks and Automations geometry: 44px tabs 24px apart on one rule, so
-     the three pages' tab baselines sit at the same height; the 32px utilities center in it. */
-  [data-route='github'] [data-slot='gh-tabs'] { gap: 24px; min-height: 0; margin-inline: -36px; padding-inline: 36px; }
+  [data-route='github'] [data-slot='gh-tabs'] { gap: 24px; min-height: 0; }
   [data-route='github'] [data-slot='gh-tabs'] > a { min-height: 44px; padding-block: 0; padding-inline: 0; }
-  /* The page actions on the title row: 32px utilities, like the Tasks and Automations headers. */
-  [data-route='github'] [data-slot='gh-page-actions'] .gh-utility { height: 32px; min-height: 32px; padding-block: 0; padding-inline: 12px; border-radius: 7px; font-size: 12px; line-height: 1; white-space: nowrap; }
   [data-route='github'] [data-slot='gh-filter-toolbar'] { gap: 10px; }
   [data-route='github'] [data-slot='gh-filter-toolbar'] :is(input, button) { min-height: 36px; height: 36px; padding-block: 0; border-radius: 7px; font-size: 12.5px; }
   [data-route='github'] [data-slot='gh-filter-toolbar'] [data-slot='gh-search'] { padding-inline-start: 32px; color: var(--foreground); }

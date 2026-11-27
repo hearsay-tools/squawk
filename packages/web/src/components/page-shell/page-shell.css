@@ -1,0 +1,186 @@
+/* Shared cockpit page shell (hearsay-tools/squawk#4373).
+ * Owns gutter, left-aligned content origin, template max-widths, header typography,
+ * unified header action button sizing, and declared empty/sparse/full layout states. */
+
+[data-slot='page-shell'] {
+  --page-shell-gutter: 16px;
+  --page-shell-max-w: none;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  flex-direction: column;
+  padding-inline: var(--page-shell-gutter);
+  padding-block: 28px 36px;
+}
+
+[data-slot='page-shell'][data-flush-padding='true'] {
+  padding-inline: 0;
+  padding-block: 0;
+}
+
+[data-slot='page-shell'][data-flush-padding='true'] > [data-slot='page-shell-frame'] {
+  max-width: none;
+}
+
+[data-slot='page-shell'][data-fill-height='true'] {
+  height: 100%;
+  min-height: 0;
+}
+
+[data-slot='page-shell'][data-template='Table'] {
+  --page-shell-max-w: 84rem;
+}
+
+[data-slot='page-shell'][data-template='Split'] {
+  --page-shell-max-w: none;
+}
+
+[data-slot='page-shell'][data-template='Reading'] {
+  --page-shell-max-w: var(--measure);
+}
+
+[data-slot='page-shell'][data-template='Form'] {
+  --page-shell-max-w: 68rem;
+}
+
+[data-slot='page-shell'][data-template='Board'] {
+  --page-shell-max-w: 96rem;
+}
+
+@media (min-width: 768px) {
+  [data-slot='page-shell'] {
+    --page-shell-gutter: 36px;
+  }
+}
+
+[data-slot='page-shell-frame'] {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: var(--page-shell-max-w);
+  margin-inline: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+[data-slot='page-shell'][data-fill-height='true'] > [data-slot='page-shell-frame'] {
+  min-height: 0;
+}
+
+[data-slot='page-shell-header'] {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  margin-block-end: 20px;
+}
+
+[data-slot='page-shell'][data-header-spacing='compact'] [data-slot='page-shell-header'] {
+  margin-block-end: 10px;
+}
+
+[data-slot='page-shell'][data-header-spacing='none'] [data-slot='page-shell-header'] {
+  margin-block-end: 0;
+}
+
+[data-slot='page-shell-header-row'] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+
+[data-slot='page-shell-header-title-block'] {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+[data-slot='page-shell-header-title'] {
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+
+@media (min-width: 768px) {
+  [data-slot='page-shell-header-title'] {
+    font-size: 28px;
+  }
+}
+
+[data-slot='page-shell-header-actions'] {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+/* Unified header action button size: 36px on desktop, 44px on mobile and coarse touch. */
+[data-slot='page-shell-header-actions'] :is(button, a)[data-slot='button'],
+[data-slot='page-shell-header-actions'] :is(button, a)[data-slot='page-shell-action'] {
+  height: 36px;
+  min-height: 36px;
+  padding-inline: 12px;
+  padding-block: 0;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1;
+}
+
+@media (max-width: 767px), (hover: none) {
+  [data-slot='page-shell-header-actions'] :is(button, a)[data-slot='button'],
+  [data-slot='page-shell-header-actions'] :is(button, a)[data-slot='page-shell-action'] {
+    height: auto;
+    min-height: 44px;
+    min-width: 44px;
+    padding-block: 8px;
+  }
+}
+
+[data-slot='page-shell-body'] {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+[data-slot='page-shell'][data-fill-height='true'] [data-slot='page-shell-body'] {
+  min-height: 0;
+}
+
+/* Sparse density framing: keep low-count Table/Board/Form/Reading screens visually grounded. */
+[data-slot='page-shell-sparse-footer'] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-block-start: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+}
+
+/* Split template master-detail layout: two balanced columns on desktop, stacked on mobile. */
+[data-slot='page-shell-split-pane'] {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+@media (min-width: 768px) {
+  [data-slot='page-shell-split-pane'] {
+    grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+    align-items: stretch;
+  }
+}
