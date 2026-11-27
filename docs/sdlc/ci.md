@@ -109,11 +109,11 @@ and before every push after the PR opens. It prints one verdict and the
 evidence block for the PR body. It reads Squeal's results for the changed files and for
 oxlint, and always runs the lint runner’s repository-only checks (file length, design CSS,
 wait discipline and stale entries). It also runs typecheck (not for a docs-only change), citations, clones,
-spec statuses (`check-spec-status.cjs`), CI's function complexity ratchet and the
+spec statuses (`check-spec-status.cjs`), the policy and anchor guards, CI's function complexity ratchet and the
 [GitHub patch limits](#github-patch-limits). It reports the [test line budget](#test-line-budget)
 and never fails on it. Its exit code
 is non-zero on a failing test, a missing direct test result (below), a lint finding, a type error, a bare citation, a new clone,
-a spec without a valid status, a changed function that grew over the complexity limit,
+a spec without a valid status, a failing policy or anchor guard, a changed function that grew over the complexity limit,
 or a committed file diff over the per-file patch limit or with a NUL byte.
 
 - The Squeal wait is bounded at 2 minutes (`--wait-ms`). The gate waits first for the edited test
@@ -123,6 +123,11 @@ or a committed file diff over the per-file patch limit or with a NUL byte.
   its result; any other selected test file is a `pending` line that gives the count, the host
   load and Squeal's causes, does not fail the gate, and leaves the file to CI
   (hearsay-tools/squawk#3940).
+- The policy and anchor guards scan the repository by path, so no import reaches them and
+  Squeal's result for them can still be pending. The command runs them itself on every change,
+  with `node --test`: `auto-merge-gates.test.cjs` (the auto-merge never-list),
+  `scripts/test-inputs.test.mjs` (`squeal.config.json` `inputs`) and `scripts/readers.test.mjs`
+  (the `scripts/readers.mjs` anchors) (hearsay-tools/squawk#4364).
 - When Squeal's lint has not finished for the changed files, or is off, the command runs
   `npm run lint` and takes its verdict.
 - The complexity check is CI's `complexity-gate.mjs` against the base. When the branch's
@@ -661,8 +666,8 @@ node .ai/skills/check-code-quality/scripts/complexity-gate.mjs --base origin/mai
 For an owner-approved increase, the owner adds the `baseline-growth` label. `.github/workflows/rerun-label-gates.yml` then re-runs the failed jobs automatically (waiting first if CI is still running); if it does not, re-run the failed `complexity-gate` job manually. An agent never adds the label. Auto-merge has no complexity check of its own.
 CRAP is not part of this gate; CI reports it without failing (§ CRAP report for changed functions).
 
-**File length.** `npm run lint` pins every non-test source file over 1,000 lines in
-`packages/cezar/src/file-length.baseline.json`. `npm run prepr` runs the budget even when Squeal supplies oxlint results. No unit test
+**File length.** `npm run lint` pins every non-test source file over 1,000 lines with one pin file,
+`packages/cezar/src/file-length.baseline/<source path>.json` holding `{ "lines": N }`. `npm run prepr` runs the budget even when Squeal supplies oxlint results. No unit test
 runs this repository-wide check. It fails when a pinned file grows and when another file passes 1,000 lines.
 Make room by a verbatim move of whole functions to a sibling module; never join lines to fit. Print a
 file's lines left before you plan a change to it:
@@ -671,7 +676,8 @@ file's lines left before you plan a change to it:
 node packages/cezar/src/lint/file-length.ts headroom <path>...
 ```
 
-When a file gets smaller, a local `npm run lint` or `npm run prepr` lowers its pin and says so.
+When a file gets smaller, a local `npm run lint` or `npm run prepr` lowers its pin and says so. A file at or
+under the limit loses its pin file. Commit the pin files the run changed.
 Commit the baseline with the change. CI writes nothing and fails a pin that was not lowered
 ([lint.md § Shrink-only baselines](lint.md#shrink-only-baselines)). A run only lowers pins and drops entries. The `Reject baseline growth` step refuses a raised pin
 or a new entry, and the same `baseline-growth` label approves one. A pin that only follows its
@@ -1385,7 +1391,11 @@ that moves from position 2 to 1 during its build, because entry 1 merged, passes
 the final reread. It also requires the reviewed queue rules (build concurrency 1
 or 2, every other setting exact), an unchanged open non-draft main PR, a successful
 `Unit, build, E2E, and package` job in the newest native `pull_request_target` run of
-this repository's `ci.yml` on the PR head, and no unresolved review thread. Dispatches
+this repository's `ci.yml` on the PR head, and no unresolved review thread. That run
+must be complete, and its conclusion may be `success` or `failure`: the job is the
+gate, so a failed job outside it, such as `Prepare PR snapshot archives`, does not
+refuse the entry (hearsay-tools/squawk#4363). A running, `cancelled` or other run is
+not proof. Dispatches
 and unrelated same-name checks cannot supply that proof. Missing or changing evidence
 fails closed. GitHub owns queue persistence; no cockpit session is required.
 
@@ -1524,7 +1534,7 @@ its head SHA and fails closed.
 | 7 | Entry 1's PR head changes | Push to the PR | Author, then GitHub | GitHub removes entry 1; as row 4 | As today |
 | 8 | Entry 2 fails while entry 1 builds | A required check fails | GitHub | Entry 2 removed; entry 1 unaffected. The next queued entry builds on entry 1's group head | Cannot happen |
 | 9 | Entry 2's PR head changes, or a human removes it | Push or removal | Author or human | Entry 2 removed; entry 1 unaffected | Not building yet: removed from the queue |
-| 10 | Queue reordered or an entry jumps ahead | Human action | Authorized human | GitHub builds again with new groups. A stale group's admission finds no matching entry and fails closed | As today |
+| 10 | Queue reordered or an entry jumps ahead | Human action | Authorized human | GitHub builds again with new groups. A stale group's admission finds no matching entry and fails closed. GitHub does not remove the PR for that failure: its current group decides (8 stale failures, none removed a PR, 2026-11-17 to 2026-11-26; hearsay-tools/squawk#4363) | As today |
 | 11 | Entry 2 conflicts with entry 1 | Group commit cannot be built | GitHub | Entry 2 removed with `merge_conflict`; PR stays open | Conflict found when it reaches the head |
 | 12 | Entry 1 changes `ci.yml` | PR content | Author | Entry 2's run uses its group head's workflow, which holds entry 1's change. Entry 2 runs full suites, as every full-matrix entry does | As today: the next entry runs the merged workflow |
 | 13 | Entry 1 changes the admission or proof helpers | PR content | Author | Entry 2 runs entry 1's helpers from its base (G3). If entry 1 fails, entry 2 is built again on `main`'s helpers | Entry 2 runs them after entry 1 merges |
@@ -1536,32 +1546,25 @@ its head SHA and fails closed.
 | 19 | Docs-only entry at position 2 | PR content | Classifier | The group diff `base..head` is that PR's own diff, so the skip is valid. Main proof: first parent = ref base | As today |
 | 20 | Entry at position 2, native suites passed | — | CI | Full suites run; PR selections are never queue proof | Cannot happen |
 | 21 | Entry at position 1 on `main`, PR up to date, entries behind it | — | CI | Full suites run; PR selections are never queue proof | Full suites run |
-| 22 | An invalidated run finishes green later | Old run completes | Actions | Its group never merges, and its SHA never reaches `main`. It is counted as waste in the pilot metric | Cannot happen |
+| 22 | An invalidated run finishes later | Old run completes | Actions | Green or red, it decides nothing: its group never merges, its SHA never reaches `main`, and its failure removes no PR (row 10). It is counted as waste in the pilot metric | Cannot happen |
 | 23 | Manual re-run of a failed queue run | Human | Human | The entry was already removed; the run proves nothing for a new group. Requeue the PR | As today |
 | 24 | GitHub reports entry 2's `baseCommit` as `main`, not entry 1's head (S5 false) | GitHub data model | GitHub | Entry 2's admission fails closed on every build. The pre-activation exercise catches this before the pilot. Then the lookup changes to: base = the position-1 head, checked through the ref name | — |
 | 25 | GitHub cancels invalidated runs itself | GitHub behavior | GitHub | Less waste than the model; no correctness change | — |
 
 Rows that "cannot happen" at k=1 are why the serial queue never needed them.
 
-### Local ratchet baseline merges
+### Conflict-free ratchet records
 
-Run `npm run setup:merge-drivers` once per clone to register the `cezar-ratchet`
-Git merge driver in repository-local config. Linked worktrees share that config.
-Dependency installation does not register it. Setup refuses to replace a different
-existing definition. Node must be on PATH when Git merges.
+GitHub's merge queue runs no custom merge driver, so a record two pull requests both change must not
+share a file, or a line next to another record. File-length pins and equivalent mutants are stored one
+file per source file: `packages/cezar/src/file-length.baseline/<source path>.json` and
+`.github/mutants/equivalent/<source path>.json` (hearsay-tools/squawk#4362). Two pull requests then
+conflict only when they change the record of the same source file.
 
-The attributes cover `packages/cezar/src/file-length.baseline.json`.
-The driver takes the lower numeric pin or site count, matching AST sites by
-`(file, rule, site)`. It keeps additions, and preserves a removal against an
-unchanged entry. A removal against a modified entry, conflicting metadata,
-duplicate AST identities or unsupported JSON leaves a conflict for manual
-resolution. Output keeps the existing schema with stable key ordering.
+`baseline-growth.cjs` reads the pin directory as one ratchet keyed by source path: a raised pin or a
+new pin file is growth and needs the owner's `baseline-growth` label, and a deleted pin file is a dropped
+entry. A pin file renamed with the source file it pins is not growth. Auto-merge takes a lowered or
+deleted pin file and sends an added one to the owner. The other `*.baseline.json` files stay single files.
 
-This merge does not approve baseline growth. Existing CI growth and stale-entry
-checks still apply; combined source changes can require another baseline refresh.
-Only the owner can approve growth through the existing `baseline-growth` policy.
-GitHub does not run this custom driver: resolve server-side conflicts with a local
-merge and push. Clones without setup use Git's ordinary merge behavior.
-
-Remove registration with `git config --local --unset-all merge.cezar-ratchet.driver`.
-This affects developer Git operations only; it adds no cockpit runtime setting.
+A clone that registered the removed `cezar-ratchet` merge driver can drop it with
+`git config --local --unset-all merge.cezar-ratchet.driver`.

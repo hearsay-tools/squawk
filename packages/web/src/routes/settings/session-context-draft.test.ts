@@ -61,6 +61,13 @@ describe('session context draft edits', () => {
     expect((parse(text) as { rules: { id: string }[] }).rules.map((r) => r.id)).toEqual(['new-rule', 'new-rule-2'])
   })
 
+  it('avoids colliding with rule ids already defined in the shared context.yaml layer', () => {
+    const shared = 'version: 1\nrules:\n  - id: new-rule\n    on: session_start\n    template: Shared\n'
+    const { text, select } = addRule('', shared)
+    expect((parse(text) as { rules: { id: string }[] }).rules.map((r) => r.id)).toEqual(['new-rule-2'])
+    expect(text.slice(...select)).toBe('new-rule-2')
+  })
+
   it('adds the rules key when the draft has only a version', () => {
     expect((parse(addRule('version: 1').text) as { rules: unknown[] }).rules).toHaveLength(1)
   })

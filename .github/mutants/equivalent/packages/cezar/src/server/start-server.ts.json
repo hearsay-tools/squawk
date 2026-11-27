@@ -1,0 +1,16 @@
+[
+  {
+    "function": "shutdownForRestart",
+    "mutator": "ConditionalExpression",
+    "original": "'closeAllConnections' in server",
+    "replacement": "true",
+    "reason": "server is always a node:http Server: the listener parameter is typed node:http Server and serve() is called without createServer, which makes a node:http server; the check only narrows the ServerType union for TypeScript."
+  },
+  {
+    "function": "setTaskWebhookOrigin",
+    "mutator": "ConditionalExpression",
+    "original": "context",
+    "replacement": "true",
+    "reason": "ids() returns the keys of the same map peek() reads, and the loop reads both synchronously, so peek() returns a context for every id it is given."
+  }
+]

@@ -1,0 +1,9 @@
+[
+  {
+    "function": "pollWindow",
+    "mutator": "EqualityOperator",
+    "original": "Date.parse(overlapSince) < Date.parse(historyStart)",
+    "replacement": "Date.parse(overlapSince) <= Date.parse(historyStart)",
+    "reason": "At equality both values are normalized ISO timestamps, so assigning historyStart keeps the identical string."
+  }
+]

@@ -1,0 +1,58 @@
+[
+  {
+    "function": "launchdServices",
+    "mutator": "ConditionalExpression",
+    "original": "a.kind === 'owned' && a.type === 'launchd'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. some() is true for a non-empty ledger either way, because the owned launchd artifact matches the original predicate (the shared ngrok-config artifact matches only the mutant), and false for an empty ledger either way."
+  },
+  {
+    "function": "launchdServices",
+    "mutator": "LogicalOperator",
+    "original": "a.kind === 'owned' && a.type === 'launchd'",
+    "replacement": "a.kind === 'owned' || a.type === 'launchd'",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact is neither owned nor launchd, so it fails the mutant too, and some() finds the owned launchd artifact either way."
+  },
+  {
+    "function": "launchdServices",
+    "mutator": "ConditionalExpression",
+    "original": "a.kind === 'owned'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact fails the mutant because its type is not launchd, and some() finds the owned launchd artifact either way."
+  },
+  {
+    "function": "launchdServices",
+    "mutator": "ConditionalExpression",
+    "original": "a.type === 'launchd'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact fails the mutant because it is not owned, and some() finds the owned launchd artifact either way."
+  },
+  {
+    "function": "agentCandidates",
+    "mutator": "LogicalOperator",
+    "original": "a.kind === 'owned' && a.type === 'launchd'",
+    "replacement": "a.kind === 'owned' || a.type === 'launchd'",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact is neither owned nor launchd, so it fails the mutant too, and find() returns the owned launchd artifact either way."
+  },
+  {
+    "function": "agentCandidates",
+    "mutator": "ConditionalExpression",
+    "original": "a.kind === 'owned'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact fails the mutant because its type is not launchd, and find() returns the owned launchd artifact either way."
+  },
+  {
+    "function": "agentCandidates",
+    "mutator": "ConditionalExpression",
+    "original": "a.type === 'launchd'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact fails the mutant because it is not owned, and find() returns the owned launchd artifact either way."
+  },
+  {
+    "function": "legacyCandidateOwned",
+    "mutator": "BlockStatement",
+    "original": "{\n    return false;\n  }",
+    "replacement": "{}",
+    "reason": "The only caller, agentCandidates, uses the result only as a ternary condition; an unreadable legacy plist returning undefined instead of false selects the same candidate list."
+  }
+]

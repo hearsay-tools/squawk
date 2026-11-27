@@ -1,9 +1,15 @@
 import { FileStackIcon, PlusIcon } from 'lucide-react'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 
 import { ApiError } from '@/api/client'
 import { usePutSessionContext, useSessionContext, useSessionContextPreview } from '@/api/queries'
-import type { SessionContextFile, SessionContextProblem, SessionContextRole } from '@open-mercato/cezar-api-client'
+import type {
+  SessionContextFile,
+  SessionContextProblem,
+  SessionContextRole,
+  SessionContextSharedFile,
+  SessionContextState,
+} from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { CodeEditor } from '@/components/code-editor'
 import { Badge } from '@/components/ui/badge'
@@ -19,34 +25,37 @@ import { FILE_TOKEN_LABEL, SESSION_CONTEXT_TOKENS, addRule, insertToken, lineRan
 const DOCS_URL = 'https://github.com/hearsay-tools/squawk/blob/main/docs/context-injection.md'
 
 /**
- * Settings → Session context (hearsay-tools/squawk#4308): the project's `context.yaml` rules,
- * which every launched session gets after its built-in handoff block. The user edits the raw
- * YAML; the server parses and renders each draft, so the problems and the preview are the ones
- * a launch would see. Saving needs no settings administration: the file runs no host command.
+ * Settings → Session context (hearsay-tools/squawk#4308, hearsay-tools/squawk#4341): edits host-local gitignored
+ * `context.local.yaml` by default, shows repo-tracked `context.yaml` read-only with tracked status,
+ * and previews the combined launch output (handoff, shared, then local).
  */
 export function SessionContextSection() {
-  const file = useSessionContext()
+  const query = useSessionContext()
   return (
     <div data-slot="session-context" className="flex flex-col gap-4 p-4 md:p-6">
       <HandoffCard />
-      {file.data !== undefined ? (
-        // A failed reload keeps the last good file, so the editor and its draft stay mounted.
+      {query.data !== undefined ? (
+        // A failed reload keeps the last good state, so the editor and its draft stay mounted.
         <>
-          {file.isError && (
+          {query.isError && (
             <p data-slot="session-context-reload-error" role="alert" className="text-[13px] text-danger">
-              Could not read context.yaml again: {file.error.message}
+              Could not read session context again: {query.error.message}
             </p>
           )}
-          <SessionContextEditor key={file.data.path} file={file.data} refetch={() => file.refetch()} />
+          <SessionContextWorkspace
+            key={query.data.local.path}
+            state={query.data}
+            refetch={() => query.refetch()}
+          />
         </>
-      ) : file.isError ? (
+      ) : query.isError ? (
         <CenteredState
           icon={<FileStackIcon />}
           tone="danger"
           title="Session context did not load"
-          subtitle={file.error.message}
+          subtitle={query.error.message}
           heading="h2"
-          actions={<Button variant="outline" onClick={() => void file.refetch()}>Try again</Button>}
+          actions={<Button variant="outline" onClick={() => void query.refetch()}>Try again</Button>}
         />
       ) : (
         <LoadingShape />
@@ -64,14 +73,14 @@ function HandoffCard() {
           <Badge variant="outline" className="border-accent-strong/40 text-[11px] text-link-foreground">Built in · always first</Badge>
         </div>
         <p className="text-[13px] text-muted-foreground">
-          Each task’s own handoff file: Goal, Progress log and Resume notes. It needs no setup and cannot be turned off. Your rules come after it.
+          Each task’s own handoff file: Goal, Progress log and Resume notes. It needs no setup and cannot be turned off. Shared and local rules come after it.
         </p>
       </div>
     </div>
   )
 }
 
-/** The editor and preview's shape while the file loads, so the page does not jump. */
+/** The editor and preview's shape while the files load, so the page does not jump. */
 function LoadingShape() {
   return (
     <div data-slot="session-context-loading" aria-busy="true" aria-label="Loading session context" className="grid gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
@@ -92,9 +101,11 @@ function useSettled(value: string, delayMs = 250): string {
 }
 
 type SaveFailure = { kind: 'conflict'; message: string } | { kind: 'error'; message: string }
+type Pane = 'edit' | 'preview'
+type Scope = 'local' | 'shared'
 
-/** The draft, its server-rendered preview, and the save that never loses the draft. */
-function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise<unknown>) {
+/** The local draft, its combined server preview, and the save that never loses the draft. */
+function useSessionContextDraft(file: SessionContextFile, shared: SessionContextSharedFile, refetch: () => Promise<unknown>) {
   const [draft, setDraftText] = useState<string | null>(null)
   // The version the draft started from. A background reload may bring a newer file; a normal save
   // still names this one, so it gets a conflict instead of overwriting the other edit.
@@ -107,6 +118,7 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
   }
   const [role, setRole] = useState<SessionContextRole>('parent')
   const [pane, setPane] = useState<Pane>('edit')
+  const [scope, setScope] = useState<Scope>('local')
   const [failure, setFailure] = useState<SaveFailure | null>(null)
   const [showDisk, setShowDisk] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -118,7 +130,8 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
   useUnsentDraft(dirty)
 
   const settled = useSettled(content)
-  const preview = useSessionContextPreview(settled, role)
+  const sharedKey = `${shared.path}|${shared.exists ? '1' : '0'}|${shared.unreadableReason ?? ''}|${shared.content}`
+  const preview = useSessionContextPreview(settled, role, sharedKey)
   // A cached good answer does not count once checking the same draft again has failed.
   const current = preview.data !== undefined && !preview.isPlaceholderData && !preview.isError && settled === content
   const previewError = preview.isError && !preview.isFetching && settled === content ? preview.error.message : null
@@ -135,6 +148,7 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
 
   const edit = (next: { text: string; select: [number, number] }) => {
     setDraft(next.text)
+    setScope('local')
     setPane('edit')
     setSelection(next.select)
   }
@@ -143,6 +157,7 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
     edit(insertToken(content, input?.selectionStart ?? content.length, input?.selectionEnd ?? content.length, token))
   }
   const goToLine = (line: number) => {
+    setScope('local')
     setPane('edit')
     setSelection(lineRange(content, line))
   }
@@ -163,9 +178,9 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
           // Text typed while the save was on its way stays as the draft, now based on the saved file.
           const kept = draftRef.current !== null && draftRef.current !== sent
           setDraftText(kept ? draftRef.current : null)
-          setBase(kept ? { version: saved.version } : null)
+          setBase(kept ? { version: saved.local.version } : null)
           setShowDisk(false)
-          toast(`Saved ${file.path}`)
+          toast(`Saved ${saved.local.path}`)
         },
         onError: (error) => {
           const conflict = error instanceof ApiError && error.status === 409
@@ -177,85 +192,254 @@ function useSessionContextDraft(file: SessionContextFile, refetch: () => Promise
   }
 
   return {
-    started: file.exists || draft !== null, content, dirty, setDraft, role, setRole, pane, setPane, failure, showDisk,
-    toggleDisk: () => setShowDisk((shown) => !shown), inputRef, preview: preview.data, current, problems,
-    previewError, retryPreview: () => void preview.refetch(),
+    localStarted: file.exists || draft !== null, content, dirty, setDraft, role, setRole, pane, setPane,
+    scope, setScope, failure, showDisk, toggleDisk: () => setShowDisk((shown) => !shown), inputRef,
+    preview: preview.data, current, problems, previewError, retryPreview: () => void preview.refetch(),
     saving: put.isPending, edit, insert, goToLine, discard, save,
   }
 }
 
-type Pane = 'edit' | 'preview'
-
-function SessionContextEditor({ file, refetch }: { file: SessionContextFile; refetch: () => Promise<unknown> }) {
-  const state = useSessionContextDraft(file, refetch)
-  const { content, problems, current } = state
-  const writable = file.writable
+function SessionContextWorkspace({ state, refetch }: { state: SessionContextState; refetch: () => Promise<unknown> }) {
+  const { local, shared } = state
+  const editor = useSessionContextDraft(local, shared, refetch)
+  const { content, problems, current } = editor
+  const writable = local.writable
   const marked = useMemo(() => new Set(problems.flatMap((p) => (p.line === null ? [] : [p.line]))), [problems])
 
-  if (!state.started) {
-    return <EmptyRules path={file.path} readOnlyReason={file.readOnlyReason} onAdd={writable ? () => state.edit(addRule('')) : undefined} />
+  if (!editor.localStarted && !shared.exists) {
+    return (
+      <EmptyRules
+        localPath={local.path}
+        sharedPath={shared.path}
+        readOnlyReason={local.readOnlyReason}
+        onAdd={writable ? () => editor.edit(addRule('', shared.content)) : undefined}
+      />
+    )
   }
   return (
     <div data-slot="session-context-editor" data-reports-dirty="" className="flex flex-col gap-4">
-      {!writable && <ReadOnlyNotice reason={file.readOnlyReason} />}
-      {state.failure && writable && (
-        <SaveFailureNotice failure={state.failure} showDisk={state.showDisk} onShowDisk={state.toggleDisk} onOverwrite={() => state.save(true)} />
+      {!writable && editor.scope === 'local' && <ReadOnlyNotice reason={local.readOnlyReason} />}
+      {editor.failure && writable && (
+        <SaveFailureNotice failure={editor.failure} showDisk={editor.showDisk} onShowDisk={editor.toggleDisk} onOverwrite={() => editor.save(true)} />
       )}
-      {state.showDisk && <DiskVersion content={file.content} />}
-      {state.previewError && (
+      {editor.showDisk && <DiskVersion content={local.content} />}
+      {editor.previewError && (
         <div data-slot="session-context-preview-error" role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-danger/45 bg-danger/10 p-3 text-[13px]">
-          <span className="mr-auto">The preview failed: {state.previewError}. Save stays off until the draft is checked.</span>
-          <Button variant="outline" onClick={state.retryPreview}>Check again</Button>
+          <span className="mr-auto">The preview failed: {editor.previewError}. Save stays off until the draft is checked.</span>
+          <Button variant="outline" onClick={editor.retryPreview}>Check again</Button>
         </div>
       )}
-      {problems.length > 0 && <ProblemList problems={problems} onLine={state.goToLine} />}
-      <PaneTabs pane={state.pane} onPane={state.setPane} />
+      {problems.length > 0 && <ProblemList problems={problems} onLine={editor.goToLine} />}
+      <PaneTabs pane={editor.pane} onPane={editor.setPane} />
       <div className="grid items-start gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <section
           id={PANE_IDS.edit}
           data-slot="session-context-file"
-          aria-label="context.yaml"
-          className={cn('flex flex-col overflow-hidden rounded-lg border border-border bg-card', state.pane !== 'edit' && 'max-md:hidden')}
+          aria-label="Session context rules"
+          className={cn('flex flex-col overflow-hidden rounded-lg border border-border bg-card', editor.pane !== 'edit' && 'max-md:hidden')}
         >
-          <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
-            <code className="font-mono text-[12px] break-all">{file.path}</code>
-            <FileStatus problems={problems.length} current={current} failed={state.previewError !== null} dirty={state.dirty} />
-            {writable && (
-              <Button data-slot="session-context-add-rule" variant="outline" className="ml-auto" onClick={() => state.edit(addRule(content))}>
-                <PlusIcon /> Add rule
-              </Button>
-            )}
-          </div>
-          <CodeEditor
-            value={content}
-            onChange={writable ? state.setDraft : undefined}
-            readOnly={!writable}
-            language="yaml"
-            markedLines={marked}
-            inputRef={state.inputRef}
-            aria-label="context.yaml rules"
-            className="h-[420px] rounded-none border-0"
-          />
-          {writable && <TokenChips onInsert={state.insert} />}
+          <ScopeTabs scope={editor.scope} onScope={editor.setScope} dirty={editor.dirty} shared={shared} />
+          {editor.scope === 'local' ? (
+            <LocalLayerPanel
+              file={local}
+              sharedPath={shared.path}
+              started={editor.localStarted}
+              content={content}
+              dirty={editor.dirty}
+              problems={problems.length}
+              current={current}
+              previewFailed={editor.previewError !== null}
+              marked={marked}
+              inputRef={editor.inputRef}
+              onDraft={editor.setDraft}
+              onAdd={() => editor.edit(addRule(content, shared.content))}
+              onInsert={editor.insert}
+            />
+          ) : (
+            <SharedLayerPanel shared={shared} onOpenLocal={() => editor.setScope('local')} />
+          )}
         </section>
         <SessionContextPreviewPanel
           id={PANE_IDS.preview}
-          preview={state.preview}
-          role={state.role}
-          onRole={state.setRole}
+          preview={editor.preview}
+          role={editor.role}
+          onRole={editor.setRole}
           pending={!current}
-          className={cn(state.pane !== 'preview' && 'max-md:hidden')}
+          className={cn(editor.pane !== 'preview' && 'max-md:hidden')}
         />
       </div>
-      <SaveBar
-        writable={writable}
-        hasProblems={problems.length > 0}
-        dirty={state.dirty}
-        saving={state.saving}
-        canSave={writable && state.dirty && !state.saving && current && problems.length === 0}
-        onDiscard={state.discard}
-        onSave={() => state.save()}
-      />
+      {(editor.localStarted || editor.dirty) && (
+        <SaveBar
+          localPath={local.path}
+          writable={writable}
+          hasProblems={problems.length > 0}
+          dirty={editor.dirty}
+          saving={editor.saving}
+          canSave={writable && editor.dirty && !editor.saving && current && problems.length === 0}
+          onDiscard={editor.discard}
+          onSave={() => editor.save()}
+        />
+      )}
+    </div>
+  )
+}
+
+const SCOPES = ['local', 'shared'] as const
+const SCOPE_PANEL_IDS: Record<Scope, string> = { local: 'session-context-local-panel', shared: 'session-context-shared-panel' }
+
+function ScopeTabs({
+  scope,
+  onScope,
+  dirty,
+  shared,
+}: {
+  scope: Scope
+  onScope: (scope: Scope) => void
+  dirty: boolean
+  shared: SessionContextSharedFile
+}) {
+  const tabs = useRef(new Map<Scope, HTMLButtonElement>())
+  const onKeyDown = (event: KeyboardEvent) => {
+    const next = valueForKey(SCOPES, scope, event.key)
+    if (next === undefined) return
+    event.preventDefault()
+    onScope(next)
+    tabs.current.get(next)?.focus()
+  }
+  return (
+    <div role="tablist" aria-label="Context rule layer" onKeyDown={onKeyDown} className="flex border-b border-border bg-muted/30">
+      {SCOPES.map((value) => {
+        const selected = scope === value
+        return (
+          <button
+            key={value}
+            ref={(element) => {
+              if (element) tabs.current.set(value, element)
+              else tabs.current.delete(value)
+            }}
+            type="button"
+            role="tab"
+            tabIndex={selected ? 0 : -1}
+            aria-selected={selected}
+            aria-controls={SCOPE_PANEL_IDS[value]}
+            data-slot="session-context-scope"
+            data-scope={value}
+            onClick={() => onScope(value)}
+            className={cn(
+              'flex min-h-11 flex-1 items-center justify-center gap-2 border-b-2 border-transparent px-3 py-3 text-[13px] leading-5 font-medium text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring',
+              selected && 'border-accent-strong bg-card text-foreground',
+            )}
+          >
+            <span>{value === 'local' ? 'Local' : 'Shared'}</span>
+            {value === 'local' && dirty && <span className="text-[11px] text-conflict">· Unsaved</span>}
+            {value === 'shared' && shared.tracked && <span className="text-[11px] text-soft-foreground">· Tracked</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function LocalLayerPanel(props: {
+  file: SessionContextFile
+  sharedPath: string
+  started: boolean
+  content: string
+  dirty: boolean
+  problems: number
+  current: boolean
+  previewFailed: boolean
+  marked: ReadonlySet<number>
+  inputRef: RefObject<HTMLTextAreaElement | null>
+  onDraft: (text: string) => void
+  onAdd: () => void
+  onInsert: (token: string) => void
+}) {
+  const { file, started, content } = props
+  const writable = file.writable
+  return (
+    <div id={SCOPE_PANEL_IDS.local} role="tabpanel" className="flex flex-col">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
+        <code className="font-mono text-[12px] break-all">{file.path}</code>
+        <Badge variant="outline" className="text-[11px]">Gitignored · local</Badge>
+        {started && <FileStatus problems={props.problems} current={props.current} failed={props.previewFailed} dirty={props.dirty} />}
+        {writable && started && (
+          <Button data-slot="session-context-add-rule" variant="outline" className="ml-auto min-h-11" onClick={props.onAdd}>
+            <PlusIcon /> Add rule
+          </Button>
+        )}
+      </div>
+      {!started ? (
+        <div data-slot="session-context-local-empty" className="flex flex-col items-start gap-3 p-4">
+          <p className="text-[13px] text-muted-foreground">
+            No local rules yet. Local rules live in <code className="font-mono text-[12px] text-foreground">{file.path}</code> (auto-ignored by Git) and run after shared rules from <code className="font-mono text-[12px] text-foreground">{props.sharedPath}</code>. Reuse a shared rule’s <code className="font-mono text-[12px] text-foreground">id</code> to replace it locally, or set <code className="font-mono text-[12px] text-foreground">enabled: false</code> to mute it.
+          </p>
+          {writable && (
+            <Button data-slot="session-context-add-rule" className="min-h-11" onClick={props.onAdd}>
+              <PlusIcon /> Add a local rule
+            </Button>
+          )}
+        </div>
+      ) : (
+        <>
+          <CodeEditor
+            value={content}
+            onChange={writable ? props.onDraft : undefined}
+            readOnly={!writable}
+            language="yaml"
+            markedLines={props.marked}
+            inputRef={props.inputRef}
+            aria-label="context.local.yaml rules"
+            className="h-[420px] rounded-none border-0"
+          />
+          {writable && <TokenChips onInsert={props.onInsert} />}
+        </>
+      )}
+    </div>
+  )
+}
+
+function SharedTrackedBadge({ shared }: { shared: SessionContextSharedFile }) {
+  if (!shared.exists) return <Badge data-slot="session-context-shared-status" variant="outline" className="text-[11px]">Not in repo</Badge>
+  if (shared.tracked) {
+    return (
+      <Badge data-slot="session-context-shared-status" variant="outline" className="border-accent-strong/40 text-[11px] text-link-foreground">
+        Tracked in Git
+      </Badge>
+    )
+  }
+  return <Badge data-slot="session-context-shared-status" variant="outline" className="text-[11px]">Untracked · repo file</Badge>
+}
+
+function SharedLayerPanel({ shared, onOpenLocal }: { shared: SessionContextSharedFile; onOpenLocal: () => void }) {
+  return (
+    <div id={SCOPE_PANEL_IDS.shared} role="tabpanel" data-slot="session-context-shared" className="flex flex-col">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
+        <code className="font-mono text-[12px] break-all">{shared.path}</code>
+        <SharedTrackedBadge shared={shared} />
+        <Badge variant="outline" className="text-[11px]">Read only</Badge>
+      </div>
+      <p data-slot="session-context-shared-note" className="border-b border-border bg-muted/30 px-3 py-2 text-[12px] text-muted-foreground">
+        Shared team rules are versioned in Git and read only here. To replace or mute a rule on this host without dirtying Git, add a rule with the same id in Local.
+      </p>
+      {shared.unreadableReason ? (
+        <div className="p-3"><ReadOnlyNotice reason={shared.unreadableReason} /></div>
+      ) : !shared.exists ? (
+        <div className="flex flex-col items-start gap-3 p-4">
+          <p className="text-[13px] text-muted-foreground">
+            This repository has no shared <code className="font-mono text-[12px] text-foreground">{shared.path}</code> yet. Commit one to share team rules across contributors, or add host-only rules in Local.
+          </p>
+          <Button variant="outline" className="min-h-11" onClick={onOpenLocal}>Edit Local rules</Button>
+        </div>
+      ) : (
+        <CodeEditor
+          value={shared.content}
+          language="yaml"
+          readOnly
+          aria-label="context.yaml shared rules"
+          className="h-[420px] rounded-none border-0"
+        />
+      )}
     </div>
   )
 }
@@ -303,12 +487,13 @@ function DiskVersion({ content }: { content: string }) {
   return (
     <div data-slot="session-context-disk" className="flex flex-col gap-2">
       <h3 className="text-sm font-semibold">On disk now</h3>
-      <CodeEditor value={content} language="yaml" readOnly aria-label="context.yaml on disk" className="h-[200px]" />
+      <CodeEditor value={content} language="yaml" readOnly aria-label="context.local.yaml on disk" className="h-[200px]" />
     </div>
   )
 }
 
 function SaveBar(props: {
+  localPath: string
   writable: boolean
   hasProblems: boolean
   dirty: boolean
@@ -320,12 +505,14 @@ function SaveBar(props: {
   return (
     <div className="flex flex-wrap items-center justify-end gap-3">
       <p data-slot="session-context-note" className="mr-auto text-[12px] text-soft-foreground">
-        {props.hasProblems ? 'Save is off while the file has problems.' : 'Applies from the next session launch. Squawk does not commit this file.'}
+        {props.hasProblems
+          ? 'Save is off while the file has problems.'
+          : `Applies from the next session launch. Saved to ${props.localPath} (gitignored; does not dirty Git).`}
       </p>
       {props.writable && (
         <>
-          <Button variant="outline" disabled={!props.dirty || props.saving} onClick={props.onDiscard}>Discard changes</Button>
-          <Button data-slot="session-context-save" disabled={!props.canSave} onClick={props.onSave}>{props.saving ? 'Saving…' : 'Save'}</Button>
+          <Button variant="outline" className="min-h-11" disabled={!props.dirty || props.saving} onClick={props.onDiscard}>Discard changes</Button>
+          <Button data-slot="session-context-save" className="min-h-11" disabled={!props.canSave} onClick={props.onSave}>{props.saving ? 'Saving…' : 'Save'}</Button>
         </>
       )}
     </div>
@@ -419,8 +606,8 @@ function SaveFailureNotice({
       <p className="mt-1 text-[13px] text-muted-foreground">{failure.message} Your draft is still here.</p>
       {failure.kind === 'conflict' && (
         <div className="mt-2 flex flex-wrap gap-2">
-          <Button variant="outline" onClick={onShowDisk}>{showDisk ? 'Hide the disk version' : 'Show the disk version'}</Button>
-          <Button variant="outline" onClick={onOverwrite}>Overwrite it</Button>
+          <Button variant="outline" className="min-h-11" onClick={onShowDisk}>{showDisk ? 'Hide the disk version' : 'Show the disk version'}</Button>
+          <Button variant="outline" className="min-h-11" onClick={onOverwrite}>Overwrite it</Button>
         </div>
       )}
     </div>
@@ -435,18 +622,28 @@ function ReadOnlyNotice({ reason }: { reason: string | null }) {
   )
 }
 
-function EmptyRules({ path, readOnlyReason, onAdd }: { path: string; readOnlyReason: string | null; onAdd: (() => void) | undefined }) {
+function EmptyRules({
+  localPath,
+  sharedPath,
+  readOnlyReason,
+  onAdd,
+}: {
+  localPath: string
+  sharedPath: string
+  readOnlyReason: string | null
+  onAdd: (() => void) | undefined
+}) {
   return (
     <div data-slot="session-context-empty" className="rounded-lg border border-border bg-card">
       <CenteredState
         icon={<FileStackIcon />}
         title="No project rules yet"
         heading="h2"
-        subtitle={`Every session already starts with its handoff block. Add rules to put more text after it: a project brief, the contents of a doc, or instructions only workers get. Rules live in ${path}.`}
+        subtitle={`Every session already starts with its handoff block. Commit shared team rules in ${sharedPath}, or add host-local rules in ${localPath} (gitignored; overrides shared rules with the same id).`}
         actions={
           <>
-            {onAdd && <Button onClick={onAdd}>Add the first rule</Button>}
-            <Button variant="outline" asChild>
+            {onAdd && <Button className="min-h-11" onClick={onAdd}>Add a local rule</Button>}
+            <Button variant="outline" className="min-h-11" asChild>
               <a href={DOCS_URL} target="_blank" rel="noreferrer">How rules work</a>
             </Button>
           </>

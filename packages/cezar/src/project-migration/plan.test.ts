@@ -216,4 +216,14 @@ describe('the planner', () => {
     chmodSync(join(root, '.ai/squawk'), 0o750);
     expect((await planProjectMigration(root)).conflicts.map(conflict => conflict.path)).toContain(join(root, '.ai/squawk'));
   });
+
+  it('moves untracked context.local.yaml automatically while leaving tracked context.yaml for git mv', async () => {
+    const { root, source } = repository();
+    writeFileSync(join(source, 'context.yaml'), 'version: 1\n');
+    writeFileSync(join(source, 'context.local.yaml'), 'version: 1\n');
+    execFileSync('git', ['add', '-f', '.ai/cezar/context.yaml'], { cwd: root });
+    const plan = await planProjectMigration(root);
+    expect(plan.tracked).toEqual([{ from: '.ai/cezar/context.yaml', to: '.ai/squawk/context.yaml' }]);
+    expect(plan.moves).toContainEqual({ from: join(source, 'context.local.yaml'), to: join(root, '.ai/squawk/context.local.yaml'), kind: 'file' });
+  });
 });

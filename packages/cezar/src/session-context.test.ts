@@ -38,6 +38,10 @@ function rules(yaml: string): void {
   writeFileSync(join(project, '.ai/cezar/context.yaml'), yaml);
 }
 
+function localRules(yaml: string): void {
+  writeFileSync(join(project, '.ai/cezar/context.local.yaml'), yaml);
+}
+
 function input(overrides: Partial<SessionContextInput> = {}): SessionContextInput {
   return {
     projectRoot: project,
@@ -324,5 +328,69 @@ describe('session context: report line', () => {
     const line = formatSessionContextReport(buildSessionContext(input()).reports);
     expect(line).toMatch(new RegExp(`^session context: handoff applied \\(\\d+ B, ${handoff.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\); vision applied \\(\\d+ B, vision\\.md\\); gone skipped \\(gone\\.md\\) — file gone\\.md: not found$`));
     expect(line).not.toContain('TOP-SECRET-VISION');
+  });
+});
+
+describe('session context: shared and local layering', () => {
+  it('injects handoff, then shared context.yaml rules, then context.local.yaml rules within the 65,536-byte cap', () => {
+    writeFileSync(join(worktree, 'team.md'), 'TEAM-DOC');
+    writeFileSync(join(worktree, 'local.md'), 'LOCAL-DOC');
+    rules(`version: 1\nrules:\n${rule('team', '{{file:team.md}}')}`);
+    localRules(`version: 1\nrules:\n${rule('host', '{{file:local.md}}')}`);
+    const context = buildSessionContext(input());
+    expect(context.prefix.indexOf('id="handoff"')).toBeLessThan(context.prefix.indexOf('id="team"'));
+    expect(context.prefix.indexOf('id="team"')).toBeLessThan(context.prefix.indexOf('id="host"'));
+    expect(context.prefix).toContain('TEAM-DOC');
+    expect(context.prefix).toContain('LOCAL-DOC');
+    expect(byId(context, 'team')).toMatchObject({ status: 'applied', sources: ['team.md'] });
+    expect(byId(context, 'host')).toMatchObject({ status: 'applied', sources: ['local.md'] });
+  });
+
+  it('replaces a shared rule in place when context.local.yaml reuses its id and reports the override', () => {
+    rules(`version: 1\nrules:\n${rule('first', 'SHARED-FIRST')}${rule('second', 'SHARED-SECOND')}`);
+    localRules(`version: 1\nrules:\n${rule('local-extra', 'LOCAL-EXTRA')}${rule('first', 'LOCAL-FIRST')}`);
+    const context = buildSessionContext(input());
+    expect(context.prefix).toContain('LOCAL-FIRST');
+    expect(context.prefix).not.toContain('SHARED-FIRST');
+    expect(context.prefix.indexOf('id="first"')).toBeLessThan(context.prefix.indexOf('id="second"'));
+    expect(context.prefix.indexOf('id="second"')).toBeLessThan(context.prefix.indexOf('id="local-extra"'));
+    expect(byId(context, 'first')).toMatchObject({ status: 'applied', reason: 'overrides context.yaml' });
+    expect(formatSessionContextReport(context.reports)).toContain('first applied');
+    expect(formatSessionContextReport(context.reports)).toContain('— overrides context.yaml');
+  });
+
+  it('mutes a shared rule locally with enabled: false without requiring a template', () => {
+    rules(`version: 1\nrules:\n${rule('vision', 'SHARED-VISION')}${rule('kept', 'SHARED-KEPT')}`);
+    localRules('version: 1\nrules:\n  - id: vision\n    on: session_start\n    enabled: false\n  - id: idle\n    on: session_start\n    enabled: false\n');
+    const context = buildSessionContext(input());
+    expect(context.prefix).not.toContain('SHARED-VISION');
+    expect(context.prefix).toContain('SHARED-KEPT');
+    expect(byId(context, 'vision')).toMatchObject({ status: REPORT_STATUS.skipped, reason: 'muted by context.local.yaml' });
+    expect(byId(context, 'idle')).toMatchObject({ status: REPORT_STATUS.skipped, reason: 'disabled' });
+    expect(formatSessionContextReport(context.reports)).toContain('vision skipped — muted by context.local.yaml');
+  });
+
+  it('keeps same-file duplicates skipped while letting the other file still run', () => {
+    rules(`version: 1\nrules:\n${rule('shared-only', 'SHARED')}${rule('overlap', 'SHARED-OVERLAP')}`);
+    localRules(`version: 1\nrules:\n${rule('overlap', 'ONE')}${rule('overlap', 'TWO')}${rule('local-ok', 'LOCAL-OK')}`);
+    const context = buildSessionContext(input());
+    expect(context.prefix).toContain('SHARED-OVERLAP');
+    expect(context.prefix).toContain('LOCAL-OK');
+    expect(context.reports.filter((r) => r.id === 'overlap' && r.reason === 'duplicate id')).toHaveLength(2);
+    expect(context.reports.filter((r) => r.id === 'overlap' && r.status === 'applied')).toHaveLength(1);
+  });
+
+  it('keeps shared rules working when context.local.yaml is malformed and vice versa', () => {
+    rules(`version: 1\nrules:\n${rule('team', 'TEAM-OK')}`);
+    localRules('version: 99\nrules: []\n');
+    const badLocal = buildSessionContext(input());
+    expect(byId(badLocal, 'team')?.status).toBe('applied');
+    expect(byId(badLocal, 'context.local.yaml')).toMatchObject({ status: REPORT_STATUS.skipped, reason: expect.stringContaining('unsupported version 99') });
+
+    rules('version: 99\nrules: []\n');
+    localRules(`version: 1\nrules:\n${rule('host', 'HOST-OK')}`);
+    const badShared = buildSessionContext(input());
+    expect(byId(badShared, 'host')?.status).toBe('applied');
+    expect(byId(badShared, 'context.yaml')).toMatchObject({ status: REPORT_STATUS.skipped, reason: expect.stringContaining('unsupported version 99') });
   });
 });

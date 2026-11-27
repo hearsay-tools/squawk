@@ -279,3 +279,14 @@ test('a workflow change selects the workflow registry tests in this repository',
   assert.ok(files.includes('.github/scripts/ci-squeal-results.workflow.test.cjs'));
   assert.ok(files.filter(file => file.endsWith('.workflow.test.cjs')).length > 1);
 });
+
+// hearsay-tools/squawk#4364: the path-scanning guards read files no import reaches, so their inputs rows select them.
+test('the policy and anchor guards are selected by every path they scan in this repository', async () => {
+  const { RUNNER_ID_READERS } = await import('./readers.mjs');
+  const gates = ['package.json', 'packages/cezar/package.json', 'scripts/new-tool.mjs', '.github/scripts/new-check.cjs', '.github/workflows/ci.yml',
+    '.ai/skills/auto-merge/check.mjs', 'packages/cezar/scripts/new-script.mjs', 'packages/cezar/src/lint/new-rule.ts', '.oxlintrc.json',
+    'squeal.config.json', 'packages/web/tsconfig.json', 'packages/web/vitest.config.ts', 'packages/cezar/vitest.setup.ts', 'packages/web/vite.config.ts'];
+  for (const path of gates) assert.ok(nodeTestReaders([path], repoRoot).files.includes('.github/scripts/auto-merge-gates.test.cjs'), path);
+  const anchored = ['AGENT_PROTOCOL.md', 'scripts/readers.mjs', ...RUNNER_ID_READERS.map(entry => entry.file)];
+  for (const path of anchored) assert.ok(nodeTestReaders([path], repoRoot).files.includes('scripts/readers.test.mjs'), path);
+});

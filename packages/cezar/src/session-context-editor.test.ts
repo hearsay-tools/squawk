@@ -104,6 +104,13 @@ describe('parseSessionContextText: problems for the editor', () => {
       { line: 5, rule: 1, message: 'unknown key "colour"' },
     ]);
   });
+
+  it('allows enabled: false without template and rejects a non-boolean enabled field', () => {
+    expect(parseSessionContextText('version: 1\nrules:\n  - id: muted\n    on: session_start\n    enabled: false\n', 'local').problems).toEqual([]);
+    expect(parseSessionContextText('version: 1\nrules:\n  - id: bad\n    on: session_start\n    enabled: nope\n    template: x\n', 'local').problems).toEqual([
+      { line: 5, rule: 1, message: 'enabled must be true or false' },
+    ]);
+  });
 });
 
 describe('previewSessionContext', () => {
@@ -119,11 +126,11 @@ describe('previewSessionContext', () => {
     const preview = previewSessionContext({ projectRoot: root, content: RULES, role: 'parent' });
     expect(preview.problems).toEqual([]);
     expect(preview.limitBytes).toBe(SESSION_CONTEXT_LIMIT_BYTES);
-    expect(preview.blocks.map((b) => [b.id, b.target, b.status])).toEqual([
-      ['handoff', 'built-in', 'applied'],
-      ['vision', 'both', 'applied'],
-      ['worker-brief', 'worker', 'not-for-role'],
-      ['missing', 'both', 'skipped'],
+    expect(preview.blocks.map((b) => [b.id, b.source, b.target, b.status, b.overridesShared])).toEqual([
+      ['handoff', 'built-in', 'built-in', 'applied', false],
+      ['vision', 'local', 'both', 'applied', false],
+      ['worker-brief', 'local', 'worker', 'not-for-role', false],
+      ['missing', 'local', 'both', 'skipped', false],
     ]);
     const vision = preview.blocks[1]!;
     expect(vision.text).toBe('Vision:\nLocal first.');
@@ -140,20 +147,74 @@ describe('previewSessionContext', () => {
     expect(brief.text).toBe('You are worker <run.id>.');
   });
 
-  it('shows the problems and skips every rule when the draft cannot be parsed', () => {
+  it('shows the problems and skips local rules when the draft cannot be parsed', () => {
     const preview = previewSessionContext({ projectRoot: root, content: 'version: 3\n', role: 'parent' });
     expect(preview.problems).toHaveLength(1);
-    expect(preview.blocks.map((b) => [b.id, b.status])).toEqual([['handoff', 'applied'], ['context.yaml', 'skipped']]);
+    expect(preview.blocks.map((b) => [b.id, b.source, b.status])).toEqual([['handoff', 'built-in', 'applied'], ['context.local.yaml', 'local', 'skipped']]);
+  });
+
+  it('previews combined shared context.yaml and local draft with overrides and mutes', () => {
+    mkdirSync(join(root, '.ai/squawk'), { recursive: true });
+    writeFileSync(join(root, '.ai/squawk/context.yaml'), [
+      'version: 1',
+      'rules:',
+      '  - id: vision',
+      '    on: session_start',
+      '    template: Shared vision',
+      '  - id: conventions',
+      '    on: session_start',
+      '    template: Shared conventions',
+      '  - id: noisy',
+      '    on: session_start',
+      '    template: Too noisy',
+      '',
+    ].join('\n'));
+    const localDraft = [
+      'version: 1',
+      'rules:',
+      '  - id: vision',
+      '    on: session_start',
+      '    template: Local vision',
+      '  - id: noisy',
+      '    on: session_start',
+      '    enabled: false',
+      '  - id: host-note',
+      '    on: session_start',
+      '    template: Host note',
+      '',
+    ].join('\n');
+    const preview = previewSessionContext({ projectRoot: root, content: localDraft, role: 'parent' });
+    expect(preview.problems).toEqual([]);
+    expect(preview.blocks.map((b) => [b.id, b.source, b.status, b.overridesShared, b.reason])).toEqual([
+      ['handoff', 'built-in', 'applied', false, null],
+      ['vision', 'local', 'applied', true, 'overrides context.yaml'],
+      ['conventions', 'shared', 'applied', false, null],
+      ['noisy', 'local', 'skipped', true, 'muted by context.local.yaml'],
+      ['host-note', 'local', 'applied', false, null],
+    ]);
+    expect(preview.blocks[1]!.text).toBe('Local vision');
+  });
+
+  it('keeps local draft saveable when shared context.yaml on disk is malformed', () => {
+    mkdirSync(join(root, '.ai/squawk'), { recursive: true });
+    writeFileSync(join(root, '.ai/squawk/context.yaml'), 'version: 99\n');
+    const preview = previewSessionContext({ projectRoot: root, content: 'version: 1\nrules:\n  - id: local\n    on: session_start\n    template: Local\n', role: 'parent' });
+    expect(preview.problems).toEqual([]);
+    expect(preview.blocks.map((b) => [b.id, b.source, b.status])).toEqual([
+      ['handoff', 'built-in', 'applied'],
+      ['local', 'local', 'applied'],
+      ['context.yaml', 'shared', 'skipped'],
+    ]);
   });
 
   it('keeps the built-in handoff applied when a draft rule takes its reserved id, and lists that rule as skipped', () => {
     const content = RULES.replace('id: vision', 'id: handoff');
     const preview = previewSessionContext({ projectRoot: root, content, role: 'parent' });
-    expect(preview.blocks[0]).toMatchObject({ id: 'handoff', target: 'built-in', status: 'applied' });
-    expect(preview.blocks.slice(1).map((b) => [b.id, b.target, b.status])).toEqual([
-      ['worker-brief', 'worker', 'not-for-role'],
-      ['missing', 'both', 'skipped'],
-      ['handoff', null, 'skipped'],
+    expect(preview.blocks[0]).toMatchObject({ id: 'handoff', source: 'built-in', target: 'built-in', status: 'applied' });
+    expect(preview.blocks.slice(1).map((b) => [b.id, b.source, b.target, b.status])).toEqual([
+      ['worker-brief', 'local', 'worker', 'not-for-role'],
+      ['missing', 'local', 'both', 'skipped'],
+      ['handoff', 'local', null, 'skipped'],
     ]);
   });
 

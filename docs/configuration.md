@@ -41,8 +41,8 @@ first time Squawk boots there, and ignored afterwards.
 
 Every session Squawk launches — a fresh step, a retry, **Continue**, recovery, an owned
 worker — opens with the run's whole handoff file, so the agent has its notes without a tool
-call. Add your own context, such as a vision document, with an optional
-`.ai/cezar/context.yaml`:
+call. Add shared team context in `.ai/squawk/context.yaml` (`.ai/cezar/context.yaml` before a
+project moves), and host-local rules or overrides in gitignored `context.local.yaml`:
 
 ```yaml
 version: 1

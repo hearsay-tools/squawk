@@ -7,7 +7,7 @@ import type {
   agentConfigFileContentSchema,
   agentConfigListingSchema,
 } from '@open-mercato/cezar-contract';
-import type { sessionContextFileSchema, sessionContextPreviewRequestSchema, sessionContextPreviewSchema, setSessionContextSchema } from '@open-mercato/cezar-contract/session-context';
+import type { sessionContextPreviewRequestSchema, sessionContextPreviewSchema, sessionContextStateSchema, setSessionContextSchema } from '@open-mercato/cezar-contract/session-context';
 import type {
   deleteWorkflowResponseSchema,
   parsedWorkflowSchema,
@@ -73,9 +73,9 @@ describe('src/contract workflows/skills/agent-config schemas match the routes ex
     Assert<Exact<z.infer<typeof agentConfigListingSchema>, AgentConfig200>>,
     Assert<Exact<z.infer<typeof agentConfigFileContentSchema>, AgentConfigFile200>>,
     Assert<Exact<z.infer<typeof agentConfigFileContentSchema>, AgentConfigPut200>>,
-    Assert<Exact<z.infer<typeof sessionContextFileSchema>, SessionContext200>>,
+    Assert<Exact<z.infer<typeof sessionContextStateSchema>, SessionContext200>>,
     Assert<Exact<z.input<typeof setSessionContextSchema>, SessionContextPut>>,
-    Assert<Exact<z.infer<typeof sessionContextFileSchema>, SessionContextPut200>>,
+    Assert<Exact<z.infer<typeof sessionContextStateSchema>, SessionContextPut200>>,
     Assert<Exact<z.input<typeof sessionContextPreviewRequestSchema>, SessionContextPreview>>,
     Assert<Exact<z.infer<typeof sessionContextPreviewSchema>, SessionContextPreview200>>,
   ];

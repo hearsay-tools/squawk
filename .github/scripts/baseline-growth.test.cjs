@@ -302,3 +302,71 @@ test('a pin that names its file below a shared directory, or inside a longer str
   assert.ok(compareBaseline({ sites: [site] }, { sites: [{ ...site, file: 'routes/kept.tsx' }] }, '$', moved).length, 'a file that stayed');
   assert.ok(compareBaseline({ sites: [site] }, { sites: [{ ...site, file: 'other/missing.tsx' }] }, '$', moved).length, 'a path the change did not add');
 });
+
+// File-length pins live one file per source file, so concurrent PRs never edit adjacent lines
+// (hearsay-tools/squawk#4362). The directory is one ratchet keyed by source path.
+const PIN = 'packages/cezar/src/file-length.baseline';
+const pin = (source, lines) => [`${PIN}/${source}.json`, `${JSON.stringify({ lines })}\n`];
+
+function pinRepository(t) {
+  const r = repository(t);
+  for (const source of ['src/a.ts', 'src/b.ts', 'src/old.ts']) r.write(source, 'export {};\n');
+  r.write(...pin('src/a.ts', 1200));
+  r.write(...pin('src/b.ts', 1100));
+  r.write(...pin('src/old.ts', 1050));
+  r.base = r.commit();
+  return r;
+}
+
+test('a pin directory may lower and drop pins, and refuses a raised or new pin without the label', (t) => {
+  const r = pinRepository(t);
+  r.write(...pin('src/a.ts', 1150));
+  fs.unlinkSync(path.join(r.cwd, PIN, 'src/b.ts.json'));
+  assert.deepEqual(checkBaselineGrowth({ cwd: r.cwd, base: r.base, head: r.commit() }), []);
+  r.write(...pin('src/a.ts', 1201));
+  r.write(...pin('src/new.ts', 1001));
+  const head = r.commit();
+  const reasons = checkBaselineGrowth({ cwd: r.cwd, base: r.base, head }).join('\n');
+  assert.match(reasons, /file-length\.baseline: \$\.src\/a\.ts\.lines: number grew from 1200 to 1201/);
+  assert.match(reasons, /file-length\.baseline: \$\.src\/new\.ts: added an entry/);
+  assert.deepEqual(checkBaselineGrowth({ cwd: r.cwd, base: r.base, head, allowGrowth: true }), []);
+});
+
+test('a pin file follows its moved source file with no label, and fails closed on invalid JSON', (t) => {
+  const r = pinRepository(t);
+  r.git('mv', 'src/old.ts', 'src/new.ts');
+  r.git('mv', `${PIN}/src/old.ts.json`, `${PIN}/src/new.ts.json`);
+  assert.deepEqual(checkBaselineGrowth({ cwd: r.cwd, base: r.base, head: r.commit() }), []);
+  r.write(`${PIN}/src/a.ts.json`, 'invalid');
+  assert.throws(() => checkBaselineGrowth({ cwd: r.cwd, base: r.base, head: r.commit(), allowGrowth: true }));
+});
+
+test('auto-merge takes a lowered or dropped pin file and sends a new or raised one to the owner', (t) => {
+  const r = pinRepository(t);
+  r.write(...pin('src/a.ts', 1150));
+  fs.unlinkSync(path.join(r.cwd, PIN, 'src/b.ts.json'));
+  const lowered = autoMerge(r, r.commit());
+  assert.equal(lowered.status, 0, lowered.stdout + lowered.stderr);
+  r.write(...pin('src/new.ts', 1001));
+  const added = autoMerge(r, r.commit());
+  assert.equal(added.status, 1, added.stdout + added.stderr);
+  assert.match(added.stdout, /lint gate: packages\/cezar\/src\/file-length\.baseline\/src\/new\.ts\.json/);
+  fs.unlinkSync(path.join(r.cwd, PIN, 'src/new.ts.json'));
+  r.write(...pin('src/a.ts', 1300));
+  const raised = autoMerge(r, r.commit());
+  assert.equal(raised.status, 1, raised.stdout + raised.stderr);
+  assert.match(raised.stdout, /lint gate: packages\/cezar\/src\/file-length\.baseline\/src\/a\.ts\.json/);
+});
+
+test('two branches that lower or drop the pins of different source files merge without a conflict', (t) => {
+  const r = pinRepository(t);
+  r.git('checkout', '-q', '-b', 'first');
+  r.write(...pin('src/a.ts', 1150));
+  r.commit();
+  r.git('checkout', '-q', '-b', 'second', r.base);
+  fs.unlinkSync(path.join(r.cwd, PIN, 'src/b.ts.json'));
+  r.write(...pin('src/old.ts', 1020));
+  r.commit();
+  const merged = spawnSync('git', ['merge-tree', '--write-tree', 'first', 'second'], { cwd: r.cwd, encoding: 'utf8' });
+  assert.equal(merged.status, 0, merged.stdout + merged.stderr);
+});

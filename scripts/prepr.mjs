@@ -2,7 +2,8 @@
 // One local gate before a PR opens (spec: .ai/specs/2026-11-11-one-full-run-delivery-pipeline.md,
 // § Before the PR). It reads Squeal's results for the changed files and for lint, and runs
 // what Squeal does not cover: repository lint checks, typecheck, citations, clones, spec statuses,
-// the complexity ratchet and GitHub's per-file patch limits, and reports the test line budget.
+// the policy and anchor guards, the complexity ratchet and GitHub's per-file patch limits, and
+// reports the test line budget.
 // Edited test files and the test files that read a changed file directly need a current verdict;
 // the rest of the selection with no result is reported as pending, and CI decides it.
 import { spawn, spawnSync } from 'node:child_process';
@@ -18,6 +19,14 @@ const { GITHUB_PATCH_LIMITS, localPatches, patchEnv } = require('../.github/scri
 const { SECTION_LIMIT, countTestLines, requirement } = require('../.github/scripts/test-budget.cjs');
 
 export const SQUEAL_WAIT_MS = 120_000;
+
+/**
+ * Tests that scan the repository by path, not by import, so no changed file reaches them directly
+ * and Squeal's result for them may still be pending: the auto-merge never-list, the
+ * squeal.config.json `inputs` tripwire and the scripts/readers.mjs anchors. Each runs in under a
+ * second, so prepr runs them itself on every change (hearsay-tools/squawk#4364).
+ */
+export const POLICY_GUARDS = ['.github/scripts/auto-merge-gates.test.cjs', 'scripts/test-inputs.test.mjs', 'scripts/readers.test.mjs'];
 
 /**
  * Judge one `squeal status --wait <ms> <paths> --json` result (exit code and parsed stdout). A
@@ -382,6 +391,7 @@ export async function prepr({ base = 'origin/main', waitMs = SQUEAL_WAIT_MS, io 
     ['citations', 'node', ['.github/scripts/check-citations.cjs', '--base', base]],
     ['clones', 'node', ['.github/scripts/check-clones.cjs', '--base', base, '--head', 'HEAD']],
     ['spec statuses', 'node', ['.github/scripts/check-spec-status.cjs']],
+    ['policy guards (auto-merge never-list, squeal.config.json inputs, readers.mjs anchors)', 'node', ['--import', './scripts/test-home-env.mjs', '--test', ...POLICY_GUARDS]],
   ];
   const directRuns = [...direct.map(([name, cmd, args]) => io.run(cmd, args).then(r => ({ ...r, name }))), complexityRun(base, io)];
   const squeal = files.length ? await squealChecks(files, waitMs, io) : NO_SQUEAL;

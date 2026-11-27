@@ -1,0 +1,9 @@
+[
+  {
+    "function": "computeWaitingOn",
+    "mutator": "ArrayDeclaration",
+    "original": "[]",
+    "replacement": "[\"Stryker was here\"]",
+    "reason": "The required fallback handles absent or malformed waits; its string element has no phase, so the open-wait filter drops it (one exact mutant match)."
+  }
+]

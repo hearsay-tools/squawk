@@ -29,6 +29,7 @@ const sessionId = `e2e-settings-session-context-${process.pid}`
 const FILE_ROUTES = ['**/api/v1/session-context', '**/api/v1/p/*/session-context']
 const AA_NORMAL_TEXT = 4.5
 const DRAFT = 'version: 1\nrules:\n  - id: handoff\n    on: session_start\n    template: Mine\n  - id: brief\n    on: session_start\n    target: worker\n    template: You are {{run.id}}.\n'
+const SHARED_DRAFT = 'version: 1\nrules:\n  - id: team-vision\n    on: session_start\n    template: Shared team vision.\n'
 
 let browser: AgentBrowser
 let baseUrl: string
@@ -38,8 +39,11 @@ beforeAll(async () => {
   baseUrl = readTestEnv().baseUrl
   project = await bootProjectId(baseUrl)
   browser = AgentBrowser.open(sessionId)
-  const file = { path: '.ai/squawk/context.yaml', exists: true, content: DRAFT, version: 'e2e', writable: true, readOnlyReason: null }
-  for (const route of FILE_ROUTES) browser.routeJson(route, file)
+  const state = {
+    local: { path: '.ai/squawk/context.local.yaml', exists: true, content: DRAFT, version: 'e2e', writable: true, readOnlyReason: null },
+    shared: { path: '.ai/squawk/context.yaml', exists: true, content: SHARED_DRAFT, tracked: true, unreadableReason: null },
+  }
+  for (const route of FILE_ROUTES) browser.routeJson(route, state)
 }, 120_000)
 
 afterAll(() => {
@@ -74,7 +78,12 @@ describe('settings → session context', () => {
         )
         expect(scrollWidth).toBeLessThanOrEqual(innerWidth)
 
-        const targets = ['[data-slot="session-context-add-rule"]', '[data-slot="session-context-save"]']
+        const targets = [
+          '[data-slot="session-context-scope"][data-scope="local"]',
+          '[data-slot="session-context-scope"][data-scope="shared"]',
+          '[data-slot="session-context-add-rule"]',
+          '[data-slot="session-context-save"]',
+        ]
         if (phone) targets.push('[data-slot="session-context-pane"]', '[data-slot="session-context-line"]')
         for (const selector of targets) {
           const rect = rectOf(selector)
@@ -85,6 +94,12 @@ describe('settings → session context', () => {
           const sample = contrastOf(selector)
           expect(sample.ratio, `${selector} ${JSON.stringify(sample)}`).toBeGreaterThanOrEqual(AA_NORMAL_TEXT)
         }
+        // Switch to Shared tab to verify tracked status badge and read-only view, then back to Local.
+        clickInView(browser, '[data-slot="session-context-scope"][data-scope="shared"]')
+        expect(browser.waitForValue<string>(`document.querySelector('[data-slot="session-context-shared-status"]')?.textContent || null`)).toBe('Tracked in Git')
+        const sharedNoteContrast = contrastOf('[data-slot="session-context-shared-note"]')
+        expect(sharedNoteContrast.ratio, `shared note ${JSON.stringify(sharedNoteContrast)}`).toBeGreaterThanOrEqual(AA_NORMAL_TEXT)
+        clickInView(browser, '[data-slot="session-context-scope"][data-scope="local"]')
         if (phone) browser.screenshot(`${artifactsDir}/settings-session-context-edit-${variant.id}.png`, { viewport: true })
 
         // The preview: on a phone it is the second tab. Previewed as a worker, the worker rule applies.
