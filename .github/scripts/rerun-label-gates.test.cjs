@@ -77,14 +77,14 @@ test('re-runs failed jobs when baseline-growth matches a failed baseline or comp
 
 test('test-budget re-runs only when the test-budget step failed, not on baseline-growth failures', async () => {
   const wrongStep = harness({
-    pr: { state: 'open', head: { sha: HEAD }, labels: [{ name: 'test-budget' }] },
+    pr: { number: 42, state: 'open', head: { sha: HEAD }, labels: [{ name: 'test-budget' }] },
     jobsByAttempt: { 1: [job('Check baseline growth and test budget', 'failure', [['Reject baseline growth', 'failure']])] },
   });
   assert.deepEqual(await wrongStep.run({ label: 'test-budget' }), { action: 'skip', reason: 'no-matching-failed-gate', runId: 100, attempt: 1 });
   assert.deepEqual(wrongStep.state.reruns, []);
 
   const rightStep = harness({
-    pr: { state: 'open', head: { sha: HEAD }, labels: [{ name: 'test-budget' }] },
+    pr: { number: 42, state: 'open', head: { sha: HEAD }, labels: [{ name: 'test-budget' }] },
     jobsByAttempt: {
       1: [job('Check baseline growth and test budget', 'failure', [
         ['Reject baseline growth', 'success'],
@@ -98,8 +98,8 @@ test('test-budget re-runs only when the test-budget step failed, not on baseline
 
 test('skips unmapped labels, closed PRs, removed labels, missing runs, and non-failed runs', async () => {
   assert.equal((await harness().run({ label: 'auto-merge' })).reason, 'unmapped-label');
-  assert.equal((await harness({ pr: { state: 'closed', head: { sha: HEAD }, labels: [{ name: 'baseline-growth' }] } }).run()).reason, 'pr-not-open');
-  assert.equal((await harness({ pr: { state: 'open', head: { sha: HEAD }, labels: [] } }).run()).reason, 'label-removed');
+  assert.equal((await harness({ pr: { number: 42, state: 'closed', head: { sha: HEAD }, labels: [{ name: 'baseline-growth' }] } }).run()).reason, 'pr-not-open');
+  assert.equal((await harness({ pr: { number: 42, state: 'open', head: { sha: HEAD }, labels: [] } }).run()).reason, 'label-removed');
   assert.equal((await harness({ runs: [] }).run()).reason, 'no-ci-run');
   assert.equal((await harness({ runs: [{ id: 100, status: 'completed', conclusion: 'success', run_attempt: 1 }] }).run()).reason, 'run-already-passed');
   assert.equal((await harness({ runs: [{ id: 100, status: 'completed', conclusion: 'startup_failure', run_attempt: 1 }] }).run()).reason, 'run-not-failed');
