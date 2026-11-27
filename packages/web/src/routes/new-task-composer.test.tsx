@@ -1198,6 +1198,22 @@ describe('the composer runner pill carries the account', () => {
   })
 })
 
+it('folds Execution settings when a desktop page narrows to a phone', async () => {
+  const listeners = new Set<() => void>()
+  const query = { matches: true, addEventListener: (_: string, listener: () => void) => listeners.add(listener), removeEventListener: (_: string, listener: () => void) => listeners.delete(listener) }
+  vi.stubGlobal('matchMedia', () => query)
+  serve()
+  renderNewTask()
+  await pillReady()
+  const disclosure = screen.getByText('Execution settings').closest('details')!
+  expect(disclosure.open).toBe(true)
+  // Chrome fires `toggle` for the `open` attribute React renders on mount; it is not a reader choice.
+  act(() => { disclosure.dispatchEvent(new Event('toggle')) })
+  query.matches = false
+  act(() => { for (const listener of listeners) listener() })
+  expect(disclosure.open).toBe(false)
+})
+
 it('starts Execution settings collapsed on mobile and allows manual expansion', async () => {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }))
   serve()

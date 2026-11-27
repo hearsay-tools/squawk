@@ -9,10 +9,11 @@ export { lastAttachedBrowser } from './browser-page'
 import { visualSampleExpression } from './visual-ready'
 import { clearField } from './clear-field'
 import { type FailureReason, layoutScript, probeScript } from './failure-probe'
-import { disabledStateExpression, type InteractOptions, interactableExpression, isCssSelector } from './interactable'
+import { blockedStateExpression, type InteractOptions, interactableExpression, isCssSelector } from './interactable'
 import { tmpdirExceedsSocketBudget } from '../../../.ai/scripts/resolve-browser-launch.mjs'
 import { readTestEnvDescriptor } from '../../../.ai/scripts/test-env-inputs.mjs'
 import { defaultWaitTimeoutMs, pause, sameSample, summarize } from './wait-support'
+import { describeError } from './describe-error'
 
 /**
  * The agent-browser provider seam. Every e2e spec drives the app through this module and
@@ -699,20 +700,22 @@ export class AgentBrowser {
     }
   }
 
-  /** `click` and `fill` run this after `awaitTarget`: one `wait --fn` call that holds until the
-   *  target is enabled and then scrolls it into view (`interactableExpression`). agent-browser
+  /** `click`, `fill` and `hover` run this after `awaitTarget`: one `wait --fn` call that holds
+   *  until the target is enabled and, for a pointer action, uncovered, and scrolls it into view
+   *  (`interactableExpression`).
+   *  `hover` skips the enabled check, so a disabled control can still show its tooltip. agent-browser
    *  refuses a `disabled` click at once, clicks an `aria-disabled` control and fills a disabled
    *  field, so without this wait a spec has to remember to wait for the enabled state itself
    *  (hearsay-tools/cezarion#2034, hearsay-tools/cezarion#2930). `allowDisabled` skips only the
    *  enabled check. Provider snapshot refs (`@e2`) and XPath are not CSS selectors and skip it. */
-  private awaitInteractable(action: 'click' | 'fill', selector: string, options: InteractOptions): void {
+  private awaitInteractable(action: 'click' | 'fill' | 'hover', selector: string, options: InteractOptions): void {
     if (!isCssSelector(selector)) return
     try {
-      this.run(['wait', '--fn', interactableExpression(selector, options)], defaultWaitTimeoutMs() + 2_000)
+      this.run(['wait', '--fn', interactableExpression(selector, options, action !== 'fill')], defaultWaitTimeoutMs() + 2_000)
     } catch (cause) {
       let state: string
       try {
-        state = String(this.evaluate(disabledStateExpression(selector)))
+        state = String(this.evaluate(blockedStateExpression(selector)))
       } catch (readError) {
         state = `unreadable: ${describeError(readError)}`
       }
@@ -985,7 +988,7 @@ export class AgentBrowser {
   }
 
   /** operation: interact (`click`). Waits for the target first; see `awaitTarget`. Then waits
-   *  until it is enabled and scrolls it into view; see `awaitInteractable`. Pass
+   *  until it is enabled and uncovered, and scrolls it into view; see `awaitInteractable`. Pass
    *  `{ allowDisabled: true }` only to click a disabled control on purpose.
    *  agent-browser v0.36.0 reads the target's centre once, then sends separate CDP
    *  `mouseMoved`, `mousePressed` and `mouseReleased` events at that same point. It performs
@@ -1001,9 +1004,11 @@ export class AgentBrowser {
 
   /** operation: interact (`hover`) — hover-revealed affordances (the table's rename pencil)
    *  only exist under a real pointer; tests must produce one, not reach past it.
-   *  Waits for the target first; see `awaitTarget`. */
+   *  Waits for the target first; see `awaitTarget`. Then scrolls it into view and waits until
+   *  nothing covers it, enabled or not; see `awaitInteractable`. */
   hover(selector: string): void {
     this.awaitTarget('hover', selector)
+    this.awaitInteractable('hover', selector, { allowDisabled: true })
     this.run(['hover', selector])
   }
 
@@ -1107,33 +1112,5 @@ export class AgentBrowser {
     } catch {
       /* already closed */
     }
-  }
-}
-
-/** An error's message with its cause chain, one line each — `run()` wraps the CLI's
- *  `Wait timed out after 25000ms` as a cause, and that line is the one worth keeping. */
-function describeError(error: unknown): string {
-  if (Array.isArray(error)) return error.map(describeError).join('\n---\n')
-  const lines: string[] = []
-  for (let current: unknown = error, depth = 0; current !== undefined && current !== null && depth < 5; depth += 1) {
-    lines.push(errorLine(current))
-    current = typeof current === 'object' && 'cause' in current ? (current as { cause?: unknown }).cause : undefined
-  }
-  return lines.join('\n  caused by: ')
-}
-
-/** One line for an Error, or for the plain `{ name, message }` object vitest serializes a test's
- *  errors into by the time `onTestFailed` sees them — not an Error instance, and with no
- *  prototype `String()` could fall back on. */
-function errorLine(value: unknown): string {
-  if (typeof value === 'object' && value !== null && 'message' in value) {
-    const { name, message } = value as { name?: unknown | undefined; message?: unknown }
-    return `${typeof name === 'string' ? name : 'Error'}: ${String(message)}`
-  }
-  if (typeof value === 'string') return value
-  try {
-    return JSON.stringify(value) ?? Object.prototype.toString.call(value)
-  } catch {
-    return Object.prototype.toString.call(value)
   }
 }

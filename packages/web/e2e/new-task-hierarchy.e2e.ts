@@ -121,6 +121,13 @@ describe('New Task hierarchy (#168)', () => {
         expect(layout.overflow).toBe(false)
         expect(layout.clipped).toEqual([])
         if (width === 360) expect(layout.small).toEqual([])
+        // Execution settings start open on desktop and folded on a phone.
+        const startsOpen = width === 1440
+        expect(browser.waitForValue(`document.querySelector('${disclosure}').open`, (open: boolean) => open === startsOpen)).toBe(startsOpen)
+        if (!startsOpen) {
+          browser.press('Space')
+          browser.waitForFunction(`document.querySelector('${disclosure}').open === true`)
+        }
         browser.press('Space')
         browser.waitForFunction(`document.querySelector('${disclosure}').open === false`)
         expect(browser.evaluate(`document.querySelector('${disclosure}').open`)).toBe(false)
@@ -193,7 +200,8 @@ describe('New Task hierarchy (#168)', () => {
       input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true }));
     })()`)
     browser.waitForFunction(`document.querySelector('[aria-label="Remove notes.txt"]') !== null`)
-    clickExecutionDisclosure()
+    // A phone folds Execution settings, even on a page that loaded at desktop width.
+    expect(browser.waitForValue(`document.querySelector('${disclosure}').open`, (open: boolean) => open === false)).toBe(false)
     for (const width of [360, 1440, 360]) {
       browser.setViewport(width, width === 360 ? 640 : 900)
       expect(browser.waitForValue(`document.querySelector('${prompt}') === window.hierarchyPrompt && document.querySelector('[data-slot="model-pill"]') === window.hierarchyModel`, (same: boolean) => same === true)).toBe(true)

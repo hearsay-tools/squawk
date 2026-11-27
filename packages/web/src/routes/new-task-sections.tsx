@@ -176,8 +176,11 @@ export function ExecutionSettings({
   const registered = useRunners().data
   const desktop = useIsDesktop()
   const [expanded, setExpanded] = useState<boolean | undefined>()
+  const open = expanded ?? desktop
+  // The browser also fires `toggle` when React sets `open` itself: on mount and on a
+  // viewport switch. Only a change away from the rendered state is the reader's choice.
   return (
-    <details data-slot="execution-options" open={expanded ?? desktop} onToggle={(event) => setExpanded(event.currentTarget.open)} className="group rounded-xl border border-border bg-card xl:self-start">
+    <details data-slot="execution-options" open={open} onToggle={(event) => { if (event.currentTarget.open !== open) setExpanded(event.currentTarget.open) }} className="group rounded-xl border border-border bg-card xl:self-start">
       <summary className="flex min-h-[44px] cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-xs text-muted-foreground pointer-hover:bg-muted/50 active:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground [&::-webkit-details-marker]:hidden">
         <SlidersHorizontalIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />
         <span className="font-medium text-foreground">Execution settings</span>

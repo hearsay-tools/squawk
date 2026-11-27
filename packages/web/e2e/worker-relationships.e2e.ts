@@ -219,10 +219,10 @@ for (const width of [320, 360]) for (const theme of ['light', 'dark']) {
         visible: r.top >= 0 && r.bottom <= innerHeight, height: r.height, width: r.width,
         hit: link.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)),
         controls: controls.map(el => { const b = el.getBoundingClientRect(); return { name: el.getAttribute('aria-label'), x: b.x, right: b.right, height: b.height }; }),
-        titleWidth: title.getBoundingClientRect().width, titleOverflow: getComputedStyle(title).textOverflow,
+        titleWidth: title.getBoundingClientRect().width, titleLineClamp: getComputedStyle(title).webkitLineClamp,
         overflow: document.documentElement.scrollWidth > innerWidth, theme: document.documentElement.classList.contains('light') === ${theme === 'light'},
         href: link.getAttribute('href') };
-    })()`) as { scroll: number; bottomGap: number; breadcrumbBottom: number; tabsTop: number; visible: boolean; height: number; width: number; hit: boolean; controls: { name: string; x: number; right: number; height: number }[]; titleWidth: number; titleOverflow: string; overflow: boolean; theme: boolean; href: string }
+    })()`) as { scroll: number; bottomGap: number; breadcrumbBottom: number; tabsTop: number; visible: boolean; height: number; width: number; hit: boolean; controls: { name: string; x: number; right: number; height: number }[]; titleWidth: number; titleLineClamp: string; overflow: boolean; theme: boolean; href: string }
     observations.push({ case: 'mobile parent at transcript bottom', viewportWidth: width, selectedTheme: theme, ...facts })
     expect(facts.scroll).toBeGreaterThan(1000)
     expect(facts.bottomGap).toBeLessThanOrEqual(1)
@@ -231,7 +231,7 @@ for (const width of [320, 360]) for (const theme of ['light', 'dark']) {
     expect(facts.visible).toBe(true); expect(facts.hit).toBe(true)
     expect(facts.height).toBeGreaterThanOrEqual(44); expect(facts.width).toBeGreaterThanOrEqual(44)
     expect(facts.overflow).toBe(false); expect(facts.theme).toBe(true)
-    expect(facts.titleWidth).toBeGreaterThan(0); expect(facts.titleOverflow).toBe('ellipsis')
+    expect(facts.titleWidth).toBeGreaterThan(0); expect(facts.titleLineClamp).toBe('2')
     expect(facts.href).toBe(route(parentId))
     expect(new Set(facts.controls.map(control => control.name))).toEqual(new Set(['Back', 'Rename task', `Parent task ${parentId}`, 'Run actions']))
     for (const [index, control] of facts.controls.entries()) {

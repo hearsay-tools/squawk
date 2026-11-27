@@ -500,9 +500,16 @@ export function useThreadScroll(
     let travelDirection: 'up' | 'down' | undefined
     let travel = 0
     let gestureDirection: 'up' | 'down' | undefined
+    /** A reader gesture ends the ask's ownership of the arrival target. The ask pin was the
+     *  only reason to stay stuck above the physical tail, so release it there too: a later
+     *  resize must not jump past the unread question. onScroll re-pins at the real tail. */
+    const releaseAskPin = () => {
+      if (askTargetRef.current && !isNearBottom(scroller, NEAR_BOTTOM_SLACK_PX)) stuckRef.current = false
+      askTargetRef.current = false
+    }
     const markGesture = (direction: 'up' | 'down') => {
       readerGestureAtRef.current = Date.now()
-      askTargetRef.current = false
+      releaseAskPin()
       gestureDirection = direction
     }
     const unstick = () => {
@@ -623,7 +630,7 @@ export function useThreadScroll(
       // Overlay scrollbars occupy the client box, so a gutter hit cannot identify
       // their grab. Actual movement during a primary scroller press is reader intent.
       if (pointerScrolling && scroller.scrollTop !== previousScrollTop) {
-        askTargetRef.current = false
+        releaseAskPin()
         if (scroller.scrollTop < previousScrollTop) unstick()
         else markDown()
       }
