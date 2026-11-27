@@ -1537,3 +1537,16 @@ it('associates summary cells with their headers in DOM order', async () => {
     ['Reference', 'reference'], ['Usage', 'usage'], ['Started', 'started'],
   ])
 })
+
+it('sorts pinned tasks first inside grouped views', async () => {
+  localStorage.clear()
+  stubFetch({
+    runs: [
+      { ...RUNS[0]!, id: 'a-unpinned', title: 'Unpinned API task', pinned: false },
+      { ...RUNS[0]!, id: 'a-pinned', title: 'Pinned API task', pinned: true },
+    ],
+  })
+  renderPage(createQueryClient(), '/tasks?group=project')
+  await screen.findByText('Pinned API task')
+  expect(rowIds()).toEqual(['a-pinned', 'a-unpinned'])
+})

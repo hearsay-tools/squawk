@@ -94,11 +94,13 @@ const QUERY_DEBOUNCE_MS = 250
 /** Archivable statuses — outcomes, not human gates. */
 const ARCHIVABLE_STATUSES: ReadonlySet<string> = new Set(['done', 'failed', 'cancelled'])
 
+type IndexedRunTarget = { projectId: string; runId: string }
+
 /** Archive (or restore) one indexed run in its own project. */
 function useArchiveIndexedRun() {
   return useIndexedRunMutation({
-    request: ({ task, archived }: { task: GlobalTask; archived: boolean }) =>
-      archiveRun(runAddress(task.run.id, { projectId: task.run.projectId }), archived),
+    request: ({ projectId, runId, archived }: IndexedRunTarget & { archived: boolean }) =>
+      archiveRun(runAddress(runId, { projectId }), archived),
     patch: ({ archived }) => (run) => ({ ...run, archived }),
   })
 }
@@ -106,8 +108,8 @@ function useArchiveIndexedRun() {
 /** Mark one indexed run read or unread in its own project. */
 function useReadIndexedRun() {
   return useIndexedRunMutation({
-    request: ({ task, read }: { task: GlobalTask; read: boolean }) =>
-      setRunRead(runAddress(task.run.id, { projectId: task.run.projectId }), read),
+    request: ({ projectId, runId, read }: IndexedRunTarget & { read: boolean }) =>
+      setRunRead(runAddress(runId, { projectId }), read),
     patch:
       ({ read }) =>
       (run) => {
@@ -121,13 +123,13 @@ function useReadIndexedRun() {
 /** Pin or unpin one indexed run in its own project. */
 function usePinIndexedRun() {
   return useIndexedRunMutation({
-    request: ({ task, pinned }: { task: GlobalTask; pinned: boolean }) =>
-      pinRun(runAddress(task.run.id, { projectId: task.run.projectId }), pinned),
+    request: ({ projectId, runId, pinned }: IndexedRunTarget & { pinned: boolean }) =>
+      pinRun(runAddress(runId, { projectId }), pinned),
     patch: ({ pinned }) => (run) => ({ ...run, pinned }),
   })
 }
 
-function useIndexedRunMutation<V extends { task: GlobalTask }>({
+function useIndexedRunMutation<V extends IndexedRunTarget>({
   request,
   patch,
 }: {
@@ -138,16 +140,16 @@ function useIndexedRunMutation<V extends { task: GlobalTask }>({
   return useMutation({
     mutationFn: request,
     onMutate: (variables: V) =>
-      writer.patchIndex(runAddress(variables.task.run.id, { projectId: variables.task.run.projectId }), () =>
+      writer.patchIndex(runAddress(variables.runId, { projectId: variables.projectId }), () =>
         patch(variables),
       ),
     onError: (error: Error, _variables, context) => {
       context?.rollback()
       toast(error.message, { tone: 'danger' })
     },
-    onSettled: (_data, _error, { task }, context) => {
+    onSettled: (_data, _error, { projectId, runId }, context) => {
       if (context) context.settle()
-      else writer.invalidateAfter('indexed', runAddress(task.run.id, { projectId: task.run.projectId }))
+      else writer.invalidateAfter('indexed', runAddress(runId, { projectId }))
     },
   })
 }
@@ -323,41 +325,34 @@ function useGlobalBulkActions({
   }
 }
 
-function useGlobalRowActions(tasks: readonly GlobalTask[]) {
-  const taskByKey = React.useMemo(
-    () => new Map(tasks.map((task) => [`${task.run.projectId}/${task.run.id}`, task])),
-    [tasks],
-  )
-  const archive = useArchiveIndexedRun()
-  const setRead = useReadIndexedRun()
-  const pin = usePinIndexedRun()
+function useGlobalRowActions() {
+  const { mutate: mutateArchive, isPending: archivePending } = useArchiveIndexedRun()
+  const { mutate: mutateRead, isPending: readPending } = useReadIndexedRun()
+  const { mutate: mutatePin, isPending: pinPending } = usePinIndexedRun()
 
   const onArchive = React.useCallback(
     (item: TaskRowModel, archived: boolean) => {
-      const task = taskByKey.get(item.key)
-      if (task) archive.mutate({ task, archived })
+      if (item.projectId) mutateArchive({ projectId: item.projectId, runId: item.runId, archived })
     },
-    [taskByKey, archive],
+    [mutateArchive],
   )
   const onSetRead = React.useCallback(
     (item: TaskRowModel, read: boolean) => {
-      const task = taskByKey.get(item.key)
-      if (task) setRead.mutate({ task, read })
+      if (item.projectId) mutateRead({ projectId: item.projectId, runId: item.runId, read })
     },
-    [taskByKey, setRead],
+    [mutateRead],
   )
   const onTogglePin = React.useCallback(
     (item: TaskRowModel, pinned: boolean) => {
-      const task = taskByKey.get(item.key)
-      if (task) pin.mutate({ task, pinned })
+      if (item.projectId) mutatePin({ projectId: item.projectId, runId: item.runId, pinned })
     },
-    [taskByKey, pin],
+    [mutatePin],
   )
   return {
     onArchive,
     onSetRead,
     onTogglePin,
-    busy: archive.isPending || setRead.isPending || pin.isPending,
+    busy: archivePending || readPending || pinPending,
   }
 }
 
@@ -421,7 +416,7 @@ export function GlobalTasksRoute() {
   const setOrigin = (next: TaskOrigin) => setFilters((current) => withOrigin(current, next))
 
   const bulk = useGlobalBulkActions({ tasks, origin, filters })
-  const rowActions = useGlobalRowActions(tasks)
+  const rowActions = useGlobalRowActions()
 
   const referenceRequests = React.useMemo(
     () =>
@@ -741,30 +736,36 @@ function GroupedTaskLists({
               </StatusGroupSection>
             )
           })
-        : groups.map((group, index) => (
-            <section key={group.key} data-slot="task-group" data-group-key={group.key}>
-              <h2 className="mb-1.5 flex items-center gap-2 text-[12px] font-semibold tracking-[0.04em] text-soft-foreground uppercase">
-                {groupBy === 'project' ? (
-                  <Link
-                    to={scopeTo(group.key, '/')}
-                    data-slot="group-project-link"
-                    className="hover:text-foreground hover:underline"
-                  >
-                    {group.label}
-                  </Link>
-                ) : (
-                  group.label
-                )}
-                <Count value={group.tasks.length} className="font-mono text-[11px] font-medium" />
-              </h2>
-              <TaskTable
-                {...sharedTableProps}
-                items={toModels(group.tasks.map((task) => ({ task, queuePosition: null })))}
-                showHeader={index === 0}
-                showProject={groupBy !== 'project'}
-              />
-            </section>
-          ))}
+        : groups.map((group, index) => {
+            const orderedTasks =
+              view === 'archived'
+                ? group.tasks
+                : [...group.tasks].sort((a, b) => Number(Boolean(b.run.pinned)) - Number(Boolean(a.run.pinned)))
+            return (
+              <section key={group.key} data-slot="task-group" data-group-key={group.key}>
+                <h2 className="mb-1.5 flex items-center gap-2 text-[12px] font-semibold tracking-[0.04em] text-soft-foreground uppercase">
+                  {groupBy === 'project' ? (
+                    <Link
+                      to={scopeTo(group.key, '/')}
+                      data-slot="group-project-link"
+                      className="hover:text-foreground hover:underline"
+                    >
+                      {group.label}
+                    </Link>
+                  ) : (
+                    group.label
+                  )}
+                  <Count value={orderedTasks.length} className="font-mono text-[11px] font-medium" />
+                </h2>
+                <TaskTable
+                  {...sharedTableProps}
+                  items={toModels(orderedTasks.map((task) => ({ task, queuePosition: null })))}
+                  showHeader={index === 0}
+                  showProject={groupBy !== 'project'}
+                />
+              </section>
+            )
+          })}
     </>
   )
 }
