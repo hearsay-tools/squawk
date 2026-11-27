@@ -223,7 +223,7 @@
   .settings-panel [data-slot=accounts-defaults] .settings-account-model { flex-direction: row; align-items: center; flex-wrap: wrap; }
   .settings-panel .settings-account-model select { flex: 1; min-width: 100px; }
 }
-.settings-panel [data-slot=agent-config-scope] { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.settings-panel [data-slot=agent-config-path] { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .settings-config-scopes [data-slot=agent-config-nav] { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 20px; }
 .settings-config-scopes [data-slot=agent-config-file] { font-size: 12px; padding: 8px; }
 .settings-panel [data-slot=accounts-defaults] .settings-model-agent-choice { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 12px; color: var(--muted-foreground); }
@@ -274,7 +274,7 @@
 .settings-account-readout { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
 .settings-account-meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; min-width: 0; font-size: 12px; color: var(--muted-foreground); }
 .settings-account-label { font-size: 13px; font-weight: 500; color: var(--foreground); }
-.settings-account-path { font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.settings-account-path { font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: color-mix(in oklch, var(--foreground) 80%, transparent); overflow-wrap: anywhere; }
 .settings-account-hint { font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
 .settings-account-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; margin-inline: 16px; padding-block: 8px 10px; border-block-start: 1px solid var(--border); }
 .settings-agent-note { margin-inline: 16px; padding-block: 8px 10px; border-block-start: 1px solid var(--border); font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }

@@ -55,21 +55,26 @@ describe('Workspace tools', () => {
       expect([...row.children].every((el) => el.tagName === 'DT' || el.tagName === 'DD')).toBe(true)
     }
     expect(codex.querySelector('[data-slot="tool-setup"]')?.parentElement?.tagName).toBe('DD')
-    const setups = screen.getAllByRole('link', { name: 'Set up ›' })
+    const setups = screen.getAllByRole('link', { name: 'Set up' })
     expect(setups).toHaveLength(1)
     expect(codex.querySelector('[data-slot="tool-setup"]')).toBe(setups[0])
     expect(setups[0]!.getAttribute('href')).toBe('/settings/global/agents#agent-codex')
-    expect(screen.getByRole('link', { name: 'Tool settings ›' }).getAttribute('href')).toBe('/settings/global/agents')
+    expect(screen.getByRole('link', { name: 'Tool settings' }).getAttribute('href')).toBe('/settings/global/agents')
+    // The chevrons are icons, as on Reports, not a text "›" in the link name.
+    for (const link of [setups[0]!, screen.getByRole('link', { name: 'Tool settings' })]) {
+      expect(link.textContent).not.toContain('›')
+      expect(link.querySelector('svg[aria-hidden="true"]')).not.toBeNull()
+    }
   })
 
   it('has no "Set up" link when every tool is available', () => {
     mocks.allAvailable = true
     render(<MemoryRouter><WorkspaceToolsRoute /></MemoryRouter>)
     expect(screen.queryByRole('link', { name: /Set up/ })).toBeNull()
-    expect(screen.getByRole('link', { name: 'Tool settings ›' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Tool settings' })).toBeTruthy()
   })
 
-  it('shows a dry-run version as a calm pill with the raw string in its tooltip', () => {
+  it('shows a dry-run version as a flat status tag with the raw string in its tooltip', () => {
     mocks.allAvailable = true
     mocks.version = 'mock (HSQ_DRY_RUN=1)'
     const { container } = render(<MemoryRouter><WorkspaceToolsRoute /></MemoryRouter>)
@@ -78,6 +83,9 @@ describe('Workspace tools', () => {
     expect(pill?.textContent).toBe('Dry run')
     expect(pill?.getAttribute('title')).toBe('mock (HSQ_DRY_RUN=1)')
     expect(codex.textContent).not.toContain('HSQ_DRY_RUN')
+    // A status tag, not a control: a flat fill and no border chrome.
+    expect(pill?.className).toContain('bg-muted/60')
+    expect(pill?.className).not.toContain('border')
     // A real version still reads inline.
     expect(container.querySelector('[data-slot="tool-row"][data-tool="git"]')?.textContent).toContain('Installed· 2.50')
   })

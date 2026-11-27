@@ -608,6 +608,25 @@ describe('the agent defaults form', () => {
     expect(reload).toHaveBeenCalledTimes(1)
   })
 
+  it('puts the prompt caption above one Save prompt row that says No unsaved changes while clean', async () => {
+    serve()
+    renderAt('/settings/agent-defaults')
+    await waitFor(() => expect(form()).not.toBeNull())
+
+    const save = document.querySelector<HTMLButtonElement>('[data-action="agents-save-prompt"]')!
+    const row = save.closest('[data-slot="settings-save-row"]')
+    expect(row?.querySelector('[data-slot="settings-save-cue"]')?.textContent).toBe('No unsaved changes')
+    // The caption is its own line, never inside the action row.
+    const help = document.querySelector('[data-slot="agents-prompt-help"]')!
+    expect(help.textContent).toBe('Leave empty and save to clear. Applied to new runs only.')
+    expect(save.closest('.settings-form-actions')?.contains(help)).toBe(false)
+    expect(help.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('System prompt'), { target: { value: 'Something new' } })
+    expect(save.disabled).toBe(false)
+    expect(row?.querySelector('[data-slot="settings-save-cue"]')).toBeNull()
+  })
+
   it('an over-limit prompt disables Save with the reason — no request leaves', async () => {
     serve()
     renderAt('/settings/agent-defaults')

@@ -160,7 +160,7 @@ function AgentsPane({ data, runners }: { data: AgentProfilesResponse; runners: R
     >
       <RemoteSettingsNotice risk="Agent accounts run each CLI with the configured host folder" />
       {data.editable ? null : (
-        <p data-slot="accounts-hosted" className="text-[13px] text-soft-foreground">
+        <p data-slot="accounts-hosted" className="text-[13px] text-muted-foreground">
           Agent accounts are read-only on this remote cockpit. Run{' '}
           <code>{REMOTE_SETTINGS_ENABLE_COMMAND}</code> on the host to add, edit, or sign in to accounts here.
         </p>
@@ -263,17 +263,18 @@ function InstallReadout({ entry, check }: { entry: RunnerEntry; check: BackendCh
 /** The dry-run probe reports `mock (HSQ_DRY_RUN=1)` as its version: an env flag is not a version. */
 const DRY_RUN_VERSION = /^mock \(\w*DRY_RUN=1\)$/
 
-/** The CLI version, or a calm "Dry run" pill when the host runs mock agents. The raw string stays
- *  in the tooltip, so the env flag is one hover away and never in the copy. */
+/** The CLI version, or a flat "Dry run" status tag when the host runs mock agents: a neutral fill
+ *  and no border, so it never reads as a button. The raw string stays in the tooltip, so the env
+ *  flag is one hover away and never in the copy. */
 function VersionReadout({ version }: { version: string }) {
   if (DRY_RUN_VERSION.test(version)) {
     return (
-      <Badge variant="outline" data-slot="agent-version" data-dry-run="" title={version} className="text-[11px] font-normal text-muted-foreground">
+      <span data-slot="agent-version" data-dry-run="" title={version} className="rounded bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
         Dry run
-      </Badge>
+      </span>
     )
   }
-  return <><span className="sr-only">, version </span><span data-slot="agent-version" className="text-soft-foreground">{version}</span></>
+  return <><span className="sr-only">, version </span><span data-slot="agent-version" className="text-muted-foreground">{version}</span></>
 }
 
 /** Inline summary items joined by a quiet middle dot. `null` items are skipped. */

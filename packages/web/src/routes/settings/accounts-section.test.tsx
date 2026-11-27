@@ -739,7 +739,7 @@ describe('the global Agents section', () => {
     expect(document.querySelector('[data-slot="agent-installed"]')?.parentElement?.textContent).toBe('CLI installed·, version 2.1.220')
   })
 
-  it('shows a calm Dry run pill, not the env flag, when the host runs mock agents', async () => {
+  it('shows a flat Dry run status tag, not the env flag, when the host runs mock agents', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
       selections: {}, profiles: DEFAULTS })
     renderAccounts(RUNNERS_RESPONSE, true, true, '/settings/global/agents', false, 'mock (HSQ_DRY_RUN=1)')
@@ -751,6 +751,9 @@ describe('the global Agents section', () => {
     })
     expect(version.textContent).toBe('Dry run')
     expect(version.hasAttribute('data-dry-run')).toBe(true)
+    // A status tag, not a control: a flat fill and no border chrome.
+    expect(version.className).toContain('bg-muted/60')
+    expect(version.className).not.toContain('border')
     // The raw string stays one hover away.
     expect(version.getAttribute('title')).toBe('mock (HSQ_DRY_RUN=1)')
     expect(document.querySelector('[data-slot="agent-summary"]')?.textContent).not.toContain('HSQ_DRY_RUN')

@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useHealth, useProjects } from '@/api/queries'
 import { runnerEntry, useRunners } from '@/api/runners'
@@ -63,14 +64,14 @@ function toolDisplayName(name: string, runners: RunnersResponse | undefined): { 
 }
 
 /** A dry-run server reports every agent CLI as `mock (HSQ_DRY_RUN=1)`. That is a mode, not a
- *  version, so the row says "Dry run" in a calm pill and keeps the raw string in its tooltip. */
+ *  version, so the row says "Dry run" in a flat status tag and keeps the raw string in its tooltip. */
 const DRY_RUN_VERSION = /DRY_RUN=1\b/
 
 function ToolVersion({ version }: { version: string | undefined }) {
   if (!version) return null
   if (DRY_RUN_VERSION.test(version)) {
     return (
-      <span data-slot="tool-dry-run" title={version} className="shrink-0 rounded-full border border-border px-2 py-px text-[11px] font-medium text-muted-foreground">
+      <span data-slot="tool-dry-run" title={version} className="shrink-0 rounded bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
         Dry run
       </span>
     )
@@ -130,7 +131,7 @@ function ToolsDiagnosticsSection({ health, runners, copying, onCopy }: {
           <p className="mt-1 text-[13px] leading-[1.5] text-muted-foreground">Check the tools available to this local workspace.</p>
         </div>
         <Button asChild variant="outline" size="sm" className={TOOL_ACTION_CLASS}>
-          <RouterLink to={TOOL_SETTINGS_PATH} data-slot="tools-settings">Tool settings ›</RouterLink>
+          <RouterLink to={TOOL_SETTINGS_PATH} data-slot="tools-settings">Tool settings<ChevronRight className="size-3.5 shrink-0" aria-hidden="true" /></RouterLink>
         </Button>
       </div>
       {health.isError ? <p role="alert" className="text-sm text-destructive">Could not refresh tool diagnostics. Recheck to retry.</p> : null}
@@ -151,7 +152,7 @@ function ToolsDiagnosticsSection({ health, runners, copying, onCopy }: {
               <ToolVersion version={check.version} />
               {check.available ? null : (
                 <Button asChild variant="outline" size="sm" className={`${TOOL_ACTION_CLASS} ml-auto`}>
-                  <RouterLink to={toolSetupPath(check.name)} data-slot="tool-setup">Set up ›</RouterLink>
+                  <RouterLink to={toolSetupPath(check.name)} data-slot="tool-setup">Set up<ChevronRight className="size-3.5 shrink-0" aria-hidden="true" /></RouterLink>
                 </Button>
               )}
             </dd>

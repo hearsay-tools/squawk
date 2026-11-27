@@ -317,27 +317,40 @@ describe('AgentConfigSection', () => {
     await waitFor(() => expect(screen.queryByLabelText('.claude/settings.json contents')).toBeNull())
   })
 
-  it('opens the agent’s first file on load, with its vendor precedence, before any click', async () => {
+  it('opens the agent’s first project file on load, with its scope and vendor precedence, before any click', async () => {
     serve({
       editable: true,
       files: [
         fileOf({ id: 'claude.user.settings', label: '~/.claude/settings.json', scope: 'user', tracked: 'outside-repo' }),
         fileOf({ id: 'claude.project.settings', label: '.claude/settings.json' }),
-        fileOf({ id: 'codex.project.config', label: '.codex/config.toml', runners: ['codex'], format: 'toml' }),
+        fileOf({ id: 'codex.user.config', label: '~/.codex/config.toml', runners: ['codex'], scope: 'user', format: 'toml', tracked: 'outside-repo' }),
       ],
       userMcp: { path: '~/.claude.json', servers: [], readable: true },
     })
     renderSection()
-    expect(await screen.findByLabelText('~/.claude/settings.json contents')).toBeTruthy()
+    // The project file opens, not the user-wide file listed above it.
+    expect(await screen.findByLabelText('.claude/settings.json contents')).toBeTruthy()
     expect(document.querySelector('[data-slot="agent-config-precedence"]')?.textContent).toBe('Overrides user settings key by key.')
     expect(document.querySelector('[data-slot="agent-config-editor-empty"]')).toBeNull()
     const selected = [...document.querySelectorAll('[data-slot="agent-config-file"][data-selected="true"]')]
-    expect(selected.map((el) => el.getAttribute('title'))).toEqual(['~/.claude/settings.json'])
-    // A pick stays; switching agent opens that agent's first file instead.
-    fireEvent.click(nav().getByText('.claude/settings.json'))
-    expect(await screen.findByLabelText('.claude/settings.json contents')).toBeTruthy()
+    expect(selected.map((el) => el.getAttribute('title'))).toEqual(['.claude/settings.json'])
+    const scope = document.querySelector('[data-slot="agent-config-scope"]')
+    expect(scope?.textContent).toBe('Project scope')
+    expect(scope?.getAttribute('data-scope')).toBe('project')
+    // A pick stays, and the scope tag follows it.
+    fireEvent.click(nav().getByText('~/.claude/settings.json'))
+    expect(await screen.findByLabelText('~/.claude/settings.json contents')).toBeTruthy()
+    expect(document.querySelector('[data-slot="agent-config-scope"]')?.textContent).toBe('User scope')
+    // An agent with no project file opens its first file.
     fireEvent.click(agentTab('codex'))
-    expect(await screen.findByLabelText('.codex/config.toml contents')).toBeTruthy()
+    expect(await screen.findByLabelText('~/.codex/config.toml contents')).toBeTruthy()
+    expect(document.querySelector('[data-slot="agent-config-scope"]')?.textContent).toBe('User scope')
+  })
+
+  it('says the page edits project, local and user-wide files', async () => {
+    serve({ editable: true, files: [fileOf({ id: 'claude.project.settings', label: '.claude/settings.json' })], userMcp: null })
+    renderSection()
+    expect(await screen.findByText('Edit project, local, and user-wide config files for each coding agent.')).toBeTruthy()
   })
 
   it('names Claude’s state file from the home folder, as ~/, with the whole command in one code span', async () => {
@@ -358,7 +371,7 @@ describe('AgentConfigSection', () => {
     expect(document.querySelector('[data-slot="agent-config-user-mcp-command"]')?.textContent).toBe('claude mcp add')
   })
 
-  it('names a user-scope file in the scope line from the home folder, as ~/, with the full path on hover', async () => {
+  it('names a user-scope file in the path line from the home folder, as ~/, with the full path on hover', async () => {
     serve({
       editable: true,
       files: [fileOf({ id: 'claude.user.settings', label: '~/.claude/settings.json', scope: 'user',
@@ -366,13 +379,14 @@ describe('AgentConfigSection', () => {
       userMcp: null,
     })
     renderSection()
-    const scope = await waitFor(() => {
-      const el = document.querySelector('[data-slot="agent-config-scope"]')
+    const path = await waitFor(() => {
+      const el = document.querySelector('[data-slot="agent-config-path"]')
       expect(el).toBeTruthy()
       return el!
     })
-    expect(scope.textContent).toBe('User scope · ~/.claude/settings.json')
-    expect(scope.getAttribute('title')).toBe('/tmp/run-1/server-home/.claude/settings.json')
+    expect(path.textContent).toBe('~/.claude/settings.json')
+    expect(path.getAttribute('title')).toBe('/tmp/run-1/server-home/.claude/settings.json')
+    expect(document.querySelector('[data-slot="agent-config-scope"]')?.textContent).toBe('User scope')
   })
 
   // hearsay-tools/squawk#3898: the panes come from the runners list, so its failure is shown, not a spinner.

@@ -38,6 +38,7 @@ import { catalogQueryStatus, modelsForRunner } from '@/routes/new-task-form'
 import { ProviderSettings } from './provider-settings'
 
 import { SettingsAgentPicker } from './settings-agent-picker'
+import { SaveRow } from './save-cue'
 
 /**
  * Settings → Agent defaults (R6 Step 1.5, spec §"Settings"): today's scattered `PUT /api/config` knobs
@@ -222,28 +223,13 @@ function AgentsForm({
           placeholder="Extra rules for every agent run — conventions, tone, review requirements…"
           className="min-h-48 w-full"
         />
-        <div className="settings-form-actions">
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            data-action="agents-save-prompt"
-            disabled={promptSaved || promptOverLimit || save.isPending}
-            onClick={savePrompt}
-          >
-            Save prompt
-          </Button>
-          {promptOverLimit ? (
-            <p data-slot="agents-prompt-limit" className="text-xs text-danger">
-              {trimmedPrompt.length.toLocaleString()} characters — the limit is{' '}
-              {SYSTEM_PROMPT_MAX.toLocaleString()}.
-            </p>
-          ) : (
-            <p className="text-xs text-soft-foreground">
-              Leave empty and save to clear. Applied to new runs only.
-            </p>
-          )}
-        </div>
+        <SystemPromptActions
+          length={trimmedPrompt.length}
+          overLimit={promptOverLimit}
+          saved={promptSaved}
+          pending={save.isPending}
+          onSave={savePrompt}
+        />
       </Field>
 
       <section data-slot="agents-task-runs" className="settings-field flex flex-col gap-5">
@@ -441,5 +427,43 @@ function OptionRow({ title, hint, children }: { title: string; hint: string; chi
       </div>
       {children}
     </section>
+  )
+}
+
+/** The system prompt's caption, then its action row. The caption sits above the row, so Save prompt
+ *  and its "No unsaved changes" cue share one line, as on every other settings page. */
+function SystemPromptActions({ length, overLimit, saved, pending, onSave }: {
+  length: number
+  overLimit: boolean
+  saved: boolean
+  pending: boolean
+  onSave: () => void
+}) {
+  return (
+    <>
+      {overLimit ? (
+        <p data-slot="agents-prompt-limit" className="text-xs text-danger">
+          {length.toLocaleString()} characters — the limit is {SYSTEM_PROMPT_MAX.toLocaleString()}.
+        </p>
+      ) : (
+        <p data-slot="agents-prompt-help" className="text-xs text-muted-foreground">
+          Leave empty and save to clear. Applied to new runs only.
+        </p>
+      )}
+      <div className="settings-form-actions">
+        <SaveRow show={saved && !overLimit && !pending}>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            data-action="agents-save-prompt"
+            disabled={saved || overLimit || pending}
+            onClick={onSave}
+          >
+            Save prompt
+          </Button>
+        </SaveRow>
+      </div>
+    </>
   )
 }
