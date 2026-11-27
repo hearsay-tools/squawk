@@ -4,10 +4,10 @@ import { queryScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { useActivityLive } from '@/api/activity-live'
 import { BoardPage, PageShellSparseFooter, pageShellDensity } from '@/components/page-shell'
 import { Button } from '@/components/ui/button'
-import { Link, useActiveProjectId } from '@/lib/project-router'
+import { useActiveProjectId } from '@/lib/project-router'
 
 import { ActivityBoard } from './activity-board'
-import { ScopeSwitch, SummaryChips, activityHeaderProps } from './activity-header'
+import { ActivityQuickLinks, ScopeSwitch, SummaryChips, activityHeaderProps } from './activity-header'
 import { ActivityLoading } from './activity-loading'
 import { projectNotice, summarize } from './activity-model'
 import { useActivityMotion } from './use-activity-motion'
@@ -66,16 +66,7 @@ export function ProjectActivityRoute() {
         !notice && project.tasks.length > 0 ? (
           <PageShellSparseFooter
             summary={`${project.tasks.length} active ${project.tasks.length === 1 ? 'task' : 'tasks'} running in ${project.name}. Start more work in parallel or inspect all tasks.`}
-            actions={
-              <>
-                <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
-                  <Link to="/new">New task</Link>
-                </Button>
-                <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
-                  <Link to="/">View tasks</Link>
-                </Button>
-              </>
-            }
+            actions={<ActivityQuickLinks />}
           />
         ) : undefined
       }

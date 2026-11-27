@@ -3,10 +3,9 @@ import type { ActivityProject, ActivityRequest, ActivityRun } from '@open-mercat
 
 import { cn } from '@/lib/utils'
 import { PageShellEmptyState } from '@/components/page-shell'
-import { Button } from '@/components/ui/button'
-import { Link } from '@/lib/project-router'
 import type { FeedEntry } from './activity-feed'
 import { ActivityCard } from './activity-card'
+import { ActivityQuickLinks } from './activity-header'
 import { ActivityLines } from './activity-lines'
 import { nameOf, peerWaits, runIndex, type PeerWait } from './activity-model'
 import { EMPTY_MOTION, waitGhosts, type MotionState } from './activity-motion'
@@ -120,16 +119,7 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
             slot="activity-empty"
             title="No active work in this project."
             description="Start a new task to watch live agents, workers, and peer requests appear on this board."
-            actions={
-              <>
-                <Button variant="primary" size="sm" asChild className="max-md:min-h-11">
-                  <Link to="/new">New task</Link>
-                </Button>
-                <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
-                  <Link to="/">View tasks</Link>
-                </Button>
-              </>
-            }
+            actions={<ActivityQuickLinks primary />}
           />
         ) : null}
         <div

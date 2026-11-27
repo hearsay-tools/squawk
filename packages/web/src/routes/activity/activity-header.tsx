@@ -4,6 +4,7 @@ import { Link as RouterLink } from 'react-router'
 
 import { StatusDot } from '@/components/status-dot'
 import type { PageShellHeaderProps } from '@/components/page-shell'
+import { Button } from '@/components/ui/button'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 
@@ -73,6 +74,20 @@ export function activityHeaderProps({
     subtitle: now === undefined ? undefined : <LiveClock now={now} updatedAt={updatedAt} stale={stale} />,
     secondaryActions: scopeSwitch,
   }
+}
+
+/** Shared next-step links for Activity empty and sparse states. */
+export function ActivityQuickLinks({ primary = false }: { primary?: boolean }) {
+  return (
+    <>
+      <Button variant={primary ? 'primary' : 'outline'} size="sm" asChild className="max-md:min-h-11">
+        <Link to="/new">New task</Link>
+      </Button>
+      <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
+        <Link to="/">View tasks</Link>
+      </Button>
+    </>
+  )
 }
 
 /** A chip's count. A new `bump` key replays the bump. */
