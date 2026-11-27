@@ -56,7 +56,7 @@ it('holds a Stop clicked while the tab return reopens the socket and sends it on
 it('drops held actions when the connection gives up instead of firing them on a later reconnect', () => {
   const props: PreviewPaneProps = { run: { id: 'run' } as PreviewPaneProps['run'], servers: [server], request: { port: 5173 }, onClose: vi.fn() }
   const hook = renderHook(() => usePreviewPaneTransport(props))
-  act(() => hook.result.current.actions.run(5173))
+  act(() => hook.result.current.actions.stop(5173))
   act(() => FakeWebSocket.instances[0]!.drop())
   act(() => { vi.advanceTimersByTime(1_000) }) // the socket's retry before its second upgrade
   act(() => FakeWebSocket.instances[1]!.drop())

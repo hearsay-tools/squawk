@@ -106,6 +106,9 @@ it('holds controls until the socket opens and keeps close as the owner callback'
   const hook = mount({ onClose })
   act(() => hook.result.current.actions.download())
   expect(last().send).not.toHaveBeenCalled()
+  // Run is refused, not held: what it approved can be replaced before the socket reopens.
+  act(() => hook.result.current.actions.run(5173))
+  expect(toast).toHaveBeenLastCalledWith('The preview is reconnecting. Run the server again once it is back.', { tone: 'danger' })
   transport('open')
   expect(last().send.mock.calls.map(call => call[0])).toEqual([{ t: 'download' }])
   last().send.mockClear()

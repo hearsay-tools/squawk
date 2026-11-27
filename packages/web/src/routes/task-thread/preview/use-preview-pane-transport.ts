@@ -121,7 +121,8 @@ export function usePreviewPaneTransport({ run, servers, request, onTarget, onLiv
   const send = useCallback((message: PreviewClientMessage) => {
     if (socketOpen.current) connection.current?.send(message)
   }, [])
-  /** Owner actions taken while the socket is not open, sent in order right after the next `open`. */
+  /** Owner actions taken while the socket is not open, sent in order right after the next `open`.
+   *  Run is never held: the registration it approved can change before the socket reopens. */
   const queued = useRef<PreviewClientMessage[]>([])
   const sendAction = useCallback((message: PreviewClientMessage) => {
     if (socketOpen.current) connection.current?.send(message)
@@ -366,14 +367,17 @@ export function usePreviewPaneTransport({ run, servers, request, onTarget, onLiv
       download: () => sendAction({ t: 'download' }),
       cancelDownload: () => sendAction({ t: 'cancelDownload' }),
       retryBrowser: () => sendAction({ t: 'retryBrowser' }),
-      run: serverPort => sendAction({ t: 'run', port: serverPort }),
+      run: serverPort => {
+        if (socketOpen.current) send({ t: 'run', port: serverPort })
+        else toast('The preview is reconnecting. Run the server again once it is back.', { tone: 'danger' })
+      },
       stop: serverPort => sendAction({ t: 'stop', port: serverPort }),
       keepWaiting: serverPort => sendAction({ t: 'keepWaiting', port: serverPort }),
       close: onClose,
       useHere: reconnect,
       copy: copyText,
     }),
-    [sendAction, onClose], // eslint-disable-line react-hooks/exhaustive-deps
+    [send, sendAction, onClose], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   return {
