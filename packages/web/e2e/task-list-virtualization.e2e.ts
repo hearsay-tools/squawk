@@ -1,4 +1,5 @@
 import { RUN_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+import { dismissWithEscape } from './contrast'
 import { settleVisual, waitForSettledSample } from './visual-ready'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { AgentBrowser } from './agent-browser'
@@ -39,8 +40,7 @@ it('bounds rows, preserves focused controls and expansion, and follows pathname 
   const row = `[data-slot="task-summary-row"][data-run-id="${first}"]`
   browser.click(`${row} button[data-task-control="usage"]`)
   browser.waitForFunction(`document.querySelector('[data-slot="task-telemetry-popover"]') !== null`)
-  browser.press('Escape')
-  browser.waitForFunction(`document.querySelector('[data-slot="task-telemetry-popover"]') === null`)
+  dismissWithEscape(browser, { content: '[data-slot="task-telemetry-popover"]', focus: `${row} button[data-task-control="usage"]` })
   // Keyboard traversal advances cleanly to the next logical run.
   const next = browser.waitForValue(`(() => { const current=document.querySelector('${row}');const index=Number(current.getAttribute('aria-rowindex'))+1;return current.closest('[role="table"]').querySelector('[data-slot="task-summary-row"][aria-rowindex="'+index+'"]')?.dataset.runId })()`) as string
   browser.evaluate(`const controls=document.querySelector('${row}').querySelectorAll('a[href],button:not([disabled]),[tabindex="0"]');controls[controls.length-1].focus()`)

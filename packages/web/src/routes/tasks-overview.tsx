@@ -1,6 +1,6 @@
 import { taskResourceGrid } from '@/lib/task-list-render'
 import { TaskListItems, TaskListFocusBoundary } from '@/components/task-list-items'
-import { TaskTitleEditorProvider, useTaskTitleEditor } from '@/lib/task-title-editor'
+import { TaskTitleEditorProvider } from '@/lib/task-title-editor'
 import { useIsDesktop } from '@/lib/use-desktop'
 import { useRunCacheWriter } from '@/api/use-run-cache-writer'
 import { projectAddress } from '@/api/run-address'
@@ -15,7 +15,6 @@ import {
   ListChecksIcon,
   LinkIcon,
   MemoryStickIcon,
-  PencilIcon,
   SearchXIcon,
   ZapIcon,
 } from 'lucide-react'
@@ -46,7 +45,6 @@ import {
   TaskControlStrip,
   TaskViewTabs,
   headingTone,
-  taskTitleClass,
   tasksOverviewDensity,
   tasksOverviewHeader,
   tasksOverviewRootProps,
@@ -55,14 +53,11 @@ import {
 } from './task-list-parts'
 import { TablePage } from '@/components/page-shell'
 import { DirectionalUsage, directionalUsageLabel } from '@/components/directional-usage'
-import { TitleEditInput } from '@/components/editable-title'
 import { Pill } from '@/components/pill'
-import { PinToggle } from '@/components/pin-toggle'
 import { TaskReferenceChip } from '@/components/reference-conflict-action'
 import { ReferenceStatusProvider } from '@/components/reference-status'
-import { StatusDot } from '@/components/status-dot'
 import { StatusGroupSection } from '@/components/task-status-groups'
-import { TaskTable } from '@/components/task-table'
+import { EditableRunTitle, TaskTable } from '@/components/task-table'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -607,9 +602,11 @@ function GroupedTasks({
           runners,
           automationName,
           now,
+          showTokens,
+          showCost,
         }),
       ),
-    [rows, runners, automationName, now],
+    [rows, runners, automationName, now, showTokens, showCost],
   )
 
   const handleTogglePin = React.useCallback(
@@ -1069,66 +1066,19 @@ function TitleCell({
   onRename: (id: string, title: string) => void
   onTogglePin?: ((run: RunSummary, pinned: boolean) => void) | undefined
 }) {
-  const title = runTitle(run)
-  const editor = useTaskTitleEditor(run)
-  const unread = isUnread(run)
-  const readDone = isReadDoneItem(run)
-
-  if (editor.editing) {
-    return (
-      <div className="flex flex-wrap items-center gap-2" data-slot="table-title-editor">
-        <TitleEditInput editor={editor} className="basis-full text-[13px] font-medium" />
-        <Button size="sm" aria-label="Save title" onMouseDown={(event) => event.preventDefault()} onClick={editor.commit}>
-          Save
-        </Button>
-        <Button size="sm" variant="outline" aria-label="Cancel rename" onMouseDown={(event) => event.preventDefault()} onClick={editor.cancel}>
-          Cancel
-        </Button>
-      </div>
-    )
-  }
-
   return (
-    <span className={cn('flex min-w-0 items-center gap-1.5', lines === 1 ? 'h-[18px]' : 'min-h-[18px]')}>
-      {run.delegation?.role === 'worker' ? <span className="shrink-0 text-xs text-muted-foreground">Worker</span> : null}
-      <Link
-        data-task-control="title"
-        to={to}
-        title={title}
-        className={cn(
-          taskTitleClass(unread, readDone, lines),
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground',
-        )}
-      >
-        {title}
-      </Link>
-      {unread ? (
-        <StatusDot
-          tone={unreadMarkerTone(run)}
-          role="img"
-          aria-label="unread"
-          title="Unread — not opened since it finished"
-          className="shrink-0"
-        />
-      ) : null}
-      <button
-        type="button"
-        data-slot="row-rename"
-        aria-label="Rename task"
-        onClick={editor.begin}
-        className="shrink-0 rounded-sm p-0.5 text-soft-foreground opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-      >
-        <PencilIcon className="size-3" aria-hidden="true" />
-      </button>
-      <span aria-hidden="true" className="flex-1" />
-      {onTogglePin ? (
-        <PinToggle
-          pinned={Boolean(run.pinned)}
-          onToggle={(pinned) => onTogglePin(run, pinned)}
-          className="size-[19px] opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 no-hover:opacity-100 data-[pinned=true]:opacity-100"
-        />
-      ) : null}
-    </span>
+    <EditableRunTitle
+      run={run}
+      to={to}
+      title={runTitle(run)}
+      unread={isUnread(run)}
+      unreadTone={unreadMarkerTone(run)}
+      readDone={isReadDoneItem(run)}
+      isWorker={run.delegation?.role === 'worker'}
+      pinned={Boolean(run.pinned)}
+      onTogglePin={onTogglePin ? (pinned) => onTogglePin(run, pinned) : undefined}
+      lines={lines}
+    />
   )
 }
 

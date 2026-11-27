@@ -103,6 +103,9 @@ describe('TaskTable', () => {
     const headers = [...container.querySelectorAll('[role="columnheader"]')].map((el) => el.textContent)
     expect(headers).toEqual(['Task', 'Runner', 'Workflow', 'Branch', 'Changes', 'Started'])
     expect(screen.getByText('feat/unified-task-table')).toBeTruthy()
+    // Folding the Usage column keeps per-row telemetry and actions reachable from the Task cell.
+    fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for Unify task lists' }))
+    expect(screen.getByText('Task telemetry')).toBeTruthy()
   })
 
   it('renders card density with project badge and pinning for Global Tasks', () => {

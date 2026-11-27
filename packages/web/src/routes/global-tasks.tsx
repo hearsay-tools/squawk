@@ -179,13 +179,14 @@ function selectBulkScopeTasks(
   filters: GlobalTaskFilters,
 ): GlobalTask[] {
   const projectSet = filters.projects && filters.projects.length > 0 ? new Set(filters.projects) : undefined
-  const tagSet = filters.tags.length > 0 ? new Set(filters.tags) : undefined
+  const tagSet =
+    filters.tags.length > 0 ? new Set(filters.tags.map((tag) => tag.toLowerCase())) : undefined
   return tasks.filter((task) => {
     if (!matchesOrigin(task.run, origin)) return false
     if (projectSet && !projectSet.has(task.run.projectId)) return false
     if (tagSet) {
       const taskTags = tagValuesOf(task)
-      if (!taskTags.some((tag) => tagSet.has(tag))) return false
+      if (!taskTags.some((tag) => tagSet.has(tag.toLowerCase()))) return false
     }
     return true
   })
@@ -673,7 +674,7 @@ function GroupedTaskLists({
       : groups.some((group) =>
           group.tasks.some((task) => taskReferences(task.run, task.project?.repoUrl).length > 0),
         )
-  const density = desktop ? 'table' : 'card'
+  const density = desktop ? ('table' as const) : ('card' as const)
 
   const toModels = (tasks: readonly { task: GlobalTask; queuePosition: number | null }[]) =>
     tasks.map(({ task, queuePosition }) =>
@@ -683,8 +684,28 @@ function GroupedTaskLists({
         runners,
         automationName,
         now,
+        showTokens,
+        showCost,
       }),
     )
+
+  const sharedTableProps = {
+    density,
+    now,
+    showReferences,
+    expandedColumns,
+    showTokens,
+    showCost,
+    scopedLinks: false as const,
+    liveUsageSource: 'snapshot' as const,
+    onTogglePin,
+    onArchive,
+    onSetRead,
+    busy,
+    tableSlot: 'global-tasks-table',
+    rowSlot: 'global-task-row',
+    cardSlot: 'global-task-row',
+  }
 
   return (
     <>
@@ -712,24 +733,10 @@ function GroupedTaskLists({
                 onToggle={() => folds.toggle(group.label)}
               >
                 <TaskTable
+                  {...sharedTableProps}
                   items={toModels(rows)}
-                  density={density}
-                  now={now}
                   showHeader={group === open[0]}
                   showProject
-                  showReferences={showReferences}
-                  expandedColumns={expandedColumns}
-                  showTokens={showTokens}
-                  showCost={showCost}
-                  scopedLinks={false}
-                  liveUsageSource="snapshot"
-                  onTogglePin={onTogglePin}
-                  onArchive={onArchive}
-                  onSetRead={onSetRead}
-                  busy={busy}
-                  tableSlot="global-tasks-table"
-                  rowSlot="global-task-row"
-                  cardSlot="global-task-row"
                 />
               </StatusGroupSection>
             )
@@ -751,24 +758,10 @@ function GroupedTaskLists({
                 <Count value={group.tasks.length} className="font-mono text-[11px] font-medium" />
               </h2>
               <TaskTable
+                {...sharedTableProps}
                 items={toModels(group.tasks.map((task) => ({ task, queuePosition: null })))}
-                density={density}
-                now={now}
                 showHeader={index === 0}
                 showProject={groupBy !== 'project'}
-                showReferences={showReferences}
-                expandedColumns={expandedColumns}
-                showTokens={showTokens}
-                showCost={showCost}
-                scopedLinks={false}
-                liveUsageSource="snapshot"
-                onTogglePin={onTogglePin}
-                onArchive={onArchive}
-                onSetRead={onSetRead}
-                busy={busy}
-                tableSlot="global-tasks-table"
-                rowSlot="global-task-row"
-                cardSlot="global-task-row"
               />
             </section>
           ))}

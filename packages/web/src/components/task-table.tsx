@@ -2,7 +2,8 @@ import * as React from 'react'
 import { ArchiveRestoreIcon, EyeIcon, EyeOffIcon, PencilIcon, ZapIcon } from 'lucide-react'
 import { Link as RouterLink, useNavigate as useRouterNavigate } from 'react-router'
 
-import type { RunStatePreview } from '@open-mercato/cezar-api-client'
+import type { RunStatePreview, RunSummary } from '@open-mercato/cezar-api-client'
+import type { AttentionTone } from '@/lib/attention'
 import { DiffStat, Path, RelativeTime } from '@/components/data-primitives'
 import { ArchiveIcon } from '@/components/design-icons'
 import { TitleEditInput } from '@/components/editable-title'
@@ -168,31 +169,65 @@ function TaskLink({ scoped, to, className, title, children, ...props }: {
   )
 }
 
-function EditableTaskTitle({ model, scoped, onTogglePin, compact }: {
-  model: TaskRowModel
-  scoped: boolean
-  onTogglePin?: ((item: TaskRowModel, pinned: boolean) => void) | undefined
-  compact: boolean
+export function EditableRunTitle({
+  run,
+  to,
+  title,
+  unread,
+  unreadTone,
+  readDone,
+  isWorker,
+  pinned,
+  automationBadge,
+  scoped = true,
+  onTogglePin,
+  lines = 1,
+  compact = false,
+}: {
+  run: RunSummary
+  to: string
+  title: string
+  unread: boolean
+  unreadTone: AttentionTone
+  readDone: boolean
+  isWorker: boolean
+  pinned: boolean
+  automationBadge?: TaskRowModel['automationBadge'] | undefined
+  scoped?: boolean
+  onTogglePin?: ((pinned: boolean) => void) | undefined
+  lines?: 1 | 2
+  compact?: boolean
 }) {
-  const editor = useTaskTitleEditor(model.run)
+  const editor = useTaskTitleEditor(run)
   if (editor.editing) {
     return (
       <div className="flex flex-wrap items-center gap-2" data-slot="table-title-editor">
         <TitleEditInput editor={editor} className="basis-full text-[13px] font-medium" />
-        <Button size="sm" aria-label="Save title" onMouseDown={(event) => event.preventDefault()} onClick={editor.commit}>Save</Button>
-        <Button size="sm" variant="outline" aria-label="Cancel rename" onMouseDown={(event) => event.preventDefault()} onClick={editor.cancel}>Cancel</Button>
+        <Button size="sm" aria-label="Save title" onMouseDown={(event) => event.preventDefault()} onClick={editor.commit}>
+          Save
+        </Button>
+        <Button size="sm" variant="outline" aria-label="Cancel rename" onMouseDown={(event) => event.preventDefault()} onClick={editor.cancel}>
+          Cancel
+        </Button>
       </div>
     )
   }
+  const titleClass = cn(
+    lines === 2
+      ? 'line-clamp-2 min-w-0 whitespace-normal rounded-sm text-[13px] leading-[18px]'
+      : 'min-w-0 truncate rounded-sm text-[13px] leading-[18px]',
+    unread ? 'font-semibold text-foreground' : readDone ? 'font-normal text-foreground' : 'font-medium text-foreground',
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground',
+  )
   return (
-    <span className={cn('flex min-w-0 items-center gap-1.5', compact ? 'h-[18px]' : 'min-h-[18px]')}>
-      {model.isWorker ? <span className="shrink-0 text-xs text-muted-foreground">Worker</span> : null}
-      <TaskLink scoped={scoped} to={model.href} title={model.title} data-task-control="title" className={titleTextClass(model.unread, model.readDone, false)}>
-        {model.title}
+    <span className={cn('flex min-w-0 items-center gap-1.5', compact || lines === 1 ? 'h-[18px]' : 'min-h-[18px]')}>
+      {isWorker ? <span className="shrink-0 text-xs text-muted-foreground">Worker</span> : null}
+      <TaskLink scoped={scoped} to={to} title={title} data-task-control="title" className={titleClass}>
+        {title}
       </TaskLink>
-      {model.automationBadge ? <AutomationBadge badge={model.automationBadge} /> : null}
-      {model.unread ? (
-        <StatusDot tone={model.unreadTone} role="img" aria-label="unread" title="Unread — not opened since it finished" className="shrink-0" />
+      {automationBadge ? <AutomationBadge badge={automationBadge} /> : null}
+      {unread ? (
+        <StatusDot tone={unreadTone} role="img" aria-label="unread" title="Unread — not opened since it finished" className="shrink-0" />
       ) : null}
       <button
         type="button"
@@ -206,12 +241,36 @@ function EditableTaskTitle({ model, scoped, onTogglePin, compact }: {
       <span aria-hidden="true" className="flex-1" />
       {onTogglePin ? (
         <PinToggle
-          pinned={model.pinned}
-          onToggle={(pinned) => onTogglePin(model, pinned)}
+          pinned={pinned}
+          onToggle={onTogglePin}
           className="size-[19px] opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 no-hover:opacity-100 data-[pinned=true]:opacity-100"
         />
       ) : null}
     </span>
+  )
+}
+
+function EditableTaskTitle({ model, scoped, onTogglePin, compact }: {
+  model: TaskRowModel
+  scoped: boolean
+  onTogglePin?: ((item: TaskRowModel, pinned: boolean) => void) | undefined
+  compact: boolean
+}) {
+  return (
+    <EditableRunTitle
+      run={model.run}
+      to={model.href}
+      title={model.title}
+      unread={model.unread}
+      unreadTone={model.unreadTone}
+      readDone={model.readDone}
+      isWorker={model.isWorker}
+      pinned={model.pinned}
+      automationBadge={model.automationBadge}
+      scoped={scoped}
+      onTogglePin={onTogglePin ? (pinned) => onTogglePin(model, pinned) : undefined}
+      compact={compact}
+    />
   )
 }
 
@@ -247,10 +306,11 @@ function StaticTaskTitle({ model, scoped, showProject, onTogglePin, clamp }: {
   )
 }
 
-function RowMetaLine({ model, showProject, showAutomationOnMeta }: {
+function RowMetaLine({ model, showProject, showAutomationOnMeta, trailing }: {
   model: TaskRowModel
   showProject: boolean
   showAutomationOnMeta: boolean
+  trailing?: React.ReactNode
 }) {
   const { attention, scheduled, queuePosition, runnerModel, tags } = model
   return (
@@ -284,6 +344,7 @@ function RowMetaLine({ model, showProject, showAutomationOnMeta }: {
           {tag}
         </span>
       ))}
+      {trailing}
     </div>
   )
 }
@@ -349,23 +410,7 @@ function ReferenceCellContent({ model, scoped }: { model: TaskRowModel; scoped: 
   )
 }
 
-function TableCell({
-  column,
-  model,
-  now,
-  scoped,
-  showProject,
-  allowRename,
-  showTokens,
-  showCost,
-  liveUsageSource,
-  compact,
-  onTogglePin,
-  onSetRead,
-  onArchive,
-  busy,
-}: {
-  column: TaskColumnDefinition
+interface TaskRowRenderContext {
   model: TaskRowModel
   now: number
   scoped: boolean
@@ -379,7 +424,50 @@ function TableCell({
   onSetRead?: ((item: TaskRowModel, read: boolean) => void) | undefined
   onArchive?: ((item: TaskRowModel, archived: boolean) => void) | undefined
   busy: boolean
+}
+
+function RowTelemetryControl({
+  model,
+  scoped,
+  showTokens,
+  showCost,
+  liveUsageSource,
+  onSetRead,
+  onArchive,
+  busy,
+  className,
+}: Pick<
+  TaskRowRenderContext,
+  'model' | 'scoped' | 'showTokens' | 'showCost' | 'liveUsageSource' | 'onSetRead' | 'onArchive' | 'busy'
+> & { className?: string | undefined }) {
+  return (
+    <TaskTelemetryPopover
+      model={model}
+      showTokens={showTokens}
+      showCost={showCost}
+      liveUsageSource={liveUsageSource}
+      className={className}
+      openLink={
+        <TelemetryOpenButton>
+          <TaskLink scoped={scoped} to={model.href} data-task-control="open">
+            Open task<span className="sr-only">: {model.title}</span>
+          </TaskLink>
+        </TelemetryOpenButton>
+      }
+      extraActions={<PopoverRowActions model={model} onSetRead={onSetRead} onArchive={onArchive} busy={busy} />}
+    />
+  )
+}
+
+function TableCell({
+  column,
+  hasUsageColumn,
+  ...ctx
+}: TaskRowRenderContext & {
+  column: TaskColumnDefinition
+  hasUsageColumn: boolean
 }) {
+  const { model, now, scoped, showProject, allowRename, compact, onTogglePin } = ctx
   switch (column.id) {
     case 'task':
       return (
@@ -389,7 +477,16 @@ function TableCell({
           ) : (
             <StaticTaskTitle model={model} scoped={scoped} showProject={showProject} onTogglePin={onTogglePin} clamp={false} />
           )}
-          <RowMetaLine model={model} showProject={false} showAutomationOnMeta={false} />
+          <RowMetaLine
+            model={model}
+            showProject={false}
+            showAutomationOnMeta={false}
+            trailing={
+              !hasUsageColumn ? (
+                <RowTelemetryControl {...ctx} className="ml-auto h-6 px-1.5 text-[11px]" />
+              ) : null
+            }
+          />
           <TaskStatePreview preview={model.statePreview} />
         </div>
       )
@@ -426,20 +523,7 @@ function TableCell({
     case 'usage':
       return (
         <div role="cell" data-column-id="usage" className="flex justify-end">
-          <TaskTelemetryPopover
-            model={model}
-            showTokens={showTokens}
-            showCost={showCost}
-            liveUsageSource={liveUsageSource}
-            openLink={
-              <TelemetryOpenButton>
-                <TaskLink scoped={scoped} to={model.href} data-task-control="open">
-                  Open task<span className="sr-only">: {model.title}</span>
-                </TaskLink>
-              </TelemetryOpenButton>
-            }
-            extraActions={<PopoverRowActions model={model} onSetRead={onSetRead} onArchive={onArchive} busy={busy} />}
-          />
+          <RowTelemetryControl {...ctx} />
         </div>
       )
     case 'started':
@@ -463,6 +547,7 @@ function sameTaskModel(a: TaskRowModel, b: TaskRowModel): boolean {
     a.projectName === b.projectName &&
     a.projectHref === b.projectHref &&
     a.runnerModel === b.runnerModel &&
+    a.usageSummary === b.usageSummary &&
     a.queuePosition === b.queuePosition &&
     a.automationBadge?.label === b.automationBadge?.label &&
     a.tags.length === b.tags.length &&
@@ -480,45 +565,22 @@ function samePropsWithModel<T extends { model: TaskRowModel }>(previous: T, next
 }
 
 export const TaskTableRow = React.memo(function TaskTableRow({
-  model,
   rowIndex,
   columns,
   gridTemplate,
-  now,
-  scoped,
-  showProject,
-  allowRename,
-  showTokens,
-  showCost,
-  liveUsageSource,
-  compact,
-  onTogglePin,
-  onSetRead,
-  onArchive,
-  busy,
   rowSlot,
-}: {
-  model: TaskRowModel
+  ...ctx
+}: TaskRowRenderContext & {
   rowIndex: number
   columns: readonly TaskColumnDefinition[]
   gridTemplate: string
-  now: number
-  scoped: boolean
-  showProject: boolean
-  allowRename: boolean
-  showTokens: boolean
-  showCost: boolean
-  liveUsageSource: 'stream' | 'snapshot'
-  compact: boolean
-  onTogglePin?: ((item: TaskRowModel, pinned: boolean) => void) | undefined
-  onSetRead?: ((item: TaskRowModel, read: boolean) => void) | undefined
-  onArchive?: ((item: TaskRowModel, archived: boolean) => void) | undefined
-  busy: boolean
   rowSlot: string
 }) {
+  const { model, scoped } = ctx
   const scopedNavigate = useScopedNavigate()
   const routerNavigate = useRouterNavigate()
   const navigateTo = (href: string) => (scoped ? scopedNavigate(href) : routerNavigate(href))
+  const hasUsageColumn = columns.some((column) => column.id === 'usage')
 
   return (
     <div
@@ -541,23 +603,7 @@ export const TaskTableRow = React.memo(function TaskTableRow({
       )}
     >
       {columns.map((column) => (
-        <TableCell
-          key={column.id}
-          column={column}
-          model={model}
-          now={now}
-          scoped={scoped}
-          showProject={showProject}
-          allowRename={allowRename}
-          showTokens={showTokens}
-          showCost={showCost}
-          liveUsageSource={liveUsageSource}
-          compact={compact}
-          onTogglePin={onTogglePin}
-          onSetRead={onSetRead}
-          onArchive={onArchive}
-          busy={busy}
-        />
+        <TableCell key={column.id} column={column} hasUsageColumn={hasUsageColumn} {...ctx} />
       ))}
     </div>
   )

@@ -1051,9 +1051,12 @@ describe('design frame 4 task summary', () => {
     fireEvent.click(toggle)
     expect(document.querySelector('[data-slot="task-telemetry-popover"]')).toBeNull()
   })
-  it('withholds capability-hidden tokens and cost in the Usage telemetry popover', () => {
-    renderOverview({ runs: [run({ title: 'Private metrics' })], showTokens: false, showCost: false, expandedColumns: {} }, false)
-    fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for Private metrics' }))
+  it('withholds capability-hidden tokens and cost in the Usage button and telemetry popover', () => {
+    renderOverview({ runs: [run({ title: 'Private metrics', inputTokens: 120_000, outputTokens: 5_000, costUsd: 0.42 })], showTokens: false, showCost: false, expandedColumns: {} }, false)
+    const trigger = screen.getByRole('button', { name: 'Usage and telemetry for Private metrics' })
+    expect(trigger.textContent).not.toContain('125.0k')
+    expect(trigger.textContent).not.toContain('$0.42')
+    fireEvent.click(trigger)
     const popover = document.querySelector('[data-slot="task-telemetry-popover"]') as HTMLElement
     expect(within(popover).queryByText('Tokens IN / OUT')).toBeNull()
     expect(within(popover).queryByText('Cost')).toBeNull()

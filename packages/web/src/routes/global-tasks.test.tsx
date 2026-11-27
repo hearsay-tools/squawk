@@ -1073,6 +1073,7 @@ it('mounts row actions inside the Usage telemetry popover only when opened', asy
       const popover = document.querySelector('[data-slot="task-telemetry-popover"]') as HTMLElement
       expect(within(popover).queryByText('Cost')).toBeNull()
       expect(within(popover).queryByText('$0.31')).toBeNull()
+      expect(screen.getByRole('button', { name: 'Usage and telemetry for Add checkout endpoint' }).textContent).not.toContain('$0.31')
     })
   })
 
@@ -1460,7 +1461,10 @@ it('supports pinning, column selection, and scoped bulk actions on Global Tasks'
     { ...RUNS[1]!, status: RUN_STATUS.done, finishedAt: RUNS[1]!.createdAt },
     { ...RUNS[2]!, status: RUN_STATUS.done, finishedAt: RUNS[2]!.createdAt },
   ]
-  stubFetch({ runs })
+  stubFetch({
+    runs,
+    projects: [PROJECTS[0]!, { ...PROJECTS[1]!, tags: ['Storefront'] }, PROJECTS[2]!],
+  })
   renderPage()
   await screen.findByText('Add checkout endpoint')
 
