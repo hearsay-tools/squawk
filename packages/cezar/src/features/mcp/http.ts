@@ -252,6 +252,7 @@ export function createMcpHttpRoute(options: McpHttpHandlerOptions = {}): HttpRou
     id: MCP_HTTP_ROUTE_ID,
     method: 'ALL',
     path: MCP_HTTP_PATH,
+    maxBodyBytes: MCP_MAX_BODY_BYTES,
     handle: (request, context) => handleMcpHttpRequest(request, context, options),
   };
 }

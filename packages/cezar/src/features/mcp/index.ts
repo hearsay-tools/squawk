@@ -24,6 +24,7 @@ export const mcpHttpRoute: HttpRouteDefinition = {
   id: 'mcp',
   method: 'ALL',
   path: '/api/v1/mcp',
+  maxBodyBytes: 1024 * 1024,
   handle: async (request, context) => (await import('./http.ts')).handleMcpHttpRequest(request, context),
 };
 

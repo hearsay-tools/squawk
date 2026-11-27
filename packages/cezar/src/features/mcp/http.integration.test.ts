@@ -182,13 +182,36 @@ describe('Streamable HTTP /api/v1/mcp auth matrix and lifecycle (hearsay-tools/s
       expect(res.status, origin).toBe(403);
     }
 
-    // 5. Oversized body (> 1 MiB) returns 413 (use Connection: close so Node does not reset a pooled socket).
+    // 5. Oversized body (> 1 MiB) returns 413 — both with Content-Length and chunked streaming
+    //    (enforced before the global 32 MiB bodyLimit middleware, even without auth).
     const oversized = await fetch(endpoint, {
       method: 'POST',
       headers: { ...MCP_HEADERS, authorization: `Bearer ${created.token}`, connection: 'close' },
       body: 'x'.repeat(MCP_MAX_BODY_BYTES + 1),
     });
     expect(oversized.status).toBe(413);
+
+    let streamedBytes = 0;
+    const chunk = new Uint8Array(64 * 1024).fill(0x78);
+    const maxStreamBytes = 4 * 1024 * 1024;
+    const chunkedStream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (streamedBytes >= maxStreamBytes) {
+          controller.close();
+          return;
+        }
+        streamedBytes += chunk.byteLength;
+        controller.enqueue(chunk);
+      },
+    });
+    const chunkedOversized = await fetch(endpoint, {
+      method: 'POST',
+      headers: { ...MCP_HEADERS, connection: 'close' },
+      body: chunkedStream,
+      duplex: 'half',
+    } as RequestInit);
+    expect(chunkedOversized.status).toBe(413);
+    expect(streamedBytes).toBeLessThan(maxStreamBytes);
 
     // 6. GET and DELETE return 405 with Allow: POST when authorized.
     for (const method of ['GET', 'DELETE']) {

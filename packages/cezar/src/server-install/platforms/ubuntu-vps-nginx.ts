@@ -57,6 +57,7 @@ ${http2}
     # Streamable HTTP MCP endpoint authenticates via bearer token, not nginx Basic Auth.
     location = /api/v1/mcp {
         auth_basic off;
+        client_max_body_size 1m;
         proxy_pass http://127.0.0.1:${port};
         proxy_http_version 1.1;
         proxy_set_header Host $host;

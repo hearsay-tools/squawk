@@ -184,6 +184,7 @@ describe('nginxVhost', () => {
     const mcpBlock = /location = \/api\/v1\/mcp \{[\s\S]*?\n    \}/.exec(vhost)?.[0];
     expect(mcpBlock).toBeDefined();
     expect(mcpBlock).toContain('auth_basic off;');
+    expect(mcpBlock).toContain('client_max_body_size 1m;');
     expect(mcpBlock).toContain('proxy_pass http://127.0.0.1:4321;');
     expect(mcpBlock).toContain('proxy_buffering off;');
     expect(mcpBlock).toContain('proxy_read_timeout 3600s;');

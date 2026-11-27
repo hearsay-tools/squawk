@@ -23,7 +23,7 @@ import { TaskWebhooks } from '../runs/webhook.ts';
 // schema this route validates with is the same one the client compiles against.
 import { registeredRunners } from '../core/runner-registry.ts';
 import type { HttpRouteDefinition } from '../core/http-route-registry.ts';
-import { mountPluginHttpRoutes } from './plugin-http-routes.ts';
+import { mountPluginHttpRouteLimits, mountPluginHttpRoutes } from './plugin-http-routes.ts';
 import { environmentStamp, type detectEnvironment } from '../core/backend-detect.ts';
 import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
@@ -343,9 +343,11 @@ export function createApp(deps: ServerDeps) {
   // Compression runs outside route families and leaves live event streams untouched.
   const staticResponse = createStaticAssets();
 
-  // Reject oversized request bodies before they reach any handler (#429). GETs
-  // and SSE carry no body, so this only ever gates the mutating routes.
-  app.use('*', bodyLimit({ maxSize: GLOBAL_BODY_LIMIT }));
+  // Reject oversized request bodies before they reach any handler (#429). Plugin routes with a
+  // stricter `maxBodyBytes` (such as `/api/v1/mcp` at 1 MiB) gate chunked uploads first.
+  const pluginLimitedPaths = mountPluginHttpRouteLimits(app, deps.httpRoutes);
+  const globalBodyLimit = bodyLimit({ maxSize: GLOBAL_BODY_LIMIT });
+  app.use('*', (c, next) => (pluginLimitedPaths.has(c.req.path) ? next() : globalBodyLimit(c, next)));
 
   // Local APIs require a loopback Host, including health. Browser writes require
   // matching full authority or the verified local dev-proxy case. Health alone is
