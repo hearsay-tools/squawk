@@ -74,9 +74,9 @@ describe('status-semantics', () => {
     expect(canonicalRungLabel('waiting-on-subagents', 'waiting for 2 subagents')).toBe('Waiting for 2 subagents')
   })
 
-  it('maps every bare RunStatus enum to its canonical Sentence-case presentation', () => {
+  it('maps every bare RunStatus enum to its canonical Sentence-case presentation without claiming Needs you for generic waiting', () => {
     const expected: Record<RunStatus, string> = {
-      waiting: 'Needs you',
+      waiting: 'Waiting',
       review: 'Needs review',
       running: 'Running',
       queued: 'Queued',
@@ -88,6 +88,13 @@ describe('status-semantics', () => {
       expect(rawRunStatusLabel(status)).toBe(label)
       expect(rawRunStatusPresentation(status).label).toBe(label)
     }
+    expect(rawRunStatusPresentation(RUN_STATUS.waiting)).toMatchObject({
+      category: 'execution',
+      label: 'Waiting',
+      tone: 'pending',
+      shape: 'ring',
+      pulse: false,
+    })
   })
 
   it('separates archive membership into its own neutral presentation', () => {

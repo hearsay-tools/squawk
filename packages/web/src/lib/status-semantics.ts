@@ -151,19 +151,21 @@ export function rungPresentation(rung: AttentionRung, rawLabel?: string): Status
 }
 
 /** Canonical Sentence-case label and presentation for a bare `RunStatus` enum (filters, group
- *  headers, worker rows, repo-not-landed). */
-const RAW_STATUS_RUNG: Record<RunStatus, AttentionRung> = {
-  waiting: 'needs-you',
-  review: 'needs-review',
-  running: 'running',
-  queued: 'queued',
-  done: 'done',
-  failed: 'failed',
-  cancelled: 'cancelled',
+ *  headers, worker rows, repo-not-landed). Bare `waiting` covers human asks, worker waits, CI
+ *  waits, timers, and usage-limit holds alike, so it stays generic `Waiting` rather than claiming
+ *  human attention (`Needs you`); full runs derive specific attention via `runStatusPresentation`. */
+const RAW_STATUS_PRESENTATION: Record<RunStatus, StatusPresentation> = {
+  waiting: { category: 'execution', label: 'Waiting', tone: 'pending', shape: 'ring', pulse: false },
+  review: rungPresentation('needs-review'),
+  running: rungPresentation('running'),
+  queued: rungPresentation('queued'),
+  done: rungPresentation('done'),
+  failed: rungPresentation('failed'),
+  cancelled: rungPresentation('cancelled'),
 }
 
 export function rawRunStatusPresentation(status: RunStatus): StatusPresentation {
-  return rungPresentation(RAW_STATUS_RUNG[status])
+  return RAW_STATUS_PRESENTATION[status]
 }
 
 export function rawRunStatusLabel(status: RunStatus): string {
