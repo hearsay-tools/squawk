@@ -161,8 +161,8 @@ test('every copied dist/runners folder loads and runs without bundled runners', 
     const probeReport = JSON.parse(probeRes.stdout) as PluginsJson;
     // The empty runners folder, the shipped features folder and the host folder, each read once.
     assert.equal(probeReport.folders.length, 3, 'CLI bootRuntime should reuse wrapper boot without re-reading plugin folders');
-    // No bundled runner loads; the bundled jobs feature still does.
-    assert.deepEqual(probeReport.loaded.filter(p => p.source === 'bundled').map(p => p.name), ['jobs']);
+    // No bundled runner loads; the bundled features still do.
+    assert.deepEqual(probeReport.loaded.filter(p => p.source === 'bundled').map(p => p.name), ['jobs', 'mcp']);
     assert.deepEqual(probeReport.failed, []);
     const probe = probeReport.loaded.filter(p => p.source === 'host');
     assert.equal(probe.length, 1);
@@ -184,7 +184,7 @@ test('every copied dist/runners folder loads and runs without bundled runners', 
     assert.equal(copyPluginsRes.code, 0, copyPluginsRes.stderr);
     const copyPlugins = JSON.parse(copyPluginsRes.stdout) as PluginsJson;
     // No bundled runner loads; the bundled jobs feature still does.
-    assert.deepEqual(copyPlugins.loaded.filter(p => p.source === 'bundled').map(p => p.name), ['jobs']);
+    assert.deepEqual(copyPlugins.loaded.filter(p => p.source === 'bundled').map(p => p.name), ['jobs', 'mcp']);
     assert.deepEqual(copyPlugins.failed, []);
     const hostRunners = copyPlugins.loaded.filter(p => p.source === 'host');
     assert.deepEqual(hostRunners.map(p => p.name).sort(), [...runnerIds].sort());

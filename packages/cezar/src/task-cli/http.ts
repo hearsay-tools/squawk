@@ -17,12 +17,25 @@ export class TaskCliError extends Error {
   }
 }
 
+export type FetchFn = typeof fetch;
+
 export interface Cockpit {
   /** `http://127.0.0.1:<port>` — no trailing slash. */
   origin: string;
   projectId: string;
   /** `${origin}/api/v1/p/${projectId}` */
   api: string;
+  /** Optional fetch implementation (defaults to `globalThis.fetch`). */
+  fetch?: FetchFn | undefined;
+}
+
+export function cockpitForProject(origin: string, projectId: string, fetchImpl?: FetchFn): Cockpit {
+  return {
+    origin,
+    projectId,
+    api: `${origin}/api/v1/p/${encodeURIComponent(projectId)}`,
+    ...(fetchImpl ? { fetch: fetchImpl } : {}),
+  };
 }
 
 export function threadUrl(cockpit: Cockpit, runId: string): string {
@@ -58,12 +71,22 @@ async function boundedText(response: Response, limit: number): Promise<string> {
 
 export interface HttpResult { status: number; data: unknown }
 
+export interface FetchJsonInit {
+  method?: string | undefined;
+  body?: unknown;
+  timeoutMs?: number | undefined;
+  responseLimitBytes?: number | undefined;
+  signal?: AbortSignal | undefined;
+  fetch?: FetchFn | undefined;
+}
+
 /** One request to an absolute URL. JSON bodies are parsed; anything else comes back as text. */
-export async function fetchJson(url: string, init: { method?: string; body?: unknown; timeoutMs?: number; responseLimitBytes?: number; signal?: AbortSignal } = {}): Promise<HttpResult> {
+export async function fetchJson(url: string, init: FetchJsonInit = {}): Promise<HttpResult> {
+  const fetchImpl = init.fetch ?? globalThis.fetch;
   let response: Response;
   let text: string;
   try {
-    response = await fetch(url, {
+    response = await fetchImpl(url, {
       method: init.method ?? (init.body === undefined ? 'GET' : 'POST'),
       redirect: 'error',
       headers: init.body === undefined ? {} : { 'content-type': 'application/json' },
@@ -86,7 +109,7 @@ export async function fetchJson(url: string, init: { method?: string; body?: unk
 }
 
 /** A project-scoped route: `path` starts with `/`, relative to `/api/v1/p/:projectId`. */
-export function request(cockpit: Cockpit, path: string, init: { method?: string; body?: unknown; timeoutMs?: number } = {}): Promise<HttpResult> {
+export function request(cockpit: Cockpit, path: string, init: FetchJsonInit = {}): Promise<HttpResult> {
   // GET /runs (`list --full`) and GET /run-summaries (#817) are unpaginated full histories. Even
   // 32 valid 100k-character tasks exceed the ordinary cap on /runs, and summaries grow with run
   // count. Match the cockpit's list read rather than making list/wait fail as history grows;
@@ -95,16 +118,17 @@ export function request(cockpit: Cockpit, path: string, init: { method?: string;
   const fullRunList = (listPath === '/runs' || listPath === '/run-summaries') && (init.method ?? (init.body === undefined ? 'GET' : 'POST')) === 'GET';
   return fetchJson(`${cockpit.api}${path}`, {
     ...init,
+    fetch: init.fetch ?? cockpit.fetch,
     ...(fullRunList ? { responseLimitBytes: Infinity } : {}),
   });
 }
 
-/** The cockpit said no: pass its `{ error }` through verbatim, exit 2. */
+/** The cockpit said no: pass its `{ error, hint? }` through verbatim, exit 2. */
 export function refuse(result: HttpResult): never {
-  const error = result.data && typeof result.data === 'object' && typeof (result.data as { error?: unknown }).error === 'string'
-    ? (result.data as { error: string }).error
-    : `cockpit answered HTTP ${result.status}`;
-  throw new TaskCliError(2, { code: 'refused', status: result.status, error });
+  const payload = result.data && typeof result.data === 'object' ? (result.data as { error?: unknown; hint?: unknown }) : undefined;
+  const error = typeof payload?.error === 'string' ? payload.error : `cockpit answered HTTP ${result.status}`;
+  const hint = typeof payload?.hint === 'string' ? payload.hint : undefined;
+  throw new TaskCliError(2, { code: 'refused', status: result.status, error, ...(hint ? { hint } : {}) });
 }
 
 /** A response the contract does not describe is a cockpit problem, not a caller problem. */

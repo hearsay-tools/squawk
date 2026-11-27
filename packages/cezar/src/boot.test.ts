@@ -171,7 +171,7 @@ it('installs the resolve hook, loads the bundled runners, then host plugins, the
     expect(lifecycle.registeredRunLifecycleListeners()).toHaveLength(1);
     const report = (await import('./plugin/loader.ts')).pluginLoadReport();
     expect(report.folders).toEqual([bundledRunnersDir(), bundledFeaturesDir(), dir]);
-    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([...BUILT_IN_RUNNER_IDS.map(id => [id, 'bundled']), ['jobs', 'bundled'], ['extra', 'host']]);
+    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([...BUILT_IN_RUNNER_IDS.map(id => [id, 'bundled']), ['jobs', 'bundled'], ['mcp', 'bundled'], ['extra', 'host']]);
     expect(report.failed).toEqual([]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -204,7 +204,7 @@ it('does not load host plugins twice when a failed hook is retried', async () =>
     await boot.bootRuntime({ pluginsDir: dir });
     const report = (await import('./plugin/loader.ts')).pluginLoadReport();
     expect(report.folders).toEqual([bundledRunnersDir(), bundledFeaturesDir(), dir]);
-    expect(report.loaded.map(plugin => plugin.name)).toEqual([...BUILT_IN_RUNNER_IDS, 'jobs', 'extra']);
+    expect(report.loaded.map(plugin => plugin.name)).toEqual([...BUILT_IN_RUNNER_IDS, 'jobs', 'mcp', 'extra']);
     expect(report.failed).toEqual([]);
     expect((await import('./core/cli-registry.ts')).cliCommand('extra')?.name).toBe('extra');
   } finally {
@@ -299,7 +299,7 @@ it('boots with no bundled runner when bundledRunnersDir is empty and reuses that
     expect(runners.registeredRunners().map(runner => [runner.id, runner.display.displayName])).toEqual([['claude', 'Host Claude']]);
     const report = (await import('./plugin/loader.ts')).pluginLoadReport();
     expect(report.folders).toEqual([emptyBundled, bundledFeaturesDir(), hostDir]);
-    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([['jobs', 'bundled'], ['claude', 'host']]);
+    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([['jobs', 'bundled'], ['mcp', 'bundled'], ['claude', 'host']]);
     expect(report.failed).toEqual([]);
   } finally {
     rmSync(emptyBundled, { recursive: true, force: true });

@@ -96,6 +96,7 @@ describe('plugin commands at dispatch', () => {
     expect(report.loaded).toEqual([
       ...BUILT_IN_RUNNER_IDS.map(id => expect.objectContaining({ name: id, source: 'bundled', contributions: expect.objectContaining({ runners: [id] }) })),
       expect.objectContaining({ name: 'jobs', source: 'bundled', contributions: expect.objectContaining({ cliCommands: ['job'], removalSlots: 1, launchParts: ['jobs'] }) }),
+      expect.objectContaining({ name: 'mcp', source: 'bundled', contributions: expect.objectContaining({ cliCommands: ['mcp'] }) }),
       expect.objectContaining({ name: 'greeter', source: 'host', contributions: expect.objectContaining({ cliCommands: ['greet'] }) }),
     ]);
     expect(report.failed).toEqual([expect.objectContaining({ name: 'empty', error: 'missing index.mjs or index.js' })]);
