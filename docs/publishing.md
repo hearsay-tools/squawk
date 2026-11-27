@@ -569,12 +569,18 @@ On **npmjs.com**, signed in as an account with maintainer access to
    workflow is not a trusted publisher for it.
    Configure all three packages **before** the next `Release` run — the
    publishing jobs carry no token, so a missing or stale publisher is a failed
-   publish, not a dry run. A mid-set failure is recoverable: re-dispatch the
-   **same** bump (`patch` if that is what failed). Already-published
-   `name@version` pairs are skipped so the remaining names, the GitHub Release,
-   and the bump PR can finish. Do not dispatch `existing` while git still holds
-   the pre-bump version — that republishes the old version, not the one already
-   on the published names.
+   publish, not a dry run. If a publish fails before `@hearsay-tools/squawk`
+   reaches npm (for example, on a Trusted Publisher mismatch), re-dispatching
+   the same bump once fixed starts a fresh run. If a stable publish stops
+   partway after `@hearsay-tools/squawk@<version>` is already on npm, retry the
+   **original run** (same source commit and bump) rather than dispatching a new
+   run — `planRelease` refuses a new dispatch when that version is already
+   published or within the 24-hour cooldown, and `scripts/release.mjs` skips an
+   already-published `name@version` only when its published `gitHead` matches
+   the checkout commit (see
+   [Retrying an interrupted release](#retrying-an-interrupted-release)). Do not
+   dispatch `existing` while git still holds the pre-bump version — that
+   targets the old version, not the one already on the published names.
 3. Keep a **granular access token** for the channels OIDC cannot cover
    (snapshots, nightlies, `npm dist-tag rm`). *Read and write*, **selected
    packages** `@hearsay-tools/squawk`, `@wjarka/cezarion`, and `cezarion` only
