@@ -199,7 +199,7 @@ export function ThreadView({
   const needsAnswer = transcriptAsk || asksQuestion(run)
   const { hasContinuation, continuable } = threadContinuation(sessionOpen, queued, continueAction)
 
-  const { openAgentId, setOpenAgentId, activityMode, activityOpen, setActivityOpen, activitySidebarOpen } = useThreadChromeState(run.id)
+  const { openAgentId, setOpenAgentId, activityMode, activityOpen, setActivityOpen, showActivitySidebar } = useThreadChromeState(run.id)
   const { openAgent, openAgentChildren } = useOpenSubagent(openAgentId, currentThread, thread, runIsTerminal)
   const sendMessage = useSendMessage(run.id)
   const reply = useAskAnswer(run)
@@ -339,7 +339,7 @@ export function ThreadView({
           />
         </div>
 
-        {activityMode === 'sidebar' && activitySidebarOpen ? (
+        {showActivitySidebar ? (
           <aside data-slot="thread-activity-sidebar" aria-label="Session activity">
             <RunActivityDock
               presentation="panel"
@@ -421,7 +421,8 @@ function useThreadChromeState(runId: string) {
   const activityMode: 'popover' | 'sidebar' = ultrawide && previewPane?.open !== true ? 'sidebar' : 'popover'
   const activityOpen = activityMode === 'sidebar' ? activitySidebarOpen : activityPopoverOpen
   const setActivityOpen = activityMode === 'sidebar' ? setActivitySidebarOpen : setActivityPopoverOpen
-  return { openAgentId, setOpenAgentId, activityMode, activityOpen, setActivityOpen, activitySidebarOpen }
+  const showActivitySidebar = activityMode === 'sidebar' && activitySidebarOpen
+  return { openAgentId, setOpenAgentId, activityMode, activityOpen, setActivityOpen, showActivitySidebar }
 }
 
 function useQueuedMessageActions(
