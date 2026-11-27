@@ -11,6 +11,8 @@ It solves the gap between opaque single-terminal CLI runs and hosted cloud codin
 
 Architecturally, Squawk is evolving toward a small core with features built as plugins (the shape of `pi`, tracked in [.ai/specs/2026-11-18-plugin-core-roadmap.md](.ai/specs/2026-11-18-plugin-core-roadmap.md)): a compact run engine, open registries, and a typed lifecycle — while remaining an orchestrator over external agent CLIs rather than becoming an agent itself.
 
+The roadmap also plans remote execution: tasks that run on other machines the user controls, driven from one place.
+
 ## Users
 
 - **Solo developers and small teams:** Run several coding agents in parallel under existing CLI subscriptions without sending code or API keys to a third-party SaaS.
@@ -30,7 +32,7 @@ Architecturally, Squawk is evolving toward a small core with features built as p
 ## Out of scope
 
 - **An in-house LLM or model loop.** Squawk orchestrates external agent CLIs; it does not implement its own model loop or compete with the runners it drives.
-- **A hosted SaaS, cloud user accounts, or an external database server.** State stays local in embedded SQLite (`runs.db`), append-only NDJSON logs, and Markdown journals.
+- **A hosted SaaS, cloud user accounts, or an external database server.** State stays local in embedded SQLite (`runs.db`), append-only NDJSON logs, and Markdown journals. Planned remote execution uses machines the user controls and adds no Squawk service.
 - **A Squawk-owned skill catalog or worktree skill installer.** Runners own their own skills ([ADR 0066](docs/adr/0066-use-runner-native-skills.md)).
 - **Pluggable run storage.** The run store stays one SQLite store behind typed ports, not a plugin seam.
 - **Big-bang rewrites or speculative plugin APIs.** No rewrite from scratch, and no extension hook added before a first-party feature uses it.

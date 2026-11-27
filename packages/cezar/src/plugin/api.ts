@@ -6,6 +6,7 @@
  */
 import { checkAgentToolRegistration, registerAgentTool, type AgentToolDefinition } from '../ci-wait/tool-registry.ts';
 import { checkCliCommandRegistration, registerCliCommand, type CliCommandDefinition } from '../core/cli-registry.ts';
+import { checkHttpRouteRegistration, registerHttpRoute, type HttpRouteDefinition } from '../core/http-route-registry.ts';
 import { checkLaunchPartRegistration, registerLaunchPart, type LaunchPartDefinition } from '../core/launch-registry.ts';
 import type { RunnerDefinition } from '../core/runner-definition.ts';
 import { checkRunnerRegistration, registerRunner } from '../core/runner-registry.ts';
@@ -22,6 +23,7 @@ export interface SquawkPluginApi {
   registerWaitKind(row: WaitKindRow): void;
   registerStepKind(step: StepKindDefinition): void;
   registerCliCommand(command: CliCommandDefinition): void;
+  registerHttpRoute(route: HttpRouteDefinition): void;
   registerRemovalSlots(slots: Partial<RunSlots>): void;
   /** Add env entries and a system-prompt part to every agent launch. */
   registerLaunchPart(part: LaunchPartDefinition): void;
@@ -61,6 +63,9 @@ const stepKinds: KeyedTable<StepKindDefinition> = {
 const cliCommands: KeyedTable<CliCommandDefinition> = {
   name: 'CLI commands', key: value => value.name, check: checkCliCommandRegistration, commit: registerCliCommand,
 };
+const httpRoutes: KeyedTable<HttpRouteDefinition> = {
+  name: 'HTTP routes', key: value => value.id, check: checkHttpRouteRegistration, commit: registerHttpRoute,
+};
 const launchParts: KeyedTable<LaunchPartDefinition> = {
   name: 'Launch parts', key: value => value.id, check: checkLaunchPartRegistration, commit: registerLaunchPart,
 };
@@ -72,6 +77,7 @@ interface StagedPlugin {
   waitKinds: WaitKindRow[];
   stepKinds: StepKindDefinition[];
   cliCommands: CliCommandDefinition[];
+  httpRoutes: HttpRouteDefinition[];
   launchParts: LaunchPartDefinition[];
   removalSlots: Array<Partial<RunSlots>>;
   lifecycle: RunLifecycleHandlers[];
@@ -110,6 +116,15 @@ function checkSlots(slots: Partial<RunSlots>): void {
   checkRunSlotsRegistration(slots);
 }
 
+function checkStagedHttpPaths(routes: readonly HttpRouteDefinition[]): void {
+  const owners = new Map<string, HttpRouteDefinition>();
+  for (const route of routes) {
+    const owner = owners.get(route.path);
+    if (owner && owner !== route) throw new Error(`HTTP routes: the plugin registers path '${route.path}' twice.`);
+    owners.set(route.path, route);
+  }
+}
+
 function checkStaged(staged: StagedPlugin): void {
   checkKeyed(runners, staged.runners);
   checkKeyed(tools, staged.tools);
@@ -117,6 +132,8 @@ function checkStaged(staged: StagedPlugin): void {
   checkStagedRequestKinds(staged.waitKinds);
   checkKeyed(stepKinds, staged.stepKinds);
   checkKeyed(cliCommands, staged.cliCommands);
+  checkKeyed(httpRoutes, staged.httpRoutes);
+  checkStagedHttpPaths(staged.httpRoutes);
   checkKeyed(launchParts, staged.launchParts);
   for (const slots of staged.removalSlots) checkSlots(slots);
   for (const handlers of staged.lifecycle) {
@@ -131,6 +148,7 @@ function commitStaged(staged: StagedPlugin): void {
   for (const value of staged.waitKinds) waitKinds.commit(value);
   for (const value of staged.stepKinds) stepKinds.commit(value);
   for (const value of staged.cliCommands) cliCommands.commit(value);
+  for (const value of staged.httpRoutes) httpRoutes.commit(value);
   for (const value of staged.launchParts) launchParts.commit(value);
   for (const slots of staged.removalSlots) registerRunSlots(slots);
   for (const handlers of staged.lifecycle) registerRunLifecycleListener(handlers);
@@ -147,6 +165,7 @@ function stagingApi(staged: StagedPlugin, open: () => boolean): SquawkPluginApi 
     registerWaitKind: stage(staged.waitKinds),
     registerStepKind: stage(staged.stepKinds),
     registerCliCommand: stage(staged.cliCommands),
+    registerHttpRoute: stage(staged.httpRoutes),
     registerRemovalSlots: stage(staged.removalSlots),
     registerLaunchPart: stage(staged.launchParts),
     onRunLifecycle: stage(staged.lifecycle),
@@ -160,6 +179,7 @@ export interface PluginContributions {
   waitKinds: string[];
   stepKinds: string[];
   cliCommands: string[];
+  httpRoutes: string[];
   removalSlots: number;
   runLifecycleListeners: number;
   launchParts: string[];
@@ -172,6 +192,7 @@ function contributions(staged: StagedPlugin): PluginContributions {
     waitKinds: staged.waitKinds.map(value => value.kind),
     stepKinds: staged.stepKinds.map(value => value.kind),
     cliCommands: staged.cliCommands.map(value => value.name),
+    httpRoutes: staged.httpRoutes.map(value => value.id),
     removalSlots: staged.removalSlots.length,
     runLifecycleListeners: staged.lifecycle.length,
     launchParts: staged.launchParts.map(value => value.id),
@@ -185,7 +206,7 @@ function contributions(staged: StagedPlugin): PluginContributions {
  * rethrows that error. The api refuses calls once setup has ended. Returns what it committed.
  */
 export async function runPluginSetup(plugin: SquawkPlugin): Promise<PluginContributions> {
-  const staged: StagedPlugin = { runners: [], tools: [], waitKinds: [], stepKinds: [], cliCommands: [], launchParts: [], removalSlots: [], lifecycle: [] };
+  const staged: StagedPlugin = { runners: [], tools: [], waitKinds: [], stepKinds: [], cliCommands: [], httpRoutes: [], launchParts: [], removalSlots: [], lifecycle: [] };
   let open = true;
   try {
     await plugin(stagingApi(staged, () => open));

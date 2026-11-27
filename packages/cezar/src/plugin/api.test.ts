@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z as zod } from 'zod';
 import type { SquawkPlugin, SquawkPluginApi } from './api.ts';
-import type { AgentToolDefinition, CliCommandDefinition, LaunchPartDefinition, RunnerDefinition, StepKindDefinition, WaitKindRow } from './index.ts';
+import type { AgentToolDefinition, CliCommandDefinition, HttpRouteDefinition, LaunchPartDefinition, RunnerDefinition, StepKindDefinition, WaitKindRow } from './index.ts';
 
 /** Fresh process-wide registries and the api that writes them. */
 async function fresh() {
@@ -12,25 +12,27 @@ async function fresh() {
   const waits = await import('../workflows/run/wait-kind-registry.ts');
   const steps = await import('../workflows/step-kind-registry.ts');
   const cli = await import('../core/cli-registry.ts');
+  const httpRoutes = await import('../core/http-route-registry.ts');
   const slots = await import('../runs/removal-slots.ts');
   const lifecycle = await import('../runs/lifecycle-registry.ts');
   const launch = await import('../core/launch-registry.ts');
   /** Seal every registry and read what it holds. */
   const committed = () => {
     runners.sealRunners(); tools.sealAgentTools(); waits.sealWaitKinds(); steps.sealStepKinds();
-    cli.sealCliCommands(); slots.sealRunSlots(); lifecycle.sealRunLifecycleListeners(); launch.sealLaunchParts();
+    cli.sealCliCommands(); httpRoutes.sealHttpRoutes(); slots.sealRunSlots(); lifecycle.sealRunLifecycleListeners(); launch.sealLaunchParts();
     return {
       runners: runners.knownRunnerIds(),
       tools: tools.agentToolNames(),
       waits: waits.registeredWaitKinds().map(row => row.kind),
       steps: steps.knownStepKinds(),
       cli: cli.registeredCliCommands().map(command => command.name),
+      httpRoutes: httpRoutes.registeredHttpRoutes().map(route => route.id),
       gates: slots.deletionRefusal('run', 'history', '/data'),
       lifecycle: lifecycle.registeredRunLifecycleListeners().length,
       launch: launch.registeredLaunchParts().map(part => part.id),
     };
   };
-  return { ...api, runners, tools, waits, steps, cli, slots, lifecycle, launch, committed };
+  return { ...api, runners, tools, waits, steps, cli, httpRoutes, slots, lifecycle, launch, committed };
 }
 
 const runner = (id: string) => ({ id }) as unknown as RunnerDefinition;
@@ -38,6 +40,7 @@ const tool = (name: string) => ({ name }) as unknown as AgentToolDefinition;
 const wait = (kind: string, requestKinds = [kind]) => ({ kind, requestKinds, isPlugin: true }) as unknown as WaitKindRow;
 const step = (kind: string): StepKindDefinition => ({ kind, requiresRunner: false, execute: async () => ({ kind: 'next' }) });
 const command = (name: string) => ({ name }) as unknown as CliCommandDefinition;
+const httpRoute = (id: string, path = `/api/v1/${id}`): HttpRouteDefinition => ({ id, method: 'POST', path, handle: () => new Response('ok') });
 const gate = { name: 'plugin-gate', refuse: () => 'held by the plugin' };
 const launchPart = (id: string, order?: unknown) => ({ id, order, contribute: () => undefined }) as unknown as LaunchPartDefinition;
 
@@ -49,6 +52,7 @@ function everywhere(last: (api: SquawkPluginApi) => void | Promise<void> = () =>
     api.registerWaitKind(wait('fixture-wait'));
     api.registerStepKind(step('fixture-step'));
     api.registerCliCommand(command('fixture-cmd'));
+    api.registerHttpRoute(httpRoute('fixture-route'));
     api.registerRemovalSlots({ gates: [gate] });
     api.onRunLifecycle({ 'store.closed': () => {} });
     api.registerLaunchPart(launchPart('fixture-part'));
@@ -56,7 +60,7 @@ function everywhere(last: (api: SquawkPluginApi) => void | Promise<void> = () =>
   };
 }
 
-const empty = { runners: [], tools: [], waits: [], steps: [], cli: [], gates: undefined, lifecycle: 0, launch: [] };
+const empty = { runners: [], tools: [], waits: [], steps: [], cli: [], httpRoutes: [], gates: undefined, lifecycle: 0, launch: [] };
 
 describe('runPluginSetup', () => {
   it('commits every staged entry once setup ends cleanly', async () => {
@@ -66,12 +70,13 @@ describe('runPluginSetup', () => {
       env.runners.checkRunnerRegistration(runner('fixture'));
       env.steps.checkStepKindRegistration(step('fixture-step'));
       env.cli.checkCliCommandRegistration(command('fixture-cmd'));
+      env.httpRoutes.checkHttpRouteRegistration(httpRoute('fixture-route'));
       env.launch.checkLaunchPartRegistration(launchPart('fixture-part'));
     };
     await env.runPluginSetup(everywhere(liveDuringSetup));
     expect(env.committed()).toEqual({
       runners: ['fixture'], tools: ['fixture_tool'], waits: ['fixture-wait'], steps: ['fixture-step'],
-      cli: ['fixture-cmd'], gates: 'held by the plugin', lifecycle: 1, launch: ['fixture-part'],
+      cli: ['fixture-cmd'], httpRoutes: ['fixture-route'], gates: 'held by the plugin', lifecycle: 1, launch: ['fixture-part'],
     });
   });
 
@@ -93,6 +98,9 @@ describe('runPluginSetup', () => {
     ['a plugin wait kind with a built-in name', api => api.registerWaitKind(wait('timer')), /reserved or invalid kind 'timer'/],
     ['an empty tool name', api => api.registerAgentTool(tool('')), /invalid key/],
     ['a duplicate launch part id in the plugin', api => api.registerLaunchPart(launchPart('fixture-part')), /registers 'fixture-part' twice/],
+    ['a duplicate HTTP route id in the plugin', api => api.registerHttpRoute(httpRoute('fixture-route', '/api/v1/other')), /registers 'fixture-route' twice/],
+    ['a duplicate HTTP route path in the plugin', api => api.registerHttpRoute(httpRoute('other-route', '/api/v1/fixture-route')), /registers path '\/api\/v1\/fixture-route' twice/],
+    ['an HTTP route outside /api/v1/', api => api.registerHttpRoute(httpRoute('bad-path', '/mcp')), /path must start with '\/api\/v1\/'/],
     ['an empty launch part id', api => api.registerLaunchPart(launchPart('')), /Launch parts: invalid id/],
     ['a launch part with a non-finite order', api => api.registerLaunchPart(launchPart('bad-order', Infinity)), /finite number order/],
     ['a launch part without contribute', api => api.registerLaunchPart({ id: 'no-contribute' } as unknown as LaunchPartDefinition), /contribute function/],

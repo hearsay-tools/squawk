@@ -32,6 +32,9 @@ describe('bundled mcp feature registration and absent-feature boot (hearsay-tool
     expect(mcpPlugin).toBeDefined();
     expect(mcpPlugin?.source).toBe('bundled');
     expect(mcpPlugin?.contributions.cliCommands).toEqual(['mcp']);
+    expect(mcpPlugin?.contributions.httpRoutes).toEqual(['mcp']);
+    const { registeredHttpRoutes } = await import('../../core/http-route-registry.ts');
+    expect(registeredHttpRoutes().map((route) => route.path)).toContain('/api/v1/mcp');
 
     const formatted = formatPluginReport(report);
     expect(formatted).toContain('mcp');
@@ -66,6 +69,8 @@ describe('bundled mcp feature registration and absent-feature boot (hearsay-tool
     expect(report.failed).toEqual([]);
     expect(report.loaded.map((entry) => entry.name)).not.toContain('mcp');
     expect(formatPluginReport(report)).not.toMatch(/^\s+mcp\s+/m);
+    const { registeredHttpRoutes } = await import('../../core/http-route-registry.ts');
+    expect(registeredHttpRoutes().map((route) => route.path)).not.toContain('/api/v1/mcp');
 
     const { testHome } = await import('../../home/test-home.testkit.ts');
     const { defaultCliDeps, main } = await import('../../cli-dispatch.ts');

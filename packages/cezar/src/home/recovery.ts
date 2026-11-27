@@ -28,7 +28,7 @@ export function recoveryFiles(home: Home): HomeFile[] {
   files.add('server.install.lock');
   // Include journals of deleted files: absence is itself an outside write.
   for (const root of new Set([home.config, home.state])) {
-    for (const dir of ['.versions', 'remote-settings', 'server-instances', '.versions/remote-settings', '.versions/server-instances']) {
+    for (const dir of ['.versions', 'remote-settings', 'mcp-tokens', 'server-instances', '.versions/remote-settings', '.versions/mcp-tokens', '.versions/server-instances']) {
       try {
         for (const name of readdirSync(join(root, dir))) {
           const family = dir.replace(/^\.versions\/?/, '');

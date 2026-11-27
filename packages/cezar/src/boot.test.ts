@@ -17,6 +17,7 @@ const SEAL_ALLOWLIST = new Set([
   'built-in-launch-parts.ts',
   'built-in-run-slots.ts',
   'core/cli-registry.ts',
+  'core/http-route-registry.ts',
   'core/launch-registry.ts',
   'core/runner-registry.ts',
   'runs/lifecycle-registry.ts',
@@ -49,8 +50,9 @@ it('seals all nine registries and runs beforeSeal only on the first full boot', 
   const waits = await import('./workflows/run/wait-kind-registry.ts');
   const lifecycle = await import('./runs/lifecycle-registry.ts');
   const launch = await import('./core/launch-registry.ts');
+  const httpRoutes = await import('./core/http-route-registry.ts');
   const sealed = () => ({
-    cli: cli.cliCommandsSealed(), runners: runners.runnersSealed(), slots: slots.runSlotsSealed(),
+    cli: cli.cliCommandsSealed(), httpRoutes: httpRoutes.httpRoutesSealed(), runners: runners.runnersSealed(), slots: slots.runSlotsSealed(),
     workers: workers.workerExecutionsSealed(), steps: steps.stepKindsSealed(),
     tools: tools.agentToolsSealed(), waits: waits.waitKindsSealed(),
     lifecycle: lifecycle.runLifecycleListenersSealed(), launch: launch.launchPartsSealed(),
@@ -63,7 +65,7 @@ it('seals all nine registries and runs beforeSeal only on the first full boot', 
   } });
   expect(order).toEqual(['hook']);
   expect(sealed()).toEqual({
-    cli: true, runners: true, slots: true, workers: true, steps: true, tools: true, waits: true, lifecycle: true, launch: true,
+    cli: true, httpRoutes: true, runners: true, slots: true, workers: true, steps: true, tools: true, waits: true, lifecycle: true, launch: true,
   });
   expect(launch.registeredLaunchParts().map(part => part.id)).toEqual(['automations', 'webhooks', 'artifacts', 'jobs']);
   await boot.bootRuntime({ beforeSeal: () => { order.push('again'); } });
@@ -87,11 +89,12 @@ it('seals only the CLI command table on a cold boot', async () => {
   const waits = await import('./workflows/run/wait-kind-registry.ts');
   const lifecycle = await import('./runs/lifecycle-registry.ts');
   const launch = await import('./core/launch-registry.ts');
+  const httpRoutes = await import('./core/http-route-registry.ts');
   expect([
     runners.runnersSealed(), slots.runSlotsSealed(), workers.workerExecutionsSealed(),
     steps.stepKindsSealed(), tools.agentToolsSealed(), waits.waitKindsSealed(),
-    lifecycle.runLifecycleListenersSealed(), launch.launchPartsSealed(),
-  ]).toEqual([false, false, false, false, false, false, false, false]);
+    lifecycle.runLifecycleListenersSealed(), launch.launchPartsSealed(), httpRoutes.httpRoutesSealed(),
+  ]).toEqual([false, false, false, false, false, false, false, false, false]);
   boot.bootColdCli();
   expect(runners.runnersSealed()).toBe(false);
 });

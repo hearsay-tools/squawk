@@ -4,7 +4,7 @@ import { filterHomeRecoveryReasons, homeFileSchema, homeRecoveryActionSchema, ho
 
 it('admits every HomeStore file family and no caller-selected path', () => {
   const files = ['config.json', 'config.json.bak', 'agent-accounts.json', 'ui-state.json', 'server.json',
-    'server.install.lock', 'remote-settings/4321.json', 'server-instances/shop.json',
+    'server.install.lock', 'remote-settings/4321.json', 'mcp-tokens/4321.json', 'server-instances/shop.json',
     'server-instances/shop.install.lock', 'remote-settings/4321.install.lock'];
   for (const file of files) expect(homeFileSchema.parse(file)).toBe(file);
   for (const file of ['../config.json', '/config.json', 'remote-settings/../config.json',
