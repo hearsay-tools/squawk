@@ -155,7 +155,9 @@ describe('GlobalActivityRoute', () => {
     await screen.findByRole('heading', { level: 2, name: 'gamma' })
     expect(within(panel('alpha')).getByRole('link', { name: 'Open project activity →' }).getAttribute('href')).toBe('/p/alpha/activity')
     expect(panel('gamma').querySelector('[data-slot="activity-panel-detail"]')?.textContent).toBe('1 active task · 2 workers')
-    expect(pill('a2').querySelector('[data-slot="activity-pill-line"]')?.textContent).toBe('Needs you · Retry the shard?')
+    // The age ticks from the server clock and the client's receive time: about a minute.
+    expect(pill('a2').querySelector('[data-slot="activity-pill-line"]')?.textContent).toMatch(/^Needs you · (59s|1m) · Retry the shard\?$/)
+    expect(within(pill('a2')).getByRole('link', { name: 'Answer' }).getAttribute('href')).toBe('/p/alpha/tasks/a2')
     expect(pill('a1').querySelector('[data-slot="activity-heartbeat"]')).not.toBeNull()
     expect(pill('g1').querySelectorAll('[data-slot="activity-pill-workers"] [data-activity-anchor]')).toHaveLength(2)
     expect(pill('g1').querySelector('[data-slot="activity-pill-workers"]')?.textContent).toBe('2 workers')

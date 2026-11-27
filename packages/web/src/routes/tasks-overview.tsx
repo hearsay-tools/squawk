@@ -559,7 +559,7 @@ function ProjectTaskResults({ view, query, origin, onShowAll, groups, folds, gro
           )
         })}
       </div>
-      <p data-slot="tasks-resource-note" className="mt-4 pb-8 text-xs text-muted-foreground">Resource details—including tokens, cost, CPU and peak memory—are available when a task row is expanded.</p>
+      <p data-slot="tasks-resource-note" className="mt-4 pb-8 text-xs text-muted-foreground">Select a task’s status to show its tokens, cost, CPU and peak memory.</p>
     </>
   )
 }

@@ -403,7 +403,7 @@ function GlobalTaskResults({ view, filtered, visibleCount, referenceRequests, li
       <ReferenceStatusProvider requests={referenceRequests}>
         <GroupedTaskLists {...lists} />
       </ReferenceStatusProvider>
-      {lists.groupBy === 'none' ? <p data-slot="tasks-resource-note" className="pb-8 text-xs text-muted-foreground">Resource details—including tokens, cost, CPU and peak memory—are available when a task row is expanded.</p> : null}
+      {lists.groupBy === 'none' ? <p data-slot="tasks-resource-note" className="pb-8 text-xs text-muted-foreground">Select a task’s status to show its tokens, cost, CPU and peak memory.</p> : null}
     </>
   )
 }

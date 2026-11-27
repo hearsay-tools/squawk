@@ -76,6 +76,8 @@ describe('pushed task screen top bar', () => {
     expect(bar.getAttribute('data-mode')).toBe('task')
     expect(within(bar).getByRole('button', { name: 'Back' })).toBeTruthy()
     expect(within(bar).getByText('Reviewer agent presets')).toBeTruthy()
+    // Up to two lines, so tasks that share a prefix stay distinguishable.
+    expect(within(bar).getByRole('heading', { name: 'Reviewer agent presets' }).className).toContain('line-clamp-2')
     expect(within(bar).getByRole('button', { name: 'Run actions' })).toBeTruthy()
     // The compact pill states the status under the title; the raw status value never shows.
     expect(bar.querySelector('[data-slot="mobile-run-status"]')?.textContent).toBe('Running')

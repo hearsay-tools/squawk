@@ -36,11 +36,20 @@ describe('Button', () => {
     expect((button as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('dims a disabled primary button to the gold tint at full opacity', () => {
+  it('turns a disabled primary button into a neutral surface at full opacity', () => {
     render(<Button disabled>Label</Button>)
     const classes = screen.getByRole('button').className.split(' ')
 
-    for (const name of ['disabled:bg-action/20', 'disabled:text-foreground/80', 'disabled:border-action/35', 'disabled:opacity-100']) expect(classes).toContain(name)
+    for (const name of ['disabled:border', 'disabled:border-border', 'disabled:bg-muted/80', 'disabled:text-muted-foreground', 'disabled:opacity-100']) expect(classes).toContain(name)
     expect(classes).not.toContain('disabled:opacity-50')
+    expect(classes.some((name) => name.startsWith('disabled:') && name.includes('action'))).toBe(false)
+  })
+
+  it('sets the standard label size on icon sizes, so a labelled icon button matches its siblings', () => {
+    for (const size of ['icon', 'icon-sm'] as const) {
+      render(<Button size={size}>Continue</Button>)
+      expect(screen.getByRole('button', { name: 'Continue' }).className.split(' ')).toContain('text-[13px]')
+      cleanup()
+    }
   })
 })

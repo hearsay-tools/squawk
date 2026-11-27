@@ -379,7 +379,7 @@ export function RunHeader({
           <MobileRunBarPortal slot={barSlot}>
             <MobileRunTitle
               run={run}
-              status={<Pill data-slot="mobile-run-status" dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="max-w-full self-start truncate px-2 py-px text-[11px]">{statusLine.label}</Pill>}
+              status={<Pill data-slot="mobile-run-status" dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="max-w-full self-start truncate px-2 py-px text-[11px] leading-4">{statusLine.label}</Pill>}
             />
             <WorkerParentLink run={run} compact />
             {actionsKebab}
@@ -539,7 +539,9 @@ function MobileRunTitle({ run, status }: { run: ApiRun; status: ReactNode }) {
       }}
     >
       <div data-slot="mobile-run-title" className="flex min-w-0 flex-1 flex-col gap-px">
-        <h1 className="line-clamp-1 break-words text-[15px] leading-tight font-semibold text-foreground" title={run.task}>{title}</h1>
+        {/* Two lines tell apart tasks that share a prefix; two 18px lines, the gap and the 18px
+            status pill fit the shell's 56px top bar. */}
+        <h1 className="line-clamp-2 break-words text-[15px] leading-[18px] font-semibold text-foreground" title={run.task}>{title}</h1>
         {status}
       </div>
       <PopoverTrigger asChild>

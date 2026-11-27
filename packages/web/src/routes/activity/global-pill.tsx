@@ -1,9 +1,11 @@
 import type { ActivityRequest, ActivityRun } from '@open-mercato/cezar-api-client/contract/activity'
 import { Link } from 'react-router'
 
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { CardEffects, LineText, hoverHandlers } from './activity-card'
+import { fullTimeOf, since, span } from './activity-format'
 import { lineTexts, type PeerWait, type RunEntry } from './activity-model'
 import { EMPTY_MOTION, type MotionState } from './activity-motion'
 import { RunShape, ToneWord } from './activity-tone'
@@ -16,7 +18,9 @@ import type { OnHover } from './use-wait-highlight'
  * One compact pill of the global view (spec 2026-11-05-live-activity-view, "Global view"): the
  * status shape, the title, a small heartbeat, one line (the card's verb in the rung tone and its
  * main line) and one dot for each live worker. The title link covers the pill, so the pill is a
- * link to its task; the narrow layout's "→ <task>" links sit above it.
+ * link to its task; the narrow layout's "→ <task>" links sit above it. Like the project card, a
+ * live running pill takes the running border, and a pill that needs the user shows how long it
+ * has waited and its Answer or Open task action.
  */
 
 /** A task's page outside every project scope: the global view names the project in the path. */
@@ -61,7 +65,8 @@ export function ActivityPill({ projectId, task, requests, waits = NO_WAITS, inde
       {...hoverHandlers(task.runId, onHover)}
       className={cn(
         'relative min-w-0 rounded-[10px] border bg-card-2 px-2.5 py-2',
-        box.action ? 'border-pending' : 'border-border',
+        // The project card's border tones, at the same strength.
+        box.action ? 'border-pending/70' : task.rung === 'running' && isLiveStatus(task.status) ? 'border-status-running/60' : 'border-border',
         linked && 'outline-2 outline-offset-2 outline-message-peer-accent',
         task.runId in motion.entering && 'activity-card-enter',
       )}
@@ -79,11 +84,19 @@ export function ActivityPill({ projectId, task, requests, waits = NO_WAITS, inde
         </h3>
         <Heartbeat rate={task.rate} className="h-3 w-10" />
       </div>
-      <p data-slot="activity-pill-line" className="mt-[3px] ml-[19px] truncate text-[11.5px] text-muted-foreground tabular-nums">
-        <ToneWord data-slot="activity-verb" tone={box.tone} className="font-semibold">{box.verb}</ToneWord>
-        {' · '}
-        <span data-slot="activity-main" className={cn(box.mono && 'font-mono text-[11px]')}>{box.main}</span>
-      </p>
+      <div className="mt-[3px] ml-[19px] flex items-center gap-2">
+        <p data-slot="activity-pill-line" className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground tabular-nums">
+          <ToneWord data-slot="activity-verb" tone={box.tone} className="font-semibold">{box.verb}</ToneWord>
+          {box.action && box.since ? <> · <span data-slot="activity-pill-age" title={fullTimeOf(box.since)}>{span(since(box.since, ctx.now))}</span></> : null}
+          {' · '}
+          <span data-slot="activity-main" className={cn(box.mono && 'font-mono text-[11px]')}>{box.main}</span>
+        </p>
+        {box.action ? (
+          <Button asChild size="sm" variant={box.action === 'answer' ? 'primary' : 'outline'} className="relative z-[1] h-7 px-2 text-[12px] max-md:min-h-11">
+            <Link data-slot="activity-pill-action" to={projectTaskPath(projectId, task.runId)}>{box.action === 'answer' ? 'Answer' : 'Open task'}</Link>
+          </Button>
+        ) : null}
+      </div>
       <LineText texts={lineTexts(task.runId, requests, index, waits)} />
       <WorkerDots task={task} />
       {/* Below `md` the arcs are hidden; the pill names each peer it asked or waits on instead. */}

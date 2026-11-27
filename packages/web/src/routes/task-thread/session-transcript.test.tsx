@@ -246,6 +246,23 @@ describe('pending ask placement (#1495)', () => {
   })
 })
 
+describe('review gate line', () => {
+  const reviewNote: ThreadEntry = { kind: 'note', id: 'settled', tone: 'dim', text: 'changes ready for review — send feedback, open a draft PR, or finish' }
+  const thread: ThreadState = { turns: [
+    { id: 'first', items: [{ ...reviewNote, id: 'earlier' }] },
+    { id: 'second', items: [note('m1'), reviewNote] },
+  ] }
+  const noteIds = (sections: TranscriptSection[]) => sections.flatMap(section => section.entries).filter(entry => entry.kind === 'note').map(entry => entry.id)
+
+  it('drops the last turn’s settlement line while the review gate shows', () => {
+    expect(noteIds(mainTranscriptSections(run({ task: '', status: RUN_STATUS.review }), thread))).toEqual(['earlier'])
+  })
+
+  it('keeps the line once the run leaves review', () => {
+    expect(noteIds(mainTranscriptSections(run({ task: '', status: RUN_STATUS.done }), thread))).toEqual(['earlier', 'settled'])
+  })
+})
+
 describe('transcript adapters and row building', () => {
   it('preserves initial images, queued messages, turn messages, and established row keys', () => {
     const state: ThreadState = {

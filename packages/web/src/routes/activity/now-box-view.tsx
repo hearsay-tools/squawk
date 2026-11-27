@@ -66,10 +66,11 @@ export function NowBoxView({ box, now, dense, motion = {} }: { box: NowBox; now:
     <div data-slot="activity-now" data-verb={box.verb} className="relative grid grid-cols-[16px_minmax(0,1fr)] gap-x-2 gap-y-px overflow-hidden rounded-lg bg-card-2 px-2.5 py-2">
       {motion.sweep ? <span data-slot="activity-sweep" aria-hidden="true" className="activity-sweep" /> : null}
       <Icon aria-hidden="true" className={cn('mt-px size-[15px]', ink)} />
-      <ToneWord tone={box.tone} className="flex gap-2 text-[11px] font-semibold tracking-[0.04em] uppercase">
+      {/* Sentence case, like the status pills of Tasks and the global view: "Needs you", not "NEEDS YOU". */}
+      <ToneWord tone={box.tone} className="flex gap-2 text-[12px] font-semibold">
         <span data-slot="activity-verb">{box.verb}</span>
         {box.since ? (
-          <span data-slot="activity-age" className="ml-auto font-medium tracking-normal text-muted-foreground normal-case tabular-nums">
+          <span data-slot="activity-age" className="ml-auto font-medium text-muted-foreground tabular-nums">
             {counter(since(box.since, now))}
           </span>
         ) : null}

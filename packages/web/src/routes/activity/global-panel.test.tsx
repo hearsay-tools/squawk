@@ -66,7 +66,19 @@ describe('ProjectPanel', () => {
     const { container } = renderPanel(project({ tasks: [asks] }))
     const pill = container.querySelector('[data-activity-pill="asks"]') as HTMLElement
     expect(pill.getAttribute('data-action')).toBe('open')
-    expect(pill.querySelector('[data-slot="activity-pill-line"]')?.textContent).toBe('Needs you · Your turn')
+    // The wait's compact age sits after the verb, and the card's action rides the pill.
+    expect(pill.querySelector('[data-slot="activity-pill-line"]')?.textContent).toBe('Needs you · 1s · Your turn')
+    expect(within(pill).getByRole('link', { name: 'Open task' }).getAttribute('href')).toBe('/p/cezarion/tasks/asks')
+    expect(pill.className).toContain('border-pending/70')
+  })
+
+  it('gives a live running pill the running border, like its card', () => {
+    const { container } = renderPanel(project({ tasks: [run({ runId: 'live' }), run({ runId: 'done', status: RUN_STATUS.done, rung: 'review' })] }))
+    const pillOf = (id: string) => container.querySelector(`[data-activity-pill="${id}"]`) as HTMLElement
+    expect(pillOf('live').className).toContain('border-status-running/60')
+    expect(pillOf('live').querySelector('[data-slot="activity-pill-age"]')).toBeNull()
+    expect(within(pillOf('live')).queryByRole('link', { name: /Answer|Open task/ })).toBeNull()
+    expect(pillOf('done').className).not.toContain('border-status-running/60')
   })
 
   describe('arc routing', () => {
