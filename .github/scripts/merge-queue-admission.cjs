@@ -1,7 +1,7 @@
 'use strict';
 const { listReviewThreads } = require('./review-threads.cjs');
 const { sanitize } = require('./failure-diagnostics.cjs');
-const { CI_PATH, VERIFY, validSha, positive, reader, readCiRuns, readCiJobs, successfulJobs, newest } = require('./queue-ci-proof.cjs');
+const { CI_PATH, VERIFY, PROOF_CONCLUSIONS, validSha, positive, reader, readCiRuns, readCiJobs, successfulJobs, newest } = require('./queue-ci-proof.cjs');
 function errorMessage(error) {
   // Never serialize request objects, headers, response bodies or stacks.
   const status = Number.isInteger(error?.status) && error.status >= 100 && error.status <= 599 ? ` (HTTP ${error.status})` : '';
@@ -111,8 +111,10 @@ function boundedGraphql(read) {
     return data.data;
   };
 }
+// VERIFY is the gate, checked by job below. A failed job outside it, such as
+// `Prepare PR snapshot archives`, leaves the run `failure` but proves nothing against the PR.
 function nativeSuccess(run, allowInProgress = false) {
-  return (run.status === 'completed' && run.conclusion === 'success')
+  return (run.status === 'completed' && PROOF_CONCLUSIONS.includes(run.conclusion))
     || (allowInProgress && run.status === 'in_progress' && run.conclusion === null);
 }
 function requireGroup(group) {
@@ -152,7 +154,7 @@ async function mergeQueueAdmission({ github, owner, repo, group, now = Date.now,
   const latest = newest(await runs());
   const run = latest && await read('GET /repos/{owner}/{repo}/actions/runs/{run_id}', { run_id: latest.id });
   const eligible = r => nativeRun(r, fullName, workflow.id, entry, pr) && nativeSuccess(r, allowInProgress);
-  if (!eligible(run)) throw new Error('Current native PR CI has not passed');
+  if (!eligible(run)) throw new Error('Current native PR CI has not completed');
   diagnostics.check = 'native protected jobs';
   if (!successfulJobs(await readCiJobs(read, run.id), [VERIFY])) throw new Error('Native CI gate missing');
   diagnostics.check = 'review threads';

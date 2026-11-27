@@ -112,7 +112,25 @@ for (const target of ['queue', 'head', 'attempt']) test(`final reread rejects mo
 
 test('final admission keeps rejecting an in-progress workflow even when required gates passed', async () => {
   const h = fixture(); h.s.run.status = 'in_progress'; h.s.run.conclusion = null;
-  await assert.rejects(h.run, /has not passed/);
+  await assert.rejects(h.run, /has not completed/);
+});
+
+// hearsay-tools/squawk#4363: a failed job outside the required check, such as a
+// rate-limited `Prepare PR snapshot archives`, removed PRs whose VERIFY passed.
+test('a failed optional job beside a passed verify job is admitted', async () => {
+  const h = fixture(); h.s.run.conclusion = 'failure';
+  h.s.jobs.push({ id: 2, name: 'Prepare PR snapshot archives', status: 'completed', conclusion: 'failure' });
+  assert.equal((await h.run()).pullNumber, 7);
+});
+for (const conclusion of ['cancelled', 'timed_out', 'action_required', 'skipped', null]) {
+  test(`a completed native run concluded ${conclusion} blocks admission even with a passed verify job`, async () => {
+    const h = fixture(); h.s.run.conclusion = conclusion;
+    await assert.rejects(h.run, /has not completed/);
+  });
+}
+test('a failed native run whose verify job failed blocks admission', async () => {
+  const h = fixture(); h.s.run.conclusion = 'failure'; h.s.jobs[0].conclusion = 'failure';
+  await assert.rejects(h.run, /Native CI gate missing/);
 });
 
 test('an outdated unresolved thread blocks admission', async () => {

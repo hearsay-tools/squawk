@@ -1392,7 +1392,11 @@ that moves from position 2 to 1 during its build, because entry 1 merged, passes
 the final reread. It also requires the reviewed queue rules (build concurrency 1
 or 2, every other setting exact), an unchanged open non-draft main PR, a successful
 `Unit, build, E2E, and package` job in the newest native `pull_request_target` run of
-this repository's `ci.yml` on the PR head, and no unresolved review thread. Dispatches
+this repository's `ci.yml` on the PR head, and no unresolved review thread. That run
+must be complete, and its conclusion may be `success` or `failure`: the job is the
+gate, so a failed job outside it, such as `Prepare PR snapshot archives`, does not
+refuse the entry (hearsay-tools/squawk#4363). A running, `cancelled` or other run is
+not proof. Dispatches
 and unrelated same-name checks cannot supply that proof. Missing or changing evidence
 fails closed. GitHub owns queue persistence; no cockpit session is required.
 
@@ -1531,7 +1535,7 @@ its head SHA and fails closed.
 | 7 | Entry 1's PR head changes | Push to the PR | Author, then GitHub | GitHub removes entry 1; as row 4 | As today |
 | 8 | Entry 2 fails while entry 1 builds | A required check fails | GitHub | Entry 2 removed; entry 1 unaffected. The next queued entry builds on entry 1's group head | Cannot happen |
 | 9 | Entry 2's PR head changes, or a human removes it | Push or removal | Author or human | Entry 2 removed; entry 1 unaffected | Not building yet: removed from the queue |
-| 10 | Queue reordered or an entry jumps ahead | Human action | Authorized human | GitHub builds again with new groups. A stale group's admission finds no matching entry and fails closed | As today |
+| 10 | Queue reordered or an entry jumps ahead | Human action | Authorized human | GitHub builds again with new groups. A stale group's admission finds no matching entry and fails closed. GitHub does not remove the PR for that failure: its current group decides (8 stale failures, none removed a PR, 2026-11-17 to 2026-11-26; hearsay-tools/squawk#4363) | As today |
 | 11 | Entry 2 conflicts with entry 1 | Group commit cannot be built | GitHub | Entry 2 removed with `merge_conflict`; PR stays open | Conflict found when it reaches the head |
 | 12 | Entry 1 changes `ci.yml` | PR content | Author | Entry 2's run uses its group head's workflow, which holds entry 1's change. Entry 2 runs full suites, as every full-matrix entry does | As today: the next entry runs the merged workflow |
 | 13 | Entry 1 changes the admission or proof helpers | PR content | Author | Entry 2 runs entry 1's helpers from its base (G3). If entry 1 fails, entry 2 is built again on `main`'s helpers | Entry 2 runs them after entry 1 merges |
@@ -1543,7 +1547,7 @@ its head SHA and fails closed.
 | 19 | Docs-only entry at position 2 | PR content | Classifier | The group diff `base..head` is that PR's own diff, so the skip is valid. Main proof: first parent = ref base | As today |
 | 20 | Entry at position 2, native suites passed | — | CI | Full suites run; PR selections are never queue proof | Cannot happen |
 | 21 | Entry at position 1 on `main`, PR up to date, entries behind it | — | CI | Full suites run; PR selections are never queue proof | Full suites run |
-| 22 | An invalidated run finishes green later | Old run completes | Actions | Its group never merges, and its SHA never reaches `main`. It is counted as waste in the pilot metric | Cannot happen |
+| 22 | An invalidated run finishes later | Old run completes | Actions | Green or red, it decides nothing: its group never merges, its SHA never reaches `main`, and its failure removes no PR (row 10). It is counted as waste in the pilot metric | Cannot happen |
 | 23 | Manual re-run of a failed queue run | Human | Human | The entry was already removed; the run proves nothing for a new group. Requeue the PR | As today |
 | 24 | GitHub reports entry 2's `baseCommit` as `main`, not entry 1's head (S5 false) | GitHub data model | GitHub | Entry 2's admission fails closed on every build. The pre-activation exercise catches this before the pilot. Then the lookup changes to: base = the position-1 head, checked through the ref name | — |
 | 25 | GitHub cancels invalidated runs itself | GitHub behavior | GitHub | Less waste than the model; no correctness change | — |
