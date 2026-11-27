@@ -75,14 +75,14 @@ export function AskCard({ ask, run, onShowOrigin }: {
 }
 
 /** The pinned copy's link to the question's original place in the transcript. */
-function ShowOriginLink({ onShowOrigin }: { onShowOrigin: () => void }) {
+function ShowOriginLink({ onShowOrigin, className }: { onShowOrigin: () => void; className?: string }) {
   return (
     <Button
       type="button"
       variant="ghost"
       size="sm"
       data-slot="ask-show-origin"
-      className="mbs-2 min-h-11 min-w-11 px-2 text-xs font-medium text-muted-foreground underline underline-offset-4"
+      className={cn('mbs-2 min-h-11 min-w-11 px-2 text-xs font-medium text-muted-foreground underline underline-offset-4', className)}
       onClick={onShowOrigin}
     >
       Show where it was asked
@@ -215,7 +215,7 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
       data-resolved="false"
       data-pinned={ask.placement === 'pinned' ? 'true' : undefined}
       data-delivery={delivery.mode}
-      className="rounded-lg border border-accent-strong/25 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card px-3 pt-4 pb-2.5"
+      className="rounded-lg border border-accent-strong/25 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card px-3 pt-4 pb-2.5 max-sm:pt-3 max-sm:pb-1"
     >
       {/* Tight rhythm: a two-question card with its Send row fits above the dock at 1440×900. The
           top padding keeps the heading clear of the border. */}
@@ -248,10 +248,14 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
           />
         ))}
       </div>
+      {/* On a phone the footer is one wrapping row: Send and "Show where it was asked" share the
+          first line, the hint and any notice take full lines below, so the card wastes no 44px
+          row on a lone link. Wider, the footer stacks as before. */}
+      <div data-slot="ask-footer" className="max-sm:mbs-2 max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:gap-x-2.5">
       <AskSubmit oneTap={oneTap} hasOtherAnswer={hasOtherAnswer} resuming={resuming}
         disabled={delivery.isPending || blocked || !allAnswered} questionCount={questions.length} onSend={sendAll} />
       {delivery.blockedBy === 'provider' ? (
-        <div data-slot="ask-provider-gate" className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <div data-slot="ask-provider-gate" className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground max-sm:order-4 max-sm:basis-full">
           <span>{delivery.reason}</span>
           <Link to="/settings/agent-defaults#providers" className="font-medium text-foreground underline underline-offset-4">
             Configure providers
@@ -259,42 +263,47 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
         </div>
       ) : null}
       {delivery.blockedBy === 'no-session' ? (
-        <p data-slot="ask-no-session" className="mt-3 text-xs text-muted-foreground">
+        <p data-slot="ask-no-session" className="mt-3 text-xs text-muted-foreground max-sm:order-4 max-sm:basis-full">
           {delivery.reason}
         </p>
       ) : null}
       {/* A dropped answer used to be silent — the tap did nothing and said nothing. */}
       {delivery.error ? (
-        <p data-slot="ask-error" role="alert" className="mt-3 text-xs text-danger">
+        <p data-slot="ask-error" role="alert" className="mt-3 text-xs text-danger max-sm:order-4 max-sm:basis-full">
           {delivery.error}
         </p>
       ) : null}
-      {onShowOrigin ? <ShowOriginLink onShowOrigin={onShowOrigin} /> : null}
+      {onShowOrigin ? <ShowOriginLink onShowOrigin={onShowOrigin} className={cn('max-sm:order-2 max-sm:mbs-0', hasSendRow(oneTap, hasOtherAnswer) && 'max-sm:ms-auto')} /> : null}
+      </div>
     </div>
   )
 }
+
+/** Whether the footer has a Send button: every shape but a one-tap question answered by a tap. */
+const hasSendRow = (oneTap: boolean, hasOtherAnswer: boolean) => !oneTap || hasOtherAnswer
 
 /** Submission controls have no question-selection state of their own. */
 function AskSubmit({ oneTap, hasOtherAnswer, resuming, disabled, questionCount, onSend }: {
   oneTap: boolean; hasOtherAnswer: boolean; resuming: boolean; disabled: boolean
   questionCount: number; onSend: () => void
 }) {
-  if (oneTap && !hasOtherAnswer) return resuming ? (
-    <p data-slot="ask-resume-hint" className="mbs-3 text-[11px] text-soft-foreground">
+  if (!hasSendRow(oneTap, hasOtherAnswer)) return resuming ? (
+    <p data-slot="ask-resume-hint" className="mbs-3 text-[11px] text-soft-foreground max-sm:order-3 max-sm:basis-full">
       The session has ended — your answer reopens it and goes to the agent.
     </p>
   ) : null
   return (
-    <div className="mbs-2 flex flex-wrap items-center gap-x-2.5">
-      <Button size="sm" className="min-h-11" disabled={disabled} onClick={onSend}>
+    // On a phone the row dissolves into the footer's row, which orders its parts.
+    <div className="mbs-2 flex flex-wrap items-center gap-x-2.5 max-sm:contents">
+      <Button size="sm" className="min-h-11 max-sm:order-1" disabled={disabled} onClick={onSend}>
         {resuming ? 'Send answer & reopen' : 'Send answer'}
       </Button>
       {resuming ? (
-        <span data-slot="ask-resume-hint" className="text-[11px] text-soft-foreground">
+        <span data-slot="ask-resume-hint" className="text-[11px] text-soft-foreground max-sm:order-3 max-sm:basis-full">
           the session has ended — sending reopens it
         </span>
       ) : (
-        <span data-slot="ask-hint" className="inline-flex flex-wrap items-center gap-x-1 text-[11px] text-soft-foreground">
+        <span data-slot="ask-hint" className="inline-flex flex-wrap items-center gap-x-1 text-[11px] text-soft-foreground max-sm:order-3 max-sm:basis-full">
           <span>
             {hasOtherAnswer
               ? `${questionCount > 1 ? 'answer each question above' : 'enter your answer above'} — or`

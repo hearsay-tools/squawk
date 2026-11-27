@@ -409,7 +409,8 @@ describe('RunActivityDock — the workflow glyph', () => {
   // disagree: a check mark on an unstarted or failed workflow reads as "this went fine".
   it.each([
     ['done', 'done'],
-    ['running', 'active'],
+    // The run waits: its live step is paused, not spinning.
+    ['running', 'paused'],
     ['pending', 'pending'],
     ['failed', 'failed'],
     ['cancelled', 'failed'],
@@ -780,6 +781,21 @@ describe('Session activity — folded workflow step (#1478)', () => {
     expect(name()?.getAttribute('title')).toBe('Do the task')
   })
 
+  // A run paused for the user's reply shows a still amber dot beside its step, never the spinner
+  // that says the agent works; the open Workflow row and its rail agree.
+  it('draws a still paused dot, not a spinner, while the run waits for the user', () => {
+    renderDock(fresh({ status: RUN_STATUS.waiting, steps: one(STEP_STATUS.running) }), [])
+    fold()
+    expect(glyph()?.getAttribute('data-visual')).toBe('paused')
+    expect(glyph()?.getAttribute('class')).not.toContain('animate-spin')
+    expect(document.querySelectorAll('.animate-spin')).toHaveLength(0)
+    fireEvent.click(summary())
+    fireEvent.click(sectionHead('workflow'))
+    expect(document.querySelector('[data-slot="step-row"]')?.getAttribute('data-visual')).toBe('paused')
+    expect(screen.getAllByRole('img', { name: 'Step paused' }).length).toBeGreaterThan(0)
+    expect(screen.queryAllByRole('status', { name: 'Step running' })).toEqual([])
+  })
+
   it('follows the workflow as it advances while folded', () => {
     const record = fresh()
     const { rerenderRun } = renderDock(record, [])
@@ -797,7 +813,7 @@ describe('Session activity — folded workflow step (#1478)', () => {
     ['failed', 'failed', 'failed'],
     ['cancelled', 'failed', 'failed'],
     ['pending', 'pending', 'pending'],
-    ['waiting', 'active', 'running'],
+    ['waiting', 'paused', 'paused'],
     ['review', 'active', 'running'],
   ] as const)('matches the Workflow row for a %s step', (status, visual, spoken) => {
     renderDock(fresh({ status: status === 'waiting' || status === 'review' ? status : 'done', steps: one(status) }), [])

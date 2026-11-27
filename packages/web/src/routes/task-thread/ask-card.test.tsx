@@ -302,6 +302,32 @@ describe('AskCard — the reply jump', () => {
   })
 })
 
+describe('AskCard — the phone footer', () => {
+  // jsdom applies no media queries; the classes are the proof of the max-sm layout.
+  it('puts "Show where it was asked" on the Send row and the reply hint on its own line below', () => {
+    render(withRunners(<MemoryRouter><AskCard ask={{ ...twoQuestionAsk, placement: 'pinned' }} run={activeRun} onShowOrigin={() => {}} /></MemoryRouter>))
+    const footer = document.querySelector('[data-slot="ask-footer"]') as HTMLElement
+    const send = screen.getByRole('button', { name: 'Send answer' })
+    const origin = screen.getByRole('button', { name: 'Show where it was asked' })
+    const hint = footer.querySelector('[data-slot="ask-hint"]') as HTMLElement
+    expect(footer.className).toContain('max-sm:flex')
+    // The Send row dissolves into the footer, so all three are ordered there.
+    expect(send.parentElement?.className).toContain('max-sm:contents')
+    expect(send.className).toContain('max-sm:order-1')
+    expect(origin.className).toContain('max-sm:order-2')
+    expect(origin.className).toContain('max-sm:ms-auto')
+    expect(origin.className).toContain('max-sm:mbs-0')
+    expect(hint.className).toContain('max-sm:order-3')
+    expect(hint.className).toContain('max-sm:basis-full')
+  })
+
+  it('keeps a lone "Show where it was asked" at the start when a tap sends the answer', () => {
+    render(withRunners(<MemoryRouter><AskCard ask={{ ...singleAsk, placement: 'pinned' }} run={activeRun} onShowOrigin={() => {}} /></MemoryRouter>))
+    expect(screen.queryByRole('button', { name: 'Send answer' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Show where it was asked' }).className).not.toContain('max-sm:ms-auto')
+  })
+})
+
 describe('AskCard — answering after the session has ended', () => {
   it('a closed run resumes instead of replying, with the same answer text', async () => {
     renderAsk(singleAsk, closedRun)

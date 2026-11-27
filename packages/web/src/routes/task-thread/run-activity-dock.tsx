@@ -4,6 +4,7 @@ import {
   BotIcon,
   ChevronDownIcon,
   CircleCheckIcon,
+  CircleDotIcon,
   CircleIcon,
   CircleXIcon,
   GitBranchIcon,
@@ -29,7 +30,7 @@ import { useIsDesktop } from '@/lib/use-desktop'
 import { AgentList } from './agents-dock'
 import { PlanList, planCounts } from './plan-dock'
 import { collectSubagents, subagentCounts } from './subagent-dock'
-import { StepRail, activeStepIndex, railSteps, railVisual } from './step-rail'
+import { PAUSED_INK, StepRail, activeStepIndex, railSteps, stepGlyph, stepGlyphWord } from './step-rail'
 import { Cleanup, WorkerActivitySection, listsWorkers, WorkerWaitDetails, hasCleanupDetails, hasWorkerWaitDetails, useWorkersVerdict, type WorkersVerdict } from './run-relationships'
 import { ActivityRow, meterText } from './run-activity-row'
 import { ActivitySummary, type SummaryItem } from './activity-summary'
@@ -338,8 +339,7 @@ function activityLabel(run: ApiRun, identity: AgentIdentity, activity: SessionAc
   const head = `Session activity: ${statusText}${conflicts.length ? '; pull request conflicts' : ''}${cost ? `; cost ${cost}` : ''}`
   if (open) return head
   const activeStep = activeWorkflowStep(run)?.step
-  const activeStepState = activeStep ? railVisual(activeStep.status) : undefined
-  const stepLabel = activeStep ? `; step ${activeStep.name}, ${activeStepState === 'active' ? 'running' : activeStepState}` : ''
+  const stepLabel = activeStep ? `; step ${activeStep.name}, ${stepGlyphWord(stepGlyph(activeStep.status, run.status))}` : ''
   const referenceLabel = summaryReferences.length ? `; ${summaryReferences.map(reference => `${reference.kind} #${reference.number}`).join('; ')}` : ''
   return `${head}${stepLabel}; runner ${identity.runner}; model ${identity.model}; effort ${identity.effort}${referenceLabel}`
 }
@@ -379,7 +379,7 @@ function FoldedSummary({
           and the open card keep the step. */}
       {activeStep ? (
         <span data-slot="run-activity-step" className={cn('flex max-w-max min-w-[calc(1.375rem+2ch)] flex-[1000_1_0] items-center gap-1.5 text-[13px] text-muted-foreground', run.status === 'waiting' && 'max-md:hidden')}>
-          <WorkflowGlyph step={activeStep} decorative />
+          <WorkflowGlyph step={activeStep} runStatus={run.status} decorative />
           <span data-slot="run-activity-step-name" title={activeStep.name} className="min-w-0 truncate">{activeStep.name}</span>
         </span>
       ) : null}
@@ -432,7 +432,7 @@ function WorkflowSection({ run, desktop, automations, open, onToggle }: { run: A
   return (
     <ActivityRow
       slot="workflow"
-      icon={active ? <WorkflowGlyph step={active.step} /> : <WorkflowIcon className="size-4" />}
+      icon={active ? <WorkflowGlyph step={active.step} runStatus={run.status} /> : <WorkflowIcon className="size-4" />}
       title={<>Workflow{workflowName ? <span className="font-normal text-muted-foreground"> · {workflowName}</span> : null}</>}
       meta={active
         ? { drop: active.step.name, keep: meterText(active.index + 1, active.steps.length, desktop, 'step') }
@@ -440,7 +440,7 @@ function WorkflowSection({ run, desktop, automations, open, onToggle }: { run: A
       open={open}
       onToggle={onToggle}
     >
-      {active ? <StepRail steps={active.steps} /> : null}
+      {active ? <StepRail steps={active.steps} runStatus={run.status} /> : null}
       <AutomationOrigin run={run} available={automations} />
     </ActivityRow>
   )
@@ -663,11 +663,11 @@ function AutomationOrigin({ run, available }: { run: ApiRun; available: boolean 
 
 /** The workflow row's glyph: the rail's own state language, so the row and the list it opens
  *  never disagree — a green check for a finished workflow, the amber spinner while it runs, a
- *  danger X for a failed or cancelled one, a faint circle for one that has not started. All
- *  four, not just the spinner: falling through to the check mark told a reader that a step
- *  which failed, or never ran, had gone fine. */
-function WorkflowGlyph({ step, decorative = false }: { step: StepState; decorative?: boolean }) {
-  const visual = railVisual(step.status)
+ *  still amber dot while the run waits, a danger X for a failed or cancelled one, a faint circle
+ *  for one that has not started. All of them, not just the spinner: falling through to the check
+ *  mark told a reader that a step which failed, or never ran, had gone fine. */
+function WorkflowGlyph({ step, runStatus, decorative = false }: { step: StepState; runStatus: ApiRun['status']; decorative?: boolean }) {
+  const visual = stepGlyph(step.status, runStatus)
   const base = 'size-4 shrink-0'
   switch (visual) {
     case 'active':
@@ -679,6 +679,15 @@ function WorkflowGlyph({ step, decorative = false }: { step: StepState; decorati
           data-visual={visual}
           // stroke-pending, not text-*: amber is a dot & spinner color only (guardian rule).
           className={cn(base, 'animate-spin stroke-pending motion-reduce:animate-none [html.light_&]:stroke-pending-strong')}
+        />
+      )
+    case 'paused':
+      return (
+        <CircleDotIcon
+          {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': 'Step paused' })}
+          data-slot="workflow-glyph"
+          data-visual={visual}
+          className={cn(base, PAUSED_INK)}
         />
       )
     case 'failed':

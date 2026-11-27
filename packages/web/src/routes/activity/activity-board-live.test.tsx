@@ -87,6 +87,24 @@ describe('the live board', () => {
     expect(column()).toEqual(['a', 'ghost:b', 'c'])
   })
 
+  it('paints the first measured layout in place: no FLIP from the unmeasured one-column layout', () => {
+    // Before the width is measured the graph has one column and B sits under A; measured, B
+    // stands beside A. The move between the two is no live change and plays no animation.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const columns = this.closest('[data-columns]')?.getAttribute('data-columns')
+      const x = this.getAttribute('data-flip') === 'b' && columns === '2' ? 396 : 0
+      const y = this.getAttribute('data-flip') === 'b' && columns === '1' ? 200 : 0
+      return { x, y, left: x, top: y, width: 300, height: 120, right: x + 300, bottom: y + 120, toJSON: () => ({}) } as DOMRect
+    })
+    const live = renderLive(at(0, { tasks: [A, B] }), 1092)
+    expect(document.querySelector('[data-slot="activity-graph"]')?.getAttribute('data-columns')).toBe('2')
+    expect(animations).toHaveLength(0)
+
+    // A live change after the first measure still plays FLIP.
+    live.rerender(at(1_000, { tasks: [A, B, C] }))
+    expect(animations.length).toBeGreaterThan(0)
+  })
+
   it('measures the lines again when FLIP settles, so a line never stays where a card was mid-flight', () => {
     const boxes: Record<string, Box> = { a: { x: 0, y: 0, w: 300, h: 120 }, b: { x: 396, y: 0, w: 300, h: 120 }, c: { x: 792, y: 0, w: 300, h: 120 }, d: { x: 0, y: 200, w: 300, h: 120 } }
     placeBoxes('data-activity-card', boxes)

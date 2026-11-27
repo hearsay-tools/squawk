@@ -106,7 +106,8 @@ export function ActivityBoard({ project, now, watchingSince, motion = EMPTY_MOTI
   const placement = columns.map((column) => column.join(',')).join('|')
   const columnGap = narrow ? 0 : drawnRequests.length + drawnWaits.length > 0 ? COLUMN_GAP : COMPACT_COLUMN_GAP
   const layoutKey = `${project.tasks.length}:${count}:${dense}:${placement}:${drawnRequests.map((request) => request.requestId).join(',')}:${drawnWaits.map((wait) => wait.id).join(',')}`
-  useFlip(hostRef, 'data-flip', placement, !still && !paused)
+  // Before the first measure the graph has one column; FLIP from that layout would fly the cards in.
+  useFlip(hostRef, 'data-flip', width > 0 ? placement : undefined, !still && !paused)
 
   return (
     <div className="flex min-w-0 flex-col gap-5">

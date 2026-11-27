@@ -83,6 +83,14 @@ describe('StepRail', () => {
     expect(screen.getAllByRole('status', { name: 'Step running' })).toHaveLength(1)
   })
 
+  it('draws the live step of a waiting run as a still paused dot, not a spinner', () => {
+    render(<StepRail runStatus="waiting" steps={[step('implement', 'done', { name: 'Do the task' }), step('verify', 'running', { name: 'Verify' })]} />)
+    const rows = [...document.querySelectorAll('[data-slot="step-row"]')]
+    expect(rows.map((row) => row.getAttribute('data-visual'))).toEqual(['done', 'paused'])
+    expect(screen.getByRole('img', { name: 'Step paused' }).getAttribute('class')).not.toContain('animate-spin')
+    expect(screen.queryAllByRole('status', { name: 'Step running' })).toEqual([])
+  })
+
   it('marks a failed step failed on its row', () => {
     render(<StepRail steps={[step('t', 'failed', { name: 'Do the task' })]} />)
     expect(document.querySelector('[data-slot="step-row"]')?.getAttribute('data-visual')).toBe('failed')

@@ -526,7 +526,7 @@ function EditableTitle({ run }: { run: ApiRun }) {
 
 /** The phone top bar's title (#621, #737): the 15px/600 title and, as its SIBLING, the 44px rename
  *  button. The bar shows no status (hearsay-tools/cezarion#1333): the Session activity card does.
- *  The 44px input cannot sit in the 56px bar, so renaming opens it in a popover anchored under the
+ *  The 44px input cannot sit in the bar, so renaming opens it in a popover anchored under the
  *  pencil; the same `useTitleEditor` machine (Enter/blur commit, Escape cancel). */
 function MobileRunTitle({ run, status }: { run: ApiRun; status: ReactNode }) {
   const { title, editor } = useRunTitleEditor(run)
@@ -538,9 +538,9 @@ function MobileRunTitle({ run, status }: { run: ApiRun; status: ReactNode }) {
         else editor.commit()
       }}
     >
-      <div data-slot="mobile-run-title" className="flex min-w-0 flex-1 flex-col gap-px">
-        {/* Two lines tell apart tasks that share a prefix; two 18px lines, the gap and the 18px
-            status pill fit the shell's 56px top bar. */}
+      <div data-slot="mobile-run-title" className="flex min-w-0 flex-1 flex-col gap-1">
+        {/* Two lines tell apart tasks that share a prefix; the shell's top bar grows past 56px
+            to hold both lines, the gap and the status pill with room above and below. */}
         <h1 className="line-clamp-2 break-words text-[15px] leading-[18px] font-semibold text-foreground" title={run.task}>{title}</h1>
         {status}
       </div>

@@ -2,7 +2,7 @@ import type { ActivityCheckBucket } from '@open-mercato/cezar-api-client/contrac
 
 import { cn } from '@/lib/utils'
 
-import { counter, since } from './activity-format'
+import { since, span } from './activity-format'
 import { NOW_ICON, TONE_INK, ToneWord } from './activity-tone'
 import type { NowBox } from './now-box'
 
@@ -58,7 +58,7 @@ export interface NowMotion {
 
 const NO_CHECKS: ReadonlySet<string> = new Set()
 
-/** The now box: a verb, a main line, a detail line and a live age counter. */
+/** The now box: a verb, a main line, a detail line and a live age in the cockpit's compact format. */
 export function NowBoxView({ box, now, dense, motion = {} }: { box: NowBox; now: number; dense: boolean; motion?: NowMotion }) {
   const Icon = NOW_ICON[box.icon]
   const ink = TONE_INK[box.tone]
@@ -71,7 +71,7 @@ export function NowBoxView({ box, now, dense, motion = {} }: { box: NowBox; now:
         <span data-slot="activity-verb">{box.verb}</span>
         {box.since ? (
           <span data-slot="activity-age" className="ml-auto font-medium text-muted-foreground tabular-nums">
-            {counter(since(box.since, now))}
+            {span(since(box.since, now))}
           </span>
         ) : null}
       </ToneWord>

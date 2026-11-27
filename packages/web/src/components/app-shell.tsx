@@ -816,7 +816,8 @@ function PushedTopBar({ onSlot }: { onSlot: (slot: HTMLElement | null) => void }
       data-mode="task"
       className="row-start-1 min-w-0 border-b border-border bg-card pt-[env(safe-area-inset-top)] md:hidden"
     >
-      <div className="flex h-[56px] min-w-0 items-center gap-[4px] px-[8px]">
+      {/* At least 56px: a two-line title and its status pill grow the bar and keep 8px above and below. */}
+      <div className="flex min-h-[56px] min-w-0 items-center gap-[4px] px-[8px] py-2">
         <Button
           variant="ghost"
           aria-label="Back"
