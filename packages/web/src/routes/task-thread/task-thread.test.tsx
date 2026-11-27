@@ -1564,14 +1564,14 @@ describe('composer execution actions (#201)', () => {
     expect(screen.getByRole('button', { name: 'Stop' }).hasAttribute('disabled')).toBe(false)
   })
 
-  it('omits the idle Stop while a pending ask waits for a reply', async () => {
+  it('keeps Stop reachable while a pending ask waits for a reply', async () => {
     const thread = reduceThread([line(1, 'ask.requested', {
       requestId: 'pending-choice',
       questions: [{ header: 'Checks', question: 'Where should checks run?', options: [{ label: 'Main' }, { label: 'Every branch' }] }],
     })])
     renderView(<ThreadView run={run('waiting', { waits: [openHumanWait(1)] } as unknown as Partial<ApiRun>)} thread={thread} />)
     await screen.findByRole('textbox', { name: 'Reply to the agent' })
-    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Stop' }).hasAttribute('disabled')).toBe(false)
   })
 
   it('requeues a stopped unstarted task through the same composer Continue action', async () => {

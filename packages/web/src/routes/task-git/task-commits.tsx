@@ -22,7 +22,6 @@ import { RunHeader } from '../task-thread/run-header'
 import { CommitList } from './commit-list'
 import { DiffViewToggles } from './diff-controls'
 import { GitTabLoadError, GitTabLoading } from './git-tab-loading'
-import { loadWorktreeText } from './task-changes'
 
 /**
  * `/tasks/:id/commits` — the run's own commits (`<base>..HEAD`), auto-selecting the newest
@@ -178,7 +177,6 @@ function CommitsWorkspace({
                     files={activeCommit.data.files}
                     mode={effectiveMode}
                     wrap={wrap}
-                    loadFileText={(path) => loadWorktreeText(run.id, path)}
                     totals={false}
                     className="min-w-0"
                   />
