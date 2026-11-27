@@ -75,11 +75,11 @@ export function DiffStatLabel({
         </span>
       ) : null}
       {stat.adds > 0 ? (
-        <span className="text-success">+{compact ? compactDiffCount(stat.adds) : stat.adds.toLocaleString('en-US')}</span>
+        <span className="text-semantic-green">+{compact ? compactDiffCount(stat.adds) : stat.adds.toLocaleString('en-US')}</span>
       ) : null}
       {stat.adds > 0 && stat.dels > 0 ? ' ' : null}
       {stat.dels > 0 ? (
-        <span className="text-danger">−{compact ? compactDiffCount(stat.dels) : stat.dels.toLocaleString('en-US')}</span>
+        <span className="text-semantic-red">−{compact ? compactDiffCount(stat.dels) : stat.dels.toLocaleString('en-US')}</span>
       ) : null}
     </span>
   )

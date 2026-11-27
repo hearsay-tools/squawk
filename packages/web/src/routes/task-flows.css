@@ -47,8 +47,8 @@
 [data-slot="todo-actions"] [data-action="todo-run"] { order: 1; }
 [data-slot="todo-actions"] button { font-weight: 500; padding-block: 10px; padding-inline: 16px; }
 [data-slot="todo-instructions-input"] { background: var(--background); }
-[data-slot="todo-instructions"] > label { font-size: 11px; font-weight: 400; }
-.automation-editor label { font-size: 11px; font-weight: 400; }
+[data-slot="todo-instructions"] > label { font-size: 12px; font-weight: 400; }
+.automation-editor label { font-size: 12px; font-weight: 400; }
 .automation-editor label:has(input[type="checkbox"]) { font-size: 14px; }
 .automation-editor > div:last-child { gap: 12px; }
 .automation-editor > div:last-child > button[type="submit"] { order: 1; }

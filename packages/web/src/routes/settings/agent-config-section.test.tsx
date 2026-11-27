@@ -182,10 +182,10 @@ describe('AgentConfigSection', () => {
     await waitFor(() => expect(agentTab('claude')).toBeTruthy())
     expect(agentTab('claude').getAttribute('data-selected')).toBe('true')
     // health only reports claude available — the other three carry the badge
-    await waitFor(() => expect(agentTab('codex').textContent).toContain('not installed'))
-    expect(agentTab('opencode').textContent).toContain('not installed')
-    expect(agentTab('pi').textContent).toContain('not installed')
-    expect(agentTab('claude').textContent).not.toContain('not installed')
+    await waitFor(() => expect(agentTab('codex').textContent).toContain('Not installed'))
+    expect(agentTab('opencode').textContent).toContain('Not installed')
+    expect(agentTab('pi').textContent).toContain('Not installed')
+    expect(agentTab('claude').textContent).not.toContain('Not installed')
   })
 
   it('Pi’s pane lists its files and states why the MCP group is empty and what to try', async () => {

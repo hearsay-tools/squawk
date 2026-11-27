@@ -14,7 +14,8 @@ import { CopyIcon, EllipsisIcon, TriangleAlertIcon } from '@/components/design-i
 import { ReferenceChip } from '@/components/reference-chip'
 import { ReferenceStatusProvider, useReferenceStatus } from '@/components/reference-status'
 import { referenceStatusPresentation } from '@/lib/reference-status'
-import { StatusDot, type StatusDotTone } from '@/components/status-dot'
+import { rawRunStatusPresentation } from '@/lib/status-semantics'
+import { StatusDot } from '@/components/status-dot'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -63,12 +64,6 @@ export function retainedFinishedTasks(branches: readonly RepoBranchEntry[]): num
     entry.class === 'active' && entry.runId !== null && entry.ahead > 0 &&
     (entry.runStatus === 'done' || entry.runStatus === 'failed' || entry.runStatus === 'cancelled'),
   ).length
-}
-
-const STATUS_TONE: Partial<Record<NonNullable<RepoBranchEntry['runStatus']>, StatusDotTone>> = {
-  done: 'success',
-  failed: 'danger',
-  cancelled: 'neutral',
 }
 
 /**
@@ -307,7 +302,8 @@ function NotLandedTitleAndMeta({ entry, finishedAt }: {
   // compact age every list uses, with the full local time in its tooltip.
   const at = finishedAt ?? entry.lastCommit.at
   const age = shortAge(at)
-  const when = orphan || !entry.runStatus ? age : `${entry.runStatus}${age ? ` ${age}` : ''}`
+  const statusPresentation = entry.runStatus ? rawRunStatusPresentation(entry.runStatus) : undefined
+  const when = orphan || !statusPresentation ? age : `${statusPresentation.label}${age ? ` ${age}` : ''}`
   const whenTitle = Number.isFinite(Date.parse(at)) ? new Date(at).toLocaleString() : undefined
 
   return (
@@ -316,7 +312,7 @@ function NotLandedTitleAndMeta({ entry, finishedAt }: {
         {orphan ? (
           <CircleDashedIcon aria-label="Task deleted" className="size-[12px] text-muted-foreground" />
         ) : (
-          <StatusDot tone={(entry.runStatus && STATUS_TONE[entry.runStatus]) || 'neutral'} aria-label={entry.runStatus ?? undefined} />
+          <StatusDot tone={statusPresentation?.tone ?? 'neutral'} shape={statusPresentation?.shape ?? 'filled'} aria-label={statusPresentation?.label} />
         )}
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">

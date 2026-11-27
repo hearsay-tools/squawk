@@ -1210,7 +1210,7 @@ it('hides indexed workers while preserving parked-parent waiting phases', async 
   expect(screen.queryByText('Worker')).toBeNull()
   for (const phase of ['parked', 'wake-pending']) {
     const row = document.querySelector(`[data-slot="global-task-row"][data-run-id="${phase}"]`)
-    expect(row?.textContent).toContain(phase === 'parked' ? 'waiting on workers' : 'waiting for capacity')
+    expect(row?.textContent).toContain(phase === 'parked' ? 'Waiting for workers' : 'Waiting for capacity')
   }
 })
 
@@ -1219,8 +1219,8 @@ it('shows a parked parent human question from the slim workspace index', async (
   renderPage()
   await waitFor(() => expect(document.querySelector('[data-slot="global-task-row"][data-run-id="asking-parent"]')).not.toBeNull())
   const row = document.querySelector('[data-slot="global-task-row"][data-run-id="asking-parent"]')
-  expect(row?.textContent).toContain('needs you')
-  expect(row?.textContent).not.toContain('waiting on workers')
+  expect(row?.textContent).toContain('Needs you')
+  expect(row?.textContent).not.toContain('Waiting for workers')
 })
 
 
@@ -1256,8 +1256,8 @@ it('renders a parent request-wait as a global-task-row and hides the worker', as
   renderPage()
   await waitFor(() => expect(document.querySelector('[data-slot="global-task-row"][data-run-id="parent-wait"]')).not.toBeNull())
   const row = document.querySelector('[data-slot="global-task-row"][data-run-id="parent-wait"]')
-  expect(row?.textContent).toContain('waiting on worker replies')
-  expect(row?.textContent).not.toContain('needs you')
+  expect(row?.textContent).toContain('Waiting for worker replies')
+  expect(row?.textContent).not.toContain('Needs you')
   expect(document.querySelector('[data-slot="global-task-row"][data-run-id="request-wait"]')).toBeNull()
 })
 

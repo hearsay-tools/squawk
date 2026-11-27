@@ -64,8 +64,8 @@ export function RunDiff({ runId }: { runId: string }) {
           {totals.files} {totals.files === 1 ? 'file' : 'files'} changed
         </span>
         <span className="font-mono font-semibold tabular-nums">
-          <span className="text-success">+{totals.additions}</span>{' '}
-          <span className="text-danger">−{totals.deletions}</span>
+          <span className="text-semantic-green">+{totals.additions}</span>{' '}
+          <span className="text-semantic-red">−{totals.deletions}</span>
         </span>
       </p>
       {shown.map((file) => (
@@ -96,7 +96,7 @@ function DiffFileSection({ file }: { file: DiffFile }) {
       open={open}
       onOpenChange={setOpen}
       data-slot="diff-file"
-      className="min-w-0 overflow-hidden rounded-md border border-border bg-card"
+      className="min-w-0 overflow-hidden rounded-md border border-card-edge bg-card shadow-card"
     >
       <CollapsibleTrigger className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-muted/50">
         <ChevronRightIcon
@@ -123,9 +123,9 @@ function DiffFileSection({ file }: { file: DiffFile }) {
             binary
           </span>
         ) : null}
-        <span className="ml-auto shrink-0 font-mono text-[11px] font-semibold tabular-nums">
-          <span className="text-success">+{file.additions}</span>{' '}
-          <span className="text-danger">−{file.deletions}</span>
+        <span className="ml-auto shrink-0 font-mono text-xs font-semibold tabular-nums">
+          <span className="text-semantic-green">+{file.additions}</span>{' '}
+          <span className="text-semantic-red">−{file.deletions}</span>
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent>
@@ -201,7 +201,7 @@ function DiffFileBody({ lines }: { lines: string[] }) {
           type="button"
           data-slot="diff-file-toggle"
           onClick={() => setExpanded((value) => !value)}
-          className="block w-full border-t border-border/50 px-4 py-1.5 text-left text-[11px] font-medium text-soft-foreground hover:text-foreground"
+          className="block w-full border-t border-border/50 px-4 py-1.5 text-left text-xs font-medium text-soft-foreground hover:text-foreground"
         >
           {expanded ? 'Show less' : `Show all ${lines.length} lines`}
         </button>

@@ -101,7 +101,7 @@ function Count({ value, bump }: { value: number; bump: number | undefined }) {
 
 function Chip({ icon, count, label, bump }: { icon: ReactNode; count: number; label: string; bump: number | undefined }) {
   return (
-    <li data-slot="activity-chip" data-chip={label} className="inline-flex items-center gap-[7px] rounded-full border border-border bg-card px-[11px] py-[5px] text-[12px] text-muted-foreground">
+    <li data-slot="activity-chip" data-chip={label} className="inline-flex items-center gap-[7px] rounded-full border border-card-edge bg-card px-[11px] py-[5px] text-xs text-muted-foreground shadow-card">
       {icon}
       <Count value={count} bump={bump} /> {label}
     </li>
@@ -112,18 +112,18 @@ export function SummaryChips({ summary, tasksTo, bumps = {} }: { summary: Activi
   const bump = (chip: keyof ActivitySummary) => bumps[chip]?.key
   return (
     <ul data-slot="activity-summary" aria-live="polite" aria-label="Summary" className="flex flex-wrap gap-2">
-      <Chip icon={<StatusDot tone="pending" aria-hidden="true" />} count={summary.needsYou} label="needs you" bump={bump('needsYou')} />
-      <Chip icon={<StatusDot tone="running" aria-hidden="true" />} count={summary.working} label="working" bump={bump('working')} />
-      <Chip icon={<StatusDot tone="running" shape="ring" aria-hidden="true" />} count={summary.waiting} label="waiting" bump={bump('waiting')} />
-      <Chip icon={<StatusDot tone="neutral" shape="ring" aria-hidden="true" />} count={summary.queued} label="queued" bump={bump('queued')} />
-      <Chip icon={<BotIcon aria-hidden="true" className="size-3.5" />} count={summary.activeWorkers} label="active workers" bump={bump('activeWorkers')} />
-      <Chip icon={<MessageSquareIcon aria-hidden="true" className="size-3.5 text-message-peer-accent" />} count={summary.openRequests} label="open requests" bump={bump('openRequests')} />
-      <li data-slot="activity-chip" data-chip="in review">
+      <Chip icon={<StatusDot tone="pending" aria-hidden="true" />} count={summary.needsYou} label="Needs you" bump={bump('needsYou')} />
+      <Chip icon={<StatusDot tone="running" aria-hidden="true" />} count={summary.working} label="Working" bump={bump('working')} />
+      <Chip icon={<StatusDot tone="running" shape="ring" aria-hidden="true" />} count={summary.waiting} label="Waiting" bump={bump('waiting')} />
+      <Chip icon={<StatusDot tone="neutral" shape="ring" aria-hidden="true" />} count={summary.queued} label="Queued" bump={bump('queued')} />
+      <Chip icon={<BotIcon aria-hidden="true" className="size-3.5" />} count={summary.activeWorkers} label="Active workers" bump={bump('activeWorkers')} />
+      <Chip icon={<MessageSquareIcon aria-hidden="true" className="size-3.5 text-message-peer-accent" />} count={summary.openRequests} label="Open requests" bump={bump('openRequests')} />
+      <li data-slot="activity-chip" data-chip="Needs review">
         {/* The one chip that leads somewhere: review work has no card here, so it opens the task
             list. The arrow and the hover border say it is a link, not a count. */}
-        <Link to={tasksTo} className="inline-flex items-center gap-[7px] rounded-full border border-border bg-card px-[11px] py-[5px] text-[12px] text-muted-foreground transition-colors hover:border-accent-text/40 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11">
+        <Link to={tasksTo} className="inline-flex items-center gap-[7px] rounded-full border border-card-edge bg-card px-[11px] py-[5px] text-xs text-muted-foreground shadow-card transition-colors hover:border-accent-text/40 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11">
           <StatusDot tone="info" aria-hidden="true" />
-          <Count value={summary.inReview} bump={bump('inReview')} /> in review
+          <Count value={summary.inReview} bump={bump('inReview')} /> Needs review
           <ArrowUpRightIcon aria-hidden="true" className="size-3 text-soft-foreground" />
         </Link>
       </li>

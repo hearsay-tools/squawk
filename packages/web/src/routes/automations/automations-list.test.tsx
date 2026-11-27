@@ -119,11 +119,11 @@ it('shows the recent activity of each automation on its card, newest first and c
 // hearsay-tools/cezarion#1465: one-time schedules in the list.
 const once = { ...base, id: 'o1', name: 'Check the rollout', kind: 'schedule', enabled: true, schedule: { type: 'once', at: '2030-01-15T09:00', timeZone: 'Europe/Warsaw' }, task, nextRunAt: '2030-01-15T08:00:00.000Z', onceStatus: 'waiting' }
 
-it('shows the once label and Waiting badge', () => {
+it('shows the once label and Scheduled badge', () => {
   routed(() => undefined)
   mount(response([once, { ...once, id: 'o2', name: 'Missed one', enabled: false, nextRunAt: undefined, onceStatus: 'missed' }]))
   expect(screen.getAllByText('once on Tue 15 Jan 2030 at 09:00 (Europe/Warsaw)')).toHaveLength(2)
-  expect(screen.getByText('Waiting')).not.toBeNull()
+  expect(screen.getByText('Scheduled')).not.toBeNull()
   expect(screen.getByText('Missed')).not.toBeNull()
   expect(screen.queryByText('Enabled')).toBeNull()
   expect(screen.getAllByRole('button', { name: 'Cancel' })).toHaveLength(2)

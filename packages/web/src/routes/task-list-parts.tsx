@@ -14,6 +14,7 @@ import { Link } from '@/lib/project-router'
 import { ARCHIVED_WINDOW, listCounts, type BucketLabel, type ListView } from '@/lib/task-groups'
 import { runnerDisplayName, useRunners } from '@/api/runners'
 import { groupTone } from '@/lib/task-origin'
+import type { SearchParamsUpdate } from '@/lib/use-search-params-writer'
 import { cn } from '@/lib/utils'
 import type { ArchivedPages } from './tasks-overview'
 
@@ -101,7 +102,7 @@ export function BranchChip({ branch }: { branch: string }) {
   return (
     <span
       title={branch}
-      className="block truncate rounded-[6px] bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-muted-foreground"
+      className="block truncate rounded-[6px] bg-muted px-1.5 py-0.5 font-mono text-xs font-medium text-muted-foreground"
     >
       {branch}
     </span>
@@ -198,4 +199,13 @@ export function useArchivedPages(runs: readonly RunSummary[] | undefined, view: 
   const plainHasMore = unfiltered === undefined ? undefined : unfiltered.at(-1)?.nextCursor != null
   const enrichedPages = React.useMemo(() => pages && { ...pages, plainHasMore }, [pages, plainHasMore])
   return { pages: enrichedPages, total: unfiltered?.[0]?.total, search: setTyped }
+}
+
+/** Write or clear a single URL search parameter. */
+export function setParam(key: string, value: string | null): SearchParamsUpdate {
+  return (current) => {
+    if (value === null) current.delete(key)
+    else current.set(key, value)
+    return current
+  }
 }

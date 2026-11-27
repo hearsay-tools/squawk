@@ -25,6 +25,7 @@ import {
   ViewTab,
   fullTime,
   headingTone,
+  setParam,
   taskTitleClass,
   tasksOverviewDensity,
   tasksOverviewHeader,
@@ -52,6 +53,7 @@ import {
 import { toast } from '@/components/ui/toaster'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { deriveAttention } from '@/lib/attention'
+import { runStatusPresentation } from '@/lib/status-semantics'
 import { shortAge } from '@/lib/format'
 import { isReadDoneItem, isUnread, unreadDoneCount, unreadMarkerTone } from '@/lib/read-state'
 import {
@@ -78,7 +80,7 @@ import {
   type TaskStatusGroup,
 } from '@/lib/task-origin'
 import { useAutomationsAvailable } from '@/lib/capabilities'
-import { useSearchParamsWriter, type SearchParamsUpdate } from '@/lib/use-search-params-writer'
+import { useSearchParamsWriter } from '@/lib/use-search-params-writer'
 import { useTaskListFoldsFromUrl } from '@/lib/use-task-list-folds'
 import {
   filterRuns,
@@ -686,8 +688,8 @@ function SummaryTasksTable({ rows, showHeader, showReference, onRename, onToggle
 }) {
   const aria = taskListRowIndexes(rows.map(({ run }) => run.id), expandedRuns)
   const labels = ['Task', 'Workflow', 'Changes', ...(showReference ? ['Pull request'] : []), 'Started']
-  return <div data-slot="tasks-summary" data-reference-column={showReference}><div className="rounded-lg border border-border bg-card px-4" role="table" aria-rowcount={aria.rowCount}>
-    <div role="row" aria-rowindex={1} data-slot="task-summary-head" className={cn('task-summary-grid', !showHeader && 'sr-only')}>{labels.map((label) => <div role="columnheader" key={label} className="flex h-8 items-center border-b border-border text-[11px] font-medium tracking-[0.04em] uppercase text-muted-foreground">{label}</div>)}</div>
+  return <div data-slot="tasks-summary" data-reference-column={showReference}><div className="rounded-lg border border-card-edge bg-card px-4 shadow-card" role="table" aria-rowcount={aria.rowCount}>
+    <div role="row" aria-rowindex={1} data-slot="task-summary-head" className={cn('task-summary-grid', !showHeader && 'sr-only')}>{labels.map((label) => <div role="columnheader" key={label} className="flex h-8 items-center border-b border-border text-xs font-medium tracking-[0.04em] uppercase text-muted-foreground">{label}</div>)}</div>
     <TaskListItems itemSize={SUMMARY_ROW_SIZE} items={rows} itemKey={({ run }) => run.id}>{({ run, queuePosition }, index) =>
       <SummaryTaskRow showReference={showReference} run={run} queuePosition={queuePosition} rowIndex={aria.indexes[index]!} onRename={onRename} onTogglePin={onTogglePin} now={now} showTokens={showTokens} showCost={showCost} automationName={automationName} open={expandedRuns.has(run.id)} toggleExpandedRun={toggleExpandedRun} />
     }</TaskListItems>
@@ -701,6 +703,7 @@ const SummaryTaskRow = React.memo(function SummaryTaskRow({ run, queuePosition, 
   automationName: (automationId: string) => string | undefined; open: boolean; toggleExpandedRun: (id: string) => void
 }) {
         const attention = deriveAttention(run)
+        const status = runStatusPresentation(run, attention)
         const scheduled = scheduledResume(run)
         const reference = taskReference(run)
         const detailId = `task-resources-${run.id}`
@@ -710,7 +713,7 @@ const SummaryTaskRow = React.memo(function SummaryTaskRow({ run, queuePosition, 
               <TitleCell run={run} to={`/tasks/${run.id}`} onRename={onRename} onTogglePin={onTogglePin} />
               {/* One meta line: status, then where the task came from. */}
               <div data-slot="task-meta-line" className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                <button type="button" data-task-control="resources" aria-label={`${open ? 'Hide' : 'Show'} resources for ${runTitle(run)}`} aria-expanded={open} aria-controls={detailId} aria-describedby={`summary-status-${run.id}`} onClick={() => toggleExpandedRun(run.id)} className="inline-flex min-h-[22px] shrink-0 items-center rounded-full p-0 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"><Pill id={`summary-status-${run.id}`} dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="py-0.5">{attention.label}{scheduled ? ` ${scheduled.label}` : ''}</Pill></button>
+                <button type="button" data-task-control="resources" aria-label={`${open ? 'Hide' : 'Show'} resources for ${runTitle(run)}`} aria-expanded={open} aria-controls={detailId} aria-describedby={`summary-status-${run.id}`} onClick={() => toggleExpandedRun(run.id)} className="inline-flex min-h-[22px] shrink-0 items-center rounded-full p-0 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"><Pill id={`summary-status-${run.id}`} dot={status.tone} shape={status.shape} pulse={status.pulse} className="py-0.5">{status.label}{scheduled ? ` ${scheduled.label}` : ''}</Pill></button>
                 <span aria-hidden="true">·</span>
                 <RunOriginLine run={run} automationName={automationName} />
                 {run.status === 'queued' && queuePosition !== null ? <><span aria-hidden="true">·</span><span className="shrink-0">#{queuePosition} in queue</span></> : null}
@@ -722,7 +725,7 @@ const SummaryTaskRow = React.memo(function SummaryTaskRow({ run, queuePosition, 
             <div role="cell" className="text-xs text-muted-foreground tabular-nums" title={fullTime(run.startedAt ?? run.createdAt)}>{shortAge(run.startedAt ?? run.createdAt, now)}</div>
           </div>
           {open ? <div role="row" aria-rowindex={rowIndex + 1} data-run-id={run.id}><div role="cell" aria-colspan={showReference ? 5 : 4} className="border-b border-border pb-4"><div id={detailId} className="flex flex-col gap-3">
-            <TaskPreview runId={run.id} status={attention.label} error={run.error} open={<Button asChild variant="outline" className="min-h-11"><Link data-task-control="open" to={`/tasks/${run.id}`}>Open task<span className="sr-only">: {runTitle(run)}</span></Link></Button>} />
+            <TaskPreview runId={run.id} status={status.label} error={run.error} open={<Button asChild variant="outline" className="min-h-11"><Link data-task-control="open" to={`/tasks/${run.id}`}>Open task<span className="sr-only">: {runTitle(run)}</span></Link></Button>} />
             <div className="rounded-md bg-muted/50 p-4"><TaskResourceDetails run={run} showTokens={showTokens} showCost={showCost} /></div>
           </div></div></div> : null}
         </div>
@@ -825,7 +828,7 @@ function Th({
       data-column-id={columnId}
       data-folded={folded || undefined}
       className={cn(
-        'h-[38px] border-b border-border px-2.5 text-left text-[11px] font-semibold tracking-[0.05em] whitespace-nowrap text-supporting-foreground uppercase first:pl-4 last:pr-4',
+        'h-[38px] border-b border-border px-2.5 text-left text-xs font-semibold tracking-[0.05em] whitespace-nowrap text-supporting-foreground uppercase first:pl-4 last:pr-4',
         right && 'text-right',
         folded && 'px-0 first:pl-0 last:pr-0',
       )}
@@ -975,7 +978,7 @@ const TableRow = React.memo(function TableRow({
               data-slot="queue-note"
               data-column-id="cpu-memory"
               aria-colspan={2} style={{ gridColumn: "span 2" }}
-              className={cn(TD_BASE, 'text-right font-mono text-[11px] text-supporting-foreground')}
+              className={cn(TD_BASE, 'text-right font-mono text-xs text-supporting-foreground')}
             >
               #{queuePosition} in queue
             </div>
@@ -1040,20 +1043,21 @@ function TaskTableCell({
   if (!expanded) return <FoldedTd column={column.id} />
 
   switch (column.id) {
-    case 'status':
+    case 'status': {
+      const status = runStatusPresentation(run, attention)
       return (
         <div role="cell" data-column-id={column.id} className={cn(TD_BASE, 'overflow-hidden')}>
           {/* A scheduled run wears its appointment in the pill, the way a queued one wears its
               queue position — the row's whole answer to "what is this waiting for?". */}
           <Pill
-            dot={attention.tone}
-            shape={attention.shape}
-            pulse={attention.pulse}
-            title={scheduled?.title ?? attention.label}
+            dot={status.tone}
+            shape={status.shape}
+            pulse={status.pulse}
+            title={scheduled?.title ?? status.label}
             className="w-full max-w-full overflow-hidden"
           >
             <span className="min-w-0 truncate">
-              {attention.label}
+              {status.label}
               {scheduled ? (
                 <>
                   {' '}
@@ -1064,6 +1068,7 @@ function TaskTableCell({
           </Pill>
         </div>
       )
+    }
     case 'task':
       return (
         <div role="cell" data-column-id={column.id} className={cn(TD_BASE, 'min-w-[320px] max-w-0 whitespace-normal')}>
@@ -1264,7 +1269,7 @@ function UsageTd({ column, cell }: { column: 'cpu' | 'memory'; cell: UsageCell }
         'overflow-hidden',
         'text-right font-mono tabular-nums',
         cell.kind === 'live' && 'bg-accent-strong/5 text-xs font-medium text-foreground',
-        cell.kind === 'peak' && 'text-[11px] text-supporting-foreground',
+        cell.kind === 'peak' && 'text-xs text-supporting-foreground',
         cell.kind === 'none' && 'text-xs text-soft-foreground'
       )}
     >
@@ -1363,7 +1368,7 @@ const TaskCard = React.memo(function TaskCard({
       </div>
       <div data-slot="mobile-task-status-row" className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
         <button data-slot="mobile-resources-toggle" data-task-control="resources" type="button" aria-controls={`mobile-resources-${run.id}`} aria-describedby={`mobile-status-${run.id}`} aria-label={resourcesOpen ? 'Hide resources' : 'Show resources'} title={resourcesOpen ? 'Hide resources' : 'Show resources'} aria-expanded={resourcesOpen} onClick={() => onToggleResources(run.id)} className="shrink-0"><Pill id={`mobile-status-${run.id}`} dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="shrink-0" title={scheduled?.title}>
-          {attention.label}
+          {runStatusPresentation(run, attention).label}
           {scheduled ? <span className="tabular-nums">{scheduled.label}</span> : null}
         </Pill></button>
         <span data-slot="mobile-task-workflow" className="min-w-0 truncate">{workflowLabel(run)}</span>
@@ -1377,7 +1382,7 @@ const TaskCard = React.memo(function TaskCard({
         <span className="tabular-nums" title={fullTime(run.startedAt ?? run.createdAt)}>{shortAge(run.startedAt ?? run.createdAt, now)}</span>
       </div>
       {resourcesOpen ? <>
-        <div className="mt-1.5"><TaskPreview runId={run.id} status={attention.label} error={run.error} open={<Button asChild variant="outline" className="min-h-11"><Link data-task-control="open" to={to}>Open task<span className="sr-only">: {runTitle(run)}</span></Link></Button>} /></div>
+        <div className="mt-1.5"><TaskPreview runId={run.id} status={runStatusPresentation(run, attention).label} error={run.error} open={<Button asChild variant="outline" className="min-h-11"><Link data-task-control="open" to={to}>Open task<span className="sr-only">: {runTitle(run)}</span></Link></Button>} /></div>
         <MobileResources run={run} showTokens={showTokens} showCost={showCost} />
       </> : null}
     </div>
@@ -1497,15 +1502,6 @@ export function TasksOverviewRoute() {
       />
     </ReferenceStatusProvider>
   )
-}
-
-/** How long the search box waits before writing `q` to the URL: one history write per word. */
-function setParam(key: string, value: string | null): SearchParamsUpdate {
-  return (current) => {
-    if (value === null) current.delete(key)
-    else current.set(key, value)
-    return current
-  }
 }
 
 /**

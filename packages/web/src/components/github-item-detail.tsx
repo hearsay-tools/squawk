@@ -69,7 +69,7 @@ function GithubItemBackLink({ backLink }: { backLink: { to: string } | null }) {
 const GH_MARKDOWN_CLASS = cn(
   'text-sm',
   '[&_[data-streamdown="code-block"]]:relative [&_[data-streamdown="code-block"]]:my-2.5 [&_[data-streamdown="code-block"]]:gap-0 [&_[data-streamdown="code-block"]]:overflow-hidden [&_[data-streamdown="code-block"]]:rounded-lg [&_[data-streamdown="code-block"]]:border [&_[data-streamdown="code-block"]]:border-border [&_[data-streamdown="code-block"]]:bg-background [&_[data-streamdown="code-block"]]:p-0 [&_[data-streamdown="code-block"]]:![content-visibility:visible] [&_[data-streamdown="code-block"]]:![contain-intrinsic-size:auto]',
-  '[&_[data-streamdown="code-block-header"]]:h-7 [&_[data-streamdown="code-block-header"]]:border-b [&_[data-streamdown="code-block-header"]]:border-border [&_[data-streamdown="code-block-header"]]:bg-muted/40 [&_[data-streamdown="code-block-header"]]:px-3 [&_[data-streamdown="code-block-header"]]:text-[11px]',
+  '[&_[data-streamdown="code-block-header"]]:h-7 [&_[data-streamdown="code-block-header"]]:border-b [&_[data-streamdown="code-block-header"]]:border-border [&_[data-streamdown="code-block-header"]]:bg-muted/40 [&_[data-streamdown="code-block-header"]]:px-3 [&_[data-streamdown="code-block-header"]]:text-xs',
   '[&_[data-streamdown="code-block-header"][data-language=""]]:hidden [&_[data-streamdown="code-block-header"]:not([data-language])]:hidden [&_[data-streamdown="code-block-header"]:has(>span:empty)]:hidden',
   '[&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:absolute [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:top-1 [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:right-1.5 [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:mt-0 [&_[data-streamdown="code-block"]>*:has([data-streamdown="code-block-actions"])]:h-auto',
   '[&_[data-streamdown="code-block-actions"]]:border-0 [&_[data-streamdown="code-block-actions"]]:bg-transparent [&_[data-streamdown="code-block-actions"]]:p-0 [&_[data-streamdown="code-block-actions"]]:backdrop-blur-none',
@@ -367,7 +367,7 @@ function GithubPrChanges({ item }: { item: GithubItem }) {
         <span className="font-mono text-muted-foreground" title={data.headSha}>head {data.headSha.slice(0, 8)}</span>
         <Button type="button" variant="outline" size="sm" className="ml-auto min-h-11" onClick={() => void refresh()}>Refresh</Button>
       </div>
-      {data.truncated ? <p role="status" className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">{data.reason ?? 'This response is incomplete.'} {fallback ? <a href={fallback} target="_blank" rel="noopener noreferrer" className="underline">Open all files on GitHub</a> : null}</p> : null}
+      {data.truncated ? <p role="status" className="mt-3 rounded-md border border-pending-strong/40 bg-pending/10 p-3 text-xs">{data.reason ?? 'This response is incomplete.'} {fallback ? <a href={fallback} target="_blank" rel="noopener noreferrer" className="underline">Open all files on GitHub</a> : null}</p> : null}
       <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="min-w-0">
           <input aria-label="Filter changed files" value={filter} onChange={(e) => changeFilter(e.target.value)} placeholder="Filter files…" className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm" />
@@ -471,7 +471,7 @@ function GithubThread({ item, colors }: { item: GithubItem; colors: Record<strin
     <section data-slot="gh-thread" className="mt-6 border-t border-border pt-5">
       <h3
         data-slot="gh-thread-header"
-        className="mb-4 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
+        className="mb-4 text-xs font-semibold tracking-wide text-muted-foreground uppercase"
       >
         {/* "Activity", not "Comments": heading a twenty-row list `Comments · 2` would be
             incoherent once events render. The comment count stays as a secondary. This is a
@@ -665,7 +665,7 @@ function CommittedPhrase({ event }: { event: GithubTimelineEvent }) {
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       <span className="shrink-0">committed</span>
-      {event.sha ? <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{event.sha.slice(0, 7)}</span> : null}
+      {event.sha ? <span className="shrink-0 font-mono text-xs text-muted-foreground">{event.sha.slice(0, 7)}</span> : null}
       {event.message ? (
         <span className="truncate font-sans text-foreground">{event.message}</span>
       ) : null}
@@ -752,10 +752,10 @@ function CommitChecks({ checks }: { checks: GithubTimelineEvent['checks'] }) {
 /** Review-state chip tones — the same success/danger/muted vocabulary the checks badge uses, so
  *  approved reads green and changes-requested reads red without a new color system. */
 const REVIEW_CHIP: Record<NonNullable<GithubComment['reviewState']>, { label: string; tone: string }> = {
-  approved: { label: 'approved', tone: 'border-success/40 text-success' },
-  changes_requested: { label: 'changes requested', tone: 'border-danger/40 text-danger' },
-  commented: { label: 'commented', tone: 'border-border text-muted-foreground' },
-  dismissed: { label: 'dismissed', tone: 'border-border text-muted-foreground' },
+  approved: { label: 'Approved', tone: 'border-success/40 text-semantic-green' },
+  changes_requested: { label: 'Changes requested', tone: 'border-danger/40 text-semantic-red' },
+  commented: { label: 'Commented', tone: 'border-border text-muted-foreground' },
+  dismissed: { label: 'Dismissed', tone: 'border-border text-muted-foreground' },
 }
 
 /** One thread entry: avatar (letter fallback), author, age, an optional review-state chip, and the
@@ -816,7 +816,7 @@ function Avatar({ url, login }: { url?: string | undefined; login: string }) {
     <span
       data-slot="gh-avatar-fallback"
       aria-hidden="true"
-      className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground uppercase"
+      className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground uppercase"
     >
       {login.slice(0, 1) || '?'}
     </span>
@@ -828,9 +828,14 @@ function Avatar({ url, login }: { url?: string | undefined; login: string }) {
 type Checks = NonNullable<GithubItem['checks']>
 const CHECKS_GLYPH: Record<Checks, string> = { passing: '✓', failing: '✗', pending: '○' }
 const CHECKS_TONE: Record<Checks, string> = {
-  passing: 'text-success',
-  failing: 'text-danger',
-  pending: 'text-muted-foreground',
+  passing: 'text-semantic-green',
+  failing: 'text-semantic-red',
+  pending: 'text-semantic-amber',
+}
+const CHECKS_LABEL: Record<Checks, string> = {
+  passing: 'Checks passing',
+  failing: 'Checks failing',
+  pending: 'Checks pending',
 }
 
 /** The comment-count badge (#499): a muted speech-bubble glyph + count, shown on issue/PR rows
@@ -854,8 +859,8 @@ export function CommentCount({ count }: { count: number | undefined }) {
 /** The checks badge — the legacy tab's three phrases, tinted by outcome. Links out
  *  to the PR's checks tab on GitHub (issue #415) when a URL is available. */
 function ChecksBadge({ checks, url }: { checks: Checks; url?: string | undefined }) {
-  const className = cn('text-[11px] font-medium', CHECKS_TONE[checks], url && 'hover:underline')
-  const label = `${CHECKS_GLYPH[checks]} checks ${checks}`
+  const className = cn('text-xs font-medium', CHECKS_TONE[checks], url && 'hover:underline')
+  const label = `${CHECKS_GLYPH[checks]} ${CHECKS_LABEL[checks]}`
 
   if (!url) {
     return (
@@ -887,9 +892,9 @@ export function ChecksGlyph({ checks }: { checks: Checks }) {
     <span
       data-slot="gh-row-checks"
       data-checks={checks}
-      title={`checks ${checks}`}
-      aria-label={`checks ${checks}`}
-      className={cn('shrink-0 font-sans text-[11px] font-semibold', CHECKS_TONE[checks])}
+      title={CHECKS_LABEL[checks]}
+      aria-label={CHECKS_LABEL[checks]}
+      className={cn('shrink-0 font-sans text-xs font-semibold', CHECKS_TONE[checks])}
     >
       {CHECKS_GLYPH[checks]}
     </span>

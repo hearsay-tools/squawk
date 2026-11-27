@@ -1235,8 +1235,8 @@ it('preserves parked-parent wait phases without listing owned workers', async ()
   await screen.findByText('Indexed parent')
   // A live summary row carries the awaited worker ids (#817) and counts them; an index row without
   // them claims no number.
-  expect(document.querySelector('[data-slot="palette-task"][data-run-id="live-parent"] [data-slot="status-dot"]')?.getAttribute('aria-label')).toBe('waiting on 1 worker')
-  expect(document.querySelector('[data-slot="palette-task"][data-run-id="indexed-parent"] [data-slot="status-dot"]')?.getAttribute('aria-label')).toBe('waiting on workers')
+  expect(document.querySelector('[data-slot="palette-task"][data-run-id="live-parent"] [data-slot="status-dot"]')?.getAttribute('aria-label')).toBe('Waiting for 1 worker')
+  expect(document.querySelector('[data-slot="palette-task"][data-run-id="indexed-parent"] [data-slot="status-dot"]')?.getAttribute('aria-label')).toBe('Waiting for workers')
   expect(document.querySelector('[data-slot="palette-task"][data-run-id="indexed-worker"]')).toBeNull()
   expect(document.querySelector('[data-slot="palette-task"][data-run-id="live-worker"]')).toBeNull()
 
@@ -1254,7 +1254,7 @@ it('preserves pending human attention in live and indexed palette rows', async (
   openWith({ metaKey: true })
   await screen.findByText('Indexed question')
   for (const id of ['live-asking', 'indexed-asking']) {
-    expect(document.querySelector(`[data-slot="palette-task"][data-run-id="${id}"] [data-slot="status-dot"]`)?.getAttribute('aria-label')).toBe('needs you')
+    expect(document.querySelector(`[data-slot="palette-task"][data-run-id="${id}"] [data-slot="status-dot"]`)?.getAttribute('aria-label')).toBe('Needs you')
   }
 })
 

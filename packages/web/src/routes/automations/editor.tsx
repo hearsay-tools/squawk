@@ -59,7 +59,7 @@ function Section({
     <section
       role={hideLegend ? undefined : 'group'}
       aria-labelledby={hideLegend ? undefined : headingId}
-      className="grid min-w-0 gap-3.5 rounded-xl border border-border bg-card p-5"
+      className="grid min-w-0 gap-3.5 rounded-xl border border-card-edge bg-card shadow-card p-5"
     >
       {hideLegend ? null : <h2 id={headingId} className="text-sm font-semibold text-foreground">{title}</h2>}
       {children}
@@ -302,7 +302,7 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
           {isSchedule
             ? <NextRunsPreview schedule={draft.schedule} timeZone={timeZone} />
             : (
-              <section className="min-w-0 rounded-xl border bg-card p-5">
+              <section className="min-w-0 rounded-xl border border-card-edge bg-card shadow-card p-5">
                 <h2 className="mb-2 text-base font-semibold">How it polls</h2>
                 <p className="text-sm break-words text-muted-foreground">{pollSentence(draft)}</p>
               </section>

@@ -62,7 +62,7 @@ export function ProjectWebhooksField({ project }: { project: ProjectListEntry })
               Add webhook
             </Button>
             {full ? (
-              <span className="text-[11px] text-soft-foreground">A project holds at most {PROJECT_WEBHOOKS_MAX} webhooks.</span>
+              <span className="text-xs text-soft-foreground">A project holds at most {PROJECT_WEBHOOKS_MAX} webhooks.</span>
             ) : null}
           </div>
         )}

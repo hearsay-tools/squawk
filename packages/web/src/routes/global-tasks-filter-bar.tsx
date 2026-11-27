@@ -24,7 +24,9 @@ import {
   type GroupBy,
 } from '@/lib/global-tasks'
 import { allProjectTags } from '@/lib/project-tags'
+import { rawRunStatusLabel } from '@/lib/status-semantics'
 import type { ListView } from '@/lib/task-groups'
+import type { RunStatus } from '@open-mercato/cezar-api-client'
 
 /** The facet values picked inside the Filters panel. The origin row and the search box sit
  *  outside it, so they do not count. */
@@ -118,7 +120,7 @@ export function FilterBar({
           onToggle={(value) => onToggle('statuses', value)}
           onClear={() => onClearFacet('statuses')}
           options={allStatuses(tasks)
-            .map((status) => ({ value: status, label: status }))
+            .map((status) => ({ value: status, label: rawRunStatusLabel(status as RunStatus) }))
             .map(withCount(counts.statuses))}
           emptyLabel="No tasks to filter"
         />
@@ -134,7 +136,7 @@ export function FilterBar({
           emptyLabel="No tasks to filter"
         />
         <div data-slot="group-controls" className="flex flex-wrap items-center gap-2"><span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
-        <span className="text-[11px] font-medium text-soft-foreground">Group by</span>
+        <span className="text-xs font-medium text-soft-foreground">Group by</span>
         {/* Pressing the pressed one releases it — see `toggleGroupBy`, which is why there is
             no "None" button to hunt for. */}
         <SegmentedControl
@@ -160,7 +162,7 @@ export function FilterBar({
 
       {tags.length > 0 ? (
         <div data-slot="tag-filters" className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-medium text-soft-foreground">Tags</span>
+          <span className="text-xs font-medium text-soft-foreground">Tags</span>
           {tags.map((tag) => (
             <ToggleChip
               key={tag}
@@ -186,7 +188,7 @@ export function FilterBar({
         // Not silence: a workspace with no tags anywhere is the ONE state where the feature is
         // invisible, and the sentence that fixes it is one line long — with the door in it,
         // since the pane that fixes it is two clicks away and outside this page.
-        <p data-slot="no-tags-hint" className="text-[11px] text-soft-foreground">
+        <p data-slot="no-tags-hint" className="text-xs text-soft-foreground">
           Tag connected repositories in{' '}
           <Link to="/settings/global/projects" className="font-medium text-accent-text hover:underline">
             {controlLocation('projects')}

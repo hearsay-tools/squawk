@@ -59,7 +59,7 @@ export function ArchivedAutomation({ automation, timeZone, onDeleted }: { automa
       }}
     >
       <div className="grid min-w-0 gap-5">
-        <section className="min-w-0 rounded-xl border bg-card p-4">
+        <section className="min-w-0 rounded-xl border border-card-edge bg-card shadow-card p-4">
           <p className="text-sm break-words">
             <span>{archive.outcome === 'launched' ? 'Started its task.' : 'Cancelled — no task was started.'}</span>
             {archive.runId ? <> · <Link className="inline-flex min-h-11 items-center underline underline-offset-4" to={`/tasks/${archive.runId}`}>Open task</Link></> : null}
@@ -67,7 +67,7 @@ export function ArchivedAutomation({ automation, timeZone, onDeleted }: { automa
           <p className="mt-1 text-sm text-muted-foreground">{`Archived ${dayTime(archive.at, timeZone)} (${timeZone}).`}</p>
           {due && schedule?.timeZone ? <p className="mt-1 text-sm text-muted-foreground">{`Was due ${due.date} ${due.time} (${schedule.timeZone}).`}</p> : null}
         </section>
-        <section aria-labelledby="archived-inputs" className="min-w-0 rounded-xl border bg-card p-4">
+        <section aria-labelledby="archived-inputs" className="min-w-0 rounded-xl border border-card-edge bg-card shadow-card p-4">
           <h2 id="archived-inputs" className="mb-3 text-[15px] font-medium">What it ran with</h2>
           <dl className="grid gap-3 text-sm">
             <div className="grid gap-1">

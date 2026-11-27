@@ -19,8 +19,8 @@ import { Heartbeat } from './now-box-view'
  * folds when it closes; the feed lists the last changes the view saw.
  */
 
-const PANEL = 'rounded-xl border border-border bg-card px-3.5 py-3'
-const PANEL_TITLE = 'mb-2 flex gap-2 text-[11.5px] font-semibold tracking-[0.06em] text-muted-foreground uppercase'
+const PANEL = 'rounded-xl border border-card-edge bg-card px-3.5 py-3 shadow-card'
+const PANEL_TITLE = 'mb-2 flex gap-2 text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase'
 
 function RequestEntry({ request, index, now, motion }: { request: ActivityRequest; index: ReadonlyMap<string, RunEntry>; now: number; motion?: 'enter' | 'fold' | undefined }) {
   const { kind, relation } = directionOf(request, index)
@@ -37,10 +37,10 @@ function RequestEntry({ request, index, now, motion }: { request: ActivityReques
         <span className="min-w-0 truncate">{senderName(index, request)}</span>
         <ArrowRightIcon aria-label="to" className="size-3 shrink-0 text-muted-foreground" />
         <span className="min-w-0 truncate">{recipientName(index, request)}</span>
-        <span className={cn('ml-auto shrink-0 text-[10px] font-semibold tracking-[0.05em] uppercase', tone)}>{kind}</span>
+        <span className={cn('ml-auto shrink-0 text-xs font-semibold tracking-[0.05em] uppercase', tone)}>{kind}</span>
       </div>
       <p className="my-1 line-clamp-3 text-[12px] text-muted-foreground">“{request.text}”</p>
-      <div className="flex gap-1.5 text-[11px] text-muted-foreground tabular-nums">
+      <div className="flex gap-1.5 text-xs text-muted-foreground tabular-nums">
         <span>{relation} · open {counter(since(request.createdAt, now))}</span>
         {request.deadline ? <span className="ml-auto">{replyDueText(request.deadline, now)}</span> : null}
       </div>
@@ -74,7 +74,7 @@ function LegendWait() {
 function Legend() {
   const row = 'flex items-center gap-2'
   return (
-    <details data-slot="activity-legend" className="text-[11.5px] text-muted-foreground md:col-span-2">
+    <details data-slot="activity-legend" className="text-xs text-muted-foreground md:col-span-2">
       <summary className="group inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 font-medium text-foreground shadow-xs hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11 [&::-webkit-details-marker]:hidden">
         <InfoIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
         Legend
@@ -82,7 +82,7 @@ function Legend() {
       </summary>
       <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5">
       <div className={row}><StatusDot tone="running" aria-hidden="true" />Filled: working now</div>
-      <div className={row}><StatusDot tone="info" shape="ring" aria-hidden="true" />Ring: waiting for something outside</div>
+      <div className={row}><StatusDot tone="running" shape="ring" aria-hidden="true" />Ring: waiting for something outside</div>
       <div className={row}><StatusDot tone="running" shape="workers" aria-hidden="true" />Robot: waiting for its own workers</div>
       <div className={row}><Heartbeat rate={[0, 2, 5, 1, 3, 0, 4, 2]} className="w-[34px]" />Heartbeat: tool calls, last 30 s</div>
       <div className={row}><LegendLine className="stroke-message-peer-accent" />Open request, task to task</div>
@@ -107,7 +107,7 @@ function JustNow({ feed, now, watchingSince }: { feed: readonly FeedEntry[]; now
             <li key={entry.id} data-slot="activity-feed-entry" className={cn('grid grid-cols-[10px_minmax(0,1fr)_auto] items-baseline gap-2 py-1 text-[12px] text-muted-foreground', i === 0 && 'activity-feed-enter')}>
               <span aria-hidden="true" className={cn('size-[7px] -translate-y-px rounded-full', FEED_DOT[entry.tone])} />
               <span className="min-w-0">{entry.text}</span>
-              <span data-slot="activity-feed-age" className="text-[11px] tabular-nums">{feedAge(now - entry.at)}</span>
+              <span data-slot="activity-feed-age" className="text-xs tabular-nums">{feedAge(now - entry.at)}</span>
             </li>
           ))}
         </ul>

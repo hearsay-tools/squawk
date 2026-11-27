@@ -38,6 +38,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { deriveAttention } from '@/lib/attention'
+import { runStatusPresentation } from '@/lib/status-semantics'
 import { shortAge } from '@/lib/format'
 import {
   formatCost,
@@ -380,7 +381,7 @@ export function GlobalTasksRoute() {
             onClick={() => setFilterDetailsOpen((open) => !open)}
           >
             <SlidersHorizontalIcon aria-hidden="true" />Filters
-            {narrowing > 0 ? <span data-slot="filters-count" aria-hidden="true" className="rounded-full bg-accent-strong/20 px-1.5 text-[11px] leading-[18px] font-semibold tabular-nums">{narrowing}</span> : null}
+            {narrowing > 0 ? <span data-slot="filters-count" aria-hidden="true" className="rounded-full bg-accent-strong/20 px-1.5 text-xs leading-[18px] font-semibold tabular-nums">{narrowing}</span> : null}
           </Button>
         </div>
         <TaskOriginRow origin={origin} counts={originTotals} automations={automations} onChange={setOrigin} labels={statusGroups.map((group) => group.label)} onSetAll={folds.setAll} />
@@ -514,7 +515,7 @@ function GroupedTaskLists({ groupBy, view, statusGroups, groups, folds, row }: {
               ) : (
                 group.label
               )}
-              <span className="font-mono text-[11px] font-medium tabular-nums">
+              <span className="font-mono text-xs font-medium tabular-nums">
                 {group.tasks.length}
               </span>
             </h2>
@@ -625,7 +626,7 @@ function TaskList({
       role={summary ? "table" : undefined} aria-rowcount={summary ? aria.rowCount : undefined} data-slot="global-tasks-table" data-head={showHead} data-reference-column={showReferences}
       className="overflow-x-auto rounded-lg border border-border bg-card p-5"
     >
-      <div data-slot="global-summary-head" className={cn('text-[11px] tracking-[0.04em]', !showHead && 'sr-only')} role="row" aria-rowindex={1}>{['Task', 'Workflow', 'Changes', ...(showReferences ? ['Pull request'] : []), 'Started'].map((label) => <span role="columnheader" key={label}>{label}</span>)}</div>
+      <div data-slot="global-summary-head" className={cn('text-xs tracking-[0.04em]', !showHead && 'sr-only')} role="row" aria-rowindex={1}>{['Task', 'Workflow', 'Changes', ...(showReferences ? ['Pull request'] : []), 'Started'].map((label) => <span role="columnheader" key={label}>{label}</span>)}</div>
       <TooltipProvider>
             <TaskListItems {...(summary ? { itemSize: desktop ? 63 : 150 } : {})} /* the desktop row; an estimate for the stacked card */ items={tasks} itemKey={(task) => `${task.run.projectId}/${task.run.id}`}>{(task, index) => (
               <TaskRow
@@ -688,6 +689,7 @@ export const TaskRow = React.memo(function TaskRow({
   const cellRole = summary ? "cell" : undefined
   const { run } = task
   const attention = deriveAttention(run)
+  const status = runStatusPresentation(run, attention)
   const to = scopeTo(run.projectId, `/tasks/${run.id}`)
   // Global usage comes from the index; run streams are project-scoped.
   const usage = usageCells(run, run.usage)
@@ -706,7 +708,7 @@ export const TaskRow = React.memo(function TaskRow({
         </span>
       </div>
     {resourcesOpen ? <div data-slot="global-task-resources" className="col-span-full flex flex-col gap-3">
-      <TaskPreview projectId={run.projectId} runId={run.id} status={attention.label} error={run.error} open={<Button asChild variant="outline" className="min-h-11"><Link to={to}>Open task<span className="sr-only">: {runTitle(run)}</span></Link></Button>} />
+      <TaskPreview projectId={run.projectId} runId={run.id} status={status.label} error={run.error} open={<Button asChild variant="outline" className="min-h-11"><Link to={to}>Open task<span className="sr-only">: {runTitle(run)}</span></Link></Button>} />
       <dl className="grid grid-cols-2 gap-4 rounded-md bg-muted/50 p-4 text-xs md:grid-cols-3">
         {showCost ? <div><dt className="text-muted-foreground">Cost</dt><dd className="mt-1">{formatCost(run.costUsd) || '—'}</dd></div> : null}
         <div><dt className="text-muted-foreground">CPU</dt><dd data-usage="cpu" data-usage-kind={usage.cpu.kind} title={usage.cpu.title} className="mt-1">{usage.cpu.text || '—'}</dd></div>
@@ -751,6 +753,7 @@ function TaskRowCells({ task, cellRole, showReferences, now }: { task: GlobalTas
 function GlobalTaskTitle({ summary, task, showProject, automationName, resourcesOpen, toggleExpandedRun }: Pick<React.ComponentProps<typeof TaskRow>, 'summary' | 'task' | 'showProject' | 'automationName' | 'resourcesOpen' | 'toggleExpandedRun'>) {
   const { run } = task
   const attention = deriveAttention(run)
+  const status = runStatusPresentation(run, attention)
   const to = scopeTo(run.projectId, `/tasks/${run.id}`)
   const unread = isUnread(run)
   const readDone = isReadDoneItem(run)
@@ -778,7 +781,7 @@ function GlobalTaskTitle({ summary, task, showProject, automationName, resources
         </span>
         {/* One meta line: status, then the project and where the task came from, then tags. */}
         <div data-slot="task-meta-line" className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-          <button type="button" data-task-control="resources" aria-expanded={resourcesOpen} aria-label={`${resourcesOpen ? 'Hide' : 'Show'} resources for ${runTitle(run)}`} onClick={() => toggleExpandedRun(`${run.projectId}/${run.id}`)} aria-describedby={`global-status-${run.projectId}-${run.id}`} title="Resources and actions" className="inline-flex min-h-[22px] shrink-0 items-center rounded-full p-0 hover:bg-muted"><Pill id={`global-status-${run.projectId}-${run.id}`} dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="py-0.5">{attention.label}</Pill></button>
+          <button type="button" data-task-control="resources" aria-expanded={resourcesOpen} aria-label={`${resourcesOpen ? 'Hide' : 'Show'} resources for ${runTitle(run)}`} onClick={() => toggleExpandedRun(`${run.projectId}/${run.id}`)} aria-describedby={`global-status-${run.projectId}-${run.id}`} title="Resources and actions" className="inline-flex min-h-[22px] shrink-0 items-center rounded-full p-0 hover:bg-muted"><Pill id={`global-status-${run.projectId}-${run.id}`} dot={status.tone} shape={status.shape} pulse={status.pulse} className="py-0.5">{status.label}</Pill></button>
           <span aria-hidden="true">·</span>
           <TaskOriginLine
             automationId={run.automationId}
@@ -924,7 +927,7 @@ export function TagChip({ tag, className }: { tag: string; className?: string | 
     <span
       data-slot="project-tag"
       className={cn(
-        'inline-flex max-w-full items-center truncate rounded-full bg-muted px-1.5 py-px text-[11px] font-medium text-muted-foreground',
+        'inline-flex max-w-full items-center truncate rounded-full bg-muted px-1.5 py-px text-xs font-medium text-muted-foreground',
         className,
       )}
     >

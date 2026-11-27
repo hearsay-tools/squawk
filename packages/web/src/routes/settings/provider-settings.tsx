@@ -16,14 +16,15 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toaster'
 import { providerStatusFor } from '@/lib/provider-status'
+import { providerStatusPresentation } from '@/lib/status-semantics'
 import { runnerDisplayName, runnerEntries, useRunners } from '@/api/runners'
 import type { RunnerEntry } from '@open-mercato/cezar-api-client/contract/runners'
 
 const STATUS_PRESENTATION = {
-  connected: { label: 'Credentials found', tone: 'success' },
-  disconnected: { label: 'Not connected', tone: 'pending' },
-  'not-installed': { label: 'Not installed', tone: 'neutral' },
-  unknown: { label: 'Could not verify', tone: 'danger' },
+  connected: providerStatusPresentation('connected'),
+  disconnected: providerStatusPresentation('disconnected'),
+  'not-installed': providerStatusPresentation('not-installed'),
+  unknown: providerStatusPresentation('unknown'),
 } as const satisfies Record<string, { label: string; tone: StatusDotTone }>
 
 interface ManualCommand {

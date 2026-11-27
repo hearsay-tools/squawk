@@ -472,9 +472,9 @@ function ProjectPill({
               >
                 <span className="min-w-0 flex-1 truncate text-xs font-medium">{project.name}</span>
                 {project.status === 'missing' ? (
-                  <span className="shrink-0 text-[11px] text-soft-foreground">folder not found</span>
+                  <span className="shrink-0 text-xs text-soft-foreground">folder not found</span>
                 ) : project.branch !== undefined ? (
-                  <span className="shrink-0 font-mono text-[11px] text-soft-foreground">
+                  <span className="shrink-0 font-mono text-xs text-soft-foreground">
                     {project.branch}
                   </span>
                 ) : null}
@@ -486,7 +486,7 @@ function ProjectPill({
           </CommandList>
           {/* The mockup's `dd-note`. Worth the two lines: picking here does far more than
               relabel a pill, and nothing else on screen says so. */}
-          <p className="border-t border-border px-3 py-2 text-[11px] leading-snug text-soft-foreground">
+          <p className="border-t border-border px-3 py-2 text-xs leading-snug text-soft-foreground">
             Skills, workflows, settings and the draft re-resolve against the selected project.
           </p>
         </Command>

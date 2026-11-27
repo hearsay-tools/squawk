@@ -41,7 +41,7 @@ export function RemoteSettingsNotice({ risk }: { risk: string }) {
     <p
       role="note"
       data-slot="remote-settings-notice"
-      className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[13px] text-foreground"
+      className="rounded-md border border-pending-strong/40 bg-pending/10 px-3 py-2 text-[13px] text-foreground"
     >
       Remote settings administration is on. {risk}, and anyone who can open this cockpit can change them. The
       host operator turns this off with{' '}

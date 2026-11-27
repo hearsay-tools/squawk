@@ -223,7 +223,7 @@ function ExpandedProjectRow({
             current={current}
             maxParts={2}
             slot="rail-project-state"
-            className="h-4 gap-x-[4px] overflow-hidden text-[11px] leading-4 whitespace-nowrap"
+            className="h-4 gap-x-[4px] overflow-hidden text-xs leading-4 whitespace-nowrap"
           />
         </span>
       </RouterLink>
@@ -361,11 +361,11 @@ function RailIdentity({ expanded, resolvedTheme, version }: { expanded: boolean;
         <img src={`/cezarion-mark-${resolvedTheme}.svg`} alt="" aria-hidden="true" data-slot="rail-app-mark" className="size-[34px] shrink-0 rounded-[8px]" />
         <span className={cn('flex min-w-0 items-baseline gap-[10px] whitespace-nowrap', TEXT_IN)} aria-label={appLabel}>
           <span className="text-[15px] leading-none font-bold text-foreground">Squawk</span>
-          {version ? <span data-slot="rail-version" title={`v${version}`} className="min-w-0 truncate text-[11px] leading-none text-soft-foreground">v{version}</span> : null}
+          {version ? <span data-slot="rail-version" title={`v${version}`} className="min-w-0 truncate text-xs leading-none text-soft-foreground">v{version}</span> : null}
         </span>
       </div>
       <div aria-hidden="true" className="h-px w-full bg-border" />
-      <div className={cn('px-1 pt-2.5 pb-1 text-[11px] font-medium text-soft-foreground', TEXT_IN)}>Projects</div>
+      <div className={cn('px-1 pt-2.5 pb-1 text-xs font-medium text-soft-foreground', TEXT_IN)}>Projects</div>
     </div>
   ) : (
     <div className="flex shrink-0 flex-col items-center gap-0.5">

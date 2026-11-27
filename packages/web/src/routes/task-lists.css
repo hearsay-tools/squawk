@@ -5,7 +5,7 @@
 [data-slot="tasks-table"] [role="columnheader"] { height: 48px; }
 [data-slot="tasks-table"] [role="cell"] { height: 50px; }
 [data-slot="global-tasks-table"] { padding: 0; overflow: visible; border: 0; background: transparent; }
-[data-slot="global-task-row"] { display: grid; grid-template-columns: auto 1fr auto; gap: 8px 16px; padding: 22px; margin-block-end: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+[data-slot="global-task-row"] { display: grid; grid-template-columns: auto 1fr auto; gap: 8px 16px; padding: 22px; margin-block-end: 20px; border: 1px solid var(--border-card); border-radius: 12px; background: var(--card); box-shadow: var(--shadow-card); }
 [data-slot="global-task-cells"] > div { height: auto; min-width: 0; max-width: none; padding: 0; border: 0; white-space: normal; }
 [data-slot="global-task-row"] [data-slot="global-task-title"] { grid-column: 1 / -1; }
 [data-slot="global-task-row"] [data-slot="global-task-title"] > span > a { font-size: 18px; white-space: normal; line-height: 1.5; }
@@ -28,7 +28,7 @@
   [data-presentation="summary"] [data-slot="global-summary-head"] { display: block; position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 }
 @media (min-width: 768px) {
-  [data-presentation="summary"] [data-slot="global-tasks-table"] { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding-block: 4px; padding-inline: 16px; }
+  [data-presentation="summary"] [data-slot="global-tasks-table"] { border: 1px solid var(--border-card); border-radius: 12px; background: var(--card); box-shadow: var(--shadow-card); padding-block: 4px; padding-inline: 16px; }
   [data-presentation="summary"] [data-slot="global-summary-head"],
   [data-presentation="summary"] [data-slot="global-task-row"] { display: grid; grid-template-columns: minmax(0, 1fr) 120px 90px 100px 70px; column-gap: 16px; }
   [data-presentation="summary"] [data-slot="global-summary-head"] { padding-block: 8px; color: var(--muted-foreground); font-weight: 500; text-transform: uppercase; }
@@ -87,7 +87,7 @@
 [data-presentation="cards"] [data-slot="global-task-references"] { grid-column: 3; grid-row: 2; align-self: center; }
 [data-presentation="cards"] [data-slot="global-task-age"] { grid-column: 4; grid-row: 2; align-self: center; text-align: start; }
 [data-presentation="cards"] [data-slot="global-task-actions"] { grid-column: 1 / -1; grid-row: 3; margin: 0; }
-[data-presentation="cards"] [data-slot="global-task-title"] [data-slot="pill"] { padding: 0; background: transparent; color: var(--muted-foreground); font-size: 12px; font-weight: 400; text-transform: capitalize; }
+[data-presentation="cards"] [data-slot="global-task-title"] [data-slot="pill"] { padding: 0; background: transparent; color: var(--muted-foreground); font-size: 12px; font-weight: 400; }
 [data-presentation="cards"] [data-slot="global-task-actions"] [data-slot="button"] { font-weight: 400; }
 @media (max-width: 767px) {
   [data-presentation="cards"] [data-slot="global-task-row"] { grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; }
@@ -104,7 +104,7 @@
 }
 
 @media (max-width: 767px) {
-  [data-presentation="summary"] [data-slot="global-tasks-table"] { border: 1px solid var(--border); border-radius: 12px; padding-block: 4px; padding-inline: 16px; background: var(--card); }
+  [data-presentation="summary"] [data-slot="global-tasks-table"] { border: 1px solid var(--border-card); border-radius: 12px; padding-block: 4px; padding-inline: 16px; background: var(--card); box-shadow: var(--shadow-card); }
   [data-presentation="summary"] [data-slot="global-task-row"] { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 12px; margin: 0; padding-block: 12px; padding-inline: 0; border: 0; border-block-start: 1px solid var(--border); border-radius: 0; }
   [data-presentation="summary"] [data-slot="global-task-title"] { grid-column: 1 / -1; }
   [data-presentation="summary"] [data-slot="global-task-title"] > span > a { line-height: 1.5; }

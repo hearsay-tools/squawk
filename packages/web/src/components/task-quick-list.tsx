@@ -19,6 +19,7 @@ import { useReferenceScope, ReferenceStatusProvider } from '@/components/referen
 import { RunRowActions, RunRowSwipeFrame } from '@/components/run-row-actions'
 import { StatusDot } from '@/components/status-dot'
 import { deriveAttention } from '@/lib/attention'
+import { runStatusPresentation } from '@/lib/status-semantics'
 import { ELLIPSIS_HIDDEN_CLASS, useEllipsisHiddenChildren } from '@/lib/ellipsis-hidden'
 import { useNoHover } from '@/lib/use-no-hover'
 import { useIsDesktop } from '@/lib/use-desktop'
@@ -106,7 +107,7 @@ export function TaskQuickList({
     <div data-slot="quick-list">
       <div data-slot="quick-list-header" className="flex min-h-11 items-center gap-1.5 pr-[6px] pl-[10px] md:min-h-[26px]">
         <h2 className="text-[13px] font-semibold text-foreground">Tasks</h2>
-        <span className="text-[11.5px] text-soft-foreground">{counts[view]}</span>
+        <span className="text-xs text-soft-foreground">{counts[view]}</span>
         <Link to="/" onClick={onNavigate} className="ml-auto flex min-h-11 items-center gap-0.5 text-[12px] text-soft-foreground hover:text-foreground md:min-h-[26px]">
           All<ChevronRightIcon className="size-[13px]" aria-hidden="true" />
         </Link>
@@ -275,7 +276,7 @@ function SectionCutLink({ section, shown, total, scope, view, automations }: {
       data-slot="section-cut-link"
       aria-label={`${section}: showing ${shown} of ${total}, see all`}
       title={`The sidebar shows ${shown} of ${total} ${section} tasks. Click to see all of them. Change the limit in ${controlLocation('sidebar')}.`}
-      className="mr-auto -ml-1 flex min-h-[44px] min-w-[44px] shrink-0 items-center rounded-[4px] px-1 text-[11px] font-normal text-soft-foreground tabular-nums underline decoration-dotted underline-offset-[3px] hover:text-foreground focus-visible:outline-2 focus-visible:outline-link-foreground md:min-h-[26px] md:min-w-0 no-hover:min-h-[44px] no-hover:min-w-[44px]"
+      className="mr-auto -ml-1 flex min-h-[44px] min-w-[44px] shrink-0 items-center rounded-[4px] px-1 text-xs font-normal text-soft-foreground tabular-nums underline decoration-dotted underline-offset-[3px] hover:text-foreground focus-visible:outline-2 focus-visible:outline-link-foreground md:min-h-[26px] md:min-w-0 no-hover:min-h-[44px] no-hover:min-w-[44px]"
     >
       {shown} of {total}
     </Link>
@@ -293,15 +294,15 @@ function SectionHeading({ id, bucket, collapsed, cut, onToggle }: {
 }) {
   const count = bucket.rows.length
   if (bucket.label === 'Archived') {
-    return <h2 id={id} className="min-w-0 flex-1 text-[11px] font-medium text-soft-foreground"><span className="px-[10px] pt-[2px] pb-[4px]">{bucket.label} {count}</span></h2>
+    return <h2 id={id} className="min-w-0 flex-1 text-xs font-medium text-soft-foreground"><span className="px-[10px] pt-[2px] pb-[4px]">{bucket.label} {count}</span></h2>
   }
   const label = bucket.label
   const members = bucket.rows.map(row => row.run)
-  const attention = members.length ? deriveAttention(loudestMember(members)) : null
+  const attention = members.length ? runStatusPresentation(loudestMember(members)) : null
   const unread = members.some(isUnread)
   const Disclosure = collapsed ? ChevronRightIcon : ChevronDownIcon
   return (
-    <h2 id={id} className={cn('min-w-0 text-[11px] font-medium text-soft-foreground', cut ? 'shrink-0' : 'flex-1')}>
+    <h2 id={id} className={cn('min-w-0 text-xs font-medium text-soft-foreground', cut ? 'shrink-0' : 'flex-1')}>
       <button type="button" data-slot="section-toggle" aria-expanded={!collapsed} aria-controls={`${id}-rows`}
         aria-label={`${label} ${count}`} onClick={() => onToggle(label)}
         className={cn('flex min-h-[44px] items-center gap-1.5 rounded-[4px] px-[10px] text-left hover:bg-sidebar-row-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-link-foreground md:min-h-[26px] no-hover:min-h-[44px]', cut ? 'pr-[4px]' : 'w-full')}>
@@ -338,13 +339,13 @@ function ViewTab({
       aria-pressed={isActive}
       onClick={() => onSelect(view)}
       className={cn(
-        'flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[7px] text-[11px] font-medium text-muted-foreground md:min-h-[22px]',
+        'flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[7px] text-xs font-medium text-muted-foreground md:min-h-[22px]',
         isActive && 'bg-card font-semibold text-foreground shadow-xs'
       )}
     >
       {children}
       {/* No "0": an empty bucket says so by being empty. */}
-      {count > 0 ? <span className="font-mono text-[11px] tabular-nums">{count}</span> : null}
+      {count > 0 ? <span className="font-mono text-xs tabular-nums">{count}</span> : null}
     </button>
   )
 }
@@ -603,7 +604,7 @@ function RunRow({
             both centre on the title line and every title starts at the same x. Not a control — a
             click on it is a row click. */}
         <span data-slot="task-row-dot" className="flex h-[19px] w-[12px] shrink-0 items-center justify-center">
-          <StatusDot tone={attention.tone} shape={attention.shape} pulse={attention.pulse} aria-label={attention.label} title={attention.label} role="img" />
+          <StatusDot tone={attention.tone} shape={attention.shape} pulse={attention.pulse} aria-label={runStatusPresentation(run, attention).label} title={runStatusPresentation(run, attention).label} role="img" />
         </span>
         <div className="flex min-w-0 flex-1 flex-col">
           <RunRowTitleLink
@@ -628,7 +629,7 @@ function RunRow({
         </div>
         {meta.references.length ? <span ref={setOverflowContainer} data-slot="protected-reference-overflow"
           className={cn('shrink-0 self-end', inertReferences && '-my-1.5 self-center')} /> : null}
-        {run.delegation?.role === 'worker' ? <span className="sr-only">Worker · {attention.label}</span> : null}
+        {run.delegation?.role === 'worker' ? <span className="sr-only">Worker · {runStatusPresentation(run, attention).label}</span> : null}
         <RunRowActions
           run={run}
           title={title}
@@ -756,7 +757,7 @@ function RunRowMetaLine({
       ref={metaRef}
       data-slot="task-row-meta"
       className={cn(
-        'h-[16px] min-w-0 truncate text-[11.5px] leading-[1.4] font-normal text-soft-foreground',
+        'h-[16px] min-w-0 truncate text-xs leading-[1.4] font-normal text-soft-foreground',
         ELLIPSIS_HIDDEN_CLASS,
         // On the selected fill `--soft-foreground` is 4.45:1 (dark) / 4.25:1 (light), under
         // the 4.5:1 an 11.5px line needs; it steps up one ink, as the title steps to
@@ -818,7 +819,7 @@ function GroupSweepButton({
       aria-label={projectName ? `${text}, ${projectName}` : undefined}
       aria-describedby={headingId}
       onClick={() => onSweep(scope)}
-      className="relative inline-flex shrink-0 items-center gap-1 rounded-[4px] px-1.5 py-0.5 font-sans text-[11px] leading-[1.4] text-muted-foreground hover:bg-sidebar-row-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-link-foreground disabled:opacity-60 max-md:before:absolute max-md:before:top-1/2 max-md:before:left-0 max-md:before:h-11 max-md:before:w-full max-md:before:-translate-y-1/2 max-md:before:content-[''] no-hover:before:absolute no-hover:before:top-1/2 no-hover:before:left-0 no-hover:before:h-11 no-hover:before:w-full no-hover:before:-translate-y-1/2 no-hover:before:content-['']"
+      className="relative inline-flex shrink-0 items-center gap-1 rounded-[4px] px-1.5 py-0.5 font-sans text-xs leading-[1.4] text-muted-foreground hover:bg-sidebar-row-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-link-foreground disabled:opacity-60 max-md:before:absolute max-md:before:top-1/2 max-md:before:left-0 max-md:before:h-11 max-md:before:w-full max-md:before:-translate-y-1/2 max-md:before:content-[''] no-hover:before:absolute no-hover:before:top-1/2 no-hover:before:left-0 no-hover:before:h-11 no-hover:before:w-full no-hover:before:-translate-y-1/2 no-hover:before:content-['']"
     >
       <ArchiveIcon className="size-[11px]" aria-hidden="true" />
       {text}
@@ -931,7 +932,7 @@ function SidebarViewTabs({ view, automations, onSelect, counts }: {
   onSelect: (view: SidebarView) => void
   counts: ReturnType<typeof sidebarCounts>
 }) {
-  const dot = <StatusDot tone="pending" pulse data-slot="waiting-dot" aria-label="needs you" />
+  const dot = <StatusDot tone="pending" pulse data-slot="waiting-dot" aria-label="Needs you" />
   return (
     <>
       <ViewTab view="active" current={view} onSelect={onSelect} count={counts.active}>

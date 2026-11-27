@@ -118,7 +118,7 @@ function RoutedAsk({ ask, onShowOrigin }: { ask: ThreadAsk; onShowOrigin: (() =>
       data-resolved="false"
       data-pinned={ask.placement === 'pinned' ? 'true' : undefined}
       data-routed="parent"
-      className="rounded-lg border border-border bg-card px-3 py-2"
+      className="rounded-lg border border-card-edge bg-card shadow-card px-3 py-2"
     >
       <div className="mb-2.5 flex items-center gap-2">
         <span className="text-xs font-medium text-link-foreground">The agent is asking its parent</span>
@@ -127,7 +127,7 @@ function RoutedAsk({ ask, onShowOrigin }: { ask: ThreadAsk; onShowOrigin: (() =>
         {ask.questions.map((question, index) => (
           <div key={question.id ?? index} role="group" aria-label={question.question}>
             <div className="mb-0.5 flex items-center gap-2">
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {question.header}
               </span>
             </div>
@@ -288,7 +288,7 @@ function AskSubmit({ oneTap, hasOtherAnswer, resuming, disabled, questionCount, 
   questionCount: number; onSend: () => void
 }) {
   if (!hasSendRow(oneTap, hasOtherAnswer)) return resuming ? (
-    <p data-slot="ask-resume-hint" className="mbs-3 text-[11px] text-soft-foreground max-sm:order-3 max-sm:basis-full">
+    <p data-slot="ask-resume-hint" className="mbs-3 text-xs text-soft-foreground max-sm:order-3 max-sm:basis-full">
       The session has ended — your answer reopens it and goes to the agent.
     </p>
   ) : null
@@ -299,11 +299,11 @@ function AskSubmit({ oneTap, hasOtherAnswer, resuming, disabled, questionCount, 
         {resuming ? 'Send answer & reopen' : 'Send answer'}
       </Button>
       {resuming ? (
-        <span data-slot="ask-resume-hint" className="text-[11px] text-soft-foreground max-sm:order-3 max-sm:basis-full">
+        <span data-slot="ask-resume-hint" className="text-xs text-soft-foreground max-sm:order-3 max-sm:basis-full">
           the session has ended — sending reopens it
         </span>
       ) : (
-        <span data-slot="ask-hint" className="inline-flex flex-wrap items-center gap-x-1 text-[11px] text-soft-foreground max-sm:order-3 max-sm:basis-full">
+        <span data-slot="ask-hint" className="inline-flex flex-wrap items-center gap-x-1 text-xs text-soft-foreground max-sm:order-3 max-sm:basis-full">
           <span>
             {hasOtherAnswer
               ? `${questionCount > 1 ? 'answer each question above' : 'enter your answer above'} — or`
@@ -380,12 +380,12 @@ function AskQuestionBlock({
     <div data-slot="ask-question" role="group" aria-label={question.question}>
       {/* The header chip and the question share one line, so each question costs one row less. */}
       <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="shrink-0 rounded-md bg-accent-strong px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent-strong-foreground">
+        <span className="shrink-0 rounded-md bg-accent-strong px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-accent-strong-foreground">
           {question.header}
         </span>
         <p className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground">{question.question}</p>
         {multiSelect ? (
-          <span className="ml-auto text-[11px] text-soft-foreground">select all that apply</span>
+          <span className="ml-auto text-xs text-soft-foreground">select all that apply</span>
         ) : null}
       </div>
       {options ? (

@@ -93,9 +93,9 @@ function WorkerRow({ worker, parentId, requests, index, ctx, motion }: WorkerRow
       <span className="mt-[3px]"><RunShape run={worker} role="worker" /></span>
       <span className="min-w-0 truncate text-[12.5px] font-medium">
         <Link to={taskPath(worker.runId)} className="relative z-[1] hover:underline focus-visible:outline-2 focus-visible:outline-ring max-md:inline-flex max-md:min-h-11 max-md:items-center">{worker.title}</Link>
-        <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{[worker.runner ? runnerDisplayName(runners, worker.runner) : undefined, worker.model].filter(Boolean).join(' · ')}</span>
+        <span className="ml-1.5 text-xs font-normal text-muted-foreground">{[worker.runner ? runnerDisplayName(runners, worker.runner) : undefined, worker.model].filter(Boolean).join(' · ')}</span>
       </span>
-      <span data-slot="activity-worker-line" className="col-start-2 truncate text-[11.5px] text-muted-foreground tabular-nums">
+      <span data-slot="activity-worker-line" className="col-start-2 truncate text-xs text-muted-foreground tabular-nums">
         <b className={cn('font-semibold', TONE_INK[line.tone])}>{line.verb}</b> · <span className={cn(line.mono && 'font-mono')}>{line.main}</span>
       </span>
       <LineText texts={lineTexts(worker.runId, requests, index)} />
@@ -105,7 +105,7 @@ function WorkerRow({ worker, parentId, requests, index, ctx, motion }: WorkerRow
 
 function WorkerDots({ workers }: { workers: readonly ActivityWorker[] }) {
   return (
-    <div data-slot="activity-worker-dots" className="mt-2 ml-[18px] flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+    <div data-slot="activity-worker-dots" className="mt-2 ml-[18px] flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
       {workers.map((worker) => <RunShape key={worker.runId} run={worker} role="worker" />)}
       <span className="ml-1">{workers.length} worker{workers.length === 1 ? '' : 's'}</span>
     </div>
@@ -126,7 +126,7 @@ function Workers({ task, requests, index, ctx, dense, motion }: Omit<CardProps, 
           {rows.map((worker) => <WorkerRow key={worker.runId} worker={worker} parentId={task.runId} requests={requests} index={index} ctx={ctx} motion={motion} />)}
         </ul>
       ) : null}
-      {finished ? <p data-slot="activity-finished" className="mt-1.5 ml-[18px] text-[11px] text-muted-foreground">{finished}</p> : null}
+      {finished ? <p data-slot="activity-finished" className="mt-1.5 ml-[18px] text-xs text-muted-foreground">{finished}</p> : null}
     </>
   )
 }
@@ -166,6 +166,11 @@ export function CardEffects({ task, motion, glow }: { task: ActivityRun; motion:
 
 const NO_WAITS: readonly PeerWait[] = []
 
+function cardBorderClass(box: ReturnType<typeof rootNow>, sweep: boolean): string {
+  if (box.action) return box.tone === 'info' ? 'border-info/70' : 'border-pending/70'
+  return sweep ? 'border-status-running/60' : 'border-card-edge'
+}
+
 export function ActivityCard({ task, requests, waits = NO_WAITS, index, ctx, dense, narrow, motion = EMPTY_MOTION, ghost = false, linked = false, onHover }: CardProps) {
   const box = rootNow(task, ctx)
   const runners = useRunners().data
@@ -181,10 +186,10 @@ export function ActivityCard({ task, requests, waits = NO_WAITS, index, ctx, den
       data-linked={linked && !ghost ? 'true' : undefined}
       {...(ghost ? {} : hoverHandlers(task.runId, onHover))}
       className={cn(
-        'relative min-w-0 rounded-xl border bg-card px-3.5 py-3',
+        'relative min-w-0 rounded-xl border bg-card px-3.5 py-3 shadow-card',
         // One 1px border on every card; only its tone changes, at a matched strength, so waiting
         // and running neighbours share their top and bottom edges to the pixel.
-        box.action ? 'border-pending/70' : now.sweep ? 'border-status-running/60' : 'border-border',
+        cardBorderClass(box, now.sweep),
         linked && !ghost && 'outline-2 outline-offset-2 outline-message-peer-accent',
         cardMotion(task, motion, ghost),
       )}
@@ -200,7 +205,7 @@ export function ActivityCard({ task, requests, waits = NO_WAITS, index, ctx, den
       </header>
       {/* The heartbeat shares the meta row, so the title keeps the header's full width. */}
       <div className="mt-0.5 mb-2 ml-5 flex items-center gap-2">
-        <p className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground">{metaLine(task, ctx.now, runners)}</p>
+        <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{metaLine(task, ctx.now, runners)}</p>
         <Heartbeat rate={task.rate} />
       </div>
       <LineText texts={lineTexts(task.runId, requests, index, waits)} />

@@ -66,7 +66,7 @@ export function RemoveProjectDialog({
             This only unregisters the project — <strong>nothing on disk is deleted</strong>. The
             folder, its git history and its task history all stay exactly where they are, and
             opening it again re-registers it with everything intact.
-            <span className="mt-1 block truncate font-mono text-[11px] text-foreground" title={project?.root}>
+            <span className="mt-1 block truncate font-mono text-xs text-foreground" title={project?.root}>
               {project?.root}
             </span>
           </AlertDialogDescription>

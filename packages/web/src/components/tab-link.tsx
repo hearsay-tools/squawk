@@ -46,7 +46,7 @@ export function TabLink({
     >
       {children}
       {count !== undefined ? (
-        <span data-slot="tab-count" className="ml-1.5 text-[11.5px] font-normal text-soft-foreground">{count}</span>
+        <span data-slot="tab-count" className="ml-1.5 text-xs font-normal text-soft-foreground">{count}</span>
       ) : null}
     </Link>
   )

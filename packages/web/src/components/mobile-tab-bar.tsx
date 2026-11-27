@@ -62,7 +62,7 @@ export function MobileTabBar({
 
   const tabClass = (active: boolean) =>
     cn(
-      'relative flex h-full min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-[3px] text-[10.5px] leading-none focus-visible:outline-2 focus-visible:outline-ring',
+      'relative flex h-full min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-[3px] text-xs leading-none focus-visible:outline-2 focus-visible:outline-ring',
       active ? 'font-semibold text-foreground' : 'font-medium text-soft-foreground',
     )
 

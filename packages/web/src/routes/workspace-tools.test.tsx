@@ -74,7 +74,7 @@ describe('Workspace tools', () => {
     expect(screen.getByRole('link', { name: 'Tool settings' })).toBeTruthy()
   })
 
-  it('shows a dry-run version as a flat status tag with the raw string in its tooltip', () => {
+  it('shows a dry-run version as a neutral Simulated mode with a Dry run badge and raw tooltip', () => {
     mocks.allAvailable = true
     mocks.version = 'mock (HSQ_DRY_RUN=1)'
     const { container } = render(<MemoryRouter><WorkspaceToolsRoute /></MemoryRouter>)
@@ -82,10 +82,12 @@ describe('Workspace tools', () => {
     const pill = codex.querySelector('[data-slot="tool-dry-run"]')
     expect(pill?.textContent).toBe('Dry run')
     expect(pill?.getAttribute('title')).toBe('mock (HSQ_DRY_RUN=1)')
+    expect(codex.textContent).toContain('Simulated')
+    expect(codex.textContent).not.toContain('Installed')
     expect(codex.textContent).not.toContain('HSQ_DRY_RUN')
-    // A status tag, not a control: a flat fill and no border chrome.
-    expect(pill?.className).toContain('bg-muted/60')
-    expect(pill?.className).not.toContain('border')
+    expect(codex.querySelector('[data-slot="status-dot"]')?.getAttribute('data-tone')).toBe('neutral')
+    expect(codex.querySelector('[data-slot="status-dot"]')?.getAttribute('data-shape')).toBe('ring')
+    expect(pill?.className).toContain('bg-muted')
     // A real version still reads inline.
     expect(container.querySelector('[data-slot="tool-row"][data-tool="git"]')?.textContent).toContain('Installed· 2.50')
   })

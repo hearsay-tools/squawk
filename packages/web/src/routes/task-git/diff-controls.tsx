@@ -140,7 +140,7 @@ export function BranchChip({ branch }: { branch: string }) {
   return (
     <span
       data-slot="branch-chip"
-      className="flex min-w-0 items-center gap-1 rounded-sm border border-border bg-card px-1.5 py-px font-mono text-[11px] font-medium"
+      className="flex min-w-0 items-center gap-1 rounded-sm border border-border bg-card px-1.5 py-px font-mono text-xs font-medium"
     >
       <GitBranchIcon size={16} aria-hidden="true" className="size-3 shrink-0" />
       <span className="truncate">{branch}</span>

@@ -89,7 +89,7 @@ export function ReferenceOverflow({
             pressOnHoverOpen.current = false
             openedByHover.current = false
           }}
-          className="no-hover:min-h-[44px] no-hover:min-w-[44px] max-md:min-h-[44px] max-md:min-w-[44px] shrink-0 rounded-full px-1 text-[11px] font-medium text-soft-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="no-hover:min-h-[44px] no-hover:min-w-[44px] max-md:min-h-[44px] max-md:min-w-[44px] shrink-0 rounded-full px-1 text-xs font-medium text-soft-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           +{hidden}
         </button>
@@ -120,7 +120,7 @@ export function ReferenceOverflow({
           if (openedByHover.current) event.preventDefault()
         }}
       >
-        <p className="px-1 pb-1.5 text-[11px] text-soft-foreground">References</p>
+        <p className="px-1 pb-1.5 text-xs text-soft-foreground">References</p>
         <span className="flex flex-col items-start gap-1">
           {references.map((reference) => (
             <ReferenceChip

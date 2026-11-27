@@ -415,14 +415,20 @@ it('offers Retry clean up while a destroy is pending, and plain Clean up otherwi
 })
 
 
-it.each(['running', 'waiting', 'review', 'queued', 'done', 'failed', 'cancelled'] as const)(
-  'shows the %s worker status and uses a running indicator only while active', async status => {
+it.each([
+  ['running', 'Running', 1],
+  ['waiting', 'Needs you', 0],
+  ['review', 'Needs review', 0],
+  ['queued', 'Queued', 0],
+  ['done', 'Done', 0],
+  ['failed', 'Failed', 0],
+  ['cancelled', 'Cancelled', 0],
+] as const)(
+  'shows the %s worker status and uses a running indicator only while running', async (status, label, runningCount) => {
     setup(root, async () => json({ workers: [{ ...worker, status, destroy: undefined }] }))
     const group = await section()
-    await within(group).findByText(status.charAt(0).toUpperCase() + status.slice(1))
-    expect(within(group).queryAllByRole('status', { name: 'Worker running' })).toHaveLength(
-      ['running', 'waiting', 'review'].includes(status) ? 1 : 0,
-    )
+    await within(group).findByText(label)
+    expect(within(group).queryAllByRole('status', { name: 'Worker running' })).toHaveLength(runningCount)
   },
 )
 

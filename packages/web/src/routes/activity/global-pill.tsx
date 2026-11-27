@@ -47,7 +47,7 @@ function WorkerDots({ task }: { task: ActivityRun }) {
   const live = task.workers.filter((worker) => isLiveStatus(worker.status))
   if (live.length === 0) return null
   return (
-    <div data-slot="activity-pill-workers" className="mt-1.5 ml-[19px] flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+    <div data-slot="activity-pill-workers" className="mt-1.5 ml-[19px] flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
       {live.map((worker) => <RunShape key={worker.runId} run={worker} role="worker" />)}
       <span className="ml-0.5">{live.length} worker{live.length === 1 ? '' : 's'}</span>
     </div>
@@ -66,7 +66,7 @@ export function ActivityPill({ projectId, task, requests, waits = NO_WAITS, inde
       className={cn(
         'relative min-w-0 rounded-[10px] border bg-card-2 px-2.5 py-2',
         // The project card's border tones, at the same strength.
-        box.action ? 'border-pending/70' : task.rung === 'running' && isLiveStatus(task.status) ? 'border-status-running/60' : 'border-border',
+        box.action ? (box.tone === 'info' ? 'border-info/70' : 'border-pending/70') : task.rung === 'running' && isLiveStatus(task.status) ? 'border-status-running/60' : 'border-border',
         linked && 'outline-2 outline-offset-2 outline-message-peer-accent',
         task.runId in motion.entering && 'activity-card-enter',
       )}
@@ -85,11 +85,11 @@ export function ActivityPill({ projectId, task, requests, waits = NO_WAITS, inde
         <Heartbeat rate={task.rate} className="h-3 w-10" />
       </div>
       <div className="mt-[3px] ml-[19px] flex items-center gap-2">
-        <p data-slot="activity-pill-line" className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground tabular-nums">
+        <p data-slot="activity-pill-line" className="min-w-0 flex-1 truncate text-xs text-muted-foreground tabular-nums">
           <ToneWord data-slot="activity-verb" tone={box.tone} className="font-semibold">{box.verb}</ToneWord>
           {box.action && box.since ? <> · <span data-slot="activity-pill-age" title={fullTimeOf(box.since)}>{span(since(box.since, ctx.now))}</span></> : null}
           {' · '}
-          <span data-slot="activity-main" className={cn(box.mono && 'font-mono text-[11px]')}>{box.main}</span>
+          <span data-slot="activity-main" className={cn(box.mono && 'font-mono text-xs')}>{box.main}</span>
         </p>
         {box.action ? (
           <Button asChild size="sm" variant={box.action === 'answer' ? 'primary' : 'outline'} className="relative z-[1] h-7 px-2 text-[12px] max-md:min-h-11">

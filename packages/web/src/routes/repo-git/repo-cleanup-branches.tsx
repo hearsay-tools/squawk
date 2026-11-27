@@ -62,7 +62,7 @@ export function CleanupBranchesCard({ base }: { base: string }) {
           <h2 id="cleanup-branches-title" className="text-[13px] font-semibold text-foreground">
             Branches safe to delete · {count}
           </h2>
-          <p className="text-[11.5px] leading-[17px] text-soft-foreground">
+          <p className="text-xs leading-[17px] text-soft-foreground">
             Their work is already on {base}, or they have none. Deleting loses nothing.
           </p>
         </div>
@@ -143,7 +143,7 @@ function BranchGroup({ kind, title, hint, rows, open, onToggle }: {
       >
         <span className="flex min-w-0 flex-1 flex-col gap-[2px]">
           <span className="truncate text-[12.5px] text-foreground">{title} · {rows.length}</span>
-          <span className="truncate text-[11px] text-soft-foreground">{hint}</span>
+          <span className="truncate text-xs text-soft-foreground">{hint}</span>
         </span>
         {rows.length > 0 ? (
           <ChevronRightIcon aria-hidden="true" className={cn('size-[13px] shrink-0 text-soft-foreground transition-transform motion-reduce:transition-none', open && 'rotate-90')} />
@@ -152,7 +152,7 @@ function BranchGroup({ kind, title, hint, rows, open, onToggle }: {
       {open ? (
         <ul id={listId} aria-label={title} className="flex flex-col pb-[6px]">
           {rows.map((entry) => (
-            <li key={entry.name} data-slot="cleanup-branch-row" data-branch={entry.name} className="flex min-h-[32px] items-center gap-[10px] px-[14px] pl-[26px] text-[11.5px]">
+            <li key={entry.name} data-slot="cleanup-branch-row" data-branch={entry.name} className="flex min-h-[32px] items-center gap-[10px] px-[14px] pl-[26px] text-xs">
               <span className="shrink-0 font-mono text-muted-foreground">{entry.name}</span>
               {entry.runId ? (
                 <Link to={`/tasks/${entry.runId}`} className="min-w-0 flex-1 truncate text-soft-foreground underline-offset-2 hover:text-foreground hover:underline">

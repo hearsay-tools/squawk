@@ -70,7 +70,7 @@ function HandoffCard() {
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-semibold">Handoff block</h3>
-          <Badge variant="outline" className="border-accent-strong/40 text-[11px] text-link-foreground">Built in · always first</Badge>
+          <Badge variant="outline" className="border-accent-strong/40 text-xs text-link-foreground">Built in · always first</Badge>
         </div>
         <p className="text-[13px] text-muted-foreground">
           Each task’s own handoff file: Goal, Progress log and Resume notes. It needs no setup and cannot be turned off. Shared and local rules come after it.
@@ -331,8 +331,8 @@ function ScopeTabs({
             )}
           >
             <span>{value === 'local' ? 'Local' : 'Shared'}</span>
-            {value === 'local' && dirty && <span className="text-[11px] text-conflict">· Unsaved</span>}
-            {value === 'shared' && shared.tracked && <span className="text-[11px] text-soft-foreground">· Tracked</span>}
+            {value === 'local' && dirty && <span className="text-xs text-conflict">· Unsaved</span>}
+            {value === 'shared' && shared.tracked && <span className="text-xs text-soft-foreground">· Tracked</span>}
           </button>
         )
       })}
@@ -361,7 +361,7 @@ function LocalLayerPanel(props: {
     <div id={SCOPE_PANEL_IDS.local} role="tabpanel" className="flex flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
         <code className="font-mono text-[12px] break-all">{file.path}</code>
-        <Badge variant="outline" className="text-[11px]">Gitignored · local</Badge>
+        <Badge variant="outline" className="text-xs">Gitignored · local</Badge>
         {started && <FileStatus problems={props.problems} current={props.current} failed={props.previewFailed} dirty={props.dirty} />}
         {writable && started && (
           <Button data-slot="session-context-add-rule" variant="outline" className="ml-auto min-h-11" onClick={props.onAdd}>
@@ -400,15 +400,15 @@ function LocalLayerPanel(props: {
 }
 
 function SharedTrackedBadge({ shared }: { shared: SessionContextSharedFile }) {
-  if (!shared.exists) return <Badge data-slot="session-context-shared-status" variant="outline" className="text-[11px]">Not in repo</Badge>
+  if (!shared.exists) return <Badge data-slot="session-context-shared-status" variant="outline" className="text-xs">Not in repo</Badge>
   if (shared.tracked) {
     return (
-      <Badge data-slot="session-context-shared-status" variant="outline" className="border-accent-strong/40 text-[11px] text-link-foreground">
+      <Badge data-slot="session-context-shared-status" variant="outline" className="border-accent-strong/40 text-xs text-link-foreground">
         Tracked in Git
       </Badge>
     )
   }
-  return <Badge data-slot="session-context-shared-status" variant="outline" className="text-[11px]">Untracked · repo file</Badge>
+  return <Badge data-slot="session-context-shared-status" variant="outline" className="text-xs">Untracked · repo file</Badge>
 }
 
 function SharedLayerPanel({ shared, onOpenLocal }: { shared: SessionContextSharedFile; onOpenLocal: () => void }) {
@@ -417,7 +417,7 @@ function SharedLayerPanel({ shared, onOpenLocal }: { shared: SessionContextShare
       <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
         <code className="font-mono text-[12px] break-all">{shared.path}</code>
         <SharedTrackedBadge shared={shared} />
-        <Badge variant="outline" className="text-[11px]">Read only</Badge>
+        <Badge variant="outline" className="text-xs">Read only</Badge>
       </div>
       <p data-slot="session-context-shared-note" className="border-b border-border bg-muted/30 px-3 py-2 text-[12px] text-muted-foreground">
         Shared team rules are versioned in Git and read only here. To replace or mute a rule on this host without dirtying Git, add a rule with the same id in Local.
@@ -523,14 +523,14 @@ function FileStatus({ problems, current, failed, dirty }: { problems: number; cu
   return (
     <span className="flex flex-wrap gap-1.5" aria-live="polite">
       {current && problems > 0 && (
-        <Badge variant="outline" className="border-danger/45 text-[11px] text-danger">
+        <Badge variant="outline" className="border-danger/45 text-xs text-danger">
           {problems} {problems === 1 ? 'problem' : 'problems'}
         </Badge>
       )}
-      {current && problems === 0 && <Badge variant="outline" className="border-success/40 text-[11px] text-success">Valid</Badge>}
-      {!current && !failed && <Badge variant="outline" className="text-[11px]">Checking…</Badge>}
-      {failed && <Badge variant="outline" className="border-danger/45 text-[11px] text-danger">Not checked</Badge>}
-      {dirty && <Badge variant="outline" className="border-conflict/50 text-[11px] text-conflict">Unsaved</Badge>}
+      {current && problems === 0 && <Badge variant="outline" className="border-success/40 text-xs text-success">Valid</Badge>}
+      {!current && !failed && <Badge variant="outline" className="text-xs">Checking…</Badge>}
+      {failed && <Badge variant="outline" className="border-danger/45 text-xs text-danger">Not checked</Badge>}
+      {dirty && <Badge variant="outline" className="border-conflict/50 text-xs text-conflict">Unsaved</Badge>}
     </span>
   )
 }

@@ -38,9 +38,9 @@ export function ChangesTree({
 function Counts({ adds, dels }: { adds: number; dels: number }) {
   return (
     <span className="ml-auto shrink-0 pl-2 font-mono text-xs font-medium tabular-nums">
-      {adds > 0 ? <span className="text-success">+{adds}</span> : null}
+      {adds > 0 ? <span className="text-semantic-green">+{adds}</span> : null}
       {adds > 0 && dels > 0 ? ' ' : null}
-      {dels > 0 ? <span className="text-danger">−{dels}</span> : null}
+      {dels > 0 ? <span className="text-semantic-red">−{dels}</span> : null}
     </span>
   )
 }
@@ -93,8 +93,8 @@ function DirNode({
 
 /** The status tint mirrors the diff cards' badges: added grows, deleted shrinks. */
 const statusTone: Partial<Record<TreeFile['status'], string>> = {
-  added: 'text-success',
-  deleted: 'text-danger',
+  added: 'text-semantic-green',
+  deleted: 'text-semantic-red',
 }
 
 function FileNode({

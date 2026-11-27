@@ -68,7 +68,7 @@ it.each([
     if (state === 'not-required') {
       expect(stateBrowser.evaluate(`(() => {
         const box = document.querySelector('[data-slot="gh-merge-box"]');
-        const review = [...box.querySelectorAll('li')].find(el => el.textContent === 'Reviews: not required');
+        const review = [...box.querySelectorAll('li')].find(el => el.textContent === 'Reviews: Not required');
         return Boolean(review?.querySelector('[data-slot="gh-merge-status-passing"]')) &&
           !box.querySelector('input[type="checkbox"]') &&
           [...box.querySelectorAll('button')].some(el => el.textContent === 'Squash and merge' && !el.disabled);

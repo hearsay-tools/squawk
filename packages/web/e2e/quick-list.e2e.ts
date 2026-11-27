@@ -442,11 +442,11 @@ describe('tasks table overview', () => {
     }))`, value => value.length === FIXTURE.filter(run => !run.archived).length)
 
     expect(Object.fromEntries(rows.map((r) => [r.id, r.status]))).toEqual({
-      'fix-review-pr': 'needs review',
-      'fix-var-a': 'needs review',
-      'fix-var-b': 'needs review',
-      'fix-done': 'done',
-      'fix-failed': 'failed',
+      'fix-review-pr': 'Needs review',
+      'fix-var-a': 'Needs review',
+      'fix-var-b': 'Needs review',
+      'fix-done': 'Done',
+      'fix-failed': 'Failed',
     })
     // The whole order, in one assertion and with nothing sorted first (#416): the sidebar's sort
     // is `statusWeight` then `createdAt` descending, so review (weight 1) precedes done (5) and
@@ -805,7 +805,7 @@ describe('the tasks table under worst-case row content', () => {
             return r.width > 0 && r.height > 0 && r.left >= outer.left - 0.5 && r.right <= outer.right + 0.5 && r.top >= outer.top - 0.5 && r.bottom <= outer.bottom + 0.5 }
           return { label: dot.getAttribute('aria-label'), box: inside(dot, row), bot: inside(bot, dot.getBoundingClientRect()), pin: inside(pin, row) }
         })()`) as Glyphs
-        expect(glyphs, density).toEqual({ label: 'waiting on 1 worker', box: true, bot: true, pin: true })
+        expect(glyphs, density).toEqual({ label: 'Waiting for 1 worker', box: true, bot: true, pin: true })
       }
     } finally {
       browser.evaluate(`delete document.documentElement.dataset.density`)
@@ -963,7 +963,7 @@ describe('the tasks table under worst-case row content', () => {
         // The longest label the status column can be asked to print, and it comes from the
         // record's own parked delegation rather than from a rewritten pill. A full record
         // carries its worker ids, so the count is said (#617).
-        expect(facts.statusLabel, `${theme}/${density}: parked status label`).toBe('waiting on 1 worker')
+        expect(facts.statusLabel, `${theme}/${density}: parked status label`).toBe('Waiting for 1 worker')
         expect.soft(facts.statusContained, `${theme}/${density}: status pill`).toBe(true)
         expect.soft(facts.referenceContained, `${theme}/${density}: reference chip`).toBe(true)
         expect(facts.referenceLabel, `${theme}/${density}: compact reference label`).toBe('#1234')
