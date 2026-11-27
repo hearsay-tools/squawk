@@ -112,10 +112,11 @@ describe('New Task hierarchy (#168)', () => {
         expect(layout.context.bottom).toBeLessThanOrEqual(layout.submission.top)
         if (width === 1440) expect(layout.submission.right).toBeLessThanOrEqual(layout.execution.left)
         else {
+          // One column: mode, agent options and Start come first; Execution settings follow Start.
           expect(layout.context.bottom).toBeLessThanOrEqual(layout.mode.top)
           expect(layout.mode.bottom).toBeLessThanOrEqual(layout.agent.top)
-          expect(layout.agent.bottom).toBeLessThanOrEqual(layout.execution.top)
-          expect(layout.execution.bottom).toBeLessThanOrEqual(layout.submission.top)
+          expect(layout.agent.bottom).toBeLessThanOrEqual(layout.submission.top)
+          expect(layout.submission.bottom).toBeLessThanOrEqual(layout.execution.top)
         }
         expect(layout.overflow).toBe(false)
         expect(layout.clipped).toEqual([])

@@ -9,6 +9,7 @@ import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/ru
 import { waitForSettledSample } from './visual-ready'
 import { dismissWithEscape } from './contrast'
 import { clearWithKeyboard } from './clear-field'
+import { revealControl } from './control-ready'
 import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './fixture-server'
 import { AgentBrowser, bootProjectId, squawkCli, fixtureServeEnv, getJson } from './agent-browser'
 import { pollJson, pollFor } from './poll'
@@ -106,6 +107,20 @@ function openSourceMenu() {
   browser.waitForFunction(`document.querySelector('[data-slot="source-menu"]')?.getAttribute('aria-busy') === 'false'`)
 }
 
+/** A phone folds Execution settings, which hold the Base branch pill, under Start. Open them when
+ *  they are folded; a page that loaded at desktop width keeps them open. */
+function openExecutionSettings() {
+  const details = '[data-slot="execution-options"]'
+  const open = browser.waitForValue<boolean>(
+    `document.querySelector('${details} [data-slot="base-pill"]') ? document.querySelector('${details}').open : null`,
+    (value) => typeof value === 'boolean',
+  )
+  if (open) return
+  revealControl(browser, `${details} > summary`)
+  browser.click(`${details} > summary`)
+  browser.waitForFunction(`document.querySelector('${details}').open && document.querySelector('${details} [data-slot="base-pill"]').checkVisibility()`)
+}
+
 function pickSpecWriter() {
   openSourceMenu()
   browser.evaluate(`{
@@ -128,6 +143,8 @@ describe('the full-screen /new against a live dry-run server', () => {
       browser.setViewport(width, height)
       const trigger = '[data-slot="base-pill"]'
       const search = 'input[type="search"][aria-label="Search branches…"]'
+      openExecutionSettings()
+      revealControl(browser, trigger)
       browser.click(trigger)
       browser.waitForFunction(`document.activeElement === document.querySelector('${search}')`)
       browser.fill(search, ' SEARCH')
@@ -219,6 +236,8 @@ describe('the full-screen /new against a live dry-run server', () => {
       return snapshot.checks.length > 0 ? snapshot : undefined
     }, () => 'runner availability never finished its first background sweep', { tries: 120 })
     const registered = await getJson<RunnersResponse>(`${baseUrl}/api/v1/runners`)
+    // The pill names the agent by its display name ("Claude Code"), not its id.
+    const claudeName = registered.runners.find((entry) => entry.id === 'claude')?.displayName
     const runners = registered.runners.map((entry) => entry.id).filter((id) =>
       health.checks.some((c) => c.name === id && c.available),
     )
@@ -229,7 +248,8 @@ describe('the full-screen /new against a live dry-run server', () => {
     )).toBe(expectedPills)
     if (runners.length > 1) {
       expect(browser.count('[data-slot="runner-pill"]')).toBe(1)
-      expect(browser.text('[data-slot="runner-pill"]')).toContain('claude')
+      expect(claudeName).toBeTruthy()
+      expect(browser.text('[data-slot="runner-pill"]')).toContain(claudeName)
     } else {
       expect(browser.count('[data-slot="runner-pill"]')).toBe(0)
     }

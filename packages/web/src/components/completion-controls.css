@@ -8,6 +8,12 @@
   inset: min(0px, (100% - 44px) / 2);
 }
 
+/* The after-Done and task-access switches draw a solid 2px focus outline. */
+.completion-switch:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
 .completion-control:active {
   background: var(--muted);
 }
