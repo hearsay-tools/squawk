@@ -73,7 +73,7 @@ describe('ProjectPanel', () => {
   })
 
   it('gives a live running pill the running border, like its card', () => {
-    const { container } = renderPanel(project({ tasks: [run({ runId: 'live' }), run({ runId: 'done', status: RUN_STATUS.done, rung: 'review' })] }))
+    const { container } = renderPanel(project({ tasks: [run({ runId: 'live' }), run({ runId: 'done', status: RUN_STATUS.done, rung: 'done' })] }))
     const pillOf = (id: string) => container.querySelector(`[data-activity-pill="${id}"]`) as HTMLElement
     expect(pillOf('live').className).toContain('border-status-running/60')
     expect(pillOf('live').querySelector('[data-slot="activity-pill-age"]')).toBeNull()
