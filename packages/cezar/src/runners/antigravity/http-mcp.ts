@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { z, type AgentRunSpec } from '@hearsay-tools/squawk/plugin';
 import { spawnSessionLeader, signalSession, boundOutputDrainAfterExit } from '@hearsay-tools/squawk/plugin/runtime';
-import { AcpTransport, AcpRpcError } from './acp/transport.ts';
+import { AcpTransport, AcpRpcError } from '@hearsay-tools/squawk/plugin/acp';
 import { ANTIGRAVITY_MCP_NAME } from './mcp-name.ts';
 
 /** Antigravity accepts HTTP MCP only. The private stdio command stays caller-owned. */

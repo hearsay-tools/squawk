@@ -17,6 +17,7 @@ export default defineConfig({
       { find: /^@hearsay-tools\/squawk\/plugin\/model-settings$/, replacement: fileURLToPath(new URL('./src/plugin/model-settings.ts', import.meta.url)) },
       { find: /^@hearsay-tools\/squawk\/plugin\/managed-cli$/, replacement: fileURLToPath(new URL('./src/plugin/managed-cli.ts', import.meta.url)) },
       { find: /^@hearsay-tools\/squawk\/plugin\/pi-rpc$/, replacement: fileURLToPath(new URL('./src/plugin/pi-rpc.ts', import.meta.url)) },
+      { find: /^@hearsay-tools\/squawk\/plugin\/acp$/, replacement: fileURLToPath(new URL('./src/plugin/acp.ts', import.meta.url)) },
     ],
   },
   test: {

@@ -1,9 +1,8 @@
 import { rm } from 'node:fs/promises';
 import { rmSync } from 'node:fs';
 import { spawnSessionLeader, signalSession, SessionDescendants } from '@hearsay-tools/squawk/plugin/runtime';
-import { AcpSession } from './acp/session.ts';
+import { AcpSession, type AcpHooks } from '@hearsay-tools/squawk/plugin/acp';
 import { antigravityEnv } from './runtime-env.ts';
-import type { AcpHooks } from './acp/protocol.ts';
 import { antigravityLaunchArgs } from './launch-args.ts';
 import { logAntigravityFailure } from './native-diagnostics.ts';
 import { ANTIGRAVITY_MISSING, launchAntigravity, missingAntigravity, type AntigravityLaunch } from './executable.ts';

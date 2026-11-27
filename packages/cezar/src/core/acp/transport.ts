@@ -1,6 +1,6 @@
 import type { Readable, Writable } from 'node:stream';
-import { z } from '@hearsay-tools/squawk/plugin';
-import { readNdjson } from '@hearsay-tools/squawk/plugin/runtime';
+import { z } from 'zod';
+import { readNdjson } from '../ndjson.ts';
 
 const idSchema = z.union([z.string(), z.number()]);
 const frameSchema = z.object({

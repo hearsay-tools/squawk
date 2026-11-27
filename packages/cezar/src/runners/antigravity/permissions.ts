@@ -1,6 +1,6 @@
 import { z, type ToolGrant } from '@hearsay-tools/squawk/plugin';
 import { unknownToolGrant } from '@hearsay-tools/squawk/plugin/runtime';
-import type { AcpPermissionOutcome, AcpPermissionRequest } from './acp/protocol.ts';
+import type { AcpPermissionOutcome, AcpPermissionRequest } from '@hearsay-tools/squawk/plugin/acp';
 import { antigravityTool, antigravityNativeToolName, antigravityMcpTool } from './tool-normalization.ts';
 
 function allowedTools(grant: ToolGrant): readonly string[] | undefined {

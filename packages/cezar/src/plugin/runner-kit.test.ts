@@ -14,6 +14,7 @@ const KIT_FILES = [
   `${SRC}plugin/model-settings.ts`,
   `${SRC}plugin/managed-cli.ts`,
   `${SRC}plugin/pi-rpc.ts`,
+  `${SRC}plugin/acp.ts`,
 ];
 const program = (file: string) => parse(readFileSync(join(repoRoot, file), 'utf8'), { sourceType: 'module', plugins: ['typescript'] }).program;
 const nameOf = (node: { type: string; name?: string; value?: string }) => (node.type === 'Identifier' ? node.name : node.value) ?? '';
@@ -76,6 +77,11 @@ describe('the runner kit', () => {
       'managed-install/cli-storage.ts',
       'core/pi-rpc-turn.ts',
       'core/pi-rpc-wire.ts',
+      'core/acp/events.ts',
+      'core/acp/protocol.ts',
+      'core/acp/session.ts',
+      'core/acp/transport.ts',
+      'core/acp/usage.ts',
       'core/skill-probe.ts',
       'core/model-probe-spawn.ts',
     ]) {
@@ -99,6 +105,11 @@ describe('the runner kit', () => {
       'managed-install/cli-storage.ts',
       'core/pi-rpc-turn.ts',
       'core/pi-rpc-wire.ts',
+      'core/acp/events.ts',
+      'core/acp/protocol.ts',
+      'core/acp/session.ts',
+      'core/acp/transport.ts',
+      'core/acp/usage.ts',
     ]) {
       expect(runtimeInputs.has(isolated), `plugin/runtime.ts must not pull ${isolated}`).toBe(false);
     }
