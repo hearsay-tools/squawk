@@ -244,11 +244,11 @@ function WorkspaceRootField({
       {serverError !== null ? (
         // The mockup's error line: the reason, then what did NOT happen — a failed probe
         // persists nothing, and saying so stops the reader wondering which value is live.
-        <p data-slot={`projects-${slot}-root-error`} role="alert" className="text-[11px] text-danger">
+        <p data-slot={`projects-${slot}-root-error`} role="alert" className="text-xs text-danger">
           {serverError} — setting unchanged
         </p>
       ) : (
-        <p className="text-[11px] text-soft-foreground">
+        <p className="text-xs text-soft-foreground">
           {footer}
         </p>
       )}
@@ -355,7 +355,7 @@ function ProjectRow({
     <tr data-slot="project-row" data-project={project.id} className="border-b border-border last:border-0">
       <th scope="row" className="max-w-0 px-3 py-2 text-left font-normal">
         <span className="block truncate text-foreground">{project.name}</span>
-        <span className="block truncate font-mono text-[11px] text-soft-foreground" title={project.root}>
+        <span className="block truncate font-mono text-xs text-soft-foreground" title={project.root}>
           {project.root}
         </span>
       </th>
@@ -617,7 +617,7 @@ export function ProjectTagsEditor({
           // and picking a suggestion for the happy path.
           onInteractOutside={(event) => event.preventDefault()}
         >
-          <p className="px-2 pt-1 pb-1.5 text-[11px] text-soft-foreground">
+          <p className="px-2 pt-1 pb-1.5 text-xs text-soft-foreground">
             Tags used in this workspace
           </p>
           {suggestions.map((tag, index) => (

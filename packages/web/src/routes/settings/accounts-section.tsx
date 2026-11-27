@@ -254,10 +254,26 @@ function InstallReadout({ entry, check }: { entry: RunnerEntry; check: BackendCh
   return (
     <span className="whitespace-nowrap">
       <span data-slot="agent-installed">CLI installed</span>
-      {/* A middle dot, never parentheses: a version can carry its own, as in "mock (HSQ_DRY_RUN=1)". */}
-      {check.version ? <><span aria-hidden="true" className="settings-agent-summary-sep">·</span><span className="sr-only">, version </span><span data-slot="agent-version" className="text-soft-foreground">{check.version}</span></> : null}
+      {/* A middle dot, never parentheses: a version can carry its own. */}
+      {check.version ? <><span aria-hidden="true" className="settings-agent-summary-sep">·</span><VersionReadout version={check.version} /></> : null}
     </span>
   )
+}
+
+/** The dry-run probe reports `mock (HSQ_DRY_RUN=1)` as its version: an env flag is not a version. */
+const DRY_RUN_VERSION = /^mock \(\w*DRY_RUN=1\)$/
+
+/** The CLI version, or a calm "Dry run" pill when the host runs mock agents. The raw string stays
+ *  in the tooltip, so the env flag is one hover away and never in the copy. */
+function VersionReadout({ version }: { version: string }) {
+  if (DRY_RUN_VERSION.test(version)) {
+    return (
+      <Badge variant="outline" data-slot="agent-version" data-dry-run="" title={version} className="text-[11px] font-normal text-muted-foreground">
+        Dry run
+      </Badge>
+    )
+  }
+  return <><span className="sr-only">, version </span><span data-slot="agent-version" className="text-soft-foreground">{version}</span></>
 }
 
 /** Inline summary items joined by a quiet middle dot. `null` items are skipped. */
@@ -636,7 +652,7 @@ function AccountRow({ account, runners, editable, onRemove, agent }: {
     <>
       <span className="settings-account-label">{account.label}</span>
       {account.isDefault ? (
-        <Badge variant="ghost" className="shrink-0 text-[11px] text-muted-foreground">
+        <Badge variant="outline" data-slot="account-discovered" className="shrink-0 text-[11px] font-normal text-muted-foreground">
           discovered
         </Badge>
       ) : null}

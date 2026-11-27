@@ -163,7 +163,7 @@
 .settings-agent-picker [data-slot=agents-runner] { display: flex; flex-direction: column; width: 100%; max-width: none; border: 0; border-block-start: 1px solid var(--border); padding: 4px; }
 .settings-agent-picker [role=radio] { font-family: inherit; white-space: normal; }
 
-.settings-panel [data-slot=settings-config-editor] > [data-slot=code-editor] { margin-block-start: 8px; }
+.settings-panel [data-slot=settings-config-editor] > [data-slot=agent-config-editor-frame] { margin-block-start: 8px; }
 
 /* The index frames retain their explanatory heading; section drill-ins use the quieter title. */
 .settings-route[data-route=settings] .settings-route-header > p,
@@ -231,7 +231,7 @@
 .settings-panel .settings-model-agent-choice select { width: 16rem; max-width: 100%; }
 .settings-config-scopes [data-slot=agent-config-group] > ul > li { width: 100%; min-width: 0; }
 .settings-config-scopes [data-slot=agent-config-file] { min-width: 0; max-width: 100%; }
-.settings-panel [data-slot=settings-config-editor] > [data-slot=code-editor] { background: var(--background); }
+.settings-panel [data-slot=settings-config-editor] [data-slot=code-editor] { background: var(--background); }
 
 /* Uniform styled selects: native arrow replaced by a right-hand chevron; one width for stacked rows. */
 .settings-panel select { appearance: none; padding-inline: 12px 36px; border: 1px solid var(--border); border-radius: 8px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
@@ -287,4 +287,50 @@
   .settings-agent-head { padding: 12px; }
   .settings-account-meta, .settings-account-line, .settings-agent-note, .settings-agent-card > section[aria-label="CLI installation"] { margin-inline: 12px; }
   .settings-panel .settings-agent-card .settings-account-actions button:not([data-slot=account-rename-input]) { min-height: 44px; }
+}
+
+/* ONE control border on every settings page (pass 8). Inputs drew the bright --control-border and
+   textareas the subtle --input, so Prompt templates read far brighter than Worktrees or Projects.
+   Every text control, select and code editor now draws --border; focus and invalid keep their
+   own colours. This file is unlayered, so it outranks the utilities and must restate them. */
+.settings-panel :is(input:not([type=checkbox]):not([type=radio]), select, textarea:not([data-slot="code-editor-input"])),
+.settings-panel [data-slot=code-editor] { border-color: var(--border); }
+.settings-panel :is(input:not([type=checkbox]):not([type=radio]), select, textarea:not([data-slot="code-editor-input"])):focus-visible { border-color: var(--ring); }
+.settings-panel :is(input:not([type=checkbox]):not([type=radio]), select, textarea:not([data-slot="code-editor-input"]))[aria-invalid=true] { border-color: var(--destructive); }
+.settings-panel [data-slot=code-editor]:focus-within { border-color: var(--ring); }
+/* Placeholders read as examples, in the field's own font: a monospace command box keeps monospace. */
+.settings-panel :is(input, textarea)::placeholder { color: var(--soft-foreground); opacity: 1; }
+
+/* A disabled Reset beside a disabled primary stays legible: neutral ink, not a half-transparent ghost. */
+.settings-panel .settings-form-actions [data-variant=outline]:disabled { opacity: 1; color: var(--muted-foreground); background: transparent; }
+
+/* Tighter vertical rhythm on the long cards (pass 8): Agent defaults, Worktrees, Agents and
+   Projects stacked a 28px gap on top of each field's 22px rule padding. One 16px gap plus an
+   18px rule padding fits more fields above the fold and still separates them. */
+@media (min-width: 768px) { .settings-panel { padding: 20px 24px; } }
+.settings-panel > :is([data-slot=agent-defaults-section], [data-slot=worktrees-section], [data-slot=projects-section], [data-slot=accounts-section]) { gap: 16px; }
+.settings-panel .settings-field { gap: 10px; }
+.settings-panel .settings-field + .settings-field,
+.settings-panel [data-slot=agent-defaults-section] .settings-field + .settings-field { padding-block-start: 18px; }
+.settings-panel .settings-field h2 + p { margin-block-start: 4px; line-height: 1.55; }
+.settings-panel [data-slot=agents-task-runs] { gap: 16px; }
+.settings-panel [data-slot=agent-cards] { gap: 12px; }
+.settings-panel :is([data-slot="project-row"], [data-slot="worktree-row"]) { padding-block: 12px; gap: 6px; }
+.settings-panel :is([data-slot=project-row],[data-slot=worktree-row]) > td:last-child { margin-block-start: 4px; padding-block-start: 12px; }
+.settings-panel .settings-form-actions { padding-block-start: 16px; }
+
+/* Appearance segments (pass 8): a card-white segment on a muted track all but vanished, and in the
+   dark theme the card is darker than the track. The active segment takes the calm accent tint the
+   section picker and selected file already use, with a matching hairline, so it reads in both themes. */
+.settings-panel [data-slot=appearance-section] [role=radiogroup] { background: var(--muted); }
+.settings-panel [data-slot=appearance-section] [role=radio][aria-checked=true] {
+  background: color-mix(in oklch, var(--accent-strong) 14%, var(--card));
+  border-color: color-mix(in oklch, var(--accent-strong) 45%, transparent);
+  color: var(--accent-text); font-weight: 500; box-shadow: var(--shadow-xs);
+}
+
+/* The empty-file example overlays the code editor, so it follows the editor's 16px touch floor
+   (styles/accessibility.css) and its lines stay where the typed text will start. */
+@media (width < 48rem), (any-pointer: coarse) {
+  [data-slot=agent-config-placeholder] { font-size: max(16px, 1rem); }
 }

@@ -166,6 +166,12 @@ describe('the settings shell', () => {
     expect(header.querySelector('[data-slot="settings-mobile-scope"]')?.textContent).toBe('Applies to every project')
     expect(document.querySelector('.settings-section-picker summary')?.textContent).toBe('Appearance')
     expect(header.textContent).toContain('Theme, density and reading width.')
+    // The section's subtitle stays visible on small screens, right under the picker.
+    const mobileSection = document.querySelector('[data-slot="settings-mobile-section"]')!
+    expect(mobileSection.querySelector('.settings-section-picker')).not.toBeNull()
+    expect(mobileSection.querySelector('[data-slot="settings-mobile-section-subtitle"]')?.textContent).toBe(
+      'Theme, density and reading width.',
+    )
   })
 
   it('navigates from the mobile disclosure and closes it on the new section', async () => {

@@ -127,7 +127,16 @@ export function SettingsSectionRoute({
         mobileTitle={scope === 'global' ? 'Global settings' : 'Project settings'}
       />
       <div className="settings-route-body flex min-w-0 flex-1 flex-col md:flex-row">
-        <SectionPills scope={scope} activeId={section.id} />
+        {/* Small screens: the picker names the section and the section's subtitle sits right under
+            it, so the phone states what the page holds as plainly as the desktop header does. */}
+        <div data-slot="settings-mobile-section" className="flex flex-col gap-2 md:hidden">
+          <SectionPills scope={scope} activeId={section.id} />
+          {section.description ? (
+            <p data-slot="settings-mobile-section-subtitle" className="px-1 text-[13px] leading-normal text-muted-foreground">
+              {section.description}
+            </p>
+          ) : null}
+        </div>
         <section className="settings-panel min-w-0 self-start md:flex-1" aria-label={section.title}>
           <h2 className="settings-panel-title sr-only">{section.title}</h2>
           <Body />

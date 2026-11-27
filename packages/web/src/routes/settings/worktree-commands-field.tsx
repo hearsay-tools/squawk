@@ -68,6 +68,13 @@ export const WORKTREE_COMMANDS_COPY: Record<'setup' | 'teardown', WorktreeComman
   },
 }
 
+/** Guidance inside the empty box, so it reads as a command list and not a blank panel. The example
+ *  is labelled as one, and only an editable box shows it: a bare greyed `npm ci` read as a saved
+ *  command (hearsay-tools/cezarion#926). */
+function commandsPlaceholder(copy: WorktreeCommandsCopy, editable: boolean): string | undefined {
+  return editable ? `One command per line, for example: ${copy.example}` : undefined
+}
+
 /**
  * Project settings → Worktrees: one command list from `config.json`.
  * - "Prepare new worktrees" (`worktreeSetup`, hearsay-tools/cezarion#917, spec
@@ -157,6 +164,7 @@ export function WorktreeCommandsField({ config, copy }: { config: ConfigResponse
           autoCapitalize="off"
           autoCorrect="off"
           value={text}
+          placeholder={commandsPlaceholder(copy, editable)}
           readOnly={!editable}
           disabled={save.isPending}
           onChange={(event) => setText(event.target.value)}

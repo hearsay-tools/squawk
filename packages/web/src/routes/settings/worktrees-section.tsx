@@ -129,7 +129,7 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
           </SaveRow>
         </div>
         {retentionInvalid ? (
-          <p data-slot="resources-retention-invalid" className="text-[11px] text-danger">
+          <p data-slot="resources-retention-invalid" className="text-xs text-danger">
             Enter a whole number from {WORKTREE_RETENTION_MIN} to {WORKTREE_RETENTION_MAX} (0 = unlimited).
           </p>
         ) : (

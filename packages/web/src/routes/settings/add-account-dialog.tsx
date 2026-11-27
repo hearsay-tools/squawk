@@ -168,7 +168,7 @@ export function AddAccountDialog({
               {browsing ? 'Hide folders' : 'Browse…'}
             </Button>
           </label>
-          <p className="text-[11px] text-soft-foreground">
+          <p className="text-xs text-soft-foreground">
             A <code>~</code> is kept as written and expanded when the agent runs.
           </p>
         </div>

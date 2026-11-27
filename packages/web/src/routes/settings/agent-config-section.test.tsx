@@ -520,3 +520,49 @@ describe('AgentConfigSection', () => {
     }
   })
 })
+
+describe('a config file that does not exist yet', () => {
+  it('shows a faint example in its own format and says how to create the file', async () => {
+    serve(
+      { editable: true, files: [fileOf({ id: 'claude.settings', label: '.claude/settings.local.json', exists: false })], userMcp: null },
+      '',
+    )
+    renderSection()
+    const editor = (await screen.findByLabelText('.claude/settings.local.json contents')) as HTMLTextAreaElement
+    const placeholder = await waitFor(() => {
+      const found = document.querySelector('[data-slot="agent-config-placeholder"]')
+      expect(found).not.toBeNull()
+      return found!
+    })
+    expect(placeholder.textContent).toBe('{\n  "permissions": {}\n}')
+    expect(placeholder.getAttribute('aria-hidden')).toBe('true')
+    expect((screen.getByRole('button', { name: 'Create file' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(document.querySelector('[data-slot="agent-config-save-cue"]')?.textContent).toBe('Enter content above to create this file')
+
+    // The first keystroke removes the example and the cue turns into the unsaved-changes note.
+    fireEvent.change(editor, { target: { value: '{}' } })
+    expect(document.querySelector('[data-slot="agent-config-placeholder"]')).toBeNull()
+    expect(document.querySelector('[data-slot="agent-config-save-cue"]')?.textContent).toBe('Unsaved changes')
+    expect((screen.getByRole('button', { name: 'Create file' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('suggests a Markdown heading for an instructions file', async () => {
+    serve(
+      { editable: true, files: [fileOf({ id: 'claude.memory', label: 'CLAUDE.local.md', kind: 'memory', format: 'markdown', exists: false })], userMcp: null },
+      '',
+    )
+    renderSection()
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="agent-config-placeholder"]')?.textContent).toBe('# Project instructions'),
+    )
+  })
+
+  it('says nothing changed, with no example, on a file that exists', async () => {
+    serve({ editable: true, files: [SETTINGS_FILE], userMcp: null })
+    renderSection()
+    const editor = (await screen.findByLabelText('.claude/settings.json contents')) as HTMLTextAreaElement
+    await waitFor(() => expect(editor.value).toBe('{"a":1}'))
+    expect(document.querySelector('[data-slot="agent-config-placeholder"]')).toBeNull()
+    expect(document.querySelector('[data-slot="agent-config-save-cue"]')?.textContent).toBe('No unsaved changes')
+  })
+})

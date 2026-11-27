@@ -366,33 +366,13 @@ export function FileEditor({ file }: { file: AgentConfigFile }) {
       ) : fileQuery.isError ? (
         <p className="text-[13px] text-destructive">{fileQuery.error.message}</p>
       ) : (
-        <CodeEditor
-          value={content}
-          language={file.format}
-          readOnly={!canWrite}
-          onChange={setDraft}
-          aria-label={`${file.label} contents`}
-          className="h-[210px]"
-        />
+        <EditorFrame file={file} content={content} isMcp={isMcp} onChange={setDraft} />
       )}
 
       <SaveStateMessages formatError={formatError} conflict={conflict} onReload={() => void fileQuery.refetch()} />
 
       {canWrite && (
-        <div className="settings-form-actions">
-          <Button size="sm" onClick={save} disabled={!dirty || isSaving}>
-            {file.exists ? 'Save file' : 'Create file'}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setDraft(null)}
-            disabled={!dirty || isSaving}
-          >
-            Reset
-          </Button>
-          {dirty && <span className="text-[12px] text-soft-foreground">Unsaved changes</span>}
-        </div>
+        <FileActions exists={file.exists} dirty={dirty} isSaving={isSaving} onSave={save} onReset={() => setDraft(null)} />
       )}
       <div className="settings-config-save-help">
       <p data-slot="agent-config-precedence" className="text-[12px] text-soft-foreground">
@@ -407,6 +387,91 @@ export function FileEditor({ file }: { file: AgentConfigFile }) {
       </div>
     </div>
   )
+}
+
+/** The editor, with a faint example over it while a file that does not exist yet is still empty. */
+function EditorFrame({
+  file,
+  content,
+  isMcp,
+  onChange,
+}: {
+  file: AgentConfigFile
+  content: string
+  isMcp: boolean
+  onChange: (next: string) => void
+}) {
+  return (
+    <div data-slot="agent-config-editor-frame" className="relative">
+      <CodeEditor
+        value={content}
+        language={file.format}
+        readOnly={!file.writable}
+        onChange={onChange}
+        aria-label={`${file.label} contents`}
+        className="h-[210px]"
+      />
+      {/* The editor has no placeholder, so this overlay sits on its surface, inset by its 1px
+          border and with its padding and font, and vanishes on the first keystroke. */}
+      {!file.exists && content === '' && (
+        <pre
+          data-slot="agent-config-placeholder"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-px m-0 overflow-hidden whitespace-pre px-3 py-2 font-mono text-xs leading-[1.7] text-soft-foreground/70"
+        >
+          {placeholderFor(file, isMcp)}
+        </pre>
+      )}
+    </div>
+  )
+}
+
+/** Save/Create and Reset, with a quiet cue that says why they are disabled — the same voice as
+ *  "No unsaved changes" on every other settings page. */
+function FileActions({
+  exists,
+  dirty,
+  isSaving,
+  onSave,
+  onReset,
+}: {
+  exists: boolean
+  dirty: boolean
+  isSaving: boolean
+  onSave: () => void
+  onReset: () => void
+}) {
+  const cue = dirty ? 'Unsaved changes' : exists ? 'No unsaved changes' : 'Enter content above to create this file'
+  return (
+    <div className="settings-form-actions">
+      <Button size="sm" onClick={onSave} disabled={!dirty || isSaving}>
+        {exists ? 'Save file' : 'Create file'}
+      </Button>
+      <Button size="sm" variant="outline" onClick={onReset} disabled={!dirty || isSaving}>
+        Reset
+      </Button>
+      {!isSaving && (
+        <span data-slot="agent-config-save-cue" className="self-center text-xs text-muted-foreground">
+          {cue}
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** A minimal, valid starting point for a file that does not exist yet, in the file's own format. */
+function placeholderFor(file: AgentConfigFile, isMcp: boolean): string {
+  switch (file.format) {
+    case 'json':
+    case 'jsonc':
+      return isMcp ? '{\n  "mcpServers": {}\n}' : '{\n  "permissions": {}\n}'
+    case 'markdown':
+      return '# Project instructions'
+    case 'toml':
+      return '# One setting per line, for example:\n# key = "value"'
+    case 'yaml':
+      return '# One setting per line, for example:\n# key: value'
+  }
 }
 
 function SaveStateMessages({

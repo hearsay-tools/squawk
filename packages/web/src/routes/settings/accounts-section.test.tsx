@@ -128,6 +128,7 @@ function renderAccounts(
   localHandoff = true,
   entry = '/settings/global/agents',
   remoteSettingsAdmin = !localHandoff && settingsAdmin,
+  claudeVersion = '2.1.220',
 ) {
   const client = createQueryClient()
   client.setDefaultOptions({ queries: { ...client.getDefaultOptions().queries, retry: false } })
@@ -139,7 +140,7 @@ function renderAccounts(
     // come from. Codex is present but UNAVAILABLE, which is "not installed"; an agent missing
     // from `checks` entirely is a different state ("Checking…") and must not be conflated.
     checks: [
-      { name: 'claude', available: true, version: '2.1.220' },
+      { name: 'claude', available: true, version: claudeVersion },
       { name: 'codex', available: false, hint: 'optional: install the Codex CLI' },
     ],
   })
@@ -734,8 +735,25 @@ describe('the global Agents section', () => {
       expect(document.querySelector('[data-slot="agent-version"]')?.textContent).toBe('2.1.220'),
     )
     expect(document.querySelector('[data-slot="agent-installed"]')?.textContent).toBe('CLI installed')
-    // A middle dot, not parentheses: a version such as "mock (HSQ_DRY_RUN=1)" brings its own.
+    // A middle dot, not parentheses: a version can bring its own.
     expect(document.querySelector('[data-slot="agent-installed"]')?.parentElement?.textContent).toBe('CLI installed·, version 2.1.220')
+  })
+
+  it('shows a calm Dry run pill, not the env flag, when the host runs mock agents', async () => {
+    serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
+      selections: {}, profiles: DEFAULTS })
+    renderAccounts(RUNNERS_RESPONSE, true, true, '/settings/global/agents', false, 'mock (HSQ_DRY_RUN=1)')
+
+    const version = await waitFor(() => {
+      const found = document.querySelector('[data-slot="agent-version"]')
+      expect(found).not.toBeNull()
+      return found!
+    })
+    expect(version.textContent).toBe('Dry run')
+    expect(version.hasAttribute('data-dry-run')).toBe(true)
+    // The raw string stays one hover away.
+    expect(version.getAttribute('title')).toBe('mock (HSQ_DRY_RUN=1)')
+    expect(document.querySelector('[data-slot="agent-summary"]')?.textContent).not.toContain('HSQ_DRY_RUN')
   })
 
   it('names the install command for an agent that is not on this machine', async () => {

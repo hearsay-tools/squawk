@@ -337,7 +337,7 @@ function WakeField({
         </SaveRow>
       </div>
       {showInvalid ? (
-        <p data-slot="resources-monitoring-wake-invalid" className="text-[11px] text-danger">Enter a whole number from 1 to 60 minutes.</p>
+        <p data-slot="resources-monitoring-wake-invalid" className="text-xs text-danger">Enter a whole number from 1 to 60 minutes.</p>
       ) : (
         <p className="text-xs text-muted-foreground">Applied consistently to Claude Code, Codex and OpenCode.</p>
       )}
@@ -396,7 +396,7 @@ function MemoryField({
         </SaveRow>
       </div>
       {memoryInvalid ? (
-        <p data-slot="resources-memory-invalid" className="text-[11px] text-danger">
+        <p data-slot="resources-memory-invalid" className="text-xs text-danger">
           Enter a whole number of at least {MEMORY_MIN_MB} MiB, or leave empty for no limit.
         </p>
       ) : (

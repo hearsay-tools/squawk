@@ -234,12 +234,12 @@ function AgentsForm({
             Save prompt
           </Button>
           {promptOverLimit ? (
-            <p data-slot="agents-prompt-limit" className="text-[11px] text-danger">
+            <p data-slot="agents-prompt-limit" className="text-xs text-danger">
               {trimmedPrompt.length.toLocaleString()} characters — the limit is{' '}
               {SYSTEM_PROMPT_MAX.toLocaleString()}.
             </p>
           ) : (
-            <p className="text-[11px] text-soft-foreground">
+            <p className="text-xs text-soft-foreground">
               Leave empty and save to clear. Applied to new runs only.
             </p>
           )}

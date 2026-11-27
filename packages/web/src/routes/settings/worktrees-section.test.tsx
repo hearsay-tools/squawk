@@ -226,7 +226,9 @@ describe('Project settings → Worktrees: worktree setup commands (#917)', () =>
     renderAt('/settings/worktrees', { localHandoff })
     await waitFor(() => expect(commandsBox()).not.toBeNull())
     expect(commandsBox()!.value).toBe('')
-    expect(commandsBox()!.placeholder).toBe('')
+    // An editable box carries labelled guidance; a read-only one stays empty so it never looks configured.
+    expect(commandsBox()!.placeholder).toBe(localHandoff ? 'One command per line, for example: npm ci' : '')
+    expect(commandsBox()!.placeholder).not.toBe('npm ci')
     expect(screen.getByText('No setup commands configured. No commands will run in new worktrees.')).toBeTruthy()
     expect(saveSetup()!.disabled).toBe(true)
   })
