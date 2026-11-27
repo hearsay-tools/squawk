@@ -658,8 +658,7 @@ head. Reproduce a run from the repository root:
 node .ai/skills/check-code-quality/scripts/complexity-gate.mjs --base origin/main --head HEAD
 ```
 
-For an owner-approved increase, the owner adds the `baseline-growth` label, then re-runs the failed
-`complexity-gate` job. An agent never adds the label. Auto-merge has no complexity check of its own.
+For an owner-approved increase, the owner adds the `baseline-growth` label. `.github/workflows/rerun-label-gates.yml` then re-runs the failed jobs automatically (waiting first if CI is still running); if it does not, re-run the failed `complexity-gate` job manually. An agent never adds the label. Auto-merge has no complexity check of its own.
 CRAP is not part of this gate; CI reports it without failing (§ CRAP report for changed functions).
 
 **File length.** `npm run lint` pins every non-test source file over 1,000 lines in
@@ -716,13 +715,7 @@ is at or under +400. The pre-PR review reads the section: a reason that does not
 or a behavior an existing test already covers, is a finding. An agent never adds the `test-budget`
 label.
 
-**In CI.** The `Check the test line budget` step in `classify-pr` runs right after
-`Reject baseline growth`, on the same events. Like that step, it runs the workflow commit's own
-`.github/scripts/test-budget.cjs` and reads the head from Git objects, so no head code runs and a
-pull request cannot change its own budget. The step summary prints the net count, the threshold
-that applies and each counted file with its added and removed lines. `verify` requires
-`classify-pr`. The body and labels are read live, but an edited body or a new label does not start
-CI: add the section or the label, then re-run the failed `classify-pr` job.
+**In CI.** The `pr-label-gates` job (`Check baseline growth and test budget`) runs `Reject baseline growth` and `Check the test line budget` on pull requests and dispatched release PRs, separate from `classify-pr` so re-running a failed label gate does not re-run the eight Vitest shards. Both steps run the workflow commit's own `.github/scripts/baseline-growth.cjs` and `.github/scripts/test-budget.cjs` and read the head from Git objects, so no head code runs and a pull request cannot change its own budget. The step summary prints the net count, the threshold that applies and each counted file with its added and removed lines. `preflight` and `verify` require `pr-label-gates` on pull requests. The body and labels are read live. Adding `test-budget` or `baseline-growth` triggers `.github/workflows/rerun-label-gates.yml`, which re-runs the failed jobs on the PR head's latest native CI run automatically (waiting up to 20 minutes if that run is still in progress). Editing the PR body alone does not trigger a rerun: after adding or editing `## Test budget` without adding a label, re-run the failed `pr-label-gates` job manually.
 
 **Locally.** `npm run prepr` prints the same count for the committed branch against `origin/main`.
 It reports and never fails on the budget, because the body and labels do not exist yet. To judge a

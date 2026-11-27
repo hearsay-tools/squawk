@@ -100,7 +100,7 @@ async function checkPullRequest({ github, context, core, cwd = process.cwd() }) 
   await core.summary.addRaw(text).write();
   core.info(text);
   const reasons = judgeBudget({ net: count.net, body: pr.body, labels: pr.labels.map(label => label.name) });
-  if (reasons.length) core.setFailed(`${reasons.join('\n')}\nAdd what is missing, then re-run the failed classify-pr job. See docs/sdlc/ci.md § Test line budget.`);
+  if (reasons.length) core.setFailed(`${reasons.join('\n')}\nAdd what is missing (adding the test-budget label re-runs the failed pr-label-gates job automatically; after editing the PR body alone, re-run the failed pr-label-gates job manually). See docs/sdlc/ci.md § Test line budget.`);
 }
 
 // Local reproduction: node .github/scripts/test-budget.cjs --base origin/main [--head HEAD] [--body-file <file>] [--label <name>]...
