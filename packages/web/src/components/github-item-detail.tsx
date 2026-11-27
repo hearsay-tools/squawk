@@ -285,9 +285,11 @@ function GithubPrChanges({ item }: { item: GithubItem }) {
   const changeFilter = (text: string) => {
     setFilter(text)
     const next = matching(text)
-    // An empty match list shows no file but keeps the reader's choice for when the filter widens.
+    // Store the shown file, so a wider filter keeps it. An empty match list shows none and
+    // keeps the reader's choice for when the filter widens again.
     const chosen = activePath ?? selected
-    if (next.length > 0 && !next.some((file) => file.path === chosen)) setSelected(next[0]!.path)
+    const keep = next.some((file) => file.path === chosen) ? chosen : (next[0]?.path ?? chosen)
+    if (keep !== selected) setSelected(keep)
   }
   const refresh = async () => {
     const oldHead = data?.available ? data.headSha : null

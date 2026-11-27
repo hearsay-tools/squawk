@@ -713,6 +713,23 @@ describe('PR changed files', () => {
     expect(refreshUrls.every((url) => url.endsWith('/prs/42/changes?refresh=1'))).toBe(true)
   })
 
+  it('keeps the filtered file when the filter widens after a head change', async () => {
+    const client = seedChanges(threeFiles())
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL) =>
+      respond(String(input).includes('/changes') ? { ...threeFiles(), headSha: B_HEAD } : MERGE_STATE))
+    renderChanges(client)
+    await waitFor(() => expect(shownPath()).toBe('src/Alpha.ts'))
+    const filter = screen.getByRole('textbox', { name: 'Filter changed files' })
+    fireEvent.change(filter, { target: { value: 'BETA' } })
+    await waitFor(() => expect(shownPath()).toBe('src/beta.ts'))
+    fireEvent.click(within(document.querySelector('[data-slot="gh-pr-changes"]') as HTMLElement).getByRole('button', { name: 'Refresh' }))
+    await screen.findByText('The reviewed revision changed.')
+    expect(shownPath()).toBe('src/beta.ts')
+    fireEvent.change(filter, { target: { value: '' } })
+    await waitFor(() => expect(selectedFile()).toBe('src/beta.ts'))
+    expect(shownPath()).toBe('src/beta.ts')
+  })
+
   it('shows an unavailable reason and a failed request instead of an empty diff', async () => {
     const first = renderChanges(seedChanges({ available: false, reason: 'The repository is offline.' }))
     expect(screen.getByText('The repository is offline.')).toBeTruthy()
