@@ -709,6 +709,13 @@ export interface DriveSeamOptions {
  * `CEZ_DRY_RUN` is cleared so the mock named by the adapter is the only
  * transport in play.
  */
+/** Declared resume session id for mocks that require a fixed native id, or the fallback when unset. */
+export function resumeSessionIdFor(backend: string): string | undefined;
+export function resumeSessionIdFor(backend: string, fallback: string): string;
+export function resumeSessionIdFor(backend: string, fallback?: string): string | undefined {
+  return runnerDefinition(backend).mock.resumeSessionId ?? fallback;
+}
+
 export async function driveSeam(
   backend: string,
   scenario: ScenarioName,

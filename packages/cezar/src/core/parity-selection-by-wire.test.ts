@@ -1,14 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { fixtureRunner } from '../runners/fixture/definition.testkit.ts';
 import type { RunnerDefinition, RunnerMock } from './runner-definition.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 import { registerRunner } from './runner-registry.ts';
 import { sealTestRunners } from './runner-registry.testkit.ts';
+import { bypassAllowlistRunners } from './ci-tools.testkit.ts';
+import { resumeSessionIdFor } from './harness-parity-core.testkit.ts';
+import { exemptionFor } from './parity-exemptions.testkit.ts';
 import { describeHarnessGroups, type CellBody, type HarnessGroup, type HarnessPartScope, type ObservedCell } from './harness-parity-registrar.testkit.ts';
 import { ownedInputGroups } from './harness-parity-owned-input.rows.testkit.ts';
 import { runGroups } from './harness-parity-run.rows.testkit.ts';
 import { SESSION_GROUPS } from './harness-parity-session.cells.testkit.ts';
 import { FOREIGN_EXTRA_TOOLS, TOOL_GRANT_CASES } from './tool-grant-parity-cells.testkit.ts';
+import { sessionWire } from '../workflows/runner-session-wires.testkit.ts';
 import { DEFAULT_ALLOWED_TOOLS } from '../workflows/types.ts';
 
 function syntheticRunner(
@@ -26,7 +31,7 @@ function syntheticRunner(
 
 const HTTP_RUNNER = syntheticRunner('synth-http', {
   facts: { transport: 'http' },
-  mock: { sessionStore: { env: 'SYNTH_SESSIONS', argsFileSuffix: '.synth-sessions.json' } },
+  mock: { sessionStore: { env: 'SYNTH_SESSIONS', argsFileSuffix: '.synth-sessions.json' }, resumeSessionId: 'synth_thread_9' },
   extraTools: [],
 });
 
@@ -103,5 +108,32 @@ describe('parity cell selection follows declared facts and runner data (hearsay-
     const tg3 = TOOL_GRANT_CASES.find(entry => entry.id === 'inherited')!;
     expect(tg3.grant(HTTP_RUNNER.id)).toEqual({ kind: 'inherited', tools: [...DEFAULT_ALLOWED_TOOLS, ...FOREIGN_EXTRA_TOOLS] });
     expect(tg3.grant(STDIO_BYPASS_RUNNER.id)).toEqual({ kind: 'inherited', tools: [...DEFAULT_ALLOWED_TOOLS] });
+  });
+
+  it('selects U0 bypass-allowlist drives by mock.defaultToolsBypassAllowlist', () => {
+    expect(bypassAllowlistRunners([HTTP_RUNNER.id, STDIO_BYPASS_RUNNER.id])).toEqual([STDIO_BYPASS_RUNNER.id]);
+  });
+
+  it('selects S14/S42/S44 resume session id by mock.resumeSessionId', () => {
+    expect(resumeSessionIdFor(HTTP_RUNNER.id)).toBe('synth_thread_9');
+    expect(resumeSessionIdFor(HTTP_RUNNER.id, 'pinned')).toBe('synth_thread_9');
+    expect(resumeSessionIdFor(STDIO_BYPASS_RUNNER.id)).toBeUndefined();
+    expect(resumeSessionIdFor(STDIO_BYPASS_RUNNER.id, 'pinned')).toBe('pinned');
+  });
+
+  it('resolves SessionWire readers for every built-in runner and matches expectGovernedWire to D1 non-exemptions', () => {
+    for (const id of BUILT_IN_RUNNER_IDS) {
+      const wire = sessionWire(id);
+      expect(typeof wire.systemPrompts, `${id}.systemPrompts`).toBe('function');
+      expect(typeof wire.expectCiWire, `${id}.expectCiWire`).toBe('function');
+      expect(typeof wire.expectSquawkToolAdmission, `${id}.expectSquawkToolAdmission`).toBe('function');
+      expect(typeof wire.started, `${id}.started`).toBe('function');
+      expect(typeof wire.resumed, `${id}.resumed`).toBe('function');
+      expect(typeof wire.freshSessions, `${id}.freshSessions`).toBe('function');
+      expect(typeof wire.skillTriggers, `${id}.skillTriggers`).toBe('function');
+    }
+    const governedReaders = BUILT_IN_RUNNER_IDS.filter(id => sessionWire(id).expectGovernedWire !== undefined);
+    const nonExemptD1 = BUILT_IN_RUNNER_IDS.filter(id => exemptionFor('D1', id) === undefined);
+    expect(governedReaders).toEqual(nonExemptD1);
   });
 });

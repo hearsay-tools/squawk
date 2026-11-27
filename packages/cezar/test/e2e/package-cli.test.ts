@@ -12,7 +12,7 @@ import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { readPersistedRuns } from '../../src/runs/run-store.testkit.ts';
-import { mockRows } from '../../src/core/runner-mock-rows.testkit.ts';
+import { requiredTarballMockPaths } from '../../src/core/runner-mock-rows.testkit.ts';
 
 const execFile = promisify(execFileCallback);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -56,7 +56,7 @@ test('the release tarball installs and runs the dry-run CLI workflow', { timeout
   try {
     const { record, consumerDir, packageRoot } = await installTarball(root);
     const packagedPaths = new Set(record.files.map((file) => file.path));
-    const runnerMockPaths = Object.values(mockRows()).map((mock) => `scripts/${mock.script}`);
+    const runnerMockPaths = requiredTarballMockPaths();
     for (const requiredPath of ['dist/index.js', 'dist/runs/transcript-facts-worker.js', 'web/dist/index.html', 'dist/ci-wait/controller.js', 'dist/ci-wait/client.js', 'dist/ci-wait/mcp.js', 'dist/ci-wait/tools.js', ...runnerMockPaths, 'README.md']) {
       assert.ok(packagedPaths.has(requiredPath), `release tarball should contain ${requiredPath}`);
     }

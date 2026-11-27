@@ -1,9 +1,9 @@
 import type { RunnerFacts } from './runner-facts.ts';
 import type { RunnerMock } from './runner-definition.ts';
 import { describe, expect, it, vi } from 'vitest';
-import { exemptionFor, humanPromptReadReleases } from './parity-exemptions.testkit.ts';
+import { exemptionFor, httpDeliveryControlRunners, humanPromptReadReleases } from './parity-exemptions.testkit.ts';
 import { factRows } from './runner-fact-rows.testkit.ts';
-import { mockRows } from './runner-mock-rows.testkit.ts';
+import { mockRows, requiredTarballMockPaths } from './runner-mock-rows.testkit.ts';
 import { SESSION_STORE_RUNNERS } from './skill-resume-rows.testkit.ts';
 
 // Swap the declarations of runners so the test proves parity exemptions and cell selections read
@@ -31,7 +31,7 @@ vi.mock('./runner-mock-rows.testkit.ts', async (load) => {
     ...rows,
     omp: ompWithoutAuto,
     pi: { ...rows.pi!, implicitAutoResume: true },
-    opencode: opencodeWithoutStore,
+    opencode: { ...opencodeWithoutStore, script: 'mock-swapped.mjs' },
     claude: { ...rows.claude!, sessionStore: opencodeStore! },
   };
   return { ...actual, mockRows: () => mocks };
@@ -97,5 +97,15 @@ describe('parity expectations follow the runner facts rows', () => {
 
   it('selects lost-session skill-resume cells by declared mock.sessionStore', () => {
     expect(SESSION_STORE_RUNNERS).toEqual(whereMock(mock => mock.sessionStore !== undefined));
+  });
+
+  it('selects HTTP delivery-control runners by declared facts.transport === http', () => {
+    expect(httpDeliveryControlRunners()).toEqual(where(facts => facts.transport === 'http'));
+  });
+
+  it('selects tarball mock script paths from declared mockRows()', () => {
+    const paths = requiredTarballMockPaths(declaredMocks);
+    expect(paths).toEqual(Object.values(declaredMocks).map(mock => `scripts/${mock.script}`));
+    expect(paths).toContain('scripts/mock-swapped.mjs');
   });
 });

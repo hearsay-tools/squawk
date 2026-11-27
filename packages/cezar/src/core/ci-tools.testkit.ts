@@ -192,6 +192,11 @@ export const CI_NATIVE_GROUPS = {
   askDone: ['cezar_ask', 'cezar_done'],
 } as const;
 
+/** Built-in runners whose default tool list bypasses the CLI allowlist (hearsay-tools/cezarion#1305). */
+export function bypassAllowlistRunners(runners: readonly string[] = BUILT_IN_RUNNER_IDS): string[] {
+  return runners.filter(backend => runnerDefinition(backend).mock.defaultToolsBypassAllowlist);
+}
+
 export function registerCiNativeTools(tools: readonly string[]) {
 // U0 (hearsay-tools/cezarion#1233): `cezar_wait` and `cezar_cancel_wait` are admitted on each
 // runner's own tool list and reach this session's handlers through its native wire, fresh and
@@ -218,8 +223,7 @@ describe('U0 wait tools on every native wire', () => {
   // hearsay-tools/cezarion#1305: runners whose step-default bypasses the CLI allowlist admit
   // Squawk tools by name on a narrowed list, through no allowlist on the default list, and as the
   // only names on an empty one.
-  const bypassDrives = BUILT_IN_RUNNER_IDS
-    .filter(backend => runnerDefinition(backend).mock.defaultToolsBypassAllowlist)
+  const bypassDrives = bypassAllowlistRunners()
     .flatMap(backend => [
       { label: 'the default tool list', toolGrant: { kind: 'step-default', tools: allowedToolsForStep(undefined, backend) } as ToolGrant },
       { label: 'an empty tool list', toolGrant: { kind: 'explicit', tools: [] } as ToolGrant },

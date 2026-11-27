@@ -1,5 +1,4 @@
 import { runnerDefinition } from './runner-registry.ts';
-import { runnersWhere } from './runner-facts.ts';
 import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -12,6 +11,7 @@ import { sessionWire } from '../workflows/runner-session-wires.testkit.ts';
 import type { WireRow } from '../workflows/native-session-wire.testkit.ts';
 import type { AgentEvent, AgentSession } from './agent-runner.ts';
 import { driveSeam, exemptionFor, HARNESS_ADAPTERS, waitFor } from './harness-parity.testkit.ts';
+import { httpDeliveryControlRunners } from './parity-exemptions.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
 import { runnerGolden } from './runner-golden.testkit.ts';
 
@@ -356,7 +356,7 @@ describe('controls reach every scenario branch', () => {
   }, 60_000);
 });
 
-describe.each(runnersWhere(facts => facts.transport === 'http'))('%s HTTP delivery control', runner => {
+describe.each(httpDeliveryControlRunners())('%s HTTP delivery control', runner => {
   it('matches the prompt text, not its JSON encoding', async () => {
     const persistent = createDeliveryControl(tempRoot(), { kind: 'reject', match: 'line one\nline "two"', persistent: true });
     await seam(runner, persistent.path, async session => {

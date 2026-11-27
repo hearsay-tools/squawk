@@ -12,7 +12,7 @@ import { readMockRecords } from '../mock-records.testkit.ts';
 import { allowedToolsForStep } from '../workflows/types.ts';
 import type { AgentEvent, AgentRunSpec, AgentRunSpecField, ContentBlock, ToolGrant } from './agent-runner.ts';
 import { AGENT_RUN_SPEC_FIELDS, inputDeliveryOf } from './agent-runner-values.ts';
-import { driveSeam, exemptionFor, PINNED_SESSION_ID, seedMockSession, textEvents, waitFor, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
+import { driveSeam, exemptionFor, PINNED_SESSION_ID, resumeSessionIdFor, seedMockSession, textEvents, waitFor, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { sessionWire } from '../workflows/runner-session-wires.testkit.ts';
 import type { WireRow } from '../workflows/native-session-wire.testkit.ts';
 import { describeHarnessPart, type HarnessPartScope, probeEnv, readRecording, type Cells, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration, type SeamCriterion } from './harness-parity-registrar.testkit.ts';
@@ -241,7 +241,7 @@ export const SESSION_GROUPS = {
         // other adapters exercise their own unchanged permissions and delivery.
         for (const resume of [false, true]) {
           it(`${backend} S14 ${resume ? 'resumes' : 'starts'} and completes repeated human messages under provider policy`, async () => {
-            const resumeSessionId = runnerDefinition(backend).mock.resumeSessionId;
+            const resumeSessionId = resumeSessionIdFor(backend);
             const obs = await driveSeam(backend, 'baseline', {
               spec: { resume, ...(resumeSessionId ? { sessionId: resumeSessionId } : {}), env: { MOCK_CODEX_REQUIREMENTS: JSON.stringify({ allowedSandboxModes: ['read-only', 'workspace-write'] }), CEZ_HANDOFF_FILE: '', } },
               whileOpen: async (session, { v1 }) => {
