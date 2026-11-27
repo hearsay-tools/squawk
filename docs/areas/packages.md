@@ -58,6 +58,7 @@ it, and the readers of the old path. A per-file record names its source file by 
 | `packages/cezar/src/lint/*.baseline.json` and the other `*.baseline.json` files | Lint and wait-discipline allowances, by file |
 | `packages/web/src/test/search-params-discipline.baseline.json`, `card-2-contrast.baseline.json` | Cockpit allowances, by the path below `packages/web/src/` |
 | `packages/cezar/src/lint/resume-time-readers.json`, `run-history-readers.json` and `reader-matrix/*.json` | Allowed readers of a run fact, by file |
+| `scripts/readers.mjs` `RUNNER_ID_READERS` | The saved-run readers of a runner id, by file and anchor text; `scripts/readers.test.mjs` fails when a listed file loses its anchor, and `npm run prepr` runs it |
 
 Some guards key on a directory, not a file, so `--moved` does not find them:
 

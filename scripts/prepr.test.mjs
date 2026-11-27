@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { complexityRun, daemonAlive, FALLBACK_TEST_MS, fallbackLines, focusedTests, gitIo, judgeSqueal, lintFallbackLine, loweredNotes, lintUnfinished, patchLimitLines, pendingLine, prepr, killTree, run, SQUEAL_WAIT_MS, squealChecks, squealLines, testBudgetLines } from './prepr.mjs';
+import { complexityRun, daemonAlive, FALLBACK_TEST_MS, fallbackLines, focusedTests, gitIo, judgeSqueal, lintFallbackLine, loweredNotes, lintUnfinished, patchLimitLines, pendingLine, POLICY_GUARDS, prepr, killTree, run, SQUEAL_WAIT_MS, squealChecks, squealLines, testBudgetLines } from './prepr.mjs';
 
 const { GITHUB_PATCH_LIMITS, numstatRows } = createRequire(import.meta.url)('../.github/scripts/missing-patches.cjs');
 
@@ -701,4 +701,17 @@ test('prepr reports an unreadable squeal status and runs npm run lint for the un
   assert.equal(r.failed, true);
   assert.match(r.report, /- FAIL: Squeal: `squeal status --wait` exited 143 without a readable result/);
   assert.match(r.report, /- pass: lint: Squeal's lint is unavailable \(squeal status was unreadable\), so prepr ran `npm run lint`/);
+});
+
+// hearsay-tools/squawk#4364: the path-scanning guards run in prepr, so a failure shows before push even when Squeal has no result.
+test('prepr runs the policy and anchor guards on every change and fails when one fails', async () => {
+  assert.deepEqual(POLICY_GUARDS, ['.github/scripts/auto-merge-gates.test.cjs', 'scripts/test-inputs.test.mjs', 'scripts/readers.test.mjs']);
+  const guardCall = call => call[0] === 'node' && call.includes('--test') && POLICY_GUARDS.every(guard => call.includes(guard));
+  const docs = fakeIo({ files: 'AGENT_PROTOCOL.md\0', responses: { squeal: ok(live([], doneLint)) } });
+  assert.equal((await prepr({ io: docs, waitMs: 1000 })).failed, false);
+  assert.ok(docs.calls.some(guardCall));
+  const bad = fakeIo({ responses: { squeal: ok(live([], doneLint)), 'node --import ./scripts/test-home-env.mjs': { code: 1, out: 'not ok 1 - every listed runner-id reader still holds its anchor', err: '' } } });
+  const r = await prepr({ io: bad, waitMs: 1000 });
+  assert.equal(r.failed, true);
+  assert.match(r.report, /FAIL: policy guards \(auto-merge never-list, squeal\.config\.json inputs, readers\.mjs anchors\)\nnot ok 1 - every listed runner-id reader/);
 });

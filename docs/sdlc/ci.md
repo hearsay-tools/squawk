@@ -109,11 +109,11 @@ and before every push after the PR opens. It prints one verdict and the
 evidence block for the PR body. It reads Squeal's results for the changed files and for
 oxlint, and always runs the lint runner’s repository-only checks (file length, design CSS,
 wait discipline and stale entries). It also runs typecheck (not for a docs-only change), citations, clones,
-spec statuses (`check-spec-status.cjs`), CI's function complexity ratchet and the
+spec statuses (`check-spec-status.cjs`), the policy and anchor guards, CI's function complexity ratchet and the
 [GitHub patch limits](#github-patch-limits). It reports the [test line budget](#test-line-budget)
 and never fails on it. Its exit code
 is non-zero on a failing test, a missing direct test result (below), a lint finding, a type error, a bare citation, a new clone,
-a spec without a valid status, a changed function that grew over the complexity limit,
+a spec without a valid status, a failing policy or anchor guard, a changed function that grew over the complexity limit,
 or a committed file diff over the per-file patch limit or with a NUL byte.
 
 - The Squeal wait is bounded at 2 minutes (`--wait-ms`). The gate waits first for the edited test
@@ -123,6 +123,11 @@ or a committed file diff over the per-file patch limit or with a NUL byte.
   its result; any other selected test file is a `pending` line that gives the count, the host
   load and Squeal's causes, does not fail the gate, and leaves the file to CI
   (hearsay-tools/squawk#3940).
+- The policy and anchor guards scan the repository by path, so no import reaches them and
+  Squeal's result for them can still be pending. The command runs them itself on every change,
+  with `node --test`: `auto-merge-gates.test.cjs` (the auto-merge never-list),
+  `scripts/test-inputs.test.mjs` (`squeal.config.json` `inputs`) and `scripts/readers.test.mjs`
+  (the `scripts/readers.mjs` anchors) (hearsay-tools/squawk#4364).
 - When Squeal's lint has not finished for the changed files, or is off, the command runs
   `npm run lint` and takes its verdict.
 - The complexity check is CI's `complexity-gate.mjs` against the base. When the branch's

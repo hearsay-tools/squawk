@@ -498,7 +498,12 @@ its static scope before implementing its scanner.
    `// oxlint-disable-next-line cez/<rule> -- <reason>`; add no baseline.
 5. Put a whole-repository check (a baseline, a stale entry) in `run.ts`, never in a rule: oxlint
    runs rules per file, in parallel.
-6. Check what the rule costs before you open its pull request:
+6. A new gate file, such as a helper the rule exempts or a script it runs, goes on the auto-merge
+   never-list (`.ai/skills/auto-merge/check.mjs`) or into `NOT_A_GATE` in
+   `.github/scripts/auto-merge-gates.test.cjs` with a reason. A test that reads a file by path, not
+   by import, needs a `squeal.config.json` `inputs` row for that file
+   (`scripts/test-inputs.test.mjs`). `npm run prepr` runs both guards on every change.
+7. Check what the rule costs before you open its pull request:
    `node packages/cezar/scripts/profile-lint.ts --compare origin/main` lints `origin/main`'s tree
    with its own config, then the working tree, in 5 alternating rounds (`--runs N` changes the
    count). A base that names an existing file is an oxlint config over the working tree. It prints
