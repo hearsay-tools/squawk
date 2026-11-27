@@ -73,8 +73,7 @@ function rowContainer(pill: HTMLElement): HTMLElement {
 
 /** Pills sharing a visual line must fit it together; separate lines fit independently. A line
  * that holds the `fill` pill (the row's flexible track) beside siblings must fit every prefixed
- * pill in an equal share of it, so the flexible pill stays at least as wide as its widest sibling
- * (#724). */
+ * pill in an equal share of it, so the flexible pill stays at least as wide as its widest sibling. */
 function allRowsFit(members: GroupMember[], fill: string | undefined): boolean {
   const lines = new Map<HTMLElement, Map<number, GroupMember[]>>()
   for (const member of members) {
@@ -102,7 +101,7 @@ function allRowsFit(members: GroupMember[], fill: string | undefined): boolean {
  * prefix drops as soon as the row cannot hold all of them, so no value truncates while a sibling
  * still spends width on a prefix, and they return together once everything fits. Outside a group
  * each pill decides for itself (#522). With `fill`, a line that holds that pill beside siblings
- * keeps the prefixes only while each prefixed pill fits an equal share of the line (#724).
+ * keeps the prefixes only while each prefixed pill fits an equal share of the line.
  * Renders no DOM, so the row's own layout is untouched.
  */
 export function PickerPillGroup({ children, fill }: {

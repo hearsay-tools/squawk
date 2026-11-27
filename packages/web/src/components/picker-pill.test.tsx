@@ -202,7 +202,7 @@ describe('PickerPillGroup (#541)', () => {
     expect(labels()).toEqual(['opencode', LONG, 'medium'])
   })
 
-  // #724: the engine row's Model takes the flexible track. `Runner · Claude Code` (205px),
+  // The engine row's Model takes the flexible track. `Runner · Claude Code` (205px),
   // `Model · Default` (175px) and `Effort · auto` (138px) sum to 518px plus two 10px gaps, so
   // they fit a 563px row, yet Model would get only 563 - 205 - 138 - 20 = 200px, less than Runner.
   const engineRow = (fill?: string) => (
@@ -215,7 +215,7 @@ describe('PickerPillGroup (#541)', () => {
     </PickerPillGroup>
   )
 
-  it('keeps the flexible pill at least as wide as its widest sibling before showing prefixes (#724)', () => {
+  it('keeps the flexible pill at least as wide as its widest sibling before showing prefixes', () => {
     Object.assign(full, { 'runner-pill': 205, 'model-pill': 175, 'effort-pill': 138 })
     available = 563
     const view = render(engineRow())
@@ -231,7 +231,7 @@ describe('PickerPillGroup (#541)', () => {
     expect(labels()).toEqual(['Claude Code', 'Default', 'auto'])
   })
 
-  it('fits a line without the flexible pill by the sum of its pills (#724)', () => {
+  it('fits a line without the flexible pill by the sum of its pills', () => {
     Object.assign(full, { 'runner-pill': 205, 'model-pill': 175, 'effort-pill': 138 })
     available = 353
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
