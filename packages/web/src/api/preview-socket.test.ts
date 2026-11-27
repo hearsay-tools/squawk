@@ -3,56 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { connectPreview } from './preview-socket'
-
-/** Records what a server would see; lifecycle is driven by hand. */
-class FakeWebSocket {
-  static instances: FakeWebSocket[] = []
-
-  url: string
-  binaryType = 'blob'
-  readyState = 0
-  sent: string[] = []
-  private handlers = new Map<string, Set<(event: unknown) => void>>()
-
-  constructor(url: string) {
-    this.url = url
-    FakeWebSocket.instances.push(this)
-  }
-
-  addEventListener(name: string, handler: (event: unknown) => void): void {
-    const set = this.handlers.get(name) ?? new Set()
-    set.add(handler)
-    this.handlers.set(name, set)
-  }
-
-  send(data: string): void {
-    this.sent.push(data)
-  }
-
-  close(): void {
-    this.readyState = 3
-  }
-
-  open(): void {
-    this.readyState = 1
-    this.fire('open', {})
-  }
-
-  message(data: unknown): void {
-    this.fire('message', { data })
-  }
-
-  /** A failed upgrade or a drop: browsers fire `error` then `close`. */
-  drop(): void {
-    this.readyState = 3
-    this.fire('error', {})
-    this.fire('close', {})
-  }
-
-  private fire(name: string, event: unknown): void {
-    for (const handler of [...(this.handlers.get(name) ?? [])]) handler(event)
-  }
-}
+import { FakeWebSocket } from './preview-socket.testkit'
 
 const handles: Array<{ close(): void }> = []
 const scope = { projectId: 'default', runId: 'r1' }
@@ -212,9 +163,10 @@ describe('preview document lifetime', () => {
   it('closes the hidden viewer and ignores its late frames after restoring', () => {
     const doc = Object.assign(new EventTarget(), { visibilityState: 'visible' })
     vi.stubGlobal('document', doc); vi.stubGlobal('window', new EventTarget())
-    const { handle, onFrame } = connect()
+    const { handle, onFrame, transport } = connect()
     const old = FakeWebSocket.instances[0]!; old.open()
     doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'))
+    expect(transport.at(-1)).toEqual(['connecting', undefined])
     old.message(new Blob(['late']))
     expect(old.readyState).toBe(3); expect(onFrame).not.toHaveBeenCalled()
     doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange'))

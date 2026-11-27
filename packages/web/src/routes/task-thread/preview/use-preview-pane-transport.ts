@@ -121,6 +121,12 @@ export function usePreviewPaneTransport({ run, servers, request, onTarget, onLiv
   const send = useCallback((message: PreviewClientMessage) => {
     if (socketOpen.current) connection.current?.send(message)
   }, [])
+  /** Owner actions taken while the socket is not open, sent in order right after the next `open`. */
+  const queued = useRef<PreviewClientMessage[]>([])
+  const sendAction = useCallback((message: PreviewClientMessage) => {
+    if (socketOpen.current) connection.current?.send(message)
+    else queued.current.push(message)
+  }, [])
 
   useEffect(() => {
     let conn: PreviewConnection | undefined
@@ -170,6 +176,7 @@ export function usePreviewPaneTransport({ run, servers, request, onTarget, onLiv
               // straight back from the other tab, and the two would trade it forever.
               setTakenOver(message.by)
               socketOpen.current = false
+              queued.current = []
               conn?.close()
               return
           }
@@ -177,18 +184,22 @@ export function usePreviewPaneTransport({ run, servers, request, onTarget, onLiv
         onTransport(state, attempt) {
           socketOpen.current = state === 'open'
           setTransport({ state, attempt: attempt ?? 0 })
+          // A connection that gave up shows it is offline; an action held for it would fire on a later, unrelated reconnect.
+          if (state === 'blocked' || state === 'closed') queued.current = []
           if (state !== 'open') return
           setEverOpened(true)
           if (target.current) {
             conn?.send({ t: 'open', target: target.current, viewerId: viewerId.current, resume: opened.current, quality: qualityRef.current, dpr: dprRef.current })
             opened.current = true
           }
+          for (const action of queued.current.splice(0)) conn?.send(action)
         },
       },
     )
     connection.current = conn
     return () => {
       socketOpen.current = false
+      queued.current = []
       conn?.close()
       if (connection.current === conn) connection.current = undefined
     }
@@ -352,17 +363,17 @@ export function usePreviewPaneTransport({ run, servers, request, onTarget, onLiv
 
   const actions: PreviewStateActions = useMemo(
     () => ({
-      download: () => send({ t: 'download' }),
-      cancelDownload: () => send({ t: 'cancelDownload' }),
-      retryBrowser: () => send({ t: 'retryBrowser' }),
-      run: serverPort => send({ t: 'run', port: serverPort }),
-      stop: serverPort => send({ t: 'stop', port: serverPort }),
-      keepWaiting: serverPort => send({ t: 'keepWaiting', port: serverPort }),
+      download: () => sendAction({ t: 'download' }),
+      cancelDownload: () => sendAction({ t: 'cancelDownload' }),
+      retryBrowser: () => sendAction({ t: 'retryBrowser' }),
+      run: serverPort => sendAction({ t: 'run', port: serverPort }),
+      stop: serverPort => sendAction({ t: 'stop', port: serverPort }),
+      keepWaiting: serverPort => sendAction({ t: 'keepWaiting', port: serverPort }),
       close: onClose,
       useHere: reconnect,
       copy: copyText,
     }),
-    [send, onClose], // eslint-disable-line react-hooks/exhaustive-deps
+    [sendAction, onClose], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   return {

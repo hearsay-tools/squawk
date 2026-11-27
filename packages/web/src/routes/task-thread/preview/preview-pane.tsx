@@ -123,7 +123,7 @@ function PreviewPaneBody(props: PreviewPaneProps) {
         onViewport={setViewport}
         onQuality={chooseQuality}
         onCopyUrl={() => copyText(url)}
-        onStop={serverPort => send({ t: 'stop', port: serverPort })}
+        onStop={actions.stop}
         onClose={onClose}
       />
       {addressError ? (
