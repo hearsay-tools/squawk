@@ -1,16 +1,18 @@
 import { z, type TokenUsage, type UiEvent } from '@hearsay-tools/squawk/plugin';
 import { AcpEvents } from './acp/events.ts';
 import { addUsage } from './acp/usage.ts';
+import { AntigravitySubagentTracker } from './subagent-tracker.ts';
 import { antigravityUsage } from './usage.ts';
-import { ANTIGRAVITY_WIRE_HOOKS } from './wire-updates.ts';
+import { antigravityWireHooks } from './wire-updates.ts';
 
 export interface AntigravityUiState {
-  events: AcpEvents; prompts: Array<string | number>; promptUsage?: TokenUsage | undefined;
+  events: AcpEvents; subagents: AntigravitySubagentTracker; prompts: Array<string | number>; promptUsage?: TokenUsage | undefined;
   /** A session/load request whose history replay is not live work. */
   loading?: string | number | undefined;
 }
 export function createAntigravityUiState(): AntigravityUiState {
-  return { events: new AcpEvents({}, ANTIGRAVITY_WIRE_HOOKS), prompts: [] };
+  const subagents = new AntigravitySubagentTracker();
+  return { events: new AcpEvents({}, antigravityWireHooks(subagents)), subagents, prompts: [] };
 }
 const envelopeSchema = z.object({ from: z.enum(['client', 'agent']), frame: z.record(z.string(), z.unknown()) });
 const resultSchema = z.object({ stopReason: z.enum(['end_turn', 'max_tokens', 'max_turn_requests', 'cancelled', 'refusal']) }).passthrough();
@@ -19,7 +21,13 @@ export function mapAntigravityFrame(value: unknown, state: AntigravityUiState): 
   const envelope = envelopeSchema.safeParse(value);
   if (!envelope.success) return { state, events: [] };
   const events: UiEvent[] = [];
-  const next: AntigravityUiState = { ...state, prompts: [...state.prompts], events: state.events.fork({ uiEvent: event => events.push(event) }) };
+  const subagents = state.subagents.fork();
+  const next: AntigravityUiState = {
+    ...state,
+    subagents,
+    prompts: [...state.prompts],
+    events: state.events.fork({ uiEvent: event => events.push(event) }, antigravityWireHooks(subagents)),
+  };
   const { frame, from } = envelope.data;
   try {
     if (from === 'client' && frame.method === 'session/prompt') {

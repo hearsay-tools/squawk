@@ -60,12 +60,44 @@ export class AcpEvents {
     if (!this.turnId) return;
     const reason = this.failure ? 'error' : stopReason;
     if (this.failure) this.sink.event?.({ type: 'error', message: this.failure });
+    for (const settled of this.hooks.settleOnTurnEnd?.(reason) ?? []) this.completeHeldTool(settled.id, settled.status, settled.output);
     this.finishTools(reason);
     // A turn-end listener sees the turn closed: it may start the next one or close the session.
     const turnId = this.turnId;
     this.turnId = undefined; this.agentStarted = false; this.failure = undefined;
     this.sink.uiEvent?.({ type: 'turn.completed', turnId, stopReason: reason, ...(usage ? { usage } : {}) });
     this.sink.event?.({ type: 'turn-end' });
+  }
+
+  /** Updates a held tool item's output while running, or amends a settled non-declined tool with `late: true`. */
+  updateHeldTool(id: string, output: string): void {
+    const tool = this.tools.get(id);
+    if (!tool || tool.status === 'declined') return;
+    const terminal = tool.status === 'completed' || tool.status === 'failed';
+    const item: UiToolItem = { ...tool, output };
+    this.tools.set(id, item);
+    this.sink.uiEvent?.({ type: 'item.updated', item, ...(terminal ? { late: true } : {}) });
+  }
+
+  /** Completes a tool item that `holdToolCompletion` kept open past its wire response. */
+  completeHeldTool(id: string, status: 'completed' | 'failed' | 'declined', output?: string): void {
+    const tool = this.tools.get(id);
+    if (!tool || tool.status === 'completed' || tool.status === 'failed' || tool.status === 'declined') return;
+    const resolvedOutput = output ?? tool.output;
+    const item: UiToolItem = { ...tool, status, ...(resolvedOutput ? { output: resolvedOutput } : {}) };
+    this.tools.set(id, item);
+    this.sink.event?.({ type: 'tool-result', toolCallId: id, result: item.output ?? '', isError: status === 'failed' });
+    this.sink.uiEvent?.({ type: 'item.completed', item });
+  }
+
+  /** Assigns or repairs `parentItemId` on matching tool items once their parent is known. */
+  reparentTools(match: (id: string) => boolean, parentItemId: string): void {
+    for (const [id, tool] of this.tools) {
+      if (!match(id) || tool.parentItemId === parentItemId) continue;
+      const item: UiToolItem = { ...tool, parentItemId };
+      this.tools.set(id, item);
+      this.sink.uiEvent?.({ type: 'item.updated', item, late: true });
+    }
   }
 
   /** True when the update was the agent's own work inside a turn. */
@@ -88,7 +120,7 @@ export class AcpEvents {
   private closedTool(update: Record<string, unknown>): boolean {
     if (update.sessionUpdate !== 'tool_call' && update.sessionUpdate !== 'tool_call_update') return false;
     const status = this.tools.get(String(update.toolCallId))?.status;
-    return status === 'completed' || status === 'failed';
+    return status === 'completed' || status === 'failed' || status === 'declined';
   }
 
 
@@ -98,8 +130,8 @@ export class AcpEvents {
   }
 
   /** A mapper can fold one frame without mutating its caller's state. */
-  fork(sink: AcpEventSink): AcpEvents {
-    const next = new AcpEvents(sink, this.hooks);
+  fork(sink: AcpEventSink, hooks: AcpHooks = this.hooks): AcpEvents {
+    const next = new AcpEvents(sink, hooks);
     next.serial = this.serial; next.turnId = this.turnId;
     next.agentStarted = this.agentStarted; next.lastWork = this.lastWork; next.failure = this.failure;
     next.block = this.block ? { ...this.block } : undefined; next.released = this.released;
@@ -179,7 +211,7 @@ export class AcpEvents {
     // background command, a timer or a question completes in a later turn.
     if (this.hooks.agentWorkEnds && reason !== 'cancelled' && reason !== 'error') return;
     for (const [id, tool] of this.tools) {
-      if (tool.status === 'completed' || tool.status === 'failed') continue;
+      if (tool.status === 'completed' || tool.status === 'failed' || tool.status === 'declined') continue;
       const item: UiToolItem = { ...tool, status: 'failed', output: tool.output || (reason === 'cancelled' ? 'Cancelled' : 'Turn ended before the tool completed') };
       this.tools.set(id, item);
       this.sink.event?.({ type: 'tool-result', toolCallId: id, result: item.output!, isError: true });
@@ -203,18 +235,29 @@ export class AcpEvents {
     const wire = toolSchema.parse(update);
     if (wire.kind !== update.kind || wire.status !== update.status) this.notice('ACP normalized unknown tool metadata');
     const previous = this.tools.get(wire.toolCallId);
-    const item: UiToolItem = { ...toolItem(wire, previous),
-      ...this.hooks.normalizeTool?.(update, previous),
-    };
+    const item = this.resolveToolItem(update, wire, previous);
     this.tools.set(item.id, item);
-    if (!previous) this.sink.event?.({ type: 'tool-call', id: item.id, tool: item.name, input: item.input });
+    this.emitToolTransition(previous, item);
+    for (const settled of this.hooks.afterToolUpdate?.(update, item) ?? []) this.completeHeldTool(settled.id, settled.status, settled.output);
+    this.toolImages(wire, item.id);
+  }
+
+  private resolveToolItem(update: Record<string, unknown>, wire: AcpTool, previous: UiToolItem | undefined): UiToolItem {
+    const normalized: UiToolItem = { ...toolItem(wire, previous), ...this.hooks.normalizeTool?.(update, previous) };
+    const wireComplete = normalized.status === 'completed' || normalized.status === 'failed';
+    return wireComplete && this.hooks.holdToolCompletion?.(update, normalized) === true ? { ...normalized, status: 'running' } : normalized;
+  }
+
+  private emitToolTransition(previous: UiToolItem | undefined, item: UiToolItem): void {
+    if (!previous) {
+      this.sink.event?.({ type: 'tool-call', id: item.id, tool: item.name, input: item.input });
+      this.sink.uiEvent?.({ type: 'item.started', item: { ...item } });
+    }
     const complete = item.status === 'completed' || item.status === 'failed';
-    if (!previous) this.sink.uiEvent?.({ type: 'item.started', item: { ...item } });
     if (complete && previous?.status !== item.status) {
       this.sink.event?.({ type: 'tool-result', toolCallId: item.id, result: item.output ?? '', isError: item.status === 'failed' });
       this.sink.uiEvent?.({ type: 'item.completed', item: { ...item } });
     } else if (previous) this.sink.uiEvent?.({ type: 'item.updated', item: { ...item } });
-    this.toolImages(wire, item.id);
   }
 
   private toolImages(wire: AcpTool, itemId: string): void {

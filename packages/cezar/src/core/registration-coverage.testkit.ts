@@ -1,3 +1,4 @@
+import { readFileSync, readdirSync } from 'node:fs';
 import { parse } from '@babel/parser';
 import { traverse, type Node } from '@babel/types';
 
@@ -137,4 +138,11 @@ function importedLiteral(call: Node, path: readonly Node[], callee: string, modu
 /** Literal partitions require their unchanged module import and a top-level call. */
 export function registrationStrings(source: string, file: string, callee: string, moduleSpecifier: string, onImport?: () => void): string[] {
   return registrationArguments(source, file, callee, (call, path) => importedLiteral(call, path, callee, moduleSpecifier), onImport);
+}
+
+/** The groups every `<prefix>*.ts` file in `directory` registers through `callee`. A guard that uses
+ *  it declares those files as its inputs in squeal.config.json. */
+export function registrationGroupsIn(directory: URL, prefix: string, callee: string, catalog: string, knownGroups: readonly string[]): string[] {
+  return readdirSync(directory).filter(file => file.startsWith(prefix) && file.endsWith('.ts'))
+    .flatMap(file => registrationGroups(readFileSync(new URL(file, directory), 'utf8'), file, callee, catalog, knownGroups));
 }

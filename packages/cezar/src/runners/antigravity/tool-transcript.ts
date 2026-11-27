@@ -1,91 +1,45 @@
-import { statSync } from 'node:fs';
-import { open } from 'node:fs/promises';
-import { join } from 'node:path';
-import { StringDecoder } from 'node:string_decoder';
-import { hookEventName, isVisibleHookItem } from '@hearsay-tools/squawk/plugin/runtime';
-import { z, type HookStatus, type UiHookItem, type UiToolItem } from '@hearsay-tools/squawk/plugin';
-import { ANTIGRAVITY_APP_DATA_DIR } from './launch-args.ts';
+import { z, type UiHookItem, type UiToolItem } from '@hearsay-tools/squawk/plugin';
+import { parseChildMessageDelivery, parseSpawnedSubagentId } from './subagent-tracker.ts';
+import {
+  BoundedJsonlTailer,
+  NOT_RESULT_ROW_TYPES,
+  TRANSCRIPT_MAX_FLUSH_CHUNKS,
+  TRANSCRIPT_OUTPUT_CHARS,
+  TRANSCRIPT_READ_BYTES,
+  TranscriptPoller,
+  antigravityTranscriptPath,
+  transcriptCallKey,
+  transcriptHookItem,
+  transcriptResultText,
+  transcriptRowSchema,
+} from './transcript-tailer.ts';
+
+export { TRANSCRIPT_OUTPUT_CHARS, antigravityTranscriptPath, transcriptHookItem, transcriptResultText };
 
 /**
- * The CLI 1.5.14 ACP wire sends no result for a read, an MCP call or a subagent tool (the completed
- * update has no `content`, `rawOutput` or `_meta`, hearsay-tools/squawk#4099) and carries no hook
- * lifecycle frame. The CLI's own transcript keeps both tool results and injected hook messages
- * (`SYSTEM_MESSAGE` rows with `source: "SYSTEM_SDK"`). It is a private format: every read is
- * bounded, and a missing file or a changed format leaves no output (docs/runners/antigravity-wire.md).
+ * The CLI 1.5.14–1.5.18 ACP wire sends no result for a read, an MCP call or a subagent tool (the
+ * completed update has no `content`, `rawOutput` or `_meta`, hearsay-tools/squawk#4099) and carries
+ * no hook lifecycle frame. The CLI's own transcript keeps tool results, spawned subagent IDs, child
+ * message deliveries, and injected hook messages (`SYSTEM_MESSAGE` rows with `source: "SYSTEM_SDK"`).
+ * It is a private format: every read is bounded, and a missing file or a changed format leaves no
+ * output (docs/runners/antigravity-wire.md).
  */
-export const TRANSCRIPT_OUTPUT_CHARS = 64 * 1024;
-const READ_BYTES = 4 * 1024 * 1024;
-const MAX_FLUSH_CHUNKS = 8;
-const LINE_BYTES = 8 * 1024 * 1024;
 const POLL_MS = 250;
 /** How long after a tool completes the runner looks for its row. */
 export const TRANSCRIPT_WAIT_MS = 10_000;
-/** Rows that never hold a tool's result. */
-const NOT_RESULTS: ReadonlySet<string> = new Set(['PLANNER_RESPONSE', 'USER_INPUT', 'SYSTEM_MESSAGE', 'CHECKPOINT']);
-const HEADER = /^(?:Created|Completed) At: .*$/;
-const SYSTEM_BLOCK = /(?:^|\n)<SYSTEM_MESSAGE>\r?\n([\s\S]*)\r?\n<\/SYSTEM_MESSAGE>\s*$/;
-const HOOK_HEADER = /^The following system message was injected by an? ([A-Za-z][A-Za-z0-9_-]*) hook:\r?\n?([\s\S]*)$/;
-
-const rowSchema = z.object({
-  step_index: z.number().int().nonnegative(), type: z.string(), source: z.string().optional(),
-  status: z.string().optional(), content: z.string().optional(), error: z.string().optional(),
-  tool_calls: z.array(z.object({ name: z.string(), args: z.unknown().optional() })).optional(),
-});
-
-export function antigravityTranscriptPath(geminiDir: string, sessionId: string): string {
-  return join(geminiDir, ANTIGRAVITY_APP_DATA_DIR, 'brain', sessionId, '.system_generated', 'logs', 'transcript_full.jsonl');
-}
-
-/** A JSON value with object keys sorted, so two equal argument objects compare equal as text. */
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value ?? null);
-}
-
-function boundOutput(text: string): string {
-  return text.length > TRANSCRIPT_OUTPUT_CHARS ? `${text.slice(0, TRANSCRIPT_OUTPUT_CHARS)}\n… (output truncated by Squawk)` : text;
-}
-
-/** The text the agent received, without the CLI's `Created At:`/`Completed At:` lines, bounded. */
-export function transcriptResultText(row: z.infer<typeof rowSchema>): string {
-  const lines = (row.content ?? '').split('\n');
-  let first = 0;
-  while (first < lines.length && HEADER.test(lines[first]!)) first++;
-  const text = lines.slice(first).join('\n') || (row.error ?? '');
-  return boundOutput(text);
-}
-
-/** A `SYSTEM_SDK` `SYSTEM_MESSAGE` row injected by a native Antigravity hook, mapped to a hook item. */
-export function transcriptHookItem(row: z.infer<typeof rowSchema>): UiHookItem | undefined {
-  if (row.type !== 'SYSTEM_MESSAGE' || row.source !== 'SYSTEM_SDK') return undefined;
-  const content = row.content ?? '';
-  const body = (SYSTEM_BLOCK.exec(content)?.[1] ?? content).trim();
-  const header = HOOK_HEADER.exec(body);
-  if (!header) return undefined;
-  const status: HookStatus = row.status === 'ERROR' ? 'failed' : 'completed';
-  const text = header[2]!.trim();
-  const entries: UiHookItem['entries'] = text
-    ? [{ kind: status === 'failed' ? 'error' : 'context', text: boundOutput(text) }]
-    : row.error?.trim() ? [{ kind: 'error', text: boundOutput(row.error.trim()) }] : [];
-  const item: UiHookItem = { kind: 'hook', id: `hook_step_${row.step_index}`, event: hookEventName(header[1]!), status, entries };
-  return isVisibleHookItem(item) ? item : undefined;
-}
 
 export interface TranscriptCall { id: string; name: string; args: unknown }
+export interface SubagentTranscriptHooks {
+  onSpawn?(parentItemId: string, childId: string): void;
+  onMessage?(childId: string, body: string): void;
+}
 
 /** Result texts held at once; the oldest goes first. */
 const HELD_RESULTS = 64;
 
 /**
- * Matches tool calls to their result rows, and extracts injected hook `SYSTEM_MESSAGE` rows.
- * A planner row lists the step's calls with the same `name` and `args` the wire sends, and the k-th
- * call's result is the row `step_index + 1 + k`. Each call takes its slot when it starts, so the
- * n-th started call with a name and arguments gets the n-th planned one: neither the order calls
- * complete in nor a call that stopped waiting moves another call's result. Only results a waiting
- * call can still take are held.
+ * Matches tool calls to their result rows, extracts injected hook `SYSTEM_MESSAGE` rows, and
+ * surfaces delivered child subagent messages (`sender=<childId>`).
  */
 export class AntigravityTranscript {
   /** Per call key: planned result steps, and started calls, that have no partner yet. */
@@ -96,10 +50,12 @@ export class AntigravityTranscript {
   private readonly results = new Map<number, string>();
   private readonly hooks: UiHookItem[] = [];
   private readonly seenHooks = new Set<number>();
+  private readonly childMessages: Array<{ childId: string; body: string }> = [];
+  private readonly seenMessages = new Set<number>();
 
   /** A call started on the wire: it takes the next planned slot of its name and arguments. */
   start(call: TranscriptCall): void {
-    const key = callKey(call.name, call.args);
+    const key = transcriptCallKey(call.name, call.args);
     this.started.set(key, [...this.started.get(key) ?? [], call.id]);
     this.pair(key);
   }
@@ -114,25 +70,25 @@ export class AntigravityTranscript {
   }
 
   addRow(value: unknown): void {
-    const row = rowSchema.safeParse(value);
+    const row = transcriptRowSchema.safeParse(value);
     if (!row.success) return;
     const { step_index: step, type, tool_calls: calls } = row.data;
     if (type === 'PLANNER_RESPONSE') {
       calls?.forEach((call, index) => {
-        const key = callKey(call.name, call.args);
+        const key = transcriptCallKey(call.name, call.args);
         this.planned.set(key, [...this.planned.get(key) ?? [], step + 1 + index]);
         this.pair(key);
       });
     } else if (type === 'SYSTEM_MESSAGE') {
-      const hook = transcriptHookItem(row.data);
-      if (hook && !this.seenHooks.has(step)) { this.seenHooks.add(step); this.hooks.push(hook); }
-    } else if (!NOT_RESULTS.has(type) && this.wanted(step)) this.hold(step, transcriptResultText(row.data));
+      this.addSystemRow(row.data);
+    } else if (!NOT_RESULT_ROW_TYPES.has(type) && this.wanted(step)) this.hold(step, transcriptResultText(row.data));
   }
 
   /** Injected hook items read since the last drain. */
-  drainHooks(): UiHookItem[] {
-    return this.hooks.splice(0);
-  }
+  drainHooks(): UiHookItem[] { return this.hooks.splice(0); }
+
+  /** Subagent reply notices read since the last drain. */
+  drainChildMessages(): Array<{ childId: string; body: string }> { return this.childMessages.splice(0); }
 
   /** The call's result text once its row is read; reading it consumes it. */
   output(id: string): string | undefined {
@@ -142,6 +98,14 @@ export class AntigravityTranscript {
     this.steps.delete(id);
     this.results.delete(step!);
     return text;
+  }
+
+  private addSystemRow(row: z.infer<typeof transcriptRowSchema>): void {
+    const hook = transcriptHookItem(row);
+    if (hook && !this.seenHooks.has(row.step_index)) { this.seenHooks.add(row.step_index); this.hooks.push(hook); return; }
+    if (row.source !== 'SYSTEM' || !row.content || this.seenMessages.has(row.step_index)) return;
+    const delivery = parseChildMessageDelivery(row.content);
+    if (delivery) { this.seenMessages.add(row.step_index); this.childMessages.push(delivery); }
   }
 
   private pair(key: string): void {
@@ -171,8 +135,6 @@ export class AntigravityTranscript {
   }
 }
 
-function callKey(name: string, args: unknown): string { return `${name}\u0000${canonical(args ?? {})}`; }
-
 const wireSchema = z.object({
   sessionUpdate: z.enum(['tool_call', 'tool_call_update']), toolCallId: z.string(), name: z.string(),
   args: z.unknown().optional(), rawInput: z.unknown().optional(),
@@ -191,90 +153,78 @@ export function transcriptCall(update: Record<string, unknown>): TranscriptCall 
   return wireCall(update);
 }
 
-interface Pending { call: TranscriptCall; item?: UiToolItem; deadline: number }
+interface Pending { call: TranscriptCall; item?: UiToolItem; spawn?: boolean; deadline: number }
 
 /**
- * Reads the session's transcript while a completed tool waits for its output, and amends the tool
- * card when the row appears. The row can land after the wire's completed update, so the read polls
- * up to `TRANSCRIPT_WAIT_MS`. It reads only bytes appended since the session opened.
+ * Reads the session's transcript while a completed tool waits for its output, resolves spawned
+ * subagent conversation IDs, detects child message deliveries, and emits injected hook items.
  */
 export class AntigravityToolOutputs {
-  private path: string | undefined;
-  private offset = 0;
-  private tail = '';
-  private readonly decoder = new StringDecoder('utf8');
-  private skippingLine = false;
+  private tailer: BoundedJsonlTailer | undefined;
   private broken = false;
-  private closed = false;
-  private hasMore = false;
-  private timer: NodeJS.Timeout | undefined;
-  private reading: Promise<void> | undefined;
   private readonly transcript = new AntigravityTranscript();
   private readonly pending = new Map<string, Pending>();
   private readonly seen = new Set<string>();
+  private readonly poller: TranscriptPoller;
   constructor(
     private readonly amend: (item: UiToolItem) => void,
     private readonly now: () => number = Date.now,
     private readonly onHook?: (item: UiHookItem) => void,
-    private readonly readBytes = READ_BYTES,
-  ) {}
+    private readonly readBytes = TRANSCRIPT_READ_BYTES,
+    private readonly subagents?: SubagentTranscriptHooks,
+  ) {
+    this.poller = new TranscriptPoller(
+      () => this.read(),
+      () => {
+        this.expire();
+        return Boolean(this.onHook || this.subagents || [...this.pending.values()].some(pending => pending.item || pending.spawn));
+      },
+      POLL_MS,
+      () => { this.broken = true; this.pending.clear(); },
+    );
+  }
 
   /** The session is open: read its transcript from its current end. */
   open(path: string): void {
-    this.path = path;
-    try { this.offset = statSync(path).size; } catch { this.offset = 0; }
-    if (this.onHook) this.schedule(POLL_MS);
+    this.tailer = new BoundedJsonlTailer(path, true, this.readBytes);
+    if (this.onHook || this.subagents) this.poller.schedule(POLL_MS);
   }
 
   /** A wire update. A call takes its transcript slot when it first appears; a terminal update with
    *  no result starts the wait for its row, and one with a result gives the slot up. */
   observe(update: Record<string, unknown>): void {
-    if (this.closed || this.broken || !this.path) return;
+    if (this.poller.closed || this.broken || !this.tailer) return;
     const call = wireCall(update);
     if (!call) return;
     if (!this.seen.has(call.id)) { this.seen.add(call.id); this.transcript.start(call); }
     if (!TERMINAL.has(update.status)) return;
-    if (transcriptCall(update)) { if (!this.pending.has(call.id)) this.pending.set(call.id, { call, deadline: this.now() + TRANSCRIPT_WAIT_MS }); }
-    else this.transcript.drop(call.id);
+    if (!transcriptCall(update)) { this.transcript.drop(call.id); return; }
+    const spawn = call.name === 'invoke_subagent' && update.status === 'completed' && !!this.subagents?.onSpawn;
+    if (!this.pending.has(call.id)) this.pending.set(call.id, { call, spawn, deadline: this.now() + TRANSCRIPT_WAIT_MS });
+    if (spawn) this.poller.schedule(0);
   }
 
   /** The mapped tool item closed with no output: amend it once its row is read. */
   completed(item: UiToolItem): void {
     const pending = this.pending.get(item.id);
-    if (!pending) return;
+    if (!pending || pending.spawn) return;
     if (item.output) { this.pending.delete(item.id); return; }
     pending.item = item;
-    this.schedule(0);
+    this.poller.schedule(0);
   }
 
-  close(): void { this.closed = true; clearTimeout(this.timer); this.pending.clear(); }
+  close(): void { this.poller.close(); this.pending.clear(); }
 
   /** One read of appended rows, then amend what resolved. Tests call it directly. */
-  poll(): Promise<void> {
-    this.reading ??= this.read().catch(() => { this.broken = true; this.pending.clear(); }).finally(() => { this.reading = undefined; });
-    return this.reading;
-  }
+  poll(): Promise<void> { return this.poller.poll(); }
 
   /** Wait for any in-flight read, then drain unread exit bytes in bounded chunks. */
   async flush(): Promise<void> {
-    clearTimeout(this.timer);
-    this.timer = undefined;
-    while (this.reading) await this.reading;
-    for (let chunk = 0; chunk < MAX_FLUSH_CHUNKS && !this.closed && !this.broken && this.path; chunk++) {
+    await this.poller.waitIdle();
+    for (let chunk = 0; chunk < TRANSCRIPT_MAX_FLUSH_CHUNKS && !this.poller.closed && !this.broken && this.tailer; chunk++) {
       await this.poll();
-      if (!this.hasMore) break;
+      if (!this.tailer.hasMore) break;
     }
-  }
-
-  private schedule(delay: number): void {
-    if (this.closed || this.timer) return;
-    this.timer = setTimeout(() => { this.timer = undefined; void this.poll().then(() => this.next()); }, delay);
-    this.timer.unref?.();
-  }
-
-  private next(): void {
-    this.expire();
-    if (this.onHook || [...this.pending.values()].some(pending => pending.item)) this.schedule(POLL_MS);
   }
 
   private expire(): void {
@@ -283,43 +233,27 @@ export class AntigravityToolOutputs {
   }
 
   private async read(): Promise<void> {
-    if (this.closed || this.broken || !this.path) return;
+    if (this.poller.closed || this.broken || !this.tailer) return;
     this.expire();
-    await this.readAppended(this.path);
-    for (const hook of this.transcript.drainHooks()) if (!this.closed) this.onHook?.(hook);
-    for (const [id, pending] of this.pending) {
-      if (!pending.item) continue;
-      const output = this.transcript.output(id);
-      if (output === undefined) continue;
-      this.pending.delete(id);
-      if (output && !this.closed) this.amend({ ...pending.item, output });
+    await this.tailer.readNext(row => this.transcript.addRow(row));
+    for (const hook of this.transcript.drainHooks()) if (!this.poller.closed) this.onHook?.(hook);
+    for (const [id, pending] of this.pending) this.resolvePending(id, pending);
+    for (const delivery of this.transcript.drainChildMessages()) {
+      if (!this.poller.closed) this.subagents?.onMessage?.(delivery.childId, delivery.body);
     }
   }
 
-  private async readAppended(path: string): Promise<void> {
-    let file;
-    try { file = await open(path, 'r'); } catch { this.hasMore = false; return; }
-    try {
-      const { size } = await file.stat();
-      if (size <= this.offset) { this.hasMore = false; return; }
-      const length = Math.min(size - this.offset, this.readBytes);
-      const buffer = Buffer.alloc(length);
-      const { bytesRead } = await file.read(buffer, 0, length, this.offset);
-      this.offset += bytesRead;
-      this.hasMore = bytesRead > 0 && this.offset < size;
-      this.lines(this.decoder.write(buffer.subarray(0, bytesRead)));
-    } finally { await file.close(); }
-  }
-
-  private lines(chunk: string): void {
-    const lines = (this.tail + chunk).split('\n');
-    this.tail = lines.pop() ?? '';
-    for (const line of lines) {
-      if (this.skippingLine) { this.skippingLine = false; continue; }
-      if (!line.trim()) continue;
-      try { this.transcript.addRow(JSON.parse(line)); } catch { /* A row the format no longer matches has no output. */ }
+  private resolvePending(id: string, pending: Pending): void {
+    if (!pending.item && !pending.spawn) return;
+    const output = this.transcript.output(id);
+    if (output === undefined) return;
+    this.pending.delete(id);
+    if (this.poller.closed) return;
+    if (pending.spawn) {
+      const childId = parseSpawnedSubagentId(output);
+      if (childId) this.subagents?.onSpawn?.(id, childId);
+    } else if (output && pending.item) {
+      this.amend({ ...pending.item, output });
     }
-    // A row past the bound is dropped; reading resumes at the next line.
-    if (this.tail.length > LINE_BYTES) { this.tail = ''; this.skippingLine = true; }
   }
 }

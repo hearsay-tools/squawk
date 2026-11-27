@@ -4,7 +4,8 @@ import './every-runner.testkit.ts';
 import { BUILT_IN_RUNNER_IDS } from './built-in-runner-ids.testkit.ts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { describeHarnessParity, HARNESS_PARITY_GROUPS, harnessParityFile, harnessParityRegistrations, type HarnessParityPart } from './harness-parity-cells.testkit.ts';
+import { describeHarnessParity, HARNESS_PARITY_GROUPS, harnessParityFile, harnessParityRegistrations, registeredGroupRows, type HarnessParityPart } from './harness-parity-cells.testkit.ts';
+import { harnessGroupRows } from './harness-parity-inventory.testkit.ts';
 import { PARITY_ROSTER } from './parity-classes.testkit.ts';
 
 import { describeAutosaveChurn, describeAutosaveSettlement } from './harness-autosave-settlement.testkit.ts';
@@ -13,6 +14,11 @@ import { describeAutosaveChurn, describeAutosaveSettlement } from './harness-aut
 describeHarnessParity('once');
 
 describe('harness parity part registration', () => {
+  // parity-classes.test.ts reads the engine-free collection; it must name every row the real cells register (hearsay-tools/squawk#3962).
+  it('collects the same rows per group without the workflow engine as the real registrations', () => {
+    expect(harnessGroupRows()).toEqual(registeredGroupRows());
+  });
+
   it('registers every criterion and runner exactly once across its part files', () => {
     const parts = Object.keys(HARNESS_PARITY_GROUPS) as HarnessParityPart[];
     const expectedFiles = PARITY_ROSTER.flatMap(runner =>

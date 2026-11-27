@@ -97,8 +97,18 @@ describe('Antigravity CLI recorded ACP wire', () => {
     expect(tools[0]).toBe('echo');
   });
 
-  it('retains native subagent arguments when an empty progress update follows', () => {
-    const completed = replay('cli-subagent').filter(event => event.type === 'item.completed');
-    expect(completed).toContainEqual(expect.objectContaining({ item: expect.objectContaining({ toolKind: 'task', status: 'completed' }) }));
+  it('nests forwarded CLI 1.5.18 subagent work under invoke_subagent and settles killed subagents as declined', () => {
+    const events18 = replay('cli-subagent-1.5.18');
+    const startedTask = events18.find(event => event.type === 'item.started' && event.item.kind === 'tool' && event.item.toolKind === 'task');
+    const completedTask = events18.find(event => event.type === 'item.completed' && event.item.kind === 'tool' && event.item.toolKind === 'task');
+    // oxlint-disable-next-line cez/test-enum-literal -- UI tool status is independent of run status.
+    expect(startedTask).toMatchObject({ item: { id: 'call_5311290449871908198', title: 'Task: Shell Runner', status: 'running', input: expect.objectContaining({ subagent_type: 'self' }) } });
+    expect(completedTask).toMatchObject({ item: { id: 'call_5311290449871908198', title: 'Task: Shell Runner', status: 'completed' } });
+    expect(events18).toContainEqual(expect.objectContaining({
+      type: 'item.completed',
+      item: expect.objectContaining({ id: '7bb3c467-2cb1-4fdc-a962-db063faac0e6:call_17336341270670134121', parentItemId: 'call_5311290449871908198', name: 'Bash', status: 'completed' }),
+    }));
+    const completed14 = replay('cli-subagent').filter(event => event.type === 'item.completed');
+    expect(completed14).toContainEqual(expect.objectContaining({ item: expect.objectContaining({ toolKind: 'task', title: 'Task: Subagent Runner', status: 'declined' }) }));
   });
 });

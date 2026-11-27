@@ -299,14 +299,17 @@
       "kind": "tool",
       "id": "call_5704470663332638531",
       "name": "Task",
-      "title": "Run invoke_subagent",
+      "title": "Task: Greeting Helper",
       "toolKind": "task",
       "status": "running",
       "input": {
         "Prompt": "say hi",
         "Role": "Greeting Helper",
         "TypeName": "self",
-        "Workspace": "inherit"
+        "Workspace": "inherit",
+        "subagent_type": "self",
+        "description": "Greeting Helper",
+        "prompt": "say hi"
       }
     }
   },
@@ -316,14 +319,17 @@
       "kind": "tool",
       "id": "call_5704470663332638531",
       "name": "Task",
-      "title": "Run invoke_subagent",
+      "title": "Task: Greeting Helper",
       "toolKind": "task",
       "status": "failed",
       "input": {
         "Prompt": "say hi",
         "Role": "Greeting Helper",
         "TypeName": "self",
-        "Workspace": "inherit"
+        "Workspace": "inherit",
+        "subagent_type": "self",
+        "description": "Greeting Helper",
+        "prompt": "say hi"
       }
     }
   },

@@ -108,10 +108,10 @@ export function setDelegationProvisioner(host: LaunchSettingsHost, provisioner: 
   };
 }
 
-export function provisionSession(host: LaunchSettingsHost, runId: string, state: ActiveRun) {
+export function provisionSession(host: LaunchSettingsHost, runId: string, state: ActiveRun, runner?: string) {
   state.liveSession.revokeDelegation?.(); state.liveSession.clearDelegationRevoker();
   if (host.historyDeletionPending(runId)) return;
-  const session = host.delegationProvisioner()?.(runId);
+  const session = host.delegationProvisioner()?.(runId, runner);
   state.liveSession.installDelegationRevoker(session?.revoke);
   return session;
 }
