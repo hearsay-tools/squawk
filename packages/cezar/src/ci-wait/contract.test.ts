@@ -67,8 +67,8 @@ it('returns a bounded wire receipt without persisted authority or delivery state
   const { waitId, ...identity } = receipt;
   const stored = ciWaitSchema.safeParse({ ...identity, id: waitId, generation: 'session-generation', turnId: 'originating-turn', timeoutSeconds: 1800 });
   expect(stored.success).toBe(true);
-  // A wait stored before hearsay-tools/squawk#4392 waited on every check.
-  expect(stored.data?.checks).toBe('all');
+  // A wait stored before hearsay-tools/squawk#4392 has no scope; the supervisor reads it as "all".
+  expect(stored.data?.checks).toBeUndefined();
 });
 
 it.each([

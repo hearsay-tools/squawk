@@ -89,8 +89,8 @@ export const ciWaitSchema = ciPrIdentitySchema.extend({
   // Legacy `ciWait` rows predate the target (hearsay-tools/cezarion#1425): they waited for checks.
   until: prWaitUntilSchema.default('checks'),
   wakeOnConflict: z.boolean().default(true),
-  // Waits stored before hearsay-tools/squawk#4392 waited on every check.
-  checks: prWaitChecksSchema.default('all'),
+  /** Absent on waits stored before hearsay-tools/squawk#4392: they waited on every check. */
+  checks: prWaitChecksSchema.optional(),
   /** The caller named a head GitHub did not show yet at registration (hearsay-tools/squawk#3972). */
   callerHead: z.literal(true).optional(),
   registeredAt: z.iso.datetime(),
