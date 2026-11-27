@@ -19,6 +19,7 @@ import { withCompatibilityPackages } from '../packages/cezar/src/release/compati
 import { withPublicationPackage } from '../packages/cezar/src/release/publication.ts';
 import { stampManifests } from '../packages/cezar/src/release/snapshot.ts';
 import {
+  formatOidcPublishHint,
   isReleaseBump,
   resolveReleaseTarget,
   stampStableManifests,
@@ -175,6 +176,14 @@ withCompatibilityPackages(dirs.cezar, publication.cezar, compatibility => {
         console.log(`release: ${name}@${version} already on the registry — skipping`);
         published.push(name);
         continue;
+      }
+      if (!dryRun && oidc && !token) {
+        console.error(
+          formatOidcPublishHint(name, version, {
+            repository: process.env.GITHUB_REPOSITORY,
+            workflowRef: process.env.GITHUB_WORKFLOW_REF,
+          }),
+        );
       }
       throw err;
     }
