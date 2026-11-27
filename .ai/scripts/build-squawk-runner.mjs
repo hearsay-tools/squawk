@@ -16,6 +16,9 @@ const DEFAULT_TEMPLATE_NAME = 'squawk-runner';
 const DEFAULT_DESCRIPTION = 'Ubuntu 26.04 Squeal test runner for Squawk (node uid=1000, Git 2.53, Chrome Stable, pinned agent-browser, tini)';
 const POLL_INTERVAL_MS = 3_000;
 const BUILD_TIMEOUT_MS = 45 * 60 * 1_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
+const DEFAULT_UPLOAD_TIMEOUT_MS = 5 * 60_000;
+const PROXY_ENV_KEYS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy'];
 
 export function readDockerfileAgentBrowserVersion(dockerfileText) {
   const match = /^\s*ARG\s+AGENT_BROWSER_VERSION=([^\s#]+)/m.exec(dockerfileText);
@@ -56,58 +59,104 @@ function formatCurlConfigValue(value) {
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
+function collectProxySecrets(env = process.env) {
+  const values = [];
+  for (const key of PROXY_ENV_KEYS) {
+    const value = env?.[key];
+    if (typeof value === 'string' && value.length > 0) values.push(value);
+  }
+  return values;
+}
+
+function extractUrlFragments(raw, fragments) {
+  let parsed = null;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    try {
+      parsed = new URL(`http://${raw}`);
+    } catch {
+      return;
+    }
+  }
+  if (parsed.pathname && parsed.pathname.length > 1) fragments.push(parsed.pathname);
+  if (parsed.search && parsed.search.length > 1) fragments.push(parsed.search);
+  for (const secret of [parsed.username, parsed.password, ...parsed.searchParams.values()]) {
+    if (!secret) continue;
+    if (secret.length >= 4) fragments.push(secret);
+    try {
+      const decoded = decodeURIComponent(secret);
+      if (decoded.length >= 4) fragments.push(decoded);
+    } catch {
+      // Leave malformed percent-encoding as raw secret only.
+    }
+  }
+}
+
 function collectSecretFragments(values) {
   const fragments = [];
   for (const value of values) {
     if (typeof value !== 'string' || value.length === 0) continue;
     fragments.push(value);
-    try {
-      const parsed = new URL(value);
-      if (parsed.pathname && parsed.pathname.length > 1) fragments.push(parsed.pathname);
-      if (parsed.search && parsed.search.length > 1) fragments.push(parsed.search);
-      for (const paramValue of parsed.searchParams.values()) {
-        if (paramValue.length >= 6) fragments.push(paramValue);
-      }
-    } catch {
-      // Not a URL; raw token string is already included.
-    }
+    extractUrlFragments(value, fragments);
   }
   return [...new Set(fragments)].sort((a, b) => b.length - a.length);
 }
 
-function sanitizeDiagnostic(rawText, secrets) {
+function sanitizeDiagnostic(rawText, secrets, env = process.env) {
   let clean = String(rawText ?? '');
-  for (const secret of collectSecretFragments(secrets)) {
+  for (const secret of collectSecretFragments([...secrets, ...collectProxySecrets(env)])) {
     clean = clean.split(secret).join('[redacted]');
   }
   clean = clean
     .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(/https?:\/\/\S+/gi, '[redacted-url]')
+    .replace(/[a-z][a-z0-9+.-]*:\/\/\S+/gi, '[redacted-url]')
+    .replace(/[^\s/@:]+:[^\s/@]+@\S+/g, '[redacted-credentials]')
     .replace(/\s+/g, ' ')
     .trim();
   return clean.slice(0, 200);
 }
 
-function runCurl({ label, args, stdinConfig, secrets = [], maxStdoutBytes = 16 * 1024 * 1024, curlBin = 'curl' }) {
+function runCurl({
+  label,
+  args,
+  stdinConfig,
+  secrets = [],
+  maxStdoutBytes = 16 * 1024 * 1024,
+  timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+  curlBin = 'curl',
+  env = process.env,
+}) {
+  if (timeoutMs <= 0) {
+    return Promise.reject(new Error(`${label} timed out`));
+  }
+  const maxTimeSec = String(Math.max(1, Math.ceil(timeoutMs / 1000)));
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(curlBin, ['--config', '-', ...args], {
+    const child = spawn(curlBin, ['--config', '-', '--max-time', maxTimeSec, ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
+      env,
     });
     const stdoutChunks = [];
     const stderrChunks = [];
     let stdoutBytes = 0;
     let stderrBytes = 0;
     let settled = false;
-    const fail = (err) => {
+    let timer = null;
+    const finish = (cb, value) => {
       if (settled) return;
       settled = true;
-      rejectPromise(err);
+      if (timer) clearTimeout(timer);
+      cb(value);
     };
+    timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(rejectPromise, new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
     child.stdout.on('data', (chunk) => {
       stdoutBytes += chunk.length;
       if (stdoutBytes > maxStdoutBytes) {
         child.kill('SIGKILL');
-        fail(new Error(`${label} failed: curl stdout exceeded ${maxStdoutBytes} bytes`));
+        finish(rejectPromise, new Error(`${label} failed: curl stdout exceeded ${maxStdoutBytes} bytes`));
         return;
       }
       stdoutChunks.push(chunk);
@@ -122,25 +171,23 @@ function runCurl({ label, args, stdinConfig, secrets = [], maxStdoutBytes = 16 *
       // Ignore EPIPE when curl exits before consuming stdin.
     });
     child.on('error', (err) => {
-      fail(new Error(`${label} failed: unable to start curl (${err.code ?? 'spawn_error'})`));
+      finish(rejectPromise, new Error(`${label} failed: unable to start curl (${err.code ?? 'spawn_error'})`));
     });
     child.on('close', (code, signal) => {
-      if (settled) return;
-      settled = true;
       if (code === 0) {
-        resolvePromise(Buffer.concat(stdoutChunks).toString('utf8'));
+        finish(resolvePromise, Buffer.concat(stdoutChunks).toString('utf8'));
         return;
       }
-      const stderrText = sanitizeDiagnostic(Buffer.concat(stderrChunks).toString('utf8'), secrets);
+      const stderrText = sanitizeDiagnostic(Buffer.concat(stderrChunks).toString('utf8'), secrets, env);
       const status = signal ? `killed by ${signal}` : `exited ${code ?? 'unknown'}`;
       const detail = stderrText ? `: ${stderrText}` : '';
-      rejectPromise(new Error(`${label} failed (curl ${status}${detail})`));
+      finish(rejectPromise, new Error(`${label} failed (curl ${status}${detail})`));
     });
     child.stdin.end(stdinConfig);
   });
 }
 
-async function curlJson({ label, method, url, authToken, body, curlBin }) {
+async function curlJson({ label, method, url, authToken, body, timeoutMs, curlBin, env }) {
   const args = ['-sS', '-X', method, '-w', '\n%{http_code}'];
   if (isLoopbackUrl(url)) args.push('--noproxy', '*');
   if (body !== undefined) {
@@ -153,7 +200,9 @@ async function curlJson({ label, method, url, authToken, body, curlBin }) {
     args,
     stdinConfig: `${configLines.join('\n')}\n`,
     secrets: authToken ? [authToken] : [],
+    timeoutMs,
     curlBin,
+    env,
   });
   const splitAt = output.lastIndexOf('\n');
   const status = Number(output.slice(splitAt + 1).trim());
@@ -169,7 +218,7 @@ async function curlJson({ label, method, url, authToken, body, curlBin }) {
   return { status, body: parsed };
 }
 
-async function uploadArchive(uploadUrl, archivePath, curlBin) {
+async function uploadArchive(uploadUrl, archivePath, { timeoutMs, curlBin, env }) {
   // Presigned PUT URL is a bearer credential: pass via stdin config, send no Authorization header, and never log it.
   const args = ['--fail-with-body', '-sS', '-X', 'PUT', '-H', 'Expect:', '--data-binary', `@${archivePath}`];
   if (isLoopbackUrl(uploadUrl)) args.push('--noproxy', '*');
@@ -179,7 +228,9 @@ async function uploadArchive(uploadUrl, archivePath, curlBin) {
     stdinConfig: `url = ${formatCurlConfigValue(uploadUrl)}\n`,
     secrets: [uploadUrl],
     maxStdoutBytes: 4 * 1024 * 1024,
+    timeoutMs,
     curlBin,
+    env,
   });
 }
 
@@ -200,11 +251,14 @@ export async function publishTemplate({
   timeoutMs = BUILD_TIMEOUT_MS,
   onLog = (chunk) => process.stdout.write(chunk),
   curlBin = 'curl',
+  env = process.env,
 } = {}) {
   const version = assertPinnedAgentBrowserMatch(repoRoot);
   const contextDir = join(repoRoot, '.ai/squeal-runner');
   const workDir = mkdtempSync(join(tmpdir(), 'squawk-runner-build-'));
   const archivePath = join(workDir, 'context.tar.gz');
+  const requestTimeoutMs = Math.min(DEFAULT_REQUEST_TIMEOUT_MS, timeoutMs);
+  const uploadTimeoutMs = Math.min(DEFAULT_UPLOAD_TIMEOUT_MS, timeoutMs);
   try {
     const sizeBytes = packBuildContext(contextDir, archivePath);
     const base = apiBaseUrl.replace(/\/$/, '');
@@ -216,14 +270,16 @@ export async function publishTemplate({
         url: `${base}/v1/template-builds`,
         authToken,
         body: { name, size_bytes: sizeBytes, description },
+        timeoutMs: requestTimeoutMs,
         curlBin,
+        env,
       }),
       [200, 201],
     );
     if (!created?.id || !created?.upload_url) {
       throw new Error('POST /v1/template-builds returned no id or upload_url');
     }
-    await uploadArchive(created.upload_url, archivePath, curlBin);
+    await uploadArchive(created.upload_url, archivePath, { timeoutMs: uploadTimeoutMs, curlBin, env });
     requireStatus(
       `POST /v1/template-builds/${created.id}/start`,
       await curlJson({
@@ -231,7 +287,9 @@ export async function publishTemplate({
         method: 'POST',
         url: `${base}/v1/template-builds/${created.id}/start`,
         authToken,
+        timeoutMs: requestTimeoutMs,
         curlBin,
+        env,
       }),
       [200, 201, 202],
     );
@@ -243,6 +301,7 @@ export async function publishTemplate({
       timeoutMs,
       onLog,
       curlBin,
+      env,
     });
     return { buildId: created.id, version, template: result.template };
   } finally {
@@ -250,10 +309,14 @@ export async function publishTemplate({
   }
 }
 
-async function pollBuildLogs({ base, buildId, authToken, pollIntervalMs, timeoutMs, onLog, curlBin }) {
+async function pollBuildLogs({ base, buildId, authToken, pollIntervalMs, timeoutMs, onLog, curlBin, env }) {
   const deadline = Date.now() + timeoutMs;
   let offset = 0;
   while (true) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new Error(`template build ${buildId} timed out after ${Math.round(timeoutMs / 1000)}s`);
+    }
     const chunk = requireStatus(
       `GET /v1/template-builds/${buildId}/logs`,
       await curlJson({
@@ -261,7 +324,9 @@ async function pollBuildLogs({ base, buildId, authToken, pollIntervalMs, timeout
         method: 'GET',
         url: `${base}/v1/template-builds/${buildId}/logs?offset=${offset}`,
         authToken,
+        timeoutMs: Math.min(DEFAULT_REQUEST_TIMEOUT_MS, remainingMs),
         curlBin,
+        env,
       }),
       [200],
     );
@@ -273,10 +338,11 @@ async function pollBuildLogs({ base, buildId, authToken, pollIntervalMs, timeout
       const message = chunk.error?.message ?? 'unknown failure';
       throw new Error(`template build ${buildId} failed (${code}): ${message}`);
     }
-    if (Date.now() >= deadline) {
+    const sleepMs = Math.min(pollIntervalMs, deadline - Date.now());
+    if (sleepMs <= 0) {
       throw new Error(`template build ${buildId} timed out after ${Math.round(timeoutMs / 1000)}s (status: ${chunk?.status ?? 'unknown'})`);
     }
-    await delay(pollIntervalMs);
+    await delay(sleepMs);
   }
 }
 

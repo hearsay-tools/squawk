@@ -186,8 +186,9 @@ test('squeal-remote-setup downloads pinned agent-browser when PATH holds another
   assert.match(run.stderr, /ready: .*agent-browser 9\.9\.9/);
 });
 
-async function startBuildStubServer(t, { failBuild = false, failUploadStatus = null, uploadPath = '/upload/signed' } = {}) {
+async function startBuildStubServer(t, { failBuild = false, failUploadStatus = null, uploadPath = '/upload/signed', hangLogs = false } = {}) {
   const seen = { createAuth: null, createBody: null, uploadAuth: null, uploadBytes: 0, startCalled: false, logOffsets: [] };
+  const openSockets = new Set();
   const server = createServer((req, res) => {
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
@@ -198,12 +199,7 @@ async function startBuildStubServer(t, { failBuild = false, failUploadStatus = n
         seen.createAuth = req.headers.authorization ?? null;
         seen.createBody = JSON.parse(body.toString('utf8'));
         res.writeHead(201, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({
-          id: 'tb_0123456789abcdef0123',
-          name: seen.createBody.name,
-          status: 'created',
-          upload_url: `http://127.0.0.1:${server.address().port}${uploadPath}`,
-        }));
+        res.end(JSON.stringify({ id: 'tb_0123456789abcdef0123', name: seen.createBody.name, status: 'created', upload_url: `http://127.0.0.1:${server.address().port}${uploadPath}` }));
         return;
       }
       if (req.method === 'PUT' && `${url.pathname}${url.search}` === uploadPath) {
@@ -220,27 +216,16 @@ async function startBuildStubServer(t, { failBuild = false, failUploadStatus = n
         return;
       }
       if (req.method === 'GET' && url.pathname === '/v1/template-builds/tb_0123456789abcdef0123/logs') {
+        if (hangLogs) return;
         const offset = Number(url.searchParams.get('offset') ?? '0');
         seen.logOffsets.push(offset);
         res.writeHead(200, { 'content-type': 'application/json' });
         if (offset === 0) {
           res.end(JSON.stringify({ id: 'tb_0123456789abcdef0123', status: 'building', offset: 12, data: 'step 1 done\n' }));
         } else if (failBuild) {
-          res.end(JSON.stringify({
-            id: 'tb_0123456789abcdef0123',
-            status: 'failed',
-            offset: 24,
-            data: 'step 2 fail\n',
-            error: { code: 'build_failed', message: 'apt-get exited 100' },
-          }));
+          res.end(JSON.stringify({ id: 'tb_0123456789abcdef0123', status: 'failed', offset: 24, data: 'step 2 fail\n', error: { code: 'build_failed', message: 'apt-get exited 100' } }));
         } else {
-          res.end(JSON.stringify({
-            id: 'tb_0123456789abcdef0123',
-            status: 'succeeded',
-            offset: 25,
-            data: 'exporting ok\n',
-            template: { name: 'squawk-runner', revision: 1, image_digest: 'sha256:deadbeef' },
-          }));
+          res.end(JSON.stringify({ id: 'tb_0123456789abcdef0123', status: 'succeeded', offset: 25, data: 'exporting ok\n', template: { name: 'squawk-runner', revision: 1, image_digest: 'sha256:deadbeef' } }));
         }
         return;
       }
@@ -248,8 +233,9 @@ async function startBuildStubServer(t, { failBuild = false, failUploadStatus = n
       res.end();
     });
   });
+  server.on('connection', (sock) => { openSockets.add(sock); sock.on('close', () => openSockets.delete(sock)); });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => new Promise((resolve) => server.close(resolve)));
+  t.after(() => { for (const s of openSockets) s.destroy(); return new Promise((resolve) => server.close(resolve)); });
   return { baseUrl: `http://127.0.0.1:${server.address().port}`, seen };
 }
 
@@ -294,36 +280,43 @@ test('publishTemplate surfaces build_failed reason from Agent37 API', async (t) 
   );
 });
 
-test('publishTemplate keeps API token off curl argv and redacts it on curl transport failure', async (t) => {
+test('publishTemplate keeps API token off curl argv and redacts tokens and proxy credentials on curl failure', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'cez-curl-fail-api-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const argvLog = join(dir, 'argv.txt');
   const stubCurl = join(dir, 'curl');
   const secretToken = 'a37_live_super_secret_api_key_987654';
+  const proxyPass = 'proxy_secret_pass_777';
+  const schemelessPass = 'schemeless_secret_888';
   writeFileSync(stubCurl, `#!/bin/sh
 printf '%s\\n' "$*" > "${argvLog}"
 cat >/dev/null
-printf 'curl: (7) Failed to connect with Authorization: Bearer ${secretToken}\\n' >&2
-exit 7
+printf 'curl: (5) bad proxy socks5://puser:${proxyPass}@127.0.0.1:bad and u2:${schemelessPass}@proxy.local:8080 Bearer ${secretToken}\\n' >&2
+exit 5
 `, { mode: 0o755 });
 
   await assert.rejects(
     () => publishTemplate({
-      repoRoot,
-      apiBaseUrl: 'http://127.0.0.1:9',
-      authToken: secretToken,
-      pollIntervalMs: 1,
-      onLog: () => {},
-      curlBin: stubCurl,
+      repoRoot, apiBaseUrl: 'http://127.0.0.1:9', authToken: secretToken, pollIntervalMs: 1, onLog: () => {}, curlBin: stubCurl,
+      env: { ...process.env, HTTPS_PROXY: `socks5://puser:${proxyPass}@127.0.0.1:bad`, HTTP_PROXY: `u2:${schemelessPass}@proxy.local:8080` },
     }),
     (err) => {
-      assert.match(err.message, /POST \/v1\/template-builds failed \(curl exited 7/);
-      assert.ok(!err.message.includes(secretToken), `API token leaked in error: ${err.message}`);
+      assert.match(err.message, /POST \/v1\/template-builds failed \(curl exited 5/);
+      for (const secret of [secretToken, proxyPass, schemelessPass]) {
+        assert.ok(!err.message.includes(secret), `secret leaked in error: ${err.message}`);
+      }
       return true;
     },
   );
-  const seenArgv = readFileSync(argvLog, 'utf8');
-  assert.ok(!seenArgv.includes(secretToken), `API token leaked in curl argv: ${seenArgv}`);
+  assert.ok(!readFileSync(argvLog, 'utf8').includes(secretToken), 'API token leaked in curl argv');
+});
+
+test('publishTemplate aborts hung log polling at timeoutMs and cleans up workdir', async (t) => {
+  const { baseUrl } = await startBuildStubServer(t, { hangLogs: true });
+  await assert.rejects(
+    () => publishTemplate({ repoRoot, apiBaseUrl: baseUrl, authToken: 'test-token', pollIntervalMs: 1, timeoutMs: 250, onLog: () => {} }),
+    /timed out/,
+  );
 });
 
 test('publishTemplate keeps presigned upload URL off curl argv and redacts it on upload failure', async (t) => {
