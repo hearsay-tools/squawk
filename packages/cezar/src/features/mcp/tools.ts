@@ -133,6 +133,10 @@ export interface OrchestratorMcpOptions {
   fetch?: FetchFn | undefined;
   pollMs?: number | undefined;
   heartbeatMs?: number | undefined;
+  /** When set (project-scoped bearer token), restricts `project_list` and rejects all other projects. */
+  allowedProject?: string | undefined;
+  /** Optional external abort signal (such as HTTP client disconnect) combined with MCP `extra.signal`. */
+  requestSignal?: AbortSignal | undefined;
 }
 
 interface ToolCallContext {
@@ -140,8 +144,18 @@ interface ToolCallContext {
   fetch?: FetchFn | undefined;
   pollMs?: number | undefined;
   heartbeatMs?: number | undefined;
+  allowedProject?: string | undefined;
   signal: AbortSignal;
   sendProgress?: ((progress: number, total: number, message: string) => Promise<void>) | undefined;
+}
+
+function assertAllowedProject(project: string, ctx: ToolCallContext): void {
+  if (ctx.allowedProject !== undefined && project !== ctx.allowedProject) {
+    throw new TaskCliError(2, {
+      code: 'forbidden',
+      error: `bearer token is scoped to project '${ctx.allowedProject}' and cannot access '${project}'`,
+    });
+  }
 }
 
 interface ToolEntry {
@@ -154,6 +168,7 @@ const TASK_ID_PROP = { type: 'string', minLength: 1, description: 'Task run ID.'
 
 async function invokeTaskStart(rawArgs: unknown, ctx: ToolCallContext) {
   const args = taskStartInputSchema.parse(rawArgs ?? {});
+  assertAllowedProject(args.project, ctx);
   const cockpit = await resolveProjectCockpit(ctx.origin, args.project, { fetch: ctx.fetch, signal: ctx.signal });
   const started = await startTask(cockpit, {
     task: args.task,
@@ -201,6 +216,7 @@ function idActionTool(
     },
     invoke: async (rawArgs, ctx) => {
       const args = taskIdInputSchema.parse(rawArgs ?? {});
+      assertAllowedProject(args.project, ctx);
       const cockpit = await resolveProjectCockpit(ctx.origin, args.project, { fetch: ctx.fetch, signal: ctx.signal });
       const result = await run(cockpit, args.id, ctx.signal);
       return { project: cockpit.projectId, ...result };
@@ -217,7 +233,9 @@ const TOOLS: readonly ToolEntry[] = [
     },
     invoke: async (rawArgs, ctx) => {
       projectListInputSchema.parse(rawArgs ?? {});
-      return listProjects(ctx.origin, { fetch: ctx.fetch, signal: ctx.signal });
+      const listed = await listProjects(ctx.origin, { fetch: ctx.fetch, signal: ctx.signal });
+      if (ctx.allowedProject === undefined) return listed;
+      return { projects: listed.projects.filter((entry) => entry.id === ctx.allowedProject) };
     },
   },
   {
@@ -266,6 +284,7 @@ const TOOLS: readonly ToolEntry[] = [
     },
     invoke: async (rawArgs, ctx) => {
       const args = taskSendInputSchema.parse(rawArgs ?? {});
+      assertAllowedProject(args.project, ctx);
       const cockpit = await resolveProjectCockpit(ctx.origin, args.project, { fetch: ctx.fetch, signal: ctx.signal });
       const result = await sendTaskMessage(cockpit, {
         id: args.id,
@@ -301,6 +320,7 @@ const TOOLS: readonly ToolEntry[] = [
     },
     invoke: async (rawArgs, ctx) => {
       const args = taskStatusInputSchema.parse(rawArgs ?? {});
+      assertAllowedProject(args.project, ctx);
       const cockpit = await resolveProjectCockpit(ctx.origin, args.project, { fetch: ctx.fetch, signal: ctx.signal });
       const status = await getTaskStatus(cockpit, {
         id: args.id,
@@ -330,6 +350,7 @@ const TOOLS: readonly ToolEntry[] = [
     },
     invoke: async (rawArgs, ctx) => {
       const args = taskLogInputSchema.parse(rawArgs ?? {});
+      assertAllowedProject(args.project, ctx);
       const cockpit = await resolveProjectCockpit(ctx.origin, args.project, { fetch: ctx.fetch, signal: ctx.signal });
       const snapshot = await getTaskLog(cockpit, {
         id: args.id,
@@ -364,6 +385,7 @@ const TOOLS: readonly ToolEntry[] = [
     },
     invoke: async (rawArgs, ctx) => {
       const args = taskDiffInputSchema.parse(rawArgs ?? {});
+      assertAllowedProject(args.project, ctx);
       const cockpit = await resolveProjectCockpit(ctx.origin, args.project, { fetch: ctx.fetch, signal: ctx.signal });
       const result = await getTaskDiff(cockpit, {
         id: args.id,
@@ -393,6 +415,7 @@ const TOOLS: readonly ToolEntry[] = [
     },
     invoke: async (rawArgs, ctx) => {
       const args = taskWaitInputSchema.parse(rawArgs ?? {});
+      assertAllowedProject(args.project, ctx);
       const cockpit = await resolveProjectCockpit(ctx.origin, args.project, { fetch: ctx.fetch, signal: ctx.signal });
       const mode = args.mode ?? 'any';
       const until = args.until ?? 'attention';
@@ -444,6 +467,7 @@ const TOOLS: readonly ToolEntry[] = [
     },
     invoke: async (rawArgs, ctx) => {
       const args = taskListInputSchema.parse(rawArgs ?? {});
+      assertAllowedProject(args.project, ctx);
       const statuses = parseStatusFilter(args.status);
       const limit = args.limit ?? 20;
       if (args.project === 'all') {
@@ -525,13 +549,15 @@ export function createOrchestratorMcpServer(options: OrchestratorMcpOptions): Se
         });
       }
       : undefined;
+    const signal = options.requestSignal ? AbortSignal.any([extra.signal, options.requestSignal]) : extra.signal;
     try {
       const data = await tool.invoke(request.params.arguments, {
         origin: options.origin,
         fetch: options.fetch,
         pollMs: options.pollMs,
         heartbeatMs: options.heartbeatMs,
-        signal: extra.signal,
+        allowedProject: options.allowedProject,
+        signal,
         sendProgress,
       });
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };
