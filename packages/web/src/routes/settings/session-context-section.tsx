@@ -326,7 +326,7 @@ function ScopeTabs({
             data-scope={value}
             onClick={() => onScope(value)}
             className={cn(
-              'flex min-h-11 flex-1 items-center justify-center gap-2 border-b-2 border-transparent px-3 text-[13px] font-medium text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring',
+              'flex min-h-11 flex-1 items-center justify-center gap-2 border-b-2 border-transparent px-3 py-3 text-[13px] leading-5 font-medium text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring',
               selected && 'border-accent-strong bg-card text-foreground',
             )}
           >
