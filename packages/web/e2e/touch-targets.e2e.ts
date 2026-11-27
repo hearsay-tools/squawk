@@ -39,9 +39,13 @@ beforeAll(async () => {
   git('commit', '-qm', 'init')
   mkdirSync(join(root, '.ai/cezar/workflows'), { recursive: true })
   writeFileSync(join(root, '.ai/cezar/workflows/touch-flow.yaml'), 'name: touch-flow\nskills:\n  - touch-check\n')
+  // real-clock: browser e2e renders relative age against the live clock; seeding 5m in the past
+  // keeps shortAge in the compact minutes band instead of 'just now' (<10s, hearsay-tools/squawk#4358),
+  // which overflows a 264px touch sidebar row beside two chips and is dropped whole by useAgeDropped.
+  const createdAt = new Date(Date.now() - 5 * 60_000).toISOString()
   seedRuns(root, [({
     id: runId, title: 'Touch target fixture', task: 'Touch target fixture', workflow: 'quick-task',
-    runner: 'claude', status: RUN_STATUS.done, archived: false, createdAt: new Date().toISOString(), tokensUsed: 0,
+    runner: 'claude', status: RUN_STATUS.done, archived: false, createdAt, tokensUsed: 0,
     // Both references (#617 01b): the sidebar row shows them as plain text on touch, and the
     // Workspace carries them as the real 44px links.
     pullRequestUrl: 'https://github.com/o/r/pull/594', referencedIssueUrl: 'https://github.com/o/r/issues/451',
