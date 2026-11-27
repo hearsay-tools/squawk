@@ -66,9 +66,10 @@ export function usePinnedAskInView(active: boolean, scrollRef: RefObject<HTMLEle
         setInView(false)
         return
       }
-      // The sticky dock covers the bottom of the viewport: a card behind it is not visible.
+      // A sticky dock (desktop) covers the bottom of the viewport: a card behind it is not
+      // visible. On a phone the dock scrolls with the transcript and covers nothing.
       const dock = document.querySelector<HTMLElement>('[data-slot="thread-dock"]')
-      const covered = Math.round(dock?.getBoundingClientRect().height ?? 0)
+      const covered = dock && getComputedStyle(dock).position === 'sticky' ? Math.round(dock.getBoundingClientRect().height) : 0
       intersection = new IntersectionObserver(
         (entries) => setInView(entries.some((entry) => entry.isIntersecting)),
         { rootMargin: `0px 0px -${covered}px 0px` },

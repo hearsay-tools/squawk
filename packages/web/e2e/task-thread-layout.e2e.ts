@@ -488,7 +488,10 @@ describe('task thread', () => {
 
 type LayoutRect = { left: number; right: number; top: number; bottom: number; width: number; height: number }
 type SessionLayout = {
-  controls: Record<'runner' | 'model' | 'effort' | 'attach' | 'dictation' | 'archive' | 'continue', LayoutRect & { hit: boolean }>
+  controls: Record<'runner' | 'model' | 'effort' | 'attach' | 'dictation' | 'continue', LayoutRect & { hit: boolean }>
+  /** Archive sits in the desktop header's fixed slot on every tab; phones keep it in the kebab. */
+  headerArchive: (LayoutRect & { hit: boolean; text: string }) | null
+  composerArchive: boolean
   modelChrome: Record<'icon' | 'label' | 'chevron', LayoutRect>
   group: LayoutRect
   editor: LayoutRect
@@ -498,8 +501,6 @@ type SessionLayout = {
   mainOverflow: boolean
   modelText: string
   modelTruncated: boolean
-  archiveLabel: string
-  archiveVisibleText: string
   bottomGap: number
 }
 
@@ -519,10 +520,12 @@ const sessionLayoutExpression = `(() => {
     effort: select('[data-slot="follow-up-effort-pill"]'),
     attach: select('[data-slot="composer"] [aria-label="Attach files"]'),
     dictation: select('[data-slot="composer"] [aria-label="Start dictation"]'),
-    archive: select('[data-slot="composer-actions"] [aria-label="Archive task"]'),
     continue: select('[data-slot="composer-actions"] [aria-label="Continue"]'),
   }
   if (Object.values(controls).some(value => !value)) return null
+  const archive = document.querySelector('[data-slot="run-header"] [aria-label="Archive task"]')
+  const headerArchive = archive ? { ...select('[data-slot="run-header"] [aria-label="Archive task"]'),
+    text: [...archive.querySelectorAll('span')].filter(span => { const r = span.getBoundingClientRect(); return r.width > 1 && r.height > 1 }).map(span => span.textContent).join('').trim() } : null
   const modelChrome = {
     icon: select('[data-slot="follow-up-model-pill"] > svg:first-child'),
     label: select('[data-slot="follow-up-model-pill"] > span'),
@@ -530,19 +533,18 @@ const sessionLayoutExpression = `(() => {
   }
   if (Object.values(modelChrome).some(value => !value)) return null
   const label = document.querySelector('[data-slot="follow-up-model-pill"] [data-slot="picker-label"]')
-  const archive = document.querySelector('[data-slot="composer-actions"] [aria-label="Archive task"]')
   const main = document.querySelector('[data-slot="main"]')
   const group = select('[data-slot="session-controls"]')
   const editorRect = select('[data-slot="composer-editor"]')
   const textarea = select('[data-slot="composer"] textarea')
   return {
-    controls, modelChrome, group, editor: editorRect, viewportHeight: innerHeight, textarea,
+    controls, modelChrome, group, editor: editorRect, viewportHeight: innerHeight, textarea, headerArchive,
+    composerArchive: document.querySelector('[data-slot="composer"] [aria-label="Archive task"]') !== null,
     documentOverflow: document.documentElement.scrollWidth > innerWidth + 1,
     mainOverflow: main.scrollWidth > main.clientWidth + 1,
     modelText: label?.textContent ?? '',
     modelTruncated: !!label && getComputedStyle(label).textOverflow === 'ellipsis' && label.scrollWidth > label.clientWidth + 1,
-    archiveLabel: archive.getAttribute('aria-label'), archiveVisibleText: [...archive.querySelectorAll('span')].filter(span => { const r = span.getBoundingClientRect(); return r.width > 1 && r.height > 1 }).map(span => span.textContent).join('').trim(),
-    bottomGap: editorRect.bottom - Math.max(controls.attach.bottom, controls.dictation.bottom, controls.archive.bottom, controls.continue.bottom),
+    bottomGap: editorRect.bottom - Math.max(controls.attach.bottom, controls.dictation.bottom, controls.continue.bottom),
   }
 })()`
 
@@ -552,8 +554,8 @@ function overlaps(a: LayoutRect, b: LayoutRect): boolean {
 }
 
 function expectUsableSessionControls(facts: SessionLayout, width: number, height: number): void {
-  const { runner, model, effort, attach, dictation, archive, continue: submit } = facts.controls
-  expect(Math.min(attach.top, dictation.top, archive.top, submit.top)).toBeGreaterThanOrEqual(Math.max(runner.bottom, model.bottom, effort.bottom) - 1)
+  const { runner, model, effort, attach, dictation, continue: submit } = facts.controls
+  expect(Math.min(attach.top, dictation.top, submit.top)).toBeGreaterThanOrEqual(Math.max(runner.bottom, model.bottom, effort.bottom) - 1)
   for (const [name, rect] of Object.entries(facts.controls)) {
     expect(rect.width, `${name} width`).toBeGreaterThanOrEqual(44)
     expect(rect.height, `${name} height`).toBeGreaterThanOrEqual(44)
@@ -585,6 +587,19 @@ function expectUsableSessionControls(facts: SessionLayout, width: number, height
   expect(facts.mainOverflow).toBe(false)
 }
 
+function expectUsableHeaderArchive(facts: SessionLayout, width: number): void {
+  const archive = facts.headerArchive
+  expect(archive, 'desktop header carries Archive').not.toBeNull()
+  if (!archive) return
+  expect(archive.text).toContain('Archive task')
+  expect(archive.width).toBeGreaterThanOrEqual(44)
+  expect(archive.height).toBeGreaterThanOrEqual(44)
+  expect(archive.left).toBeGreaterThanOrEqual(-1)
+  expect(archive.right).toBeLessThanOrEqual(width + 1)
+  expect(archive.top).toBeGreaterThanOrEqual(-1)
+  expect(archive.hit, 'header Archive center hit').toBe(true)
+}
+
 // #478/#460: real fixture values and real browser geometry, including the narrow action collision.
 describe('responsive session composer', () => {
   it.each([
@@ -598,7 +613,7 @@ describe('responsive session composer', () => {
     const facts = waitForSettledSample(browser, sessionLayoutExpression) as SessionLayout
     expectEditorFitsViewport(facts)
     if (width === 360) {
-      const actions = [facts.controls.attach, facts.controls.dictation, facts.controls.archive, facts.controls.continue]
+      const actions = [facts.controls.attach, facts.controls.dictation, facts.controls.continue]
       for (const [i, action] of actions.entries()) {
         expect(action.hit, `action ${i} center hit`).toBe(true)
         for (const [offset, other] of actions.slice(i + 1).entries()) {
@@ -622,17 +637,17 @@ describe('responsive session composer', () => {
       } else {
         expect(facts.modelTruncated).toBe(true)
       }
-      expect(facts.archiveVisibleText).toContain('Archive task')
+      expectUsableHeaderArchive(facts, width)
     } else {
       expect(Math.abs(runner.top - effort.top)).toBeLessThanOrEqual(2)
       expect(model.top).toBeGreaterThanOrEqual(Math.max(runner.bottom, effort.bottom) - 1)
       expect(facts.modelTruncated).toBe(true)
-      expect(facts.archiveVisibleText).toBe('')
+      expect(facts.headerArchive, 'phones keep Archive in the run actions menu').toBeNull()
     }
     expectUsableSessionControls(facts, width, height)
     expect(facts.bottomGap).toBeGreaterThanOrEqual(0)
     expect(facts.bottomGap).toBeLessThanOrEqual(20)
-    expect(facts.archiveLabel).toBe('Archive task')
+    expect(facts.composerArchive, 'the composer offers no Archive of its own').toBe(false)
 
     // WCAG AA: small text 4.5:1; meaningful icons 3:1, sampled over their painted surfaces.
     const textTargets: Array<[string, string]> = [
@@ -644,7 +659,7 @@ describe('responsive session composer', () => {
       ['Effort label', '[data-slot="follow-up-effort-pill"] [data-slot="picker-label"] > span'],
       ['Send', '[data-slot="composer-actions"] [aria-label="Continue"]'],
     ]
-    if (width >= 768) textTargets.push(['Archive task', '[data-slot="composer-actions"] [aria-label="Archive task"]'])
+    if (width >= 768) textTargets.push(['Archive task', '[data-slot="run-header"] [aria-label="Archive task"]'])
     const textSamples: Array<{ target: string } & ContrastSample> = []
     for (const [name, selector] of textTargets) {
       if (name.endsWith(' label') && browser.count(selector) === 0) continue
@@ -658,9 +673,9 @@ describe('responsive session composer', () => {
       ['Effort', '[data-slot="follow-up-effort-pill"] svg:first-child'],
       ['Attach files', '[data-slot="composer"] [aria-label="Attach files"] svg'],
       ['Start dictation', '[data-slot="composer"] [aria-label="Start dictation"] svg'],
-      ['Archive task', '[data-slot="composer-actions"] [aria-label="Archive task"] svg'],
       ['Send', '[data-slot="composer-actions"] [aria-label="Continue"] svg'],
     ]
+    if (width >= 768) iconTargets.push(['Archive task', '[data-slot="run-header"] [aria-label="Archive task"] svg'])
     const iconSamples: Array<{ target: string } & ContrastSample> = []
     for (const [name, selector] of iconTargets) {
       const sample = browser.evaluate(contrastSampleExpression(selector)) as ContrastSample
@@ -683,7 +698,10 @@ describe('responsive session composer', () => {
     browser.screenshot(`${artifactsDir}/responsive-session-${width}-${theme}.png`, { viewport: true })
     browser.evaluate(`document.querySelector('[aria-label="Run actions"]').scrollIntoView({block:'center'})`)
     browser.click('[aria-label="Run actions"]')
-    browser.waitForFunction(`document.querySelector('[data-slot="run-actions-menu"]')?.textContent?.includes('Notes') === true`)
+    const menu = browser.waitForValue<string>(`document.querySelector('[data-slot="run-actions-menu"]')?.textContent?.includes('Notes') ? document.querySelector('[data-slot="run-actions-menu"]').textContent : null`)
+    // Exactly one Archive per screen: the phone kebab carries it, the desktop header slot does otherwise.
+    if (width >= 768) expect(menu).not.toContain('Archive task')
+    else expect(menu).toContain('Archive task')
     browser.press('Escape')
     const preservedDraft = browser.waitForValue(`document.querySelector('[data-slot="run-actions-menu"]') === null ? document.querySelector('[data-slot="composer"] textarea')?.value : null`)
     expect(preservedDraft).toBe('Keep these follow-up instructions')
@@ -716,7 +734,7 @@ describe('responsive session composer', () => {
       expect(facts.group.left).toBeGreaterThanOrEqual(facts.editor.left - 1)
       expect(facts.group.right).toBeLessThanOrEqual(facts.editor.right + 1)
       expectUsableSessionControls(facts, viewport, 900)
-      expect(facts.archiveLabel).toBe('Archive task')
+      expectUsableHeaderArchive(facts, viewport)
       browser.screenshot(`${artifactsDir}/responsive-session-800-wide-sidebar.png`, { viewport: true })
     } finally {
       const end = handlePoint()
@@ -785,7 +803,7 @@ it.each(TYPO_RUNS.flatMap(run => [360, 906, 1280].map(width => ({ run, width }))
     if (width === 1280 && run.model.startsWith('opencode/')) {
       expect(facts.model.scrollWidth, `${width}px: full model ID visible without an ellipsis`).toBeLessThanOrEqual(facts.model.clientWidth)
       expect(facts.model.text).toBe(run.model)
-      expect(facts.runner.text).toBe('opencode')
+      expect(facts.runner.text).toBe('OpenCode')
       expect(facts.effort.text).toBe('auto')
     }
     for (const slot of ['runner-pill', 'follow-up-model-pill', 'follow-up-effort-pill']) {
@@ -794,7 +812,7 @@ it.each(TYPO_RUNS.flatMap(run => [360, 906, 1280].map(width => ({ run, width }))
     }
     if (width === 906 && run.model === 'grok-4.6') {
       expect(facts.groupWidth).toBeGreaterThan(300)
-      expect(facts.runner.text).toBe('Runner · opencode')
+      expect(facts.runner.text).toBe('Runner · OpenCode')
       expect(facts.effort.text).toBe('Effort · auto')
       expect(facts.model.text, JSON.stringify(facts)).toBe('Model · grok-4.6')
     }

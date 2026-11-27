@@ -155,10 +155,17 @@ describe.each([
     })()`))
     browser.waitForValue(`document.querySelector('${activity}')?.getAttribute('aria-expanded')`,
       (value): value is string => value === 'true')
-    const actual = waitForSettledSample<number>(browser, `${MAIN}.scrollTop`)
-    expect(Math.abs(actual - target)).toBeLessThan(2)
+    const restored = waitForSettledSample<{ top: number; belowFold: number; pill: boolean }>(browser, `(() => {
+      const main = ${MAIN};
+      return { top: main.scrollTop, belowFold: main.scrollHeight - main.clientHeight - main.scrollTop,
+        pill: document.querySelector('${PILL}') !== null };
+    })()`)
+    expect(Math.abs(restored.top - target)).toBeLessThan(2)
     if (width >= 768) {
-      expect(browser.evaluate(`document.querySelector('${PILL}') !== null`)).toBe(true)
+      // The restored card grows the sticky footer below the reader, who stays put. The pinned
+      // question is still in view above it, so no jump pill floats over its options.
+      expect(restored.belowFold).toBeGreaterThan(2)
+      expect(restored.pill).toBe(false)
     }
     // A further reader movement can still reach the expanded footer's real bottom.
     browser.evaluate(`(() => {
@@ -166,7 +173,7 @@ describe.each([
       main.dispatchEvent(new WheelEvent('wheel', { deltaY: 1000, bubbles: true }));
       window.__cezThreadScrollTo(main.scrollHeight - main.clientHeight);
     })()`)
-    browser.waitForFunction(`document.querySelector('${PILL}') === null`)
+    browser.waitForFunction(`(() => { const main = ${MAIN}; return main.scrollHeight - main.clientHeight - main.scrollTop < 2 && document.querySelector('${PILL}') === null })()`)
   })
 
   it('pins the pending question at the tail and never answers the earlier one', () => {

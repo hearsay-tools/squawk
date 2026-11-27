@@ -94,7 +94,7 @@ function IssueProjectPicker({
         <SelectContent align="start">
           <SelectItem value={ALL_BOARDS_VALUE}>All boards</SelectItem>
           {data.projects.map(board => (
-            <SelectItem key={board.id} value={board.id}>
+            <SelectItem key={board.id} value={board.id} data-board={board.id}>
               {board.title}
             </SelectItem>
           ))}

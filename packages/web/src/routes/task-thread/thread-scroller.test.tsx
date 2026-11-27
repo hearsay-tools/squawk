@@ -135,6 +135,42 @@ describe('useThreadScroll — outside a shell scroller (jsdom, tests, storybook-
     expect(main.scrollTop).toBe(1028)
   })
 
+  it('follows the real bottom, not the pending ask, once the reader scrolls back to the tail', async () => {
+    let grow!: ResizeObserverCallback
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: ResizeObserverCallback) { grow = callback }
+      observe() {}
+      disconnect() {}
+    })
+    const main = document.createElement('main')
+    main.dataset.slot = 'main'
+    Object.defineProperties(main, { clientHeight: { value: 500 }, scrollHeight: { value: 2000 } })
+    const content = document.createElement('div')
+    const card = document.createElement('div')
+    Object.assign(card.dataset, { slot: 'ask-card', pinned: 'true', resolved: 'false' })
+    main.getBoundingClientRect = () => ({ top: 0 }) as DOMRect
+    card.getBoundingClientRect = () => ({ top: 1000 - main.scrollTop }) as DOMRect
+    content.append(card)
+    main.append(content)
+    document.body.append(main)
+    const hook = renderHook(() => useThreadScroll('pending-tail'))
+    act(() => hook.result.current.attachContent(content))
+    expect(main.scrollTop).toBe(988)
+    // The reader leaves the question, then wheels down to the real tail and pins there.
+    fireEvent.wheel(main, { deltaY: -100 })
+    main.scrollTop = 500
+    fireEvent.scroll(main)
+    fireEvent.wheel(main, { deltaY: 100 })
+    main.scrollTop = 1500
+    fireEvent.scroll(main)
+    // Activity opening (or the pill leaving) resizes the dock: the reader stays at the tail.
+    act(() => grow([], {} as ResizeObserver))
+    expect(main.scrollTop).toBe(1500)
+    // The pill's jump lands on the question again.
+    await act(async () => { hook.result.current.jumpToLatest() })
+    expect(main.scrollTop).toBe(988)
+  })
+
   it('keeps jump-to-latest intent when refreshing history remounts the transcript', async () => {
     const scroller = document.createElement('main')
     scroller.dataset.slot = 'main'

@@ -639,7 +639,7 @@ function ThreadFooterDock({
     >
       {/* Desktop places Jump above the sticky footer; phones keep it in the viewport. */}
       {scroll.pillVisible && !askInView ? (
-        <div data-slot="thread-jump" data-pending-ask={needsAnswer || undefined} className="pointer-events-none z-30 flex justify-center">
+        <div data-slot="thread-jump" className="pointer-events-none z-30 flex justify-center">
           <JumpToLatestPill
             pendingQuestions={pendingQuestions}
             onJump={onJump}

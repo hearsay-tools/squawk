@@ -52,6 +52,14 @@
   }
 }
 @media (max-width: 767px) {
+  /* The Session header docks on phones too: native focus and scrollIntoView stop below it, or
+   * a row revealed from above parks under the facet tabs. The phone dock scrolls with the
+   * transcript, so only the top needs the room. */
+  [data-slot='main']:has([data-route='task-thread'] [data-slot='run-header'][data-sticky]) { scroll-padding-block-start: calc(var(--thread-header-height, 0px) + 8px); }
+  /* Only the facet tabs dock under the phone top bar: the header's lead (parent breadcrumb,
+   * completion status, actions row) scrolls away, so the top bar's own Parent stays the one
+   * parent control and the transcript keeps the small viewport. useSessionViewport measures it. */
+  [data-route='task-thread'] [data-slot='run-header'][data-sticky] { inset-block-start: calc(var(--run-header-lead, 0px) * -1); }
   [data-slot='run-title-row'] > .group { max-width: calc(100% - 52px); }
   .session-engine-controls { grid-template-columns: max-content minmax(0, 1fr); }
   .session-engine-controls [data-slot='follow-up-model-pill'] { grid-column: 1 / -1; grid-row: 2; }
@@ -114,11 +122,6 @@
 [data-route='task-thread'] [data-slot='ask-card'][data-resolved='false'][data-pinned='true'] { margin-block-end: calc(var(--spacing) * 2); }
 /* The composer's Continue/Send label matches the 13px primary call to action. */
 [data-route='task-thread'] [data-slot='composer-submit-row'] > button { font-size: 13px; }
-
-@media (max-width: 767px) {
-  /* Pending answers keep the jump control in flow, clear of the ask options. */
-  [data-route='task-thread'] [data-slot='thread-jump'][data-pending-ask] { position: relative; inset-inline: auto; inset-block-end: auto; inline-size: 100%; padding-inline: 16px; }
-}
 
 /* A soft edge under the sticky Session header: once the conversation scrolls, the turn above the
  * fold fades out under the tab bar instead of being sliced by its divider. The first 12px stay
