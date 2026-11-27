@@ -22,6 +22,8 @@ import { TaskWebhooks } from '../runs/webhook.ts';
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
 import { registeredRunners } from '../core/runner-registry.ts';
+import type { HttpRouteDefinition } from '../core/http-route-registry.ts';
+import { mountPluginHttpRoutes, pluginManagedBodyLimitPaths } from './plugin-http-routes.ts';
 import { environmentStamp, type detectEnvironment } from '../core/backend-detect.ts';
 import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
@@ -182,6 +184,8 @@ export interface ServerDeps extends ActivityServerDeps {
   /** Re-arm the workspace automation timer after definition mutations. */
   automationsChanged?: () => void;
   archiveOnMergeChanged?: () => void;
+  /** Non-RPC plugin HTTP routes override for isolated tests; defaults to sealed `registeredHttpRoutes()`. */
+  httpRoutes?: readonly HttpRouteDefinition[] | undefined;
 }
 // ---- project-scoped routing (multi-project spec, step 2.2) -----------------
 
@@ -339,9 +343,12 @@ export function createApp(deps: ServerDeps) {
   // Compression runs outside route families and leaves live event streams untouched.
   const staticResponse = createStaticAssets();
 
-  // Reject oversized request bodies before they reach any handler (#429). GETs
-  // and SSE carry no body, so this only ever gates the mutating routes.
-  app.use('*', bodyLimit({ maxSize: GLOBAL_BODY_LIMIT }));
+  // Reject oversized request bodies before they reach any handler (#429). Plugin routes with
+  // `managesBodyLimit` (such as `/api/v1/mcp`) skip global 32 MiB buffering and enforce auth plus
+  // their own streaming body cap directly inside the handler.
+  const managedBodyPaths = pluginManagedBodyLimitPaths(deps.httpRoutes);
+  const globalBodyLimit = bodyLimit({ maxSize: GLOBAL_BODY_LIMIT });
+  app.use('*', (c, next) => (managedBodyPaths.has(c.req.path) ? next() : globalBodyLimit(c, next)));
 
   // Local APIs require a loopback Host, including health. Browser writes require
   // matching full authority or the verified local dev-proxy case. Health alone is
@@ -913,6 +920,15 @@ export function createApp(deps: ServerDeps) {
     .route(V1_SCOPED_PREFIX, v1)
     .route(V1_PREFIX, v1)
     .route(V1_PREFIX, workspaceV1);
+
+  mountPluginHttpRoutes({
+    routed,
+    home: deps.home,
+    version,
+    squawkPort: deps.squawkPort,
+    isHostedMode,
+    httpRoutes: deps.httpRoutes,
+  });
 
   // ---- SPA catch-all -------------------------------------------------------
   // Last, so every route above still wins. Any other GET gets the cockpit shell:

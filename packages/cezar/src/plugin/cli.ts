@@ -9,7 +9,7 @@ the reason: first the runners and features bundled with Squawk (source "bundled"
 <config>/plugins/ (source "host"). --json prints the same report as JSON.`;
 
 const CONTRIBUTION_LABELS: ReadonlyArray<[keyof PluginContributions, string]> = [
-  ['cliCommands', 'commands'], ['runners', 'runners'], ['agentTools', 'agent tools'],
+  ['cliCommands', 'commands'], ['httpRoutes', 'HTTP routes'], ['runners', 'runners'], ['agentTools', 'agent tools'],
   ['waitKinds', 'wait kinds'], ['stepKinds', 'step kinds'],
   ['removalSlots', 'removal slots'], ['runLifecycleListeners', 'run lifecycle listeners'],
   ['launchParts', 'launch parts'],

@@ -47,4 +47,31 @@ worktree setup read-only; to edit them from the browser, see
 A remote cockpit loads [plugins](plugins.md) from the server's `<config>/plugins/`
 only: the browser cannot add or remove one, and health sends no plugin paths.
 
+## Streamable HTTP MCP endpoint (`/api/v1/mcp`)
+
+Multi-host orchestrators can drive a hosted cockpit over Streamable HTTP at
+`POST /api/v1/mcp` using host-managed bearer tokens (hearsay-tools/squawk#4402):
+
+```bash
+hsq mcp token create --name fleet --port 4321            # prints raw hsq_mcp_... token once
+hsq mcp token create --name ci --port 4321 --project app # optional project scope
+hsq mcp token list                                       # metadata only; never hashes or tokens
+hsq mcp token revoke <id>                                # takes effect on next request
+```
+
+Tokens are stored per listen port as SHA-256 hashes in `<config>/mcp-tokens/<port>.json`
+(mode `0600`) and are withdrawn automatically on `server-uninstall` and fresh installs on
+that port. When no token is configured (and `HSQ_MCP_TOKEN` is unset), `/api/v1/mcp`
+returns `404`.
+
+- **Built-in `ubuntu-vps` nginx:** The generated vhost sets `auth_basic off;`,
+  `proxy_buffering off;`, and `proxy_read_timeout 3600s;` on `location = /api/v1/mcp`
+  while keeping HTTP Basic Auth on `/` and all other cockpit routes.
+- **External TLS reverse proxies (Traefik, Caddy, custom nginx):** Always terminate TLS
+  at the proxy, bypass Basic Auth **only** for exact path `/api/v1/mcp` so
+  `Authorization: Bearer <token>` reaches Squawk, disable response buffering for SSE
+  streaming (`proxy_buffering off` / `flush_interval -1`), and set a long read timeout
+  (e.g. `3600s`) for `task_wait` calls. Keep proxy authentication enforced on every other
+  path.
+
 ---

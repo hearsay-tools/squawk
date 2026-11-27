@@ -11,9 +11,9 @@ export function subscribeHomeRecovery(home: Home, listener: () => void): () => v
   let closed = false;
   let scheduled = false;
   const watchers = new Map<string, FSWatcher>();
-  const directories = [home.config, home.state, home.remoteSettings, home.serverInstances,
+  const directories = [home.config, home.state, home.remoteSettings, home.mcpTokens, home.serverInstances,
     join(home.config, '.versions'), join(home.state, '.versions'),
-    join(home.config, '.versions', 'remote-settings'), join(home.state, '.versions', 'server-instances')];
+    join(home.config, '.versions', 'remote-settings'), join(home.config, '.versions', 'mcp-tokens'), join(home.state, '.versions', 'server-instances')];
   const schedule = () => {
     if (closed || scheduled) return;
     scheduled = true;

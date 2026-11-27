@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** HomeStore keys, never an absolute path or a caller-selected filesystem location. */
-export const HOME_FILE_PATTERN = /^(?:(?:config\.json(?:\.bak)?|agent-accounts\.json|ui-state\.json|server\.json|server\.install\.lock)|(?:remote-settings|server-instances)\/[a-zA-Z0-9-]+\.(?:json|install\.lock))$/;
+export const HOME_FILE_PATTERN = /^(?:(?:config\.json(?:\.bak)?|agent-accounts\.json|ui-state\.json|server\.json|server\.install\.lock)|(?:remote-settings|server-instances)\/[a-zA-Z0-9-]+\.(?:json|install\.lock)|mcp-tokens\/[a-zA-Z0-9-]+\.json)$/;
 export const homeFileSchema = z.string().regex(HOME_FILE_PATTERN);
 export type HomeFile = z.infer<typeof homeFileSchema>;
 

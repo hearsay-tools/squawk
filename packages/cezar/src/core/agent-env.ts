@@ -334,6 +334,8 @@ function curateEnv(
     'CEZ_TOOL_CLIENT', 'HSQ_TOOL_CLIENT',
     'CEZ_DELEGATION_TOKEN', 'HSQ_DELEGATION_TOKEN',
     'CEZ_DELEGATION_URL', 'HSQ_DELEGATION_URL',
+    // hearsay-tools/squawk#4402: operator MCP HTTP bearer token belongs only to the cockpit process.
+    'CEZ_MCP_TOKEN', 'HSQ_MCP_TOKEN',
     // The cockpit address (#774) names THIS run's cockpit and project. A nested headless
     // `cez run` sets none, and must not inherit its parent's: that would let it change
     // automations in a project it does not belong to.

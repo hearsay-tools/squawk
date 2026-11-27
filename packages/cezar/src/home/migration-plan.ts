@@ -23,15 +23,15 @@ export const archiveExcludes = /^(?:versions|bin|dry-cache|dry-prefix|tmp|\.lock
 export function isSquawkMigrationJson(path: string): boolean {
   if (path.split('/').includes('backups')) return false;
   return ['config.json', 'config.json.bak', 'agent-accounts.json', 'ui-state.json', 'server.json', 'migration.json'].includes(path)
-    || /^(?:remote-settings|tracker-connections|server-instances|application-updates)\/.+\.json(?:\.bak)?$/.test(path);
+    || /^(?:remote-settings|mcp-tokens|tracker-connections|server-instances|application-updates)\/.+\.json(?:\.bak)?$/.test(path);
 }
 
 function destination(path: string): MigrationFile['target'] {
   if (path.endsWith('.install.lock')) return null;
   if (homeFileSchema.safeParse(path).success) return { kind: homeFileKind(path), path };
-  const nestedBackup = /^(remote-settings|server-instances)\/backups\/(.+)$/.exec(path);
+  const nestedBackup = /^(remote-settings|mcp-tokens|server-instances)\/backups\/(.+)$/.exec(path);
   if (nestedBackup) return { kind: 'state', path: `backups/${nestedBackup[1]}/${nestedBackup[2]}` };
-  if (/^(?:remote-settings|tracker-connections)\//.test(path)) return { kind: 'config', path };
+  if (/^(?:remote-settings|mcp-tokens|tracker-connections)\//.test(path)) return { kind: 'config', path };
   if (/^(?:backups|application-updates)\//.test(path)) return { kind: 'state', path };
   if (path.startsWith('versions/')) return { kind: 'data', path };
   return null;
@@ -63,7 +63,7 @@ export function planLegacyMigration(legacy: Home, target: Home): MigrationPlan {
     managedInstall: existsSync(legacy.versions),
     backup: join(target.backups, `legacy-cezar-home-${new Date().toISOString().replaceAll(':', '-')}.tar.gz`),
     empty: !registryFiles(legacy).some(path => existsSync(path)) && !existsSync(legacy.backups)
-      && !existsSync(join(legacy.remoteSettings, 'backups')) && !existsSync(join(legacy.serverInstances, 'backups')) };
+      && !existsSync(join(legacy.remoteSettings, 'backups')) && !existsSync(join(legacy.mcpTokens, 'backups')) && !existsSync(join(legacy.serverInstances, 'backups')) };
 }
 
 export function migrationRecordFor(plan: MigrationPlan): MigrationRecord {

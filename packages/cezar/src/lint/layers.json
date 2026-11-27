@@ -93,7 +93,7 @@
     ],
     "feature:install-as-command": ["install-as-command.ts"],
     "feature:jobs": ["features/jobs/"],
-    "feature:mcp": ["features/mcp/"],
+    "feature:mcp": ["features/mcp/", "mcp-tokens.ts"],
     "feature:merge-observations": ["merge-observations.ts"],
     "feature:migration": ["project-migration/"],
     "feature:open-url": ["open-url.ts"],

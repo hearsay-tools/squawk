@@ -27,7 +27,7 @@ import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { runPullRequestSchema } from '@open-mercato/cezar-contract/runs';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import type { AgentInput, ConversationState, DelegationState, RunPullRequest } from '@open-mercato/cezar-contract';
-import { redactSecrets } from '../core/secret-redaction.ts';
+import { redactMcpTokenPattern, redactSecrets } from '../core/secret-redaction.ts';
 import { ConversationIdInUseError } from './conversation-identity.ts';
 import { mergePullRequests } from './pull-requests.ts';
 import { applyExit, type RunExitId } from './run-exits.ts';
@@ -283,7 +283,7 @@ function isStaleResume(run: RunRecord): boolean {
 }
 
 export function redactText(text: string, sessionSecrets: readonly string[], hostSecrets: () => readonly string[]): string {
-  const safe = sessionSecrets.length ? redactSecrets(text, sessionSecrets) : text;
+  const safe = sessionSecrets.length ? redactSecrets(text, sessionSecrets) : redactMcpTokenPattern(text);
   if (productEnv('REDACT_SECRETS') === '0') return safe;
   return redactSecrets(safe, hostSecrets());
 }
