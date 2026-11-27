@@ -92,15 +92,16 @@ async function prompt(frame) {
   const turn = { cancelled: false, cancelledPromise: new Promise(resolve => { cancel = resolve; }), cancel: () => { turn.cancelled = true; cancel(); } };
   turn.frameId = frame.id;
   active = turn;
-  if (pendingAsk) { await answerAsk(text); finishAnswer(frame, text); return; }
+  if (pendingAsk) { await answerAsk(text); finishAnswer(frame, text, turn); return; }
   try { await playTurn(frame, text, turn); }
   catch (error) { write({ id: (turn.carrier ?? frame).id, error: { code: -32603, message: error.message } }); }
   finally { active = undefined; await turn.afterTurn?.(); }
 }
-function finishAnswer(frame, text) {
+function finishAnswer(frame, text, turn) {
+  echoSteers(turn);
   update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
   active = undefined;
-  acknowledge(frame, { stopReason: 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }, text);
+  acknowledge(turn.carrier ?? frame, { stopReason: 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }, turn.carrierText ?? text);
 }
 async function playTurn(frame, text, turn) {
   // An unread crash stops before the first yield can accept a concurrent steer.
@@ -112,12 +113,21 @@ async function playTurn(frame, text, turn) {
   if (!turn.cancelled) update({ sessionUpdate: 'usage_update', used: 7, size: 1048576 });
   acknowledge(turn.carrier ?? frame, { stopReason: turn.cancelled ? 'cancelled' : 'end_turn', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }, turn.carrierText ?? text);
 }
-/** A steer ends the running prompt at once; the steer's own response ends the turn. */
+const permissionWaitError = () =>
+  `Can't add this prompt to session ${sessionId}: the running prompt is waiting for a permission or question answer; answer it or send session/cancel, then send this prompt again`;
+/** A steer ends the running prompt at once; the steer's own response ends the turn.
+ *  CLI 1.5.14 rejects a mid-turn steer while the running prompt waits on a permission or question. */
 function steer(frame, text) {
+  if (active.onSteer?.(frame, text)) return;
+  if (pending.size > 0) {
+    write({ id: frame.id, error: { code: -32603, message: permissionWaitError() } });
+    return;
+  }
   steers.push(text);
   if (!active.carrier) reply(active.frameId, { stopReason: 'end_turn' });
   else acknowledge(active.carrier, { stopReason: 'end_turn' }, active.carrierText);
   active.carrier = frame; active.carrierText = text;
+  active.onSteerAccepted?.(text);
 }
 function accountHomes(frame) {
   content('agent_message_chunk', JSON.stringify({ gemini: flag('--gemini-dir'), appData: flag('--app-data-dir'), geminiHome: process.env.GEMINI_HOME, home: process.env.HOME, config: process.env.XDG_CONFIG_HOME, ssh: process.env.SSH_CONNECTION,
@@ -209,6 +219,7 @@ async function runtimeProbe(text, turn) {
 async function runPrompt(text, turn) {
   if (await runtimeProbe(text, turn)) return;
   if (text.includes('mock:hook-after-park')) return hookAfterPark(text, turn);
+  if (text.includes('mock:permission-race-')) return permissionRacePrompt(text, turn);
   if (text.includes('mock:permission-late')) return latePermission(turn, text.includes('mock:permission-late-error'));
   // The CLI's quota refusal, verbatim from a live CLI 1.5.14 turn (hearsay-tools/squawk#4098).
   if (text.includes('mock:quota')) { content('agent_message_chunk', '\n⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 3h54m9s.\n'); return; }
@@ -261,6 +272,67 @@ async function permissionPrompt(text, turn) {
   if (malformed) content('agent_message_chunk', `Malformed permission refused${await context.lifecycle(['cezar_done', {}])}`);
   else if (text.includes('mock:acp-')) content('agent_message_chunk', JSON.stringify(response));
   else content('agent_message_chunk', `Approval response: ${response.outcome.optionId === 'allow-once' ? 'allow' : 'deny'}${await context.lifecycle(['cezar_done', {}])}`);
+}
+
+/** Reproduces CLI 1.5.14 mid-turn steer races with permission/question waits (hearsay-tools/squawk#4181). */
+async function permissionRacePrompt(text, turn) {
+  const gated = text.includes('gated');
+  const autoBeforeReject = text.includes('mock:permission-race-auto');
+  const askRace = text.includes('mock:permission-race-ask');
+  const call = { toolCallId: 'call_race', name: gated ? 'generate_image' : 'run_command',
+    title: gated ? 'Run generate_image' : 'pwd', kind: gated ? 'other' : 'execute',
+    rawInput: gated ? {} : { CommandLine: 'pwd' } };
+  const options = [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }, { optionId: 'reject-once', name: 'Deny', kind: 'reject_once' }];
+  update({ sessionUpdate: 'tool_call', ...call, status: 'in_progress' });
+  let raced = false;
+  let resolvePermission;
+  const permissionDone = new Promise(resolve => { resolvePermission = resolve; });
+  let resolveSteer;
+  const steerAccepted = new Promise(resolve => { resolveSteer = resolve; });
+  turn.onSteerAccepted = () => resolveSteer();
+  turn.onSteer = frame => {
+    if (raced) return false;
+    raced = true;
+    if (askRace) {
+      write({ id: frame.id, error: { code: -32603, message: permissionWaitError() } });
+      resolvePermission({ outcome: { outcome: 'ask' } });
+      return true;
+    }
+    if (autoBeforeReject) {
+      // Incident order: permission arrives and settles before the steer's RPC rejection lands.
+      void request('session/request_permission', { sessionId, toolCall: call, options }).then(answer => {
+        write({ id: frame.id, error: { code: -32603, message: permissionWaitError() } });
+        resolvePermission(answer);
+      });
+      return true;
+    }
+    if (text.includes('perm-first')) {
+      // Permission frame reaches stdout before the racing steer's RPC rejection, while still open.
+      void request('session/request_permission', { sessionId, toolCall: call, options }).then(resolvePermission);
+      write({ id: frame.id, error: { code: -32603, message: permissionWaitError() } });
+      return true;
+    }
+    // Early-rejection order: RPC rejection arrives before session/request_permission is read.
+    write({ id: frame.id, error: { code: -32603, message: permissionWaitError() } });
+    void request('session/request_permission', { sessionId, toolCall: call, options }).then(resolvePermission);
+    return true;
+  };
+  const answer = await Promise.race([permissionDone, turn.cancelledPromise]);
+  if (turn.cancelled) return;
+  if (askRace) {
+    update({ sessionUpdate: 'tool_call_update', toolCallId: call.toolCallId, status: 'completed', rawOutput: { output: 'ready' } });
+    await askQuestion('mock:ask-native');
+    return;
+  }
+  const allowed = answer?.outcome?.optionId === 'allow-once';
+  if (!allowed) {
+    update({ sessionUpdate: 'tool_call_update', toolCallId: call.toolCallId, status: 'failed', rawOutput: { output: '' } });
+    return;
+  }
+  update({ sessionUpdate: 'tool_call_update', toolCallId: call.toolCallId, status: 'completed', rawOutput: { output: 'ok' } });
+  if (!text.includes('no-steer-wait')) await Promise.race([steerAccepted, turn.cancelledPromise]);
+  if (turn.cancelled) return;
+  if (text.includes('with-done')) content('agent_message_chunk', `Race completed.${await context.lifecycle(['cezar_done', {}])}`);
 }
 
 /** The native timer stays open until it fires; this turn ends at once. */
