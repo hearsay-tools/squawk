@@ -101,7 +101,7 @@ function reveal(expectedHeading?: string) {
     if (!(${headingReady})) return null
     if (document.querySelector('[data-slot="parent-task-link"]')) return true
     if (document.querySelector(${JSON.stringify(region)})) return true
-    document.querySelector('[data-slot="run-activity-dock"] > button[aria-expanded="false"]')?.click()
+    document.querySelector('[data-slot="run-activity-trigger"][aria-expanded="false"], [data-slot="run-activity-trigger-mobile"][aria-expanded="false"]')?.click()
     document.querySelector('[data-slot="run-activity-workers"] > button[aria-expanded="false"]')?.click()
     return null
   })()`, undefined, { failure: 'task relationships did not open' })
@@ -191,7 +191,9 @@ for (const [width, height] of [[1440, 900], [360, 640]]) for (const theme of ['l
     expect(parentFacts.visible).toBe(true)
     browser.screenshot(join(artifacts, `worker-parent-${width}-${theme}.png`), { viewport: true })
     browser.click(parentLink)
-    browser.waitForFunction(`location.pathname === '${route(parentId)}' && document.querySelector('[data-slot="run-activity-workers"]') !== null`)
+    browser.waitForFunction(`location.pathname === '${route(parentId)}'`)
+    reveal('Relationship parent')
+    browser.waitForFunction(`document.querySelector('[data-slot="run-activity-workers"]') !== null`)
   }, 120_000)
 }
 
@@ -206,28 +208,24 @@ for (const width of [320, 360]) for (const theme of ['light', 'dark']) {
     browser.waitForFunction(`document.body.textContent.includes('Pass 40:')`)
     const link = '[data-slot="mobile-parent-task-link"]'
     browser.waitForFunction(`document.querySelector('${link}') !== null`)
-    browser.evaluate(`(() => { const main = document.querySelector('[data-slot="main"]'); main.scrollTop = main.scrollHeight; })()`)
+    browser.evaluate(`(() => { const transcript = document.querySelector('[data-slot="thread-transcript"]'); transcript.scrollTop = transcript.scrollHeight; })()`)
     const facts = waitForSettledSample(browser, `(() => {
-      const main = document.querySelector('[data-slot="main"]'), link = document.querySelector('${link}');
+      const main = document.querySelector('[data-slot="main"]'), transcript = document.querySelector('[data-slot="thread-transcript"]'), link = document.querySelector('${link}');
       const r = link.getBoundingClientRect(), title = document.querySelector('[data-slot="mobile-run-title"] h1');
       const controls = [...document.querySelectorAll('[data-slot="mobile-top-bar"] a, [data-slot="mobile-top-bar"] button')];
-      return { scroll: main.scrollTop, bottomGap: main.scrollHeight - main.scrollTop - main.clientHeight,
-        // The Session header docks only its facet tabs on a phone: the breadcrumb scrolls out
-        // above the scrollport, and the tabs sit at its top edge.
-        breadcrumbBottom: document.querySelector('[data-slot="parent-task-link"]').getBoundingClientRect().bottom - main.getBoundingClientRect().top,
-        tabsTop: document.querySelector('[data-slot="run-tabs"]').getBoundingClientRect().top - main.getBoundingClientRect().top,
+      return { scroll: transcript.scrollTop, bottomGap: transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight,
+        tabsVisible: document.querySelector('[data-slot="run-tabs"]').getBoundingClientRect().top >= main.getBoundingClientRect().top - 0.5,
         visible: r.top >= 0 && r.bottom <= innerHeight, height: r.height, width: r.width,
         hit: link.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)),
         controls: controls.map(el => { const b = el.getBoundingClientRect(); return { name: el.getAttribute('aria-label'), x: b.x, right: b.right, height: b.height }; }),
         titleWidth: title.getBoundingClientRect().width, titleLineClamp: getComputedStyle(title).webkitLineClamp,
         overflow: document.documentElement.scrollWidth > innerWidth, theme: document.documentElement.classList.contains('light') === ${theme === 'light'},
         href: link.getAttribute('href') };
-    })()`) as { scroll: number; bottomGap: number; breadcrumbBottom: number; tabsTop: number; visible: boolean; height: number; width: number; hit: boolean; controls: { name: string; x: number; right: number; height: number }[]; titleWidth: number; titleLineClamp: string; overflow: boolean; theme: boolean; href: string }
+    })()`) as { scroll: number; bottomGap: number; tabsVisible: boolean; visible: boolean; height: number; width: number; hit: boolean; controls: { name: string; x: number; right: number; height: number }[]; titleWidth: number; titleLineClamp: string; overflow: boolean; theme: boolean; href: string }
     observations.push({ case: 'mobile parent at transcript bottom', viewportWidth: width, selectedTheme: theme, ...facts })
     expect(facts.scroll).toBeGreaterThan(1000)
     expect(facts.bottomGap).toBeLessThanOrEqual(1)
-    expect(facts.breadcrumbBottom).toBeLessThanOrEqual(0.5)
-    expect(Math.abs(facts.tabsTop)).toBeLessThanOrEqual(0.5)
+    expect(facts.tabsVisible).toBe(true)
     expect(facts.visible).toBe(true); expect(facts.hit).toBe(true)
     expect(facts.height).toBeGreaterThanOrEqual(44); expect(facts.width).toBeGreaterThanOrEqual(44)
     expect(facts.overflow).toBe(false); expect(facts.theme).toBe(true)

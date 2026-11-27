@@ -232,7 +232,9 @@ export function useThreadScroll(
     setContentEl(el)
     if (el) {
       scrollElRef.current = el.closest<HTMLElement>(
-        surface === 'panel' ? '[data-slot="transcript-viewport"]' : '[data-slot="main"]',
+        surface === 'panel'
+          ? '[data-slot="transcript-viewport"]'
+          : '[data-slot="thread-transcript"], [data-slot="main"]',
       )
       applyArrival()
     }
@@ -410,12 +412,13 @@ export function useThreadScroll(
     const pin = () => {
       if (stuckRef.current) toBottom()
     }
-    // The refreshed tail can remount the transcript, so the target is looked up under the
-    // shell scroller, not the rows container, and focused when it exists.
+    // The refreshed tail can remount the transcript, and the pinned decision zone sits beside
+    // the transcript scroller under the task-thread root, so resolve late focus from the route.
+    const focusRoot = scroller.closest<HTMLElement>('[data-route="task-thread"]') ?? scroller
     const owns = () => ownsFocus(owner, generation)
     // True when the wait is over: the target took focus, or the caller gave it up.
     const focus = () => {
-      const target = focusTarget?.(scroller)
+      const target = focusTarget?.(focusRoot)
       if (target === false) return true
       if (!target) return false
       target.focus({ preventScroll: true })
@@ -436,7 +439,7 @@ export function useThreadScroll(
             else if (focus()) observer.disconnect()
           })
           pendingFocusRef.current = observer
-          observer.observe(scroller, { childList: true, subtree: true })
+          observer.observe(focusRoot, { childList: true, subtree: true })
         })
       })
     })

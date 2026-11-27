@@ -57,7 +57,7 @@ const RUNS = [
   record(OTHER_ID, 'Another finished task'),
 ]
 
-const MAIN = `document.querySelector('[data-slot="main"]')`
+const MAIN = `document.querySelector('[data-slot="thread-transcript"]')`
 const PILL = '[data-slot="jump-to-latest"]'
 const PINNED = '[data-slot="ask-card"][data-pinned="true"]'
 const FIRST_CHIP = `${PINNED} [data-slot="ask-question"] button`
@@ -131,49 +131,38 @@ describe.each([
   { name: '360×640', width: 360, height: 640, query: '' },
   { name: 'desktop, virtualized rows', width: 1440, height: 900, query: '?thread=virtual' },
 ])('the pinned pending question at $name', ({ width, height, query }) => {
-  it('restores Activity without scrolling the question again at the folded footer bottom', () => {
+  it('pins the pending ask in the bottom decision zone while scrolling history, with unified reply mode and no Activity gap', () => {
     openTask(width, height, query)
-    const activity = '[data-slot="run-activity-dock"] > button'
-    const initiallyOpen = browser.waitForValue(`document.querySelector('${activity}')?.getAttribute('aria-expanded')`)
-    if (initiallyOpen === 'false') browser.click(activity)
-    browser.waitForValue(`document.querySelector('${activity}')?.getAttribute('aria-expanded')`,
-      (value): value is string => value === 'true')
-    waitForSettledSample(browser, `${MAIN}.scrollHeight`)
-    browser.evaluate(`(() => {
-      const main = ${MAIN};
-      main.dispatchEvent(new WheelEvent('wheel', { deltaY: -1000, bubbles: true }));
-      window.__cezThreadScrollTo(main.scrollHeight - main.clientHeight - 1000);
+    const before = waitForSettledSample<{ dockInView: boolean; activityInDock: boolean; inDock: boolean }>(browser, `(() => {
+      const dock = document.querySelector('[data-slot="thread-dock"]')
+      const ask = dock?.querySelector('${PINNED}')
+      const box = dock?.getBoundingClientRect()
+      return {
+        dockInView: !!box && box.bottom <= innerHeight + 1 && box.top >= 0,
+        activityInDock: dock?.querySelector('[data-slot="run-activity-dock"]') !== null,
+        inDock: ask !== null,
+      }
     })()`)
-    browser.waitForValue(`document.querySelector('${activity}')?.getAttribute('aria-expanded')`,
-      (value): value is string => value === (width >= 768 ? 'false' : 'true'))
-    waitForSettledSample(browser, `${MAIN}.scrollHeight`)
-    const target = Number(browser.evaluate(`(() => {
-      const main = ${MAIN}, target = main.scrollHeight - main.clientHeight;
-      main.dispatchEvent(new WheelEvent('wheel', { deltaY: 1000, bubbles: true }));
-      window.__cezThreadScrollTo(target);
-      return target;
-    })()`))
-    browser.waitForValue(`document.querySelector('${activity}')?.getAttribute('aria-expanded')`,
-      (value): value is string => value === 'true')
-    const restored = waitForSettledSample<{ top: number; belowFold: number; pill: boolean }>(browser, `(() => {
-      const main = ${MAIN};
-      return { top: main.scrollTop, belowFold: main.scrollHeight - main.clientHeight - main.scrollTop,
-        pill: document.querySelector('${PILL}') !== null };
+    expect(before).toEqual({ dockInView: true, activityInDock: false, inDock: true })
+
+    // Scroll the transcript independently while the pinned ask stays fixed at the bottom.
+    scrollAwayFromTail()
+    const whileScrolled = waitForSettledSample<{ dockAtBottom: boolean; askVisible: boolean }>(browser, `(() => {
+      const dock = document.querySelector('[data-slot="thread-dock"]').getBoundingClientRect()
+      const ask = document.querySelector('${PINNED}').getBoundingClientRect()
+      return { dockAtBottom: Math.abs(dock.bottom - innerHeight) <= 2, askVisible: ask.top >= 0 && ask.bottom <= innerHeight + 1 }
     })()`)
-    expect(Math.abs(restored.top - target)).toBeLessThan(2)
-    if (width >= 768) {
-      // The restored card grows the sticky footer below the reader, who stays put. The pinned
-      // question is still in view above it, so no jump pill floats over its options.
-      expect(restored.belowFold).toBeGreaterThan(2)
-      expect(restored.pill).toBe(false)
-    }
-    // A further reader movement can still reach the expanded footer's real bottom.
-    browser.evaluate(`(() => {
-      const main = ${MAIN};
-      main.dispatchEvent(new WheelEvent('wheel', { deltaY: 1000, bubbles: true }));
-      window.__cezThreadScrollTo(main.scrollHeight - main.clientHeight);
-    })()`)
-    browser.waitForFunction(`(() => { const main = ${MAIN}; return main.scrollHeight - main.clientHeight - main.scrollTop < 2 && document.querySelector('${PILL}') === null })()`)
+    expect(whileScrolled).toEqual({ dockAtBottom: true, askVisible: true })
+
+    // Embedded free-text reply mode lives inside the same decision surface with one send path.
+    browser.click('[data-slot="ask-mode-reply"]')
+    browser.waitForFunction(`document.querySelector('${PINNED} textarea') !== null`)
+    browser.fill(`${PINNED} textarea`, 'Keep this reply draft')
+    browser.click('[data-slot="ask-mode-options"]')
+    browser.waitForFunction(`document.querySelector('${FIRST_CHIP}') !== null`)
+    browser.click('[data-slot="ask-mode-reply"]')
+    expect(browser.waitForValue(`document.querySelector('${PINNED} textarea')?.value ?? null`, (v): v is string => v === 'Keep this reply draft')).toBe('Keep this reply draft')
+    browser.click('[data-slot="ask-mode-options"]')
   })
 
   it('pins the pending question at the tail and never answers the earlier one', () => {
@@ -186,15 +175,18 @@ describe.each([
     expect(Number(browser.evaluate(cursorRequests))).toBe(0)
   })
 
-  it('keeps long active context fully expanded and replays the earlier decision', () => {
+  it('opens long active context in a non-destructive sheet and replays the earlier decision', () => {
     openTask(width, height, query)
+    browser.click('[data-slot="ask-show-context"]')
+    browser.waitForFunction(`document.querySelector('[data-slot="ask-context-sheet"] [data-slot="ask-context"]') !== null`)
     const context = browser.evaluate(`(() => {
-      const region = document.querySelector('[data-slot="ask-context"]')
-      return { height: region.clientHeight, content: region.scrollHeight }
-    })()`) as { height: number; content: number }
-    expect(context.height).toBe(context.content)
-    expect(context.height).toBeGreaterThan(height)
-    browser.evaluate(`document.querySelector('[data-slot="ask-show-origin"]').click()`)
+      const region = document.querySelector('[data-slot="ask-context-sheet"] [data-slot="ask-context"]')
+      return { content: region.scrollHeight, text: region.textContent }
+    })()`) as { content: number; text: string }
+    expect(context.text).toContain('Context paragraph 1:')
+    expect(context.text).toContain('Context paragraph 40:')
+    expect(context.content).toBeGreaterThan(height)
+    browser.evaluate(`document.querySelector('[data-slot="ask-context-sheet"] button:last-of-type').click()`)
     browser.waitForFunction(`document.querySelector('[data-slot="ask-answers"]') !== null`)
     expect(browser.text('[data-slot="ask-answers"]')).toContain('Which branch is the base?')
     expect(browser.text('[data-slot="ask-answers"]')).toContain('develop')
@@ -224,7 +216,12 @@ describe.each([
 
   it('"Show where it was asked" loads older history and focuses the marker', () => {
     openTask(width, height, query)
-    browser.evaluate(`document.querySelector('[data-slot="ask-show-origin"]').focus()`)
+    browser.click('[data-slot="ask-show-context"]')
+    browser.waitForFunction(`document.querySelector('[data-slot="ask-context-sheet"]') !== null`)
+    browser.evaluate(`(() => {
+      const btn = [...document.querySelectorAll('[data-slot="ask-context-sheet"] button')].find(el => el.textContent?.includes('Show where it was asked'))
+      btn.focus()
+    })()`)
     browser.press('Enter')
     browser.waitForValue(`(() => {
       const marker = document.querySelector('[data-slot="ask-origin"]')
@@ -233,8 +230,7 @@ describe.each([
     expect(Number(browser.evaluate(cursorRequests))).toBeGreaterThan(0)
     // The answered question stays a summary and is never focused.
     expect(browser.evaluate(`document.activeElement?.closest('[data-resolved="true"]') === null`)).toBe(true)
-    // Virtualized rows may unmount the pinned card here, far below; never more than one copy.
-    expect(browser.count('[data-slot="ask-card"][data-resolved="false"]')).toBeLessThanOrEqual(1)
+    expect(browser.count('[data-slot="ask-card"][data-resolved="false"]')).toBe(1)
 
     const marker = '[data-slot="ask-go-to-question"]'
     const box = browser.evaluate(`(() => { const r = document.querySelector(${JSON.stringify(marker)}).getBoundingClientRect(); return { w: r.width, h: r.height } })()`) as { w: number; h: number }
@@ -254,12 +250,13 @@ describe.each([
   })
 
   // Rule: docs/areas/web-ui.md § Touch and phone rules and § Accessibility rules (contrast).
-  it('keeps 44×44 targets and readable contrast in light and dark themes', () => {
-    // The pinned link is measured at the tail, where its row is mounted; the pill once away.
-    const measure = (selector: string) => {
+  it('keeps 44×44 mobile targets and readable contrast in light and dark themes', () => {
+    const measure = (selector: string, requireTouchSize: boolean) => {
       const box = browser.evaluate(`(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return { w: r.width, h: r.height } })()`) as { w: number; h: number }
-      expect(box.w, selector).toBeGreaterThanOrEqual(44)
-      expect(box.h, selector).toBeGreaterThanOrEqual(44)
+      if (requireTouchSize) {
+        expect(box.w, selector).toBeGreaterThanOrEqual(44)
+        expect(box.h, selector).toBeGreaterThanOrEqual(44)
+      }
       for (const theme of ['dark', 'light'] as const) {
         browser.evaluate(`document.documentElement.classList.toggle('light', ${theme === 'light'})`)
         const sample = browser.waitForValue<ContrastSample>(contrastSampleExpression(selector), (value) => value !== null)
@@ -268,9 +265,11 @@ describe.each([
       browser.evaluate(`document.documentElement.classList.remove('light')`)
     }
     openTask(width, height, query)
-    measure('[data-slot="ask-show-origin"]')
+    measure('[data-slot="ask-show-context"]', width < 768)
+    measure('[data-slot="ask-mode-options"]', width < 768)
+    measure('[data-slot="ask-mode-reply"]', width < 768)
     scrollAwayFromTail()
-    measure(PILL)
+    measure(PILL, true)
   })
 })
 

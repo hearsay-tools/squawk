@@ -180,8 +180,28 @@ function WorkerParentLink({ run, compact = false }: { run: ApiRun; compact?: boo
 /** #281: Archive out of the kebab row, into one fixed header slot on all four tabs, so switching
  *  between Session, Changes, Commits and Files never moves it. A blocker shows the same manual
  *  Archive control beside its reason instead. Phones keep it in the kebab. */
-function headerArchiveButton(run: ApiRun, flags: ReturnType<typeof runActionFlags>) {
-  return !run.archiveBlocker && flags.archive ? <ArchiveButton run={run} /> : null
+/** Desktop header status slot: either the Session tab's interactive Activity trigger or the static status pill. */
+function DesktopHeaderStatus({
+  isDesktop,
+  desktopActivitySlot,
+  attention,
+  statusLine,
+}: {
+  isDesktop: boolean
+  desktopActivitySlot: ReactNode | undefined
+  attention: ReturnType<typeof deriveAttention>
+  statusLine: ReturnType<typeof runStatusLine>
+}) {
+  if (isDesktop && desktopActivitySlot) return <>{desktopActivitySlot}</>
+  return (
+    <Pill dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="max-md:hidden">
+      {statusLineText(statusLine)}
+    </Pill>
+  )
+}
+
+function headerArchiveButton(run: ApiRun, flags: ReturnType<typeof runActionFlags>, isDesktop: boolean) {
+  return isDesktop && !run.archiveBlocker && flags.archive ? <ArchiveButton run={run} /> : null
 }
 
 /** The auto-archive provenance line: shown only when the run is archived right now by the
@@ -299,6 +319,8 @@ export function RunHeader({
   run,
   tab = 'session',
   onMarkedUnread,
+  desktopActivitySlot,
+  mobileActivitySlot,
 }: {
   run: ApiRun
   tab?: RunTab
@@ -306,6 +328,10 @@ export function RunHeader({
    *  to suppress its auto-mark-read effect for the rest of the visit (#775). Optional because
    *  the three `task-git` tabs render this same header and run no such effect. */
   onMarkedUnread?: (() => void) | undefined
+  /** Replaces the desktop status pill on the Session tab with the interactive Activity trigger. */
+  desktopActivitySlot?: ReactNode | undefined
+  /** Renders the compact 44px mobile Activity strip in the Session header below the tabs. */
+  mobileActivitySlot?: ReactNode | undefined
 }) {
   const attention = deriveAttention(run)
   const flags = runActionFlags(run)
@@ -353,7 +379,7 @@ export function RunHeader({
     />
   )
 
-  const archiveButton = headerArchiveButton(run, flags)
+  const archiveButton = headerArchiveButton(run, flags, isDesktop)
 
   return (
     <ReferenceStatusProvider projectId={referenceProjectId} repoBase={repoBase} requests={referenceRequests}>
@@ -363,9 +389,9 @@ export function RunHeader({
       className={cn(
         // Pushed phone screen: the facet tabs sit directly under the shell's top bar (#621), so
         // the header has no top padding of its own there.
-        'relative z-20 bg-background px-4 md:px-9 md:pt-7',
+        'relative z-20 shrink-0 bg-background px-4 md:px-9 md:pt-7',
         phoneBar ? 'pt-0' : 'pt-[18px]',
-        tab === 'session' && 'sticky [inset-block-start:0]',
+        tab === 'session' && 'border-b border-border',
       )}
     >
       <AutoArchiveNote run={run} />
@@ -390,12 +416,14 @@ export function RunHeader({
               {sessionKindLabel(run.delegation)}
             </p>
             <EditableTitle run={run} />
-            {/* Desktop only: below md the header shows no status at all (#1333). */}
-            <Pill dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="max-md:hidden">
-              {statusLineText(statusLine)}
-            </Pill>
+            <DesktopHeaderStatus
+              isDesktop={isDesktop}
+              desktopActivitySlot={desktopActivitySlot}
+              attention={attention}
+              statusLine={statusLine}
+            />
             <span className="ml-auto flex shrink-0 items-center gap-1 md:gap-2.5">
-              {isDesktop ? archiveButton : null}
+              {archiveButton}
               {previewToggle}
               <HandoffAction run={run} />
               {actionsKebab}
@@ -418,6 +446,8 @@ export function RunHeader({
           phoneBar={phoneBar}
           isDesktop={isDesktop}
         />
+
+        {!isDesktop ? mobileActivitySlot : null}
 
         {notesOpen ? <NotesPanel runId={run.id} onClose={() => setNotesOpen(false)} /> : null}
         {openChooser ? <OpenInMenuForRun run={run} canResume={runActionFlags(run).terminal} onResume={() => actions.terminal.mutate()} onClose={() => setOpenChooser(false)} /> : null}

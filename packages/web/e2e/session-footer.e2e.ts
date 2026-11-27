@@ -51,16 +51,17 @@ afterAll(async () => {
 
 const geometry = `(() => {
   const main = document.querySelector('[data-slot="main"]');
+  const transcript = document.querySelector('[data-slot="thread-transcript"]');
   const rect = slot => document.querySelector('[data-slot="' + slot + '"]').getBoundingClientRect();
-  const dock = rect('thread-dock'), activity = rect('run-activity-dock'), composer = rect('composer-editor');
+  const dock = rect('thread-dock'), composer = rect('composer-editor');
   const header = rect('run-header'), viewport = main.getBoundingClientRect();
   const jump = document.querySelector('[data-slot="jump-to-latest"]');
   const jumpBox = jump?.getBoundingClientRect();
   return {
-    footerVisible: activity.top >= header.bottom - 1 && composer.bottom <= viewport.bottom + 1,
+    footerVisible: dock.top >= header.bottom - 1 && composer.bottom <= viewport.bottom + 1,
     footerAtBottom: Math.abs(dock.bottom - viewport.bottom) < 2,
     jumpClear: !jumpBox || (jumpBox.bottom <= dock.top && jump.contains(document.elementFromPoint(jumpBox.x + jumpBox.width / 2, jumpBox.y + jumpBox.height / 2))),
-    overflow: main.scrollWidth > main.clientWidth,
+    overflow: main.scrollWidth > main.clientWidth || transcript.scrollWidth > transcript.clientWidth,
     draft: document.querySelector('textarea').value,
   };
 })()`
@@ -74,11 +75,11 @@ it.each([
   browser.waitForFunction(`document.querySelector('[data-slot="thread-rows"]') !== null`)
   browser.evaluate(`document.documentElement.classList.toggle('light', ${theme === 'light'})`)
   browser.fill('textarea', 'Keep this draft while reading history')
-  for (const position of ['0', '(main.scrollHeight - main.clientHeight) / 2']) {
+  for (const position of ['0', '(transcript.scrollHeight - transcript.clientHeight) / 2']) {
     browser.evaluate(`(() => {
-      const main = document.querySelector('[data-slot="main"]');
-      main.dispatchEvent(new WheelEvent('wheel', { deltaY: -1800, bubbles: true }));
-      main.scrollTop = ${position};
+      const transcript = document.querySelector('[data-slot="thread-transcript"]');
+      transcript.dispatchEvent(new WheelEvent('wheel', { deltaY: -1800, bubbles: true }));
+      transcript.scrollTop = ${position};
     })()`)
     browser.waitForFunction(`document.querySelector('[data-slot="jump-to-latest"]') !== null`)
     expect(waitForSettledSample(browser, geometry)).toEqual({
@@ -105,7 +106,7 @@ it('keeps a short desktop session footer at the bottom', () => {
   })
 })
 
-it('keeps expanded activity and a long draft accessible on a short desktop viewport', () => {
+it('keeps expanded activity popover and a long draft accessible on a short desktop viewport', () => {
   browser.setViewport(768, 640)
   browser.goto(`${baseUrl}/p/${project}/tasks/${runId}`)
   openSessionActivityRow(browser, 'usage')
@@ -114,17 +115,16 @@ it('keeps expanded activity and a long draft accessible on a short desktop viewp
     footerVisible: true, footerAtBottom: true, overflow: false,
   })
   const details = waitForSettledSample(browser, `(() => {
-    const activity = document.querySelector('[data-slot="run-activity-dock"]');
-    activity.scrollTop = activity.scrollHeight;
-    return { scrollable: activity.scrollHeight > activity.clientHeight, reachedEnd: activity.scrollTop + activity.clientHeight >= activity.scrollHeight - 1 };
+    const popover = document.querySelector('[data-slot="run-activity-popover"]');
+    popover.scrollTop = popover.scrollHeight;
+    return { mounted: popover !== null, reachedEnd: popover.scrollTop + popover.clientHeight >= popover.scrollHeight - 1 };
   })()`)
-  expect(details).toEqual({ scrollable: true, reachedEnd: true })
+  expect(details).toEqual({ mounted: true, reachedEnd: true })
 })
 
 it('keeps the Composer controls visible with attachments in a 480px-high desktop window', () => {
   browser.setViewport(1440, 900)
   browser.goto(`${baseUrl}/p/${project}/tasks/${runId}`)
-  openSessionActivityRow(browser, 'usage')
   browser.setViewport(1024, 480)
   browser.fill('textarea', Array.from({ length: 20 }, (_, index) => `Draft line ${index}`).join('\n'))
   browser.evaluate(`(() => {
@@ -160,10 +160,10 @@ it('scrolls a keyboard-focused transcript control above the desktop footer', () 
     return rendered;
   })()`, rendered => rendered === true)
   browser.evaluate(`(() => {
-    const main = document.querySelector('[data-slot="main"]');
+    const transcript = document.querySelector('[data-slot="thread-transcript"]');
     const button = document.querySelector('${target}');
     button.scrollIntoView({ block: 'center' });
-    main.scrollTop += button.getBoundingClientRect().top - document.querySelector('[data-slot="thread-dock"]').getBoundingClientRect().top - 20;
+    transcript.scrollTop += button.getBoundingClientRect().top - document.querySelector('[data-slot="thread-dock"]').getBoundingClientRect().top - 20;
     // Set the sequential keyboard start immediately before the target, without scrolling
     // either control into view. The actual Tab must reveal the covered transcript control.
     const start = document.createElement('span');

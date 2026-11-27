@@ -1,16 +1,32 @@
-import { useId, useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 
-import type { ApiRun } from '@open-mercato/cezar-api-client'
+import type { ApiRun, UiAskQuestion } from '@open-mercato/cezar-api-client'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
+import { useUnsentDraft } from '@/lib/version-reload'
 
 import { useAskAnswer } from './ask-answer'
-import { Markdown } from './markdown'
 import { AskAnswers } from './ask-answers'
+import {
+  AskCommentStep,
+  AskContextSheet,
+  AskDeliveryNotices,
+  AskFreeTextBody,
+  DesktopStepPills,
+  PendingAskHeader,
+  ShowOriginLink,
+  SingleAskFooterControls,
+  SteppedFooterControls,
+  questionAnswered,
+  type FreeTextReplyRenderProps,
+} from './ask-card-parts'
+import { Markdown } from './markdown'
 import { ConversationMessage } from './thread-items'
 import type { AskClosedReason, ThreadAsk } from './thread-state'
+
+export type { FreeTextReplyRenderProps }
 
 /** What a closed question's card says (hearsay-tools/cezarion#1260, hearsay-tools/cezarion#1301, hearsay-tools/cezarion#2410). */
 const ASK_CLOSED_LABEL: Record<AskClosedReason, string> = {
@@ -20,73 +36,89 @@ const ASK_CLOSED_LABEL: Record<AskClosedReason, string> = {
   'worker-stopped': 'Closed when the worker stopped',
   undeliverable: 'Closed: not delivered',
 }
-import type { UiAskQuestion } from '@open-mercato/cezar-api-client'
 
 /** Format one answered question the way the agent reads it back. */
 function formatAnswer(question: UiAskQuestion, labels: string[], otherAnswer?: string): string {
   return `${question.header}: ${otherAnswer?.trim() || labels.join(', ')}`
 }
 
-/**
- * The AskUser card (#473): the agent asked one or more structured questions (`cezar_ask`, the
- * ask line or a native ask); render each with clickable option chips. A question without
- * options is open (hearsay-tools/cezarion#1234): it shows only the answer field. A single
- * single-select question resolves on one tap; any other shape (multiple questions, a
- * multi-select question, or an open one) collects every answer and resolves on one **Send**
- * that posts a single combined message — the reducer resolves the whole card on that one user
- * message, so partial answers can never leak. Unless allowFreeText is false, a question
- * with options also offers an optional Other answer that can be mixed with chip answers from the other questions. Either
- * way the answer rides `useAskAnswer`, which picks the seam the run's state
- * allows: the live reply while the engine owns a session, and a resume once it
- * has closed — a question outlives its session, so answering one that the agent
- * asked before an idle timeout or a restart reopens the session with the answer
- * as its opening prompt. The composer below stays available for a free-form
- * "Other". Resolved cards preserve the context, questions and options.
- */
-export function AskCard({ ask, run, onShowOrigin }: {
-  ask: ThreadAsk
-  run: ApiRun
-  /** The pinned copy's link back to where the agent asked (hearsay-tools/cezarion#1495). */
-  onShowOrigin?: () => void
-}) {
-  // An answered card is a static summary — split so the delivery hook (two mutations and a
-  // provider-status subscription) only mounts for a question that can still be answered.
-  // Threads accumulate asks; every resolved one would otherwise carry live machinery for a
-  // question nobody can answer again.
-  const context = ask.context ? <AskContext text={ask.context} /> : null
-  if (ask.resolved) {
-    return <div className="flex flex-col gap-3">
-      {context}
-      <ConversationMessage role="user"
-        data-slot="ask-card"
-        data-resolved="true"
-      >
-        <span className="text-soft-foreground">
-          {ask.closed ? ASK_CLOSED_LABEL[ask.closed] : ask.answeredBy === 'parent' ? 'Answered by parent' : 'Answered'}
-        </span>
-        <AskAnswers ask={ask} />
-      </ConversationMessage>
-    </div>
-  }
-  const showOrigin = ask.placement === 'pinned' && onShowOrigin ? onShowOrigin : undefined
-  return <div className="flex flex-col gap-3">{context}{ask.routedToParent
-    ? <RoutedAsk ask={ask} onShowOrigin={showOrigin} />
-    : <PendingAsk ask={ask} run={run} onShowOrigin={showOrigin} />}</div>
+/** Format all structured answers plus an optional trailing comment block. */
+export function formatAskPayload(
+  questions: readonly UiAskQuestion[],
+  selections: Readonly<Record<number, string[]>>,
+  otherAnswers: Readonly<Record<number, string>>,
+  additionalComment = '',
+): string {
+  const answers = questions
+    .map((q, index) => formatAnswer(q, selections[index] ?? [], otherAnswers[index]))
+    .join('\n')
+  const note = additionalComment.trim()
+  return note ? `${answers}\n\nAdditional comments:\n${note}` : answers
 }
 
-/** The pinned copy's link to the question's original place in the transcript. */
-function ShowOriginLink({ onShowOrigin, className }: { onShowOrigin: () => void; className?: string }) {
+/**
+ * The AskUser card (#473, unified decision surface in hearsay-tools/squawk#4374):
+ * renders structured options (stepped `1 of N` for multi-question asks with an optional
+ * trailing comment step), embeds free-text reply as a mode inside the same surface with one
+ * send path, and opens long context in a non-destructive sheet without losing drafts.
+ */
+export function AskCard({
+  ask,
+  run,
+  onShowOrigin,
+  renderFreeTextReply,
+  onStop,
+  stopping = false,
+  surface = 'transcript',
+}: {
+  ask: ThreadAsk
+  run: ApiRun
+  /** Jump to the question's original place in the transcript (hearsay-tools/cezarion#1495). */
+  onShowOrigin?: (() => void) | undefined
+  /** Shared composer rendered inside the embedded free-text reply mode. */
+  renderFreeTextReply?: ((props: FreeTextReplyRenderProps) => ReactNode) | undefined
+  /** Optional Stop action kept reachable while a pending ask waits for a reply. */
+  onStop?: (() => void) | undefined
+  stopping?: boolean | undefined
+  /** `decision-zone` pins the card at the viewport bottom and opens context in a sheet. */
+  surface?: 'transcript' | 'decision-zone' | undefined
+}) {
+  const inlineContext = surface === 'transcript' && ask.context ? <AskContext text={ask.context} /> : null
+  if (ask.resolved) {
+    return (
+      <div className="flex flex-col gap-3">
+        {ask.context ? <AskContext text={ask.context} /> : null}
+        <ConversationMessage role="user" data-slot="ask-card" data-resolved="true">
+          <span className="text-soft-foreground">
+            {ask.closed ? ASK_CLOSED_LABEL[ask.closed] : ask.answeredBy === 'parent' ? 'Answered by parent' : 'Answered'}
+          </span>
+          <AskAnswers ask={ask} />
+        </ConversationMessage>
+      </div>
+    )
+  }
+  const showOrigin = ask.placement === 'pinned' && onShowOrigin ? onShowOrigin : undefined
+  if (ask.routedToParent) {
+    return (
+      <div className="flex flex-col gap-3">
+        {inlineContext}
+        <RoutedAsk ask={ask} surface={surface} onShowOrigin={showOrigin} />
+      </div>
+    )
+  }
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      data-slot="ask-show-origin"
-      className={cn('mbs-2 min-h-11 min-w-11 px-2 text-xs font-medium text-muted-foreground underline underline-offset-4', className)}
-      onClick={onShowOrigin}
-    >
-      Show where it was asked
-    </Button>
+    <div className="flex flex-col gap-3">
+      {inlineContext}
+      <PendingAsk
+        ask={ask}
+        run={run}
+        surface={surface}
+        onShowOrigin={showOrigin}
+        renderFreeTextReply={renderFreeTextReply}
+        onStop={onStop}
+        stopping={stopping}
+      />
+    </div>
   )
 }
 
@@ -97,33 +129,55 @@ function ShowOriginLink({ onShowOrigin, className }: { onShowOrigin: () => void;
 export function AskContext({ text }: { text: string }) {
   return (
     <ConversationMessage role="agent">
-    <div
-      data-slot="ask-context"
-      role="region"
-      aria-label="Context"
-      className="break-words text-sm text-foreground"
-    >
-      <Markdown breaks>{text}</Markdown>
-    </div>
+      <div
+        data-slot="ask-context"
+        role="region"
+        aria-label="Context"
+        className="break-words text-sm text-foreground"
+      >
+        <Markdown breaks>{text}</Markdown>
+      </div>
     </ConversationMessage>
   )
 }
 
-/** A worker's question sent to its parent task (#505): read-only here, answered there. If the
- *  parent can no longer answer, the question falls back and this becomes the ordinary card. */
-function RoutedAsk({ ask, onShowOrigin }: { ask: ThreadAsk; onShowOrigin: (() => void) | undefined }) {
+/** A worker's question sent to its parent task (#505): read-only here, answered there. */
+function RoutedAsk({
+  ask,
+  surface,
+  onShowOrigin,
+}: {
+  ask: ThreadAsk
+  surface: 'transcript' | 'decision-zone'
+  onShowOrigin: (() => void) | undefined
+}) {
+  const [contextOpen, setContextOpen] = useState(false)
+  const hasSheetContext = surface === 'decision-zone' && Boolean(ask.context)
   return (
     <div
       data-slot="ask-card"
       data-resolved="false"
+      data-ask-id={ask.id}
       data-pinned={ask.placement === 'pinned' ? 'true' : undefined}
       data-routed="parent"
-      className="rounded-lg border border-border bg-card px-3 py-2"
+      className="rounded-xl border border-border bg-card px-3 py-2.5"
     >
-      <div className="mb-2.5 flex items-center gap-2">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-link-foreground">The agent is asking its parent</span>
+        {hasSheetContext ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-slot="ask-show-context"
+            className="ms-auto min-h-11 min-w-11 px-2 text-xs font-medium text-link-foreground underline underline-offset-4 md:min-h-8 md:min-w-0"
+            onClick={() => setContextOpen(true)}
+          >
+            Show context
+          </Button>
+        ) : null}
       </div>
-      <div className="flex flex-col gap-3">
+      <div data-slot="ask-body" className="flex flex-col gap-3">
         {ask.questions.map((question, index) => (
           <div key={question.id ?? index} role="group" aria-label={question.question}>
             <div className="mb-0.5 flex items-center gap-2">
@@ -149,32 +203,56 @@ function RoutedAsk({ ask, onShowOrigin }: { ask: ThreadAsk; onShowOrigin: (() =>
           </div>
         ))}
       </div>
-      <p data-slot="ask-routed-hint" className="mt-3 text-xs text-muted-foreground">
-        Routed to parent: answer it in the{' '}
-        {ask.parentRunId ? (
-          <Link to={`/tasks/${ask.parentRunId}`} className="font-medium text-foreground underline underline-offset-4">
-            parent task
-          </Link>
-        ) : (
-          'parent task'
-        )}
-        .
-      </p>
-      {onShowOrigin ? <ShowOriginLink onShowOrigin={onShowOrigin} /> : null}
+      <div data-slot="ask-footer" className="mt-2.5 flex flex-wrap items-center gap-2">
+        <p data-slot="ask-routed-hint" className="text-xs text-muted-foreground">
+          Routed to parent: answer it in the{' '}
+          {ask.parentRunId ? (
+            <Link to={`/tasks/${ask.parentRunId}`} className="font-medium text-foreground underline underline-offset-4">
+              parent task
+            </Link>
+          ) : (
+            'parent task'
+          )}
+          .
+        </p>
+        {!hasSheetContext && onShowOrigin ? <ShowOriginLink onShowOrigin={onShowOrigin} className="ms-auto" /> : null}
+      </div>
+      {hasSheetContext && ask.context ? (
+        <AskContextSheet open={contextOpen} onOpenChange={setContextOpen} context={ask.context} onShowOrigin={onShowOrigin} />
+      ) : null}
     </div>
   )
 }
 
-/** The unanswered card: option chips wired to whichever delivery seam the run's state allows. */
-function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; onShowOrigin: (() => void) | undefined }) {
+function usePendingAskState(ask: ThreadAsk, run: ApiRun) {
   const delivery = useAskAnswer(run)
   const blocked = delivery.blockedBy !== undefined
   const questions = ask.questions
-  // One-tap only when there is a single single-select question with options; every
-  // other shape needs a combined Send so no question's answer is dropped.
-  const oneTap = questions.length === 1 && questions[0]?.options !== undefined && questions[0]?.multiSelect !== true
+  const stepped = questions.length > 1
+  const commentStepIndex = questions.length
+  const [mode, setMode] = useState<'options' | 'reply'>('options')
+  const [stepIndex, setStepIndex] = useState(0)
   const [selections, setSelections] = useState<Record<number, string[]>>({})
   const [otherAnswers, setOtherAnswers] = useState<Record<number, string>>({})
+  const [additionalComment, setAdditionalComment] = useState('')
+  const [singleCommentOpen, setSingleCommentOpen] = useState(false)
+  const [freeTextDraft, setFreeTextDraft] = useState('')
+  const [contextOpen, setContextOpen] = useState(false)
+
+  const onCommentStep = stepped && stepIndex === commentStepIndex
+  const oneTap =
+    questions.length === 1 &&
+    questions[0]?.options !== undefined &&
+    questions[0]?.multiSelect !== true &&
+    !singleCommentOpen &&
+    additionalComment.trim() === ''
+
+  const hasDraft =
+    Object.values(selections).some((labels) => labels.length > 0) ||
+    Object.values(otherAnswers).some((text) => text.trim() !== '') ||
+    additionalComment.trim() !== '' ||
+    freeTextDraft.trim() !== ''
+  useUnsentDraft(hasDraft)
 
   const setQuestion = (index: number, labels: string[]) =>
     setSelections((prev) => ({ ...prev, [index]: labels }))
@@ -192,154 +270,237 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
     setOtherAnswers((prev) => ({ ...prev, [index]: prev[index] ?? '' }))
   }
 
-  // An open question is typed, like an Other answer.
   const hasOtherAnswer = questions.some((question, index) => !question.options || otherAnswers[index] !== undefined)
-  const allAnswered = questions.every(
-    (_, index) => (selections[index]?.length ?? 0) > 0 || Boolean(otherAnswers[index]?.trim()),
-  )
-
+  const answeredCount = questions.filter((_, index) => questionAnswered(index, selections, otherAnswers)).length
+  const allAnswered = answeredCount === questions.length
   const sendAll = () =>
-    void delivery.send(
-      questions
-        .map((q, index) => formatAnswer(q, selections[index] ?? [], otherAnswers[index]))
-        .join('\n'),
-    )
+    void delivery.send(formatAskPayload(questions, selections, otherAnswers, additionalComment))
+  const sendFreeText = () => {
+    const trimmed = freeTextDraft.trim()
+    if (!trimmed) return
+    void delivery.send(trimmed).then((err) => {
+      if (err === undefined) setFreeTextDraft('')
+    })
+  }
 
-  // The session ended before the question was answered — say so, because sending the
-  // answer now does more than reply: it reopens the agent's session to deliver it.
-  const resuming = delivery.mode === 'resume'
+  return {
+    delivery, blocked, questions, stepped, commentStepIndex,
+    mode, setMode, stepIndex, setStepIndex, selections, otherAnswers, setOtherAnswers,
+    additionalComment, setAdditionalComment, singleCommentOpen, setSingleCommentOpen,
+    freeTextDraft, setFreeTextDraft, contextOpen, setContextOpen,
+    onCommentStep, oneTap, setQuestion, clearOtherAnswer, selectOther,
+    hasOtherAnswer, answeredCount, allAnswered, sendAll, sendFreeText,
+  }
+}
+
+function PendingAskBody({
+  state,
+  renderFreeTextReply,
+}: {
+  state: ReturnType<typeof usePendingAskState>
+  renderFreeTextReply: ((props: FreeTextReplyRenderProps) => ReactNode) | undefined
+}) {
+  const singleCommentId = useId()
+  const disabled = state.delivery.isPending || state.blocked
+  if (state.mode === 'reply') {
+    return (
+      <AskFreeTextBody
+        value={state.freeTextDraft}
+        onValueChange={state.setFreeTextDraft}
+        disabled={disabled}
+        renderFreeTextReply={renderFreeTextReply}
+        onSubmit={state.sendFreeText}
+      />
+    )
+  }
+  if (state.onCommentStep) {
+    return (
+      <AskCommentStep
+        questions={state.questions}
+        selections={state.selections}
+        otherAnswers={state.otherAnswers}
+        comment={state.additionalComment}
+        disabled={disabled}
+        onCommentChange={state.setAdditionalComment}
+        onJumpToQuestion={state.setStepIndex}
+      />
+    )
+  }
+  const activeIndex = state.stepped ? Math.min(state.stepIndex, state.questions.length - 1) : 0
+  const activeQuestion = state.questions[activeIndex]
+  if (!activeQuestion) return null
+  return (
+    <>
+      <AskQuestionBlock
+        key={activeQuestion.id ?? activeIndex}
+        question={activeQuestion}
+        disabled={disabled}
+        selected={state.selections[activeIndex] ?? []}
+        isOther={state.otherAnswers[activeIndex] !== undefined}
+        otherAnswer={state.otherAnswers[activeIndex] ?? ''}
+        onSelect={(labels) => {
+          if (state.blocked) return
+          state.clearOtherAnswer(activeIndex)
+          if (state.oneTap) void state.delivery.send(formatAnswer(activeQuestion, labels))
+          else state.setQuestion(activeIndex, labels)
+        }}
+        onOtherToggle={() => {
+          if (state.blocked) return
+          if (state.otherAnswers[activeIndex] === undefined) state.selectOther(activeIndex)
+          else state.clearOtherAnswer(activeIndex)
+        }}
+        onOtherChange={(answer) =>
+          state.setOtherAnswers((prev) => ({ ...prev, [activeIndex]: answer }))
+        }
+      />
+      {!state.stepped && state.singleCommentOpen ? (
+        <div className="pt-1">
+          <label htmlFor={singleCommentId} className="mb-1 block text-xs font-medium text-foreground">
+            Additional comments (optional)
+          </label>
+          <Textarea
+            id={singleCommentId}
+            data-slot="ask-additional-comment"
+            rows={2}
+            value={state.additionalComment}
+            disabled={disabled}
+            placeholder="Optional extra notes for the agent…"
+            onChange={(event) => state.setAdditionalComment(event.target.value)}
+            className="bg-card text-base md:text-[13px]"
+          />
+        </div>
+      ) : null}
+    </>
+  )
+}
+
+/** The unanswered card: stepped multi-question options, optional comment step, and unified free-text mode. */
+function PendingAsk({
+  ask,
+  run,
+  surface,
+  onShowOrigin,
+  renderFreeTextReply,
+  onStop,
+  stopping,
+}: {
+  ask: ThreadAsk
+  run: ApiRun
+  surface: 'transcript' | 'decision-zone'
+  onShowOrigin: (() => void) | undefined
+  renderFreeTextReply: ((props: FreeTextReplyRenderProps) => ReactNode) | undefined
+  onStop: (() => void) | undefined
+  stopping: boolean
+}) {
+  const state = usePendingAskState(ask, run)
+  const resuming = state.delivery.mode === 'resume'
+  const showModeSwitch = surface === 'decision-zone' || renderFreeTextReply !== undefined
+  const hasSheetContext = surface === 'decision-zone' && Boolean(ask.context)
+  const hasComment = state.additionalComment.trim() !== ''
+  const stopControl = onStop ? (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={stopping}
+      className="min-h-11 min-w-11 px-3 md:min-h-8 md:min-w-0"
+      onClick={onStop}
+    >
+      {stopping ? 'Stopping…' : 'Stop'}
+    </Button>
+  ) : undefined
 
   return (
     <div
       data-slot="ask-card"
       data-resolved="false"
+      data-ask-id={ask.id}
+      data-ask-mode={state.mode}
       data-pinned={ask.placement === 'pinned' ? 'true' : undefined}
-      data-delivery={delivery.mode}
-      className="rounded-lg border border-accent-strong/25 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card px-3 pt-4 pb-2.5 max-sm:pt-3 max-sm:pb-1"
+      data-delivery={state.delivery.mode}
+      className="rounded-xl border border-accent-strong/30 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card"
     >
-      {/* Tight rhythm: a two-question card with its Send row fits above the dock at 1440×900. The
-          top padding keeps the heading clear of the border. */}
-      <div className="mb-1.5 flex items-center gap-2">
-        <span className="text-xs font-medium text-link-foreground">The agent is asking</span>
-      </div>
-      <div className="flex flex-col gap-2">
-        {questions.map((question, index) => (
-          <AskQuestionBlock
-            key={question.id ?? index}
-            question={question}
-            disabled={delivery.isPending || blocked}
-            selected={selections[index] ?? []}
-            isOther={otherAnswers[index] !== undefined}
-            otherAnswer={otherAnswers[index] ?? ''}
-            onSelect={(labels) => {
-              if (blocked) return
-              clearOtherAnswer(index)
-              if (oneTap) void delivery.send(formatAnswer(question, labels))
-              else setQuestion(index, labels)
-            }}
-            onOtherToggle={() => {
-              if (blocked) return
-              if (otherAnswers[index] === undefined) selectOther(index)
-              else clearOtherAnswer(index)
-            }}
-            onOtherChange={(answer) =>
-              setOtherAnswers((prev) => ({ ...prev, [index]: answer }))
-            }
-          />
-        ))}
-      </div>
-      {/* On a phone the footer is one wrapping row: Send and "Show where it was asked" share the
-          first line, the hint and any notice take full lines below, so the card wastes no 44px
-          row on a lone link. Wider, the footer stacks as before. */}
-      <div data-slot="ask-footer" className="max-sm:mbs-2 max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:gap-x-2.5">
-      <AskSubmit oneTap={oneTap} hasOtherAnswer={hasOtherAnswer} resuming={resuming}
-        disabled={delivery.isPending || blocked || !allAnswered} questionCount={questions.length} onSend={sendAll} />
-      {delivery.blockedBy === 'provider' ? (
-        <div data-slot="ask-provider-gate" className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground max-sm:order-4 max-sm:basis-full">
-          <span>{delivery.reason}</span>
-          <Link to="/settings/agent-defaults#providers" className="font-medium text-foreground underline underline-offset-4">
-            Configure providers
-          </Link>
-        </div>
+      <PendingAskHeader
+        stepped={state.stepped}
+        mode={state.mode}
+        onModeChange={state.setMode}
+        showModeSwitch={showModeSwitch}
+        stepLabel={state.onCommentStep ? 'Comment (optional)' : `${state.stepIndex + 1} of ${state.questions.length}`}
+        hasSheetContext={hasSheetContext}
+        onOpenContext={() => state.setContextOpen(true)}
+        onShowOrigin={!hasSheetContext ? onShowOrigin : undefined}
+      />
+
+      {state.stepped && state.mode === 'options' ? (
+        <DesktopStepPills
+          questions={state.questions}
+          stepIndex={state.stepIndex}
+          selections={state.selections}
+          otherAnswers={state.otherAnswers}
+          hasComment={hasComment}
+          onSelectStep={state.setStepIndex}
+        />
       ) : null}
-      {delivery.blockedBy === 'no-session' ? (
-        <p data-slot="ask-no-session" className="mt-3 text-xs text-muted-foreground max-sm:order-4 max-sm:basis-full">
-          {delivery.reason}
-        </p>
-      ) : null}
-      {/* A dropped answer used to be silent — the tap did nothing and said nothing. */}
-      {delivery.error ? (
-        <p data-slot="ask-error" role="alert" className="mt-3 text-xs text-danger max-sm:order-4 max-sm:basis-full">
-          {delivery.error}
-        </p>
-      ) : null}
-      {onShowOrigin ? <ShowOriginLink onShowOrigin={onShowOrigin} className={cn('max-sm:order-2 max-sm:mbs-0', hasSendRow(oneTap, hasOtherAnswer) && 'max-sm:ms-auto')} /> : null}
+
+      <div data-slot="ask-body" className="flex flex-col gap-2.5 px-3 py-2.5">
+        <PendingAskBody state={state} renderFreeTextReply={renderFreeTextReply} />
       </div>
+
+      <div
+        data-slot="ask-footer"
+        className="flex shrink-0 flex-col gap-2 border-t border-border/70 px-3 py-2"
+      >
+        {state.mode === 'options' ? (
+          state.stepped ? (
+            <SteppedFooterControls
+              stepIndex={state.stepIndex}
+              questionCount={state.questions.length}
+              answeredCount={state.answeredCount}
+              allAnswered={state.allAnswered}
+              hasComment={hasComment}
+              resuming={resuming}
+              disabled={state.delivery.isPending || state.blocked}
+              onBack={() => state.setStepIndex((prev) => Math.max(0, prev - 1))}
+              onNext={() => state.setStepIndex((prev) => Math.min(state.commentStepIndex, prev + 1))}
+              onOpenComment={() => state.setStepIndex(state.commentStepIndex)}
+              onSend={state.sendAll}
+              questions={state.questions}
+              selections={state.selections}
+              otherAnswers={state.otherAnswers}
+              stopControl={stopControl}
+            />
+          ) : (
+            <SingleAskFooterControls
+              oneTap={state.oneTap}
+              hasOtherAnswer={state.hasOtherAnswer}
+              allowComment={state.questions[0]?.allowFreeText !== false}
+              commentOpen={state.singleCommentOpen}
+              hasComment={hasComment}
+              resuming={resuming}
+              disabled={state.delivery.isPending || state.blocked || !state.allAnswered}
+              onToggleComment={() => state.setSingleCommentOpen((open) => !open)}
+              onSend={state.sendAll}
+              stopControl={stopControl}
+            />
+          )
+        ) : null}
+
+        <AskDeliveryNotices
+          blockedBy={state.delivery.blockedBy}
+          reason={state.delivery.reason}
+          error={state.delivery.error}
+        />
+      </div>
+
+      {hasSheetContext && ask.context ? (
+        <AskContextSheet
+          open={state.contextOpen}
+          onOpenChange={state.setContextOpen}
+          context={ask.context}
+          onShowOrigin={onShowOrigin}
+        />
+      ) : null}
     </div>
-  )
-}
-
-/** Whether the footer has a Send button: every shape but a one-tap question answered by a tap. */
-const hasSendRow = (oneTap: boolean, hasOtherAnswer: boolean) => !oneTap || hasOtherAnswer
-
-/** Submission controls have no question-selection state of their own. */
-function AskSubmit({ oneTap, hasOtherAnswer, resuming, disabled, questionCount, onSend }: {
-  oneTap: boolean; hasOtherAnswer: boolean; resuming: boolean; disabled: boolean
-  questionCount: number; onSend: () => void
-}) {
-  if (!hasSendRow(oneTap, hasOtherAnswer)) return resuming ? (
-    <p data-slot="ask-resume-hint" className="mbs-3 text-[11px] text-soft-foreground max-sm:order-3 max-sm:basis-full">
-      The session has ended — your answer reopens it and goes to the agent.
-    </p>
-  ) : null
-  return (
-    // On a phone the row dissolves into the footer's row, which orders its parts.
-    <div className="mbs-2 flex flex-wrap items-center gap-x-2.5 max-sm:contents">
-      <Button size="sm" className="min-h-11 max-sm:order-1" disabled={disabled} onClick={onSend}>
-        {resuming ? 'Send answer & reopen' : 'Send answer'}
-      </Button>
-      {resuming ? (
-        <span data-slot="ask-resume-hint" className="text-[11px] text-soft-foreground max-sm:order-3 max-sm:basis-full">
-          the session has ended — sending reopens it
-        </span>
-      ) : (
-        <span data-slot="ask-hint" className="inline-flex flex-wrap items-center gap-x-1 text-[11px] text-soft-foreground max-sm:order-3 max-sm:basis-full">
-          <span>
-            {hasOtherAnswer
-              ? `${questionCount > 1 ? 'answer each question above' : 'enter your answer above'} — or`
-              : `${questionCount > 1 ? 'answer each question' : 'pick one or more'} — or`}
-          </span>
-          <ReplyJump />
-        </span>
-      )}
-    </div>
-  )
-}
-
-/** The thread composer's text box, from inside the same task thread. */
-function threadComposerInput(from: HTMLElement): HTMLTextAreaElement | null {
-  const route = from.closest('[data-route="task-thread"]') ?? document
-  return route.querySelector<HTMLTextAreaElement>('[data-slot="thread-dock"] [data-slot="composer-editor"] textarea')
-}
-
-/** "type a reply below" as a control: on a phone the composer sits under the fold, so the hint
- *  carries the reader there and puts the caret in it. */
-function ReplyJump() {
-  return (
-    <button
-      type="button"
-      data-slot="ask-reply-jump"
-      className="min-h-11 rounded-sm font-medium text-foreground underline underline-offset-4 hover:text-link-foreground focus-visible:outline-2 focus-visible:outline-ring"
-      onClick={(event) => {
-        const input = threadComposerInput(event.currentTarget)
-        if (!input) return
-        const still = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        input.scrollIntoView?.({ behavior: still ? 'auto' : 'smooth', block: 'center' })
-        input.focus({ preventScroll: true })
-      }}
-    >
-      type a reply below
-    </button>
   )
 }
 
@@ -378,21 +539,18 @@ function AskQuestionBlock({
 
   return (
     <div data-slot="ask-question" role="group" aria-label={question.question}>
-      {/* The header chip and the question share one line, so each question costs one row less. */}
       <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className="shrink-0 rounded-md bg-accent-strong px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent-strong-foreground">
           {question.header}
         </span>
         <p className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground">{question.question}</p>
         {multiSelect ? (
-          <span className="ml-auto text-[11px] text-soft-foreground">select all that apply</span>
+          <span className="ms-auto text-[11px] text-soft-foreground">select all that apply</span>
         ) : null}
       </div>
       {options ? (
         <>
-          {/* Choices sit in two columns from the small breakpoint; Other is the grid's last cell,
-              and spans both columns when it would sit alone in its row. */}
-          <div data-slot="ask-options" className="grid grid-cols-1 gap-1 sm:grid-cols-2 sm:gap-2">
+          <div data-slot="ask-options" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 sm:gap-2">
             {options.map((option) => {
               const isSelected = selected.includes(option.label)
               return (
@@ -403,15 +561,15 @@ function AskQuestionBlock({
                   aria-pressed={isSelected}
                   onClick={() => pick(option.label)}
                   className={cn(
-                    'flex min-h-11 w-full flex-col items-start justify-start content-start gap-0.5 rounded-md border px-2.5 py-1 text-left transition-colors sm:py-1.5',
-                    'hover:border-accent-strong/50 hover:bg-accent-strong/[0.06] [html:not(.light)_&]:hover:bg-card disabled:pointer-events-none disabled:opacity-50',
+                    'flex min-h-11 w-full flex-col items-start justify-start content-start gap-0.5 rounded-md border px-2.5 py-1.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-ring',
+                    'pointer-hover:border-accent-strong/50 pointer-hover:bg-accent-strong/[0.06] [html:not(.light)_&]:pointer-hover:bg-card disabled:pointer-events-none disabled:opacity-50',
                     isSelected ? 'border-accent-strong/60 bg-accent-strong/[0.06] [html:not(.light)_&]:bg-card' : 'border-border bg-card',
                   )}
                 >
                   <span className="flex min-w-0 items-start gap-2 text-[13px] font-semibold text-foreground">
                     {multiSelect ? (
                       <span
-                        aria-hidden
+                        aria-hidden="true"
                         className={cn(
                           'flex size-4 shrink-0 items-center justify-center rounded border text-[12px]',
                           isSelected
@@ -442,7 +600,7 @@ function AskQuestionBlock({
                 disabled={disabled}
                 onClick={onOtherToggle}
                 className={cn(
-                  'h-auto min-h-11 w-full justify-start px-2.5 py-1 text-left sm:py-1.5',
+                  'h-auto min-h-11 w-full justify-start px-2.5 py-1.5 text-left',
                   options.length % 2 === 0 && 'sm:col-span-2',
                   isOther && 'border-accent-strong/60 bg-accent-strong/[0.06] [html:not(.light)_&]:bg-card',
                 )}
@@ -462,7 +620,7 @@ function AskQuestionBlock({
                 value={otherAnswer}
                 disabled={disabled}
                 onChange={(event) => onOtherChange(event.target.value)}
-                className="bg-card"
+                className="bg-card text-base md:text-[13px]"
               />
             </div>
           ) : null}
@@ -478,7 +636,7 @@ function AskQuestionBlock({
             value={otherAnswer}
             disabled={disabled}
             onChange={(event) => onOtherChange(event.target.value)}
-            className="bg-card"
+            className="bg-card text-base md:text-[13px]"
           />
         </div>
       )}

@@ -246,14 +246,14 @@ it('restores the saved virtual viewport and card focus after virtualizer compens
   browser.click(BACK)
   expectReturned(selector)
   settleVisual(browser, selector, { idle: true })
-  const before = waitForSettledSample<number>(browser, `document.querySelector('[data-slot="main"]').scrollTop`)
+  const before = waitForSettledSample<number>(browser, `document.querySelector('[data-slot="thread-transcript"]').scrollTop`)
   openReport(selector)
   browser.evaluate(`window.__cezThreadScrollTo(100000)`)
   browser.waitForFunction(`document.querySelector(${JSON.stringify(selector)}) === null`)
   browser.click(BACK)
   expectReturned(selector)
   const after = waitForSettledSample<{ top: number; focused: boolean }>(browser, `(() => ({
-    top: document.querySelector('[data-slot="main"]').scrollTop,
+    top: document.querySelector('[data-slot="thread-transcript"]').scrollTop,
     focused: document.activeElement?.id === ${JSON.stringify(buttonId)}
   }))()`, () => true, selector)
   expect(after.focused).toBe(true)
@@ -294,11 +294,10 @@ it.each(['light', 'dark'])('fits a full-screen phone reader with accessible card
 it.each([360, 1440])('opens and closes a report from the agent sheet at %ipx', width => {
   browser.setViewport(width, 640)
   browser.goto(base + `/p/${projectId}/tasks/${agentRunId}`)
-  const activity = '[data-slot="run-activity-dock"]'
-  browser.waitForFunction(`document.querySelector('${activity} > button') !== null`)
-  browser.evaluate(`document.querySelector('${activity} > button').scrollIntoView({ block: 'center' })`)
-  settleVisual(browser, activity, { idle: true })
-  browser.click(`${activity} > button`)
+  const trigger = '[data-slot="run-activity-trigger"], [data-slot="run-activity-trigger-mobile"]'
+  browser.waitForFunction(`document.querySelector('${trigger}') !== null`)
+  settleVisual(browser, trigger, { idle: true })
+  browser.click(trigger)
   const dock = '[data-slot="run-activity-subagents"]'
   browser.waitForFunction(`document.querySelector('${dock} > button') !== null`)
   browser.evaluate(`document.querySelector('${dock} > button').scrollIntoView({ block: 'center' })`)

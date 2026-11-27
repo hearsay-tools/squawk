@@ -8,6 +8,17 @@
   display: contents;
 }
 
+/* Task thread locks to the viewport height with its own transcript scroller; keep the split
+ * wrapper bounded to the shell's main height when the preview/report pane is open. */
+[data-slot='task-split'][data-pane='open']:has([data-route='task-thread']) {
+  block-size: 100%;
+  min-block-size: 0;
+}
+[data-slot='task-split'][data-pane='open']:has([data-route='task-thread']) > [data-slot='task-main'] {
+  block-size: 100%;
+  min-block-size: 0;
+}
+
 /* The pane docks beside the transcript and sticks to the shell's scrolling main, so it stays in
  * view while a long transcript scrolls. --preview-h is the main's measured height (100dvh until
  * measured); --preview-pane is the divider's width. */

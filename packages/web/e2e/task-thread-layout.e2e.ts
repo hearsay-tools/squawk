@@ -81,8 +81,9 @@ describe('task thread', () => {
       })()`),
     ).toBe(true)
 
-    // Phone default: the Session activity card folds to its one summary row.
-    expect(browser.evaluate(`document.querySelector('[data-slot="run-activity-dock"]').dataset.state`)).toBe('collapsed')
+    // Phone default: Session activity lives in the header trigger (collapsed), never inside the bottom dock.
+    expect(browser.evaluate(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}')?.getAttribute('aria-expanded')`)).toBe('false')
+    expect(browser.count('[data-slot="thread-dock"] [data-slot="run-activity-dock"]')).toBe(0)
 
     browser.screenshot(`${artifactsDir}/thread-mobile.png`)
     browser.setViewport(1440, 900)
@@ -177,12 +178,12 @@ describe('task thread', () => {
       expect(waitForSettledSample(browser, `(() => { const r = document.querySelector('${control}').getBoundingClientRect(); return r.width >= 44 && r.height >= 44 })()`)).toBe(true)
     }
     // At the start of the transcript, the header and bottom dock still leave reading space.
-    browser.evaluate(`document.querySelector('[data-slot="main"]').scrollTop = 0`)
+    browser.evaluate(`document.querySelector('[data-slot="thread-transcript"]').scrollTop = 0`)
     const room = waitForSettledSample(browser, `(() => {
-      const main = document.querySelector('[data-slot="main"]');
+      const transcript = document.querySelector('[data-slot="thread-transcript"]');
       const header = document.querySelector('[data-slot="run-header"]').getBoundingClientRect();
       const dock = document.querySelector('[data-slot="thread-dock"]').getBoundingClientRect();
-      return { height: dock.top - header.bottom, scrollable: main.scrollHeight > main.clientHeight };
+      return { height: dock.top - header.bottom, scrollable: transcript.scrollHeight > transcript.clientHeight };
     })()`) as { height: number; scrollable: boolean }
     expect(room.scrollable).toBe(true)
     expect(room.height).toBeGreaterThanOrEqual(120)
@@ -192,7 +193,7 @@ describe('task thread', () => {
     // Desktop gets the one status pill back (hearsay-tools/cezarion#1333).
     expect(settledVisibility('[data-slot="run-header"] [data-slot="pill"]')).toBe(true)
     expect(settledVisibility('[data-slot="follow-up-engine"]')).toBe(true)
-    browser.evaluate(`(() => { const main = document.querySelector('[data-slot="main"]'); main.scrollTop = main.scrollHeight })()`)
+    browser.evaluate(`(() => { const transcript = document.querySelector('[data-slot="thread-transcript"]'); transcript.scrollTop = transcript.scrollHeight })()`)
     const headerInMain = waitForSettledSample(browser, `(() => {
       const header = document.querySelector('[data-slot="run-header"]').getBoundingClientRect();
       const main = document.querySelector('[data-slot="main"]').getBoundingClientRect();
@@ -234,10 +235,13 @@ describe('task thread', () => {
       expect(settledVisibility('[aria-label="Run actions"]')).toBe(true)
       expect(waitForSettledSample(browser, `document.documentElement.scrollWidth <= innerWidth`)).toBe(true)
     }
-    // Back on Session, the card remembers what was open for this run.
+    // Back on Session, opening Activity remembers which sections were expanded for this run.
+    browser.click(SESSION_ACTIVITY_SUMMARY)
     expect(browser.waitForValue(`document.querySelector('[data-slot="run-activity-workspace"] > button')?.getAttribute('aria-expanded') ?? null`)).toBe('true')
-    // Navigate through the real phone UI (Back to the list, then the task card); a full browser.goto would reset module memory.
-    for (const [id, expanded] of [[RUN_ID, 'false'], [LONG_RUN.id, 'true']]) {
+    browser.press('Escape')
+    browser.waitForFunction(`document.querySelector('[data-slot="run-activity-popover"]') === null`)
+    // Switching runs resets the header Activity popover to closed on every run.
+    for (const id of [RUN_ID, LONG_RUN.id]) {
       backToList()
       const link = `[data-slot="task-card"][data-run-id="${id}"] a[href]`
       browser.waitForFunction(`document.querySelector('${link}') !== null`)
@@ -245,7 +249,7 @@ describe('task thread', () => {
       browser.evaluate(`document.querySelector('${link}').focus()`)
       browser.press('Enter')
       browser.waitForFunction(`document.querySelector('[data-route="task-thread"][data-run-id="${id}"] ${SESSION_ACTIVITY_SUMMARY}') !== null`)
-      expect(browser.waitForValue(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}')?.getAttribute('aria-expanded') ?? null`)).toBe(expanded)
+      expect(browser.waitForValue(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}')?.getAttribute('aria-expanded') ?? null`)).toBe('false')
       expect(settledVisibility('[data-slot="session-controls"]')).toBe(true)
     }
     expect(waitForSettledSample(browser, `(() => { const el = document.querySelector('[data-slot="follow-up-model-pill"]'); return el.scrollHeight <= el.clientHeight })()`)).toBe(true)
@@ -253,237 +257,82 @@ describe('task thread', () => {
     browser.setReducedMotion()
     expect(browser.evaluate(`matchMedia('(prefers-reduced-motion: reduce)').matches`)).toBe(true)
     expect(browser.evaluate(`getComputedStyle(document.querySelector('${SESSION_ACTIVITY_SUMMARY} > svg:last-child')).transitionProperty`)).toBe('none')
+    browser.click(SESSION_ACTIVITY_SUMMARY)
+    browser.waitForFunction(`document.querySelector('[data-slot="run-activity-usage"] > button') !== null`)
     expect(browser.evaluate(`getComputedStyle(document.querySelector('[data-slot="run-activity-usage"] > button > svg:last-child')).transitionProperty`)).toBe('none')
-    browser.evaluate(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}').click()`)
+    browser.press('Escape')
     expect(browser.waitForValue(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}')?.getAttribute('aria-expanded') ?? null`)).toBe('false')
     browser.evaluate(`document.documentElement.classList.remove('light')`)
     browser.screenshot(`${artifactsDir}/phone-long-details-dark.png`, { viewport: true })
     browser.setViewport(1440, 900)
   })
 
-  // hearsay-tools/cezarion#1333: one card, the same at every width. Folded it is one summary row;
-  // open, every control in it is a 44px target on a phone (desktop rows keep their compact
-  // `md:` sizes, as the rest of the cockpit does). Expanding it never reshapes the composer or the
-  // transcript beside it: the composer and transcript are out of this issue's scope.
-  it.each([[320, 640], [360, 640], [390, 844], [1280, 900]] as const)('Session activity fits %ipx folded and expanded', (width, height) => {
+  // hearsay-tools/squawk#4374: Session activity lives in the header trigger (popover < 1600px,
+  // collapsible right sidebar >= 1600px) so opening it never reshapes the composer or transcript.
+  it.each([[320, 640], [360, 640], [390, 844], [1280, 900]] as const)('Session activity fits %ipx closed and open without shifting composer or transcript', (width, height) => {
     browser.setViewport(width, height)
     browser.goto(`${baseUrl}${scoped(`/tasks/${LONG_RUN.id}`)}`)
     browser.waitForFunction(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}') !== null && document.querySelector('[data-slot="composer"]') !== null`)
-    const sample = `(() => {
-      const card = document.querySelector('[data-slot="run-activity-dock"]')
-      const summary = card.querySelector(':scope > button')
-      const box = (sel) => { const r = document.querySelector(sel)?.getBoundingClientRect(); return r ? { left: Math.round(r.left), width: Math.round(r.width) } : null }
-      const small = [...card.querySelectorAll('button, a')].filter(el => el.getClientRects().length && el.getBoundingClientRect().height < 44)
-        .map(el => (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 40))
-      // The folded status sits before the summary and never shrinks (hearsay-tools/cezarion#1478).
-      const status = card.querySelector(':scope > button [data-slot="run-activity-status"]')
-      const statusCut = !status || status.scrollWidth > status.clientWidth + 1 || status.getBoundingClientRect().right > summary.getBoundingClientRect().right + 1
-      // The step after it keeps its glyph whole and may only end its name in an ellipsis.
-      const stepGlyph = card.querySelector(':scope > button [data-slot="run-activity-step"] [data-slot="workflow-glyph"]')?.getBoundingClientRect()
-      const stepName = card.querySelector(':scope > button [data-slot="run-activity-step-name"]')
-      const step = stepGlyph && stepName ? { glyphWhole: stepGlyph.width >= 15 && stepGlyph.right <= summary.getBoundingClientRect().right,
-        nameInside: stepName.getBoundingClientRect().right <= summary.getBoundingClientRect().right + 1, truncated: stepName.scrollWidth > stepName.clientWidth + 1 } : null
-      // A two-part row meta never paints half a word: what it keeps sits whole across its row,
-      // what it drops is either whole on its line or wrapped wholly onto the clipped one below.
-      // The open card scrolls on a short phone, so the kept part is measured across, not down.
-      const inside = (r, c) => r.left >= c.left - 1 && r.right <= c.right + 1 && r.top >= c.top - 1 && r.bottom <= c.bottom + 1
-      const metaCut = [...card.querySelectorAll('[data-slot="run-activity-meta-keep"], [data-slot="run-activity-meta-drop"]')].filter(part => {
-        const r = part.getBoundingClientRect()
-        if (part.dataset.slot === 'run-activity-meta-keep') {
-          const row = part.closest('button').getBoundingClientRect()
-          return r.left < row.left - 1 || r.right > row.right + 1
-        }
-        const clip = part.parentElement.getBoundingClientRect()
-        return !inside(r, clip) && r.top < clip.bottom
-      }).map(part => part.textContent)
-      const summaryCut = [...card.querySelectorAll('[data-slot="activity-summary"] > [data-hidden="false"]')]
-        .filter(part => !inside(part.getBoundingClientRect(), part.parentElement.getBoundingClientRect())).map(part => part.dataset.summaryItem)
-      const usageItems = [...card.querySelectorAll('[data-slot="run-activity-usage"] [data-summary-item]')]
-      const removalOrder = ['tokens', 'cost', 'provider', 'effort', 'model'].filter(id => usageItems.some(item => item.dataset.summaryItem === id))
-      const removed = removalOrder.filter(id => usageItems.find(item => item.dataset.summaryItem === id).dataset.hidden === 'true')
-      const usageOrderValid = removed.every((id, index) => id === removalOrder[index])
-      return { state: card.dataset.state, overflow: document.documentElement.scrollWidth - innerWidth, statusCut, step, metaCut, summaryCut, usageOrderValid,
-        summaryHeight: Math.round(summary.getBoundingClientRect().height), small,
-        composer: box('[data-slot="composer"]'), transcript: box('[data-slot="thread-rows"]') }
-    })()`
-    type Sample = { state: string; overflow: number; statusCut: boolean; step: { glyphWhole: boolean; nameInside: boolean; truncated: boolean } | null; metaCut: string[]; summaryCut: string[]; usageOrderValid: boolean; summaryHeight: number; small: string[]; composer: { left: number; width: number }; transcript: { left: number; width: number } | null }
-    browser.evaluate(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}[aria-expanded="true"]')?.click()`)
-    const layoutSelectors = {
-      card: '[data-slot="run-activity-dock"]',
-      status: '[data-slot="run-activity-status"]',
-      keptMeta: '[data-slot="run-activity-meta-keep"]',
-      droppedMeta: '[data-slot="run-activity-meta-drop"]',
-      rows: '[data-slot="run-activity-dock"] button',
-      composer: '[data-slot="composer"]',
-      transcript: '[data-slot="thread-rows"]',
-    }
-    const folded = waitForSettledSample<Sample>(browser, `(${sample}).state === 'collapsed' ? ${sample} : null`)
-    browser.recordLayout('folded', layoutSelectors)
-    expect(folded.overflow).toBeLessThanOrEqual(0)
-    expect(folded.statusCut).toBe(false)
-    expect(folded.step).toMatchObject({ glyphWhole: true, nameInside: true })
-    // The fixture's last step is "Verify": a desktop header has room for all of it.
-    if (width >= 768) expect(folded.step?.truncated).toBe(false)
-    expect(folded.summaryCut).toEqual([])
-    // One 44px summary; narrower rows remove whole values by priority.
-    expect(folded.summaryHeight).toBeGreaterThanOrEqual(44)
-    if (width < 768) expect(folded.small).toEqual([])
+    const boxOf = `((sel) => { const r = document.querySelector(sel)?.getBoundingClientRect(); return r ? { left: Math.round(r.left), width: Math.round(r.width) } : null })`
+    const closed = waitForSettledSample<{ overflow: number; triggerHeight: number; composer: { left: number; width: number }; transcript: { left: number; width: number } | null }>(browser, `(() => {
+      const trigger = document.querySelector('${SESSION_ACTIVITY_SUMMARY}')
+      return {
+        overflow: document.documentElement.scrollWidth - innerWidth,
+        triggerHeight: Math.round(trigger.getBoundingClientRect().height),
+        composer: ${boxOf}('[data-slot="composer"]'),
+        transcript: ${boxOf}('[data-slot="thread-rows"]'),
+      }
+    })()`)
+    expect(closed.overflow).toBeLessThanOrEqual(0)
+    if (width < 768) expect(closed.triggerHeight).toBeGreaterThanOrEqual(44)
     openSessionActivityRow(browser, 'workspace')
     openSessionActivityRow(browser, 'usage')
     openSessionActivityRow(browser, 'workflow')
-    const expanded = waitForSettledSample<Sample>(browser, sample)
-    browser.recordLayout('expanded', layoutSelectors)
-    expect(expanded.state).toBe('open')
-    expect(expanded.overflow).toBeLessThanOrEqual(0)
-    expect(expanded.metaCut).toEqual([])
-    expect(expanded.summaryCut).toEqual([])
-    expect(expanded.usageOrderValid).toBe(true)
-    if (width < 768) expect(expanded.small).toEqual([])
-    expect(expanded.composer).toEqual(folded.composer)
-    expect(expanded.transcript).toEqual(folded.transcript)
+    const opened = waitForSettledSample<{ overflow: number; small: string[]; composer: { left: number; width: number }; transcript: { left: number; width: number } | null }>(browser, `(() => {
+      const card = document.querySelector('[data-slot="run-activity-dock"]')
+      const small = [...card.querySelectorAll('button, a')].filter(el => el.getClientRects().length && el.getBoundingClientRect().height < 44)
+        .map(el => (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 40))
+      return {
+        overflow: document.documentElement.scrollWidth - innerWidth,
+        small,
+        composer: ${boxOf}('[data-slot="composer"]'),
+        transcript: ${boxOf}('[data-slot="thread-rows"]'),
+      }
+    })()`)
+    expect(opened.overflow).toBeLessThanOrEqual(0)
+    if (width < 768) expect(opened.small).toEqual([])
+    expect(opened.composer).toEqual(closed.composer)
+    expect(opened.transcript).toEqual(closed.transcript)
     browser.screenshot(`${artifactsDir}/session-activity-${width}.png`, { viewport: true })
     browser.setViewport(1440, 900)
   })
 
-  // hearsay-tools/cezarion#1478 review: once the step shows its whole name, the summary takes all
-  // the room left, so a desktop header still shows agent details beside the step.
-  it('folded Activity keeps agent details beside the step on desktop', () => {
-    browser.setViewport(1280, 900)
-    browser.goto(`${baseUrl}${scoped(`/tasks/${TYPO_RUNS[1]!.id}`)}`)
-    browser.waitForFunction(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}') !== null`)
-    browser.evaluate(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}[aria-expanded="true"]')?.click()`)
-    const folded = waitForSettledSample<{ step: boolean; visible: string[] } | null>(browser, `(() => {
-      const summary = document.querySelector('${SESSION_ACTIVITY_SUMMARY}')
-      const name = summary.querySelector('[data-slot="run-activity-step-name"]')
-      if (summary.getAttribute('aria-expanded') !== 'false' || !name) return null
-      return { step: name.scrollWidth <= name.clientWidth + 1,
-        visible: [...summary.querySelectorAll('[data-slot="activity-summary"] > [data-hidden="false"]')].map(item => item.dataset.summaryItem) }
-    })()`)
-    expect(folded?.step).toBe(true)
-    expect(folded?.visible).toEqual(expect.arrayContaining(['runner', 'model', 'effort']))
-    browser.setViewport(1440, 900)
-  })
-
-  // hearsay-tools/cezarion#1537: the summary's 8px gap used to appear only with its first shown
-  // value. Where a value fitted only without that gap, it showed, lost the room, hid and showed
-  // again on every frame, so main CI's touch-targets 360px cell never settled. Every card width
-  // exercises the boundary, so the sweep finds it without the fixture's exact font widths. The
-  // flip period is one or two frames: three settle frames, then three sampled frames per width.
-  it('folded Activity settles at every card width', () => {
-    browser.setViewport(1280, 900)
-    browser.goto(`${baseUrl}${scoped(`/tasks/${TYPO_RUNS[1]!.id}`)}`)
-    browser.waitForFunction(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}') !== null`)
-    browser.evaluate(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}[aria-expanded="true"]')?.click()`)
-    browser.waitForFunction(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}')?.getAttribute('aria-expanded') === 'false'`)
-    const flipping = browser.evaluate(`(async () => {
-      const card = document.querySelector('[data-slot="run-activity-dock"]')
-      const frame = () => new Promise(resolve => requestAnimationFrame(resolve))
-      const shown = () => [...card.querySelectorAll(':scope > button [data-slot="activity-summary"] > [data-hidden="false"]')]
-        .map(item => item.dataset.summaryItem).join()
-      const flipping = []
-      for (let width = 200; width <= 640; width += 4) {
-        card.style.width = width + 'px'
-        for (let i = 0; i < 3; i++) await frame()
-        const seen = new Set()
-        for (let i = 0; i < 3; i++) { seen.add(shown()); await frame() }
-        if (seen.size > 1) flipping.push(width)
-      }
-      card.style.width = ''
-      return flipping
-    })()`)
-    expect(flipping).toEqual([])
-    browser.setViewport(1440, 900)
-  })
-
-  // hearsay-tools/cezarion#1478: the folded header names the step in flight. A long name ends in an
-  // ellipsis on a phone while its spinner stays whole; the disclosure keeps working from the
-  // keyboard and names the step; reduced motion stops the spin but keeps the loader glyph.
   it.each([[320, 640, 'light'], [320, 640, 'dark'], [1280, 900, 'light'], [1280, 900, 'dark']] as const)(
-    'folded Activity shows the step in flight at %ipx / %s', async (width, height, theme) => {
+    'header Activity trigger names the active step at %ipx / %s and opens from the keyboard', (width, height, theme) => {
       browser.setViewport(width, height)
       browser.goto(`${baseUrl}${scoped(`/tasks/${STEP_RUN.id}`)}`)
       browser.waitForFunction(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}') !== null`)
       browser.evaluate(`document.documentElement.classList.remove('light', 'dark'); document.documentElement.classList.add('${theme}')`)
-      browser.evaluate(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}[aria-expanded="true"]')?.click()`)
-      const sample = `(() => {
-        const summary = document.querySelector('${SESSION_ACTIVITY_SUMMARY}')
-        const glyph = summary.querySelector('[data-slot="run-activity-step"] [data-slot="workflow-glyph"]')
-        const name = summary.querySelector('[data-slot="run-activity-step-name"]')
-        if (summary.getAttribute('aria-expanded') !== 'false' || !glyph || !name) return null
-        const box = summary.getBoundingClientRect(), g = glyph.getBoundingClientRect(), n = name.getBoundingClientRect()
-        return { overflow: document.documentElement.scrollWidth - innerWidth, visual: glyph.dataset.visual,
-          glyphWhole: g.width >= 15 && g.right <= box.right, nameInside: n.right <= box.right + 1, nameWidth: Math.round(n.width),
-          truncated: name.scrollWidth > name.clientWidth + 1, ellipsis: getComputedStyle(name).textOverflow,
-          color: getComputedStyle(name).color, label: summary.getAttribute('aria-label'),
-          statusTruncated: (() => { const l = summary.querySelector('[data-slot="run-activity-status-label"]'); return l.scrollWidth > l.clientWidth + 1 })() }
-      })()`
-      type Folded = { overflow: number; visual: string; glyphWhole: boolean; nameInside: boolean; nameWidth: number; truncated: boolean; ellipsis: string; color: string; label: string; statusTruncated: boolean }
-      const folded = waitForSettledSample<Folded>(browser, sample)
-      expect(folded.overflow).toBeLessThanOrEqual(0)
-      expect(folded.visual).toBe('active')
-      expect(folded.glyphWhole).toBe(true)
-      expect(folded.nameInside).toBe(true)
-      // The name keeps a readable character and its ellipsis, never only the glyph.
-      expect(folded.nameWidth).toBeGreaterThanOrEqual(12)
-      expect(folded.ellipsis).toBe('ellipsis')
-      if (width < 768) expect(folded.truncated).toBe(true)
-      // A short status stays whole: the step name gives way first.
-      expect(folded.statusTruncated).toBe(false)
-      expect(folded.label).toContain('; step Verify the change against every acceptance criterion in the ticket, running')
-      browser.screenshot(`${artifactsDir}/folded-step-${width}-${theme}.png`, { viewport: true })
-
-      // The longest real status labels (packages/contract/src/attention.ts) share the phone row with
-      // the step: both shorten, and the status dot, the step glyph and the chevron stay in the card.
-      // The fixture cannot park a run on its workers, so a detached clone of the folded header,
-      // in a copy of the card at the card's width, carries the label instead.
-      const crowded = waitForSettledSample<{ status: boolean; label: boolean; step: boolean; chevron: boolean }>(browser, `(() => {
-        const card = document.querySelector('[data-slot="run-activity-dock"]')
-        const host = card.cloneNode(false)
-        host.style.width = card.getBoundingClientRect().width + 'px'
-        const clone = document.querySelector('${SESSION_ACTIVITY_SUMMARY}').cloneNode(true)
-        const status = clone.querySelector('[data-slot="run-activity-status"]')
-        ;[...status.childNodes].reverse().find((node) => node.textContent.trim()).textContent = 'Waiting on worker replies'
-        host.appendChild(clone)
-        document.body.appendChild(host)
-        const box = host.getBoundingClientRect()
-        const inside = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.left >= box.left - 1 && r.right <= box.right + 1 }
-        const result = { status: inside(status.firstElementChild), label: inside(status),
-          step: inside(clone.querySelector('[data-slot="run-activity-step"] [data-slot="workflow-glyph"]')), chevron: inside(clone.lastElementChild) }
-        host.remove()
-        return result
+      const trigger = waitForSettledSample<{ overflow: number; label: string; status: string }>(browser, `(() => {
+        const el = document.querySelector('${SESSION_ACTIVITY_SUMMARY}')
+        return {
+          overflow: document.documentElement.scrollWidth - innerWidth,
+          label: el.getAttribute('aria-label') ?? '',
+          status: el.querySelector('[data-slot="run-activity-status-label"]')?.textContent ?? '',
+        }
       })()`)
-      if (width < 768) expect(crowded).toEqual({ status: true, label: true, step: true, chevron: true })
+      expect(trigger.overflow).toBeLessThanOrEqual(0)
+      expect(trigger.status.length).toBeGreaterThan(0)
+      expect(trigger.label).toContain('Verify the change against every acceptance criterion in the ticket')
 
       focusWithKeyboard(browser, SESSION_ACTIVITY_SUMMARY)
       browser.press('Enter')
       browser.waitForFunction(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}')?.getAttribute('aria-expanded') === 'true'`)
-      browser.press('Enter')
+      browser.press('Escape')
       browser.waitForFunction(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}')?.getAttribute('aria-expanded') === 'false'`)
-      // Folding again brings the step back with the current name.
-      browser.waitForFunction(`document.querySelector('${SESSION_ACTIVITY_SUMMARY} [data-slot="run-activity-step-name"]')?.textContent === ${JSON.stringify(STEP_RUN.steps[1]!.name)}`)
-
-      await browser.withCdp(async (request) => {
-        const url = browser.url()
-        const { targetInfos } = await request('Target.getTargets')
-        const target = targetInfos.find((t: { type: string; url: string }) => t.type === 'page' && t.url === url)
-        const { sessionId } = await request('Target.attachToTarget', { targetId: target.targetId, flatten: true })
-        await request('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] }, sessionId)
-        try {
-          const still = waitForSettledSample<{ animation: string; visual: string } | null>(browser, `(() => {
-            if (!matchMedia('(prefers-reduced-motion: reduce)').matches) return null
-            const glyph = document.querySelector('${SESSION_ACTIVITY_SUMMARY} [data-slot="run-activity-step"] [data-slot="workflow-glyph"]')
-            return glyph ? { animation: getComputedStyle(glyph).animationName, visual: glyph.dataset.visual } : null
-          })()`)
-          expect(still).toEqual({ animation: 'none', visual: 'active' })
-        } finally {
-          await request('Emulation.setEmulatedMedia', { features: [] }, sessionId)
-        }
-      })
       browser.evaluate(`document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light')`)
       browser.setViewport(1440, 900)
     })
-
-
 })
 
 type LayoutRect = { left: number; right: number; top: number; bottom: number; width: number; height: number }

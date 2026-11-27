@@ -37,7 +37,10 @@ export function pinnedAskFocus(askId: string, stillPending: () => boolean) {
   return (root: HTMLElement): HTMLElement | null | false => {
     if (!stillPending()) return false
     const row = [...root.querySelectorAll<HTMLElement>('[data-row-key]')].find((el) => el.dataset.rowKey === key)
-    return row ? pinnedAnswerControl(row) : null
+    if (row) return pinnedAnswerControl(row)
+    const card = [...root.querySelectorAll<HTMLElement>('[data-slot="ask-card"][data-pinned="true"]')]
+      .find((el) => el.dataset.askId === askId)
+    return card ? firstAnswerControl(card) : null
   }
 }
 

@@ -147,6 +147,17 @@ function stablePresentedEntries(source: readonly ThreadEntry[], next: readonly T
   return next
 }
 
+/** Look up the active unresolved ask from compact current state without rendering it as a transcript row. */
+export function findPendingThreadAsk(
+  currentThread: ThreadState,
+  pendingAskId: string | null | undefined,
+): ThreadAsk | undefined {
+  if (pendingAskId === undefined || pendingAskId === null) return undefined
+  return currentThread.turns
+    .flatMap(turn => turn.items)
+    .find((entry): entry is ThreadAsk => entry.kind === 'ask' && entry.id === pendingAskId && !entry.resolved)
+}
+
 /** The main run record plus reduced turns, without rendering or backend inspection. */
 export function mainTranscriptSections(
   run: ApiRun,
@@ -155,10 +166,10 @@ export function mainTranscriptSections(
   /** The pending ask from current state: an id, `null` when current state says none is pending,
    *  or omitted when the caller does not know (no placement and no reconciliation then). */
   pendingAskId?: string | null,
+  options?: { pinPendingAskInTranscript?: boolean },
 ): TranscriptSection[] {
-  const pinnedAsk = pendingAskId === undefined || pendingAskId === null ? undefined : currentThread.turns
-    .flatMap(turn => turn.items)
-    .find((entry): entry is ThreadAsk => entry.kind === 'ask' && entry.id === pendingAskId && !entry.resolved)
+  const pinnedAsk = findPendingThreadAsk(currentThread, pendingAskId)
+  const pinInTranscript = options?.pinPendingAskInTranscript !== false
   const currentPermissions = new Map(currentThread.turns.flatMap(turn => turn.items).filter((entry): entry is ThreadPermission => entry.kind === 'permission').map(entry => [entry.requestId, entry]))
   const visiblePermissions = new Set<string>()
   const answeredAsks = new Set(thread.turns.map(turn => turn.userMessage?.ask?.id))
@@ -218,7 +229,7 @@ export function mainTranscriptSections(
   // the live edge until loading older history supplies their original transcript position.
   const missing = [...currentPermissions.values()].filter(entry => entry.status === 'pending' && !visiblePermissions.has(entry.requestId))
   if (missing.length > 0) sections.push({ id: 'pending-permissions', entries: missing, inDaySequence: false })
-  if (pinnedAsk !== undefined) {
+  if (pinnedAsk !== undefined && pinInTranscript) {
     sections.push({ id: PENDING_ASK_SECTION_ID, entries: [{ ...pinnedAsk, placement: 'pinned' }], inDaySequence: false })
   }
   return sections
