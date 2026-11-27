@@ -1,5 +1,5 @@
 import { expect } from 'vitest';
-import { appendedSystemPrompt, flagValues, isCommand, stdinPrompts, wireArgv, wireRecord, type SessionWire } from '../../workflows/native-session-wire.testkit.ts';
+import { appendedSystemPrompt, appendedSystemPrompts, flagValues, isCommand, stdinPrompts, wireArgv, wireRecord, type SessionWire } from '../../workflows/native-session-wire.testkit.ts';
 
 type Block = { type?: string; text?: string };
 const blocksOf = (row: Parameters<typeof wireRecord>[0]) => wireRecord(row)?.blocks as Block[] | undefined;
@@ -14,6 +14,7 @@ export const CLAUDE_SESSION_WIRE: SessionWire = {
   prompts: stdinPrompts,
   steers: () => [],
   systemPrompt: appendedSystemPrompt,
+  systemPrompts: appendedSystemPrompts,
   skillTriggers: ({ args, stdin }, name) => [...args, ...stdin].flatMap(row => {
     const blocks = blocksOf(row);
     const command = blocks?.at(-1)?.text;
@@ -24,5 +25,16 @@ export const CLAUDE_SESSION_WIRE: SessionWire = {
     const message = [...args, ...stdin].map(blocksOf).find(Boolean)!;
     expect(message.at(-1)).toEqual({ type: 'text', text: `/${name} ${skillArgs}` });
     if (context) expect(message.slice(0, -1)).toContainEqual({ type: 'text', text: context });
+  },
+  expectCiWire: (rows) => {
+    expect(wireArgv(rows[0]!)).toContain('--mcp-config');
+  },
+  expectSquawkToolAdmission: (rows, { serverName, expectedTools, exact }) => {
+    const argv = wireArgv(rows[0]!)!;
+    const allowed = argv[argv.indexOf('--allowedTools') + 1]!.split(',');
+    const prefix = `mcp__${serverName}__`;
+    const actual = allowed.filter(name => name.startsWith(prefix));
+    const expected = expectedTools.map(name => `${prefix}${name}`);
+    expect(actual).toEqual(exact ? expected : expect.arrayContaining(expected));
   },
 };

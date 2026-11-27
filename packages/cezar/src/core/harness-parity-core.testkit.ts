@@ -462,7 +462,7 @@ export interface ParityExemption {
 interface FactExemptionRule {
   readonly criterion: string;
   readonly kind: ExemptionKind;
-  readonly matches: (facts: RunnerFacts, backend: string) => boolean;
+  readonly matches: (facts: RunnerFacts, mock?: RunnerMock) => boolean;
   readonly reason: (backend: string) => string;
 }
 
@@ -525,8 +525,8 @@ const FACT_EXEMPTION_RULES: readonly FactExemptionRule[] = [
   },
   {
     criterion: 'S21', kind: 'scenario-unconstructible',
-    matches: (_facts, backend) => backend !== 'omp',
-    reason: () => 'This native wire has no OMP get_state.messageCount response for an implicit autoResume. Fresh/start and explicit resume remain covered by S1/S3/S14 and spec-support rows.',
+    matches: (_facts, mock) => mock?.implicitAutoResume !== true,
+    reason: () => 'This native wire has no implicit autoResume history restoration signal at start. Fresh/start and explicit resume remain covered by S1/S3/S14 and spec-support rows.',
   },
   // R44/R45: a recoverable skill diagnostic is a server-wide session.error that names no session.
   ...(['R44', 'R45'] as const).map((criterion): FactExemptionRule => ({
@@ -546,8 +546,8 @@ const FACT_EXEMPTION_RULES: readonly FactExemptionRule[] = [
   },
   {
     criterion: 'F11', kind: 'scenario-unconstructible',
-    matches: (_facts, backend) => backend !== 'codex',
-    reason: () => 'This wire has no native turn-start frame that reaches v2 after the nudge is sent; turn.started is synthetic inside sendAgentMessage and fires at nudge send, before the bound.',
+    matches: facts => facts.turnStart !== 'on-wire',
+    reason: () => 'This wire has no native turn-start frame that reaches v2 after the nudge is sent; turn.started is synthetic at nudge write or dispatch, before any late wire frame.',
   },
   // S11 (hearsay-tools/cezarion#2397): these wires have no answerable native ask; the `ask`
   // scenario calls cezar_ask, whose human wait the workflow holds input behind (R6), not the runner.
@@ -608,7 +608,7 @@ export function buildParityExemptions(
   const runnerIds = Object.keys(factsById);
   const byFact = FACT_EXEMPTION_RULES.flatMap(rule =>
     runnerIds
-      .filter(backend => rule.matches(factsById[backend]!, backend))
+      .filter(backend => rule.matches(factsById[backend]!, mocksById[backend]))
       .map(backend => ({ criterion: rule.criterion, backend, kind: rule.kind, reason: rule.reason(backend) })),
   );
   const declared = Object.entries(mocksById).flatMap(([backend, mock]) =>
@@ -635,7 +635,7 @@ export function exemptionForFacts(
   mock?: RunnerMock,
 ): ParityExemption | undefined {
   for (const rule of FACT_EXEMPTION_RULES) {
-    if (rule.criterion === criterion && rule.matches(facts, backend)) {
+    if (rule.criterion === criterion && rule.matches(facts, mock)) {
       return { criterion, backend, kind: rule.kind, reason: rule.reason(backend) };
     }
   }

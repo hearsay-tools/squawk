@@ -23,10 +23,10 @@ import { onRunWrite } from '../runs/lifecycle-listeners.testkit.ts';
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
 export const { describeWaitParity } = waitPartDescribers('closed', closedCells);
 
-/** Claude U22c/k/x cross several real process launches. Keep the shared 15 s guard per
- *  signal, rather than charging every delivery attempt to one window (hearsay-tools/cezarion#1450). */
+/** U22c/k/x cross several real process launches. Keep the shared 15 s guard per signal on every
+ *  runner, rather than charging every delivery attempt to one window (hearsay-tools/cezarion#1450). */
 const refusalStep = (runner: string, id: string, step: string, predicate: () => boolean) =>
-  until(predicate, runner === 'claude' ? () => `${runner} ${step}\n${timeline(id)}` : undefined);
+  until(predicate, () => `${runner} ${step}\n${timeline(id)}`);
 
 /** The failure these cells mean is the delivery cap, on every runner: any other failure fails the
  *  cell here, with its own error (hearsay-tools/squawk#3508). */
@@ -37,11 +37,6 @@ function expectDeliveryCap(id: string) {
 
 async function refusalDeliveryBound(runner: string, id: string, cell: string, closed: () => number) {
   const failed = () => store.getRun(id)?.status === 'failed' && !manager.isActive(id);
-  if (runner !== 'claude') {
-    await until(failed);
-    expectDeliveryCap(id);
-    return;
-  }
   // bound: each existing 15 s guard covers one durable queue write, native admission, close,
   // or retry checkpoint. Three fresh mock processes no longer share one launch budget.
   await refusalStep(runner, id, `${cell}: refusal queued`, () =>
@@ -97,7 +92,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
     for (const legacy of [false, true]) {
       it(`${runner} U22c a refusal whose reopened sessions keep closing cleanly is queued once, stops at the delivery bound, and Continue delivers it once${legacy ? ' (legacy Finish)' : ''}`, async () => {
         retryAtOnce();
-        const { p, w } = await parentWithWorker(runner, runner === 'claude' ? 'U22c' : undefined);
+        const { p, w } = await parentWithWorker(runner, 'U22c');
         const refusal = `Workers are still live: ${w.id}.`;
         const refusals = () => store.getRun(p.id)?.agentInputs?.filter(input => input.text.includes(refusal)) ?? [];
         const wakes = store.getRun(p.id)?.automaticWakes ?? 0;
@@ -129,10 +124,8 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
           expect(store.getRun(p.id)?.delegation).not.toHaveProperty('finishRequestedAt');
           closing = false;
           expect(manager.continueRun(p.id, { text: 'go on' })).toEqual({ ok: true });
-          if (runner === 'claude') {
-            await refusalStep(runner, p.id, 'U22c: Continue native refusal receipt', () => prompted(runner, refusal).length > 0);
-            await refusalStep(runner, p.id, 'U22c: Continue delivery checkpoint', () => refusals()[0]?.deliveredAt !== undefined);
-          } else await until(() => refusals()[0]?.deliveredAt !== undefined && prompted(runner, refusal).length > 0);
+          await refusalStep(runner, p.id, 'U22c: Continue native refusal receipt', () => prompted(runner, refusal).length > 0);
+          await refusalStep(runner, p.id, 'U22c: Continue delivery checkpoint', () => refusals()[0]?.deliveredAt !== undefined);
           expect(prompted(runner, refusal)).toHaveLength(1);
           expect(refusals()).toHaveLength(1);
           await refusalStep(runner, p.id, 'U22c: Continue final park', () => store.getRun(p.id)?.status === 'waiting');
@@ -195,7 +188,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
         const silence = variant === 'silent' ? silenceRefusals() : undefined;
         if (variant === 'closing') process.env.CEZ_MOCK_COMPLETION_REPLY = refusedDoneReply();
         const opening = heldOpening ? closeAtOpeningPark(release) : undefined;
-        const started = parentWithWorker(runner, runner === 'claude' ? 'U22k' : undefined);
+        const started = parentWithWorker(runner, 'U22k');
         if (opening) await silence!.expireReply();
         const { p, w } = await started;
         // The aborted nudge carried no input: the close charged nothing and failed nothing.
@@ -319,7 +312,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
     // discards the run's waits, so a Continue after it never delivers a stale refusal.
     it(`${runner} U22x Stop retires a refusal a closed session still owes, and Continue does not deliver it`, async () => {
       retryAtOnce();
-      const { p, w } = await parentWithWorker(runner, runner === 'claude' ? 'U22x' : undefined);
+      const { p, w } = await parentWithWorker(runner, 'U22x');
       const refusal = `Workers are still live: ${w.id}.`;
       const refusals = () => store.getRun(p.id)?.agentInputs?.filter(input => input.text.includes(refusal)) ?? [];
       let closes = MAX_WAKE_DELIVERY_ATTEMPTS;
@@ -339,7 +332,7 @@ export function closedCells(runners: string[], it: typeof registerTest = registe
       expect(store.getRun(p.id)?.status).toBe('failed');
       expect(store.eventLog.readEvents(p.id).filter(event => event.type === 'note' && event.message === REFUSAL_DISCARDED_NOTE)).toHaveLength(1);
       expect(manager.continueRun(p.id, { text: 'go on' })).toEqual({ ok: true });
-      if (runner === 'claude') await refusalStep(runner, p.id, 'U22x: Continue native receipt', () => prompted(runner, 'go on').length > 0);
+      await refusalStep(runner, p.id, 'U22x: Continue native receipt', () => prompted(runner, 'go on').length > 0);
       await refusalStep(runner, p.id, 'U22x: Continue final park', () => prompted(runner, 'go on').length > 0 && store.getRun(p.id)?.status === 'waiting');
       expect(prompted(runner, refusal)).toHaveLength(0);
       expect(nudgeNotes(p.id)).toHaveLength(1);

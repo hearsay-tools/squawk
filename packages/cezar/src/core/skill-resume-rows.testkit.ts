@@ -3,10 +3,13 @@ import { expect } from 'vitest';
 import { collectedOnly, partitionParity, type CellBody, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
 import { SKILL_RESUME_CRITERIA } from './harness-parity-core.testkit.ts';
 import { factsWhere } from './runner-fact-rows.testkit.ts';
+import { mockRows } from './runner-mock-rows.testkit.ts';
 
 // The skill-resume cells and their partition, apart from the engine the cell bodies drive,
 // so the registration guard collects the same names without loading it.
 export const IN_THREAD = new Set(factsWhere(facts => facts.systemPromptOnResume === 'in-thread'));
+/** Runners whose mock keeps a session store and falls back to a fresh session when a saved id is missing. */
+export const SESSION_STORE_RUNNERS = Object.entries(mockRows()).filter(([, mock]) => mock.sessionStore !== undefined).map(([id]) => id);
 
 const PARTS: Readonly<Record<string, readonly string[]>> = {
   "live-continue-claude-pi": [
@@ -61,7 +64,7 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
   "wire-and-fallback-engine": [
     "codex fresh-session continuation includes the skill",
     "opencode fresh-session continuation includes the skill",
-    "opens a fresh session with the skill, one note, and a new session id"
+    "opencode opens a fresh session with the skill, one note, and a new session id"
   ]
 };
 
@@ -69,7 +72,7 @@ type RunnerCell = (backend: string) => CellBody;
 export type SkillResumeCells = {
   resumedContinue: RunnerCell; recoveredContinuation: RunnerCell; recordedSession: RunnerCell;
   interruptedContinue: RunnerCell; skillGone: RunnerCell; freshSession: RunnerCell;
-  declaresResumeMode: CellBody; declarationWire: RunnerCell; lostSession: CellBody;
+  declaresResumeMode: CellBody; declarationWire: RunnerCell; lostSession: RunnerCell;
 };
 
 export function skillResumeParity(cells: SkillResumeCells) {
@@ -99,8 +102,10 @@ export function skillResumeParity(cells: SkillResumeCells) {
       }
     });
 
-    describe('opencode lost-session fallback (#790)', () => {
-      it('opens a fresh session with the skill, one note, and a new session id', cells.lostSession, 60_000);
+    describe('lost-session fallback (#790)', () => {
+      for (const backend of SESSION_STORE_RUNNERS) {
+        it(`${backend} opens a fresh session with the skill, one note, and a new session id`, cells.lostSession(backend), 60_000);
+      }
     });
   };
 }
@@ -109,5 +114,5 @@ export function skillResumeParity(cells: SkillResumeCells) {
 export const skillResumeCellNames = skillResumeParity({
   resumedContinue: collectedOnly, recoveredContinuation: collectedOnly, recordedSession: collectedOnly,
   interruptedContinue: collectedOnly, skillGone: collectedOnly, freshSession: collectedOnly,
-  declaresResumeMode: collectedOnly(), declarationWire: collectedOnly, lostSession: collectedOnly(),
+  declaresResumeMode: collectedOnly(), declarationWire: collectedOnly, lostSession: collectedOnly,
 });

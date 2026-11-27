@@ -61,7 +61,7 @@ describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
       expect(['process-group', 'observed-tree'], id).toContain(RUNNER_FACTS[id]!.shutdownDescendants);
       expect(['launch', 'native'], id).toContain(RUNNER_FACTS[id]!.sessionIdSource);
       expect(['resent', 'in-thread'], id).toContain(RUNNER_FACTS[id]!.systemPromptOnResume);
-      expect(['on-write', 'on-wire'], id).toContain(RUNNER_FACTS[id]!.turnStart);
+      expect(['on-write', 'on-dispatch', 'on-wire'], id).toContain(RUNNER_FACTS[id]!.turnStart);
     }
   });
 

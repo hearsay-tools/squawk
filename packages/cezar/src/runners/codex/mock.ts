@@ -8,6 +8,7 @@ export const CODEX_MOCK = {
   askResumeCases: [{ kind: 'item/tool/requestUserInput', scenario: 'ask-resume', answer: 'Library: Vitest' }],
   binEnv: 'CEZ_CODEX_BIN',
   script: 'mock-codex-app-server.mjs',
+  resumeSessionId: 'th_mock_1',
   approvalDecisions: [
     { pick: 'decline', echo: 'Approval response: {"decision":"decline"}' },
     { pick: 'cancel', echo: 'Approval response: {"decision":"cancel"}' },

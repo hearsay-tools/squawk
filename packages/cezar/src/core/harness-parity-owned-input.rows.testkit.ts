@@ -1,5 +1,8 @@
 import type { CellBody, HarnessGroup, HarnessRegistrar } from './harness-parity-registrar.testkit.ts';
 
+export type DurableOpeningOutcome = 'rejected' | 'finished' | 'cancelled';
+export type DurableInputMode = 'fresh' | 'continuation';
+
 /** The owned-input part's cell bodies, which `harness-parity-owned-input.cells.testkit.ts` holds, by row id. */
 export type OwnedInputCells = {
   readonly R6: (backend: string) => CellBody;
@@ -10,13 +13,17 @@ export type OwnedInputCells = {
   readonly R11: (backend: string) => CellBody;
   readonly R9: (backend: string) => CellBody;
   readonly R8: (backend: string) => CellBody;
+  readonly durableOpeningAnswer: (backend: string, outcome: DurableOpeningOutcome) => CellBody;
+  readonly durableLateReplyDone: (backend: string, mode: DurableInputMode) => CellBody;
+  readonly durableRejectedHumanPost: (backend: string) => CellBody;
+  readonly durableRejectedAgentPost: (backend: string, mode: DurableInputMode) => CellBody;
 };
 
 /** The owned-input part's groups, apart from its bodies so a registration guard loads no run engine. */
 export function ownedInputGroups(cells: OwnedInputCells) {
   return {
     owned(r: HarnessRegistrar) {
-      const { describeRunners, runners, it } = r;
+      const { describeRunners, runners, it, scope } = r;
       describeRunners('owned', 'harness parity — owned input run tier', () => {
         for (const backend of runners) {
           it(`${backend} R6 queues before/during asks and drains only after the parent's answer`, cells.R6(backend), 60_000);
@@ -37,6 +44,20 @@ export function ownedInputGroups(cells: OwnedInputCells) {
           it(`${backend} R9 continuation asks keep input queued through delayed native reply acknowledgement`, cells.R9(backend), 60_000);
 
           it(`${backend} R8 queued restart/starting inputs persist; disk failure emits and delivers nothing`, cells.R8(backend), 60_000);
+
+          // HTTP server wires acknowledge prompts with HTTP replies apart from SSE turn frames.
+          if (scope !== 'once' && scope.runner.facts.transport === 'http') {
+            for (const outcome of ['rejected', 'finished', 'cancelled'] as const) {
+              it(`${backend} ${outcome} opening answer never checkpoints an unanswered ask`, cells.durableOpeningAnswer(backend, outcome), 60_000);
+            }
+            for (const mode of ['fresh', 'continuation'] as const) {
+              it(`${backend} ${mode} late reply acknowledgement plus DONE retries accepted input`, cells.durableLateReplyDone(backend, mode), 60_000);
+            }
+            it(`${backend} rejected mid-session human POST remains nonfatal`, cells.durableRejectedHumanPost(backend), 60_000);
+            for (const mode of ['fresh', 'continuation'] as const) {
+              it(`${backend} ${mode} rejected agent POST fails without draining more accepted input`, cells.durableRejectedAgentPost(backend, mode), 60_000);
+            }
+          }
         }
       });
     },

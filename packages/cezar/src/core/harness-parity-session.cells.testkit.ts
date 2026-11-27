@@ -13,7 +13,8 @@ import { allowedToolsForStep } from '../workflows/types.ts';
 import type { AgentEvent, AgentRunSpec, AgentRunSpecField, ContentBlock, ToolGrant } from './agent-runner.ts';
 import { AGENT_RUN_SPEC_FIELDS, inputDeliveryOf } from './agent-runner-values.ts';
 import { driveSeam, exemptionFor, PINNED_SESSION_ID, seedMockSession, textEvents, waitFor, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
-import { runnerGolden, shippedScriptPath } from './runner-golden.testkit.ts';
+import { sessionWire } from '../workflows/runner-session-wires.testkit.ts';
+import type { WireRow } from '../workflows/native-session-wire.testkit.ts';
 import { describeHarnessPart, type HarnessPartScope, probeEnv, readRecording, type Cells, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration, type SeamCriterion } from './harness-parity-registrar.testkit.ts';
 import { runsOn, type ParityFamilyName } from './parity-classes.testkit.ts';
 import { FOLLOW_ON_ROWS, INPUT_ROWS } from './harness-parity-rows.testkit.ts';
@@ -240,8 +241,9 @@ export const SESSION_GROUPS = {
         // other adapters exercise their own unchanged permissions and delivery.
         for (const resume of [false, true]) {
           it(`${backend} S14 ${resume ? 'resumes' : 'starts'} and completes repeated human messages under provider policy`, async () => {
+            const resumeSessionId = runnerDefinition(backend).mock.resumeSessionId;
             const obs = await driveSeam(backend, 'baseline', {
-              spec: { resume, ...(backend === 'codex' ? { sessionId: 'th_mock_1' } : {}), env: { MOCK_CODEX_REQUIREMENTS: JSON.stringify({ allowedSandboxModes: ['read-only', 'workspace-write'] }), CEZ_HANDOFF_FILE: '', } },
+              spec: { resume, ...(resumeSessionId ? { sessionId: resumeSessionId } : {}), env: { MOCK_CODEX_REQUIREMENTS: JSON.stringify({ allowedSandboxModes: ['read-only', 'workspace-write'] }), CEZ_HANDOFF_FILE: '', } },
               whileOpen: async (session, { v1 }) => {
                 for (let count = 1; count <= 3; count++) {
                   await waitFor(() => v1.filter(e => e.type === 'turn-end').length >= count);
@@ -378,7 +380,7 @@ export const SESSION_GROUPS = {
   // message board, OpenCode's task_id). Every other runner is a named `capability-absent`
   // exemption, pinned the other way round: its governed wire equals the ordinary one.
   governed(r: HarnessRegistrar) {
-    const { describeRunners, runners, it } = r;
+    const { describeRunners, runners, it, scope } = r;
     describeRunners('governed', 'harness parity — D1 governed cross-session controls', () => {
       for (const backend of runners) {
         const exempt = exemptionFor('D1', backend);
@@ -387,7 +389,7 @@ export const SESSION_GROUPS = {
           it(exempt ? `${backend} is exempt from D1 on ${when} — ${exempt.reason}` : `${backend} D1 keeps subagents and controls only cross-session reach on ${when}`, async () => {
             const dir = mkdtempSync(join(tmpdir(), 'cez-native-wire-'));
             try {
-              const launches = [];
+              const launches: WireRow[][] = [];
               for (const governed of [false, true]) {
                 const path = join(dir, `${governed}.ndjson`);
                 if (resume) seedMockSession(backend, path);
@@ -399,31 +401,59 @@ export const SESSION_GROUPS = {
                 } });
                 expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
                 expect(obs.v1.at(-1)?.type).toBe('done');
-                // Argv arrays or JSON-RPC rows, by runner, as JSON.parse returned them before.
-                launches.push(readMockRecords<any>(path));
+                launches.push(readMockRecords<WireRow>(path));
               }
               const [ordinary, governed] = launches;
               if (exempt) {
                 expect(exempt.kind).toBe('capability-absent');
                 expect(governed).toEqual(ordinary);
-              } else if (backend === 'codex') {
-                const method = resume ? 'thread/resume' : 'thread/start';
-                const normal = ordinary!.find(row => row.method === method);
-                const controlled = governed!.find(row => row.method === method);
-                expect(controlled.params.config).toEqual({ 'features.agent_message_board': false });
-                const { config: _config, ...rest } = controlled.params;
-                expect(rest).toEqual(normal.params);
-                expect(normal.params).not.toHaveProperty('config');
               } else {
-                // A runtime plugin (OpenCode's task scope) rides the runtime config; no session rule is sent.
-                const config = governed!.find(row => row.type === 'runtime-config')?.config;
-                expect(config?.plugin).toEqual(runnerGolden(backend, 'runtimePlugins').map(shippedScriptPath));
-                expect(ordinary!.some(row => row.type === 'runtime-config')).toBe(false);
-                const requests = (rows: any[]) => rows.filter(row => row.type !== 'runtime-config');
-                expect(requests(governed!)).toEqual(requests(ordinary!));
-                expect(governed!.filter(row => row.method === 'PATCH')).toEqual([]);
-                expect(governed!.filter(row => row.method === 'POST' && row.url === '/session').every(row => row.body.permission === undefined)).toBe(true);
+                const expectGovernedWire = sessionWire(backend).expectGovernedWire;
+                expect(expectGovernedWire, `${backend} is not exempt from D1 and must declare expectGovernedWire in runners/${backend}/session-wire.testkit.ts`).toBeDefined();
+                expectGovernedWire!(ordinary!, governed!, resume, backend);
               }
+            } finally { rmSync(dir, { recursive: true, force: true }); }
+          }, 45000);
+        }
+        // An HTTP server runner with a session store appends permission rules with no remove: a
+        // `task` deny an older Squawk added stays without PATCHing it again, and a 404 fallback
+        // creates a fresh session with no task deny.
+        if (!exempt && scope !== 'once' && scope.runner.facts.transport === 'http' && scope.runner.mock.sessionStore !== undefined) {
+          type HttpRequestRow = { method?: string; url?: string; body?: { permission?: unknown } };
+          it(`${backend} governed Continue sends no PATCH when the session already denies task`, async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'cez-native-wire-sticky-'));
+            const path = join(dir, 'wire.ndjson');
+            try {
+              seedMockSession(backend, path, {
+                permission: [{ permission: 'task', pattern: '*', action: 'deny' }],
+              });
+              const obs = await driveSeam(backend, 'baseline', { spec: {
+                cwd: dir, resume: true, restrictCrossSessionMessaging: true,
+                env: { CEZ_MOCK_ARGS_FILE: path, CEZ_HANDOFF_FILE: '', },
+              } });
+              expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
+              const rows = readMockRecords<HttpRequestRow>(path);
+              expect(rows.some(row => row.method === 'GET' && row.url === `/session/${PINNED_SESSION_ID}`)).toBe(true);
+              expect(rows.filter(row => row.method === 'POST' && row.url === '/session')).toEqual([]);
+              expect(rows.filter(row => row.method === 'PATCH')).toEqual([]);
+            } finally { rmSync(dir, { recursive: true, force: true }); }
+          }, 45000);
+
+          it(`${backend} governed Continue POSTs a session with no task deny when GET /session/{id} 404s`, async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'cez-native-wire-fallback-'));
+            const path = join(dir, 'wire.ndjson');
+            try {
+              const obs = await driveSeam(backend, 'baseline', { spec: {
+                cwd: dir, resume: true, restrictCrossSessionMessaging: true,
+                env: { CEZ_MOCK_ARGS_FILE: path, CEZ_HANDOFF_FILE: '', },
+              } });
+              expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
+              const rows = readMockRecords<HttpRequestRow>(path);
+              expect(rows.some(row => row.method === 'GET' && row.url === `/session/${PINNED_SESSION_ID}`)).toBe(true);
+              const created = rows.find(row => row.method === 'POST' && row.url === '/session');
+              expect(created).toBeDefined();
+              expect(created?.body?.permission).toBeUndefined();
+              expect(rows.filter(row => row.method === 'PATCH')).toEqual([]);
             } finally { rmSync(dir, { recursive: true, force: true }); }
           }, 45000);
         }
@@ -586,13 +616,16 @@ export const SESSION_GROUPS = {
   // `cezar_schedule_task` and `cezar_scheduled_tasks` unless `CEZ_AUTOMATIONS=0` (hearsay-tools/cezarion#1465).
   // Exercise the default and both explicit automation states on every native wire.
   tools(r: HarnessRegistrar) {
-    const { describeRunners, runners, it } = r;
+    const { describeRunners, runners, it, scope } = r;
     describeRunners('tools', 'harness parity — squawkTools list behind CEZ_PREVIEW', () => {
       const wait = { id: '11111111-1111-4111-8111-111111111111', generation: 'gen', turnId: 'turn', timeoutSeconds: 1800, until: 'checks' as const, wakeOnConflict: true, prUrl: 'https://github.com/owner/repo/pull/1', repository: 'owner/repo', prNumber: 1, headSha: 'a'.repeat(40), registeredAt: '2026-09-22T00:00:00.000Z', deadline: '2026-09-22T00:30:00.000Z', phase: 'registered' as const };
-      // hearsay-tools/cezarion#1305: pi also runs the default list, which admits the tools through no allowlist.
+      // hearsay-tools/cezarion#1305: runners whose step-default bypasses the CLI allowlist also
+      // run the default list, which admits extension tools through no allowlist.
       const lists = (backend: string) => [
         { label: '', toolGrant: explicitToolGrant(['Read']) },
-        ...(backend === 'pi' ? [{ label: ' on the default tool list', toolGrant: { kind: 'step-default', tools: allowedToolsForStep(undefined, 'pi') } as ToolGrant }] : []),
+        ...(scope !== 'once' && scope.runner.mock.defaultToolsBypassAllowlist
+          ? [{ label: ' on the default tool list', toolGrant: { kind: 'step-default', tools: allowedToolsForStep(undefined, backend) } as ToolGrant }]
+          : []),
       ];
       for (const backend of runners) for (const value of [undefined, '1', '0']) for (const { label, toolGrant } of lists(backend)) {
         it(`${backend} R35 lists tools with CEZ_AUTOMATIONS ${value ?? 'unset'}${label}`, async () => {
@@ -608,14 +641,12 @@ export const SESSION_GROUPS = {
             const waits = ['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done'];
             const expected = [...waits, ...(value === '1' ? ['cezar_preview_serve', 'cezar_preview_stop'] : []), ...(value !== '0' ? ['cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks'] : [])];
             expect(JSON.parse(readFileSync(join(dir, 'result'), 'utf8')).names).toEqual(expected);
-            const argv: string[] = JSON.parse(readFileSync(join(dir, 'wire'), 'utf8').trim().split('\n')[0]!);
-            if (backend === 'claude') {
-              const allowed = argv[argv.indexOf('--allowedTools') + 1]!.split(',');
-              expect(allowed.filter((name) => name.startsWith(`mcp__${session.descriptor.name}__`))).toEqual(expected.map((name) => `mcp__${session.descriptor.name}__${name}`));
-            }
-            // hearsay-tools/cezarion#1305: pi's default list sends no allowlist, so the extension's tools stay active.
-            if (backend === 'pi' && !argv.includes('--tools')) expect(argv).toContain('--no-builtin-tools');
-            else if (backend === 'pi' || backend === 'omp') expect(argv[argv.indexOf('--tools') + 1]!.split(',').filter((name) => name.startsWith('cezar_'))).toEqual(expected);
+            const rows = readMockRecords<WireRow>(join(dir, 'wire'));
+            sessionWire(backend).expectSquawkToolAdmission(rows, {
+              serverName: session.descriptor.name,
+              expectedTools: expected,
+              exact: true,
+            });
           } finally {
             vi.unstubAllEnvs();
             await controller.close();

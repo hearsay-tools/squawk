@@ -8,7 +8,9 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ToolGrant } from './agent-runner.ts';
 import { driveSeam, seedMockSession } from './harness-parity-core.testkit.ts';
-import { runnerGolden, shippedScriptPath } from './runner-golden.testkit.ts';
+import { runnerDefinition } from './runner-registry.ts';
+import { sessionWire } from '../workflows/runner-session-wires.testkit.ts';
+import type { WireRow } from '../workflows/native-session-wire.testkit.ts';
 import { buildChildEnv } from './agent-env.ts';
 import { buildClaudeArgs } from '../runners/claude/claude-cli-runner.ts';
 import { buildPiArgs } from '../runners/pi/pi-runner.ts';
@@ -133,23 +135,8 @@ describe('CI tool injection', () => {
         if (resume) seedMockSession(backend, file);
         const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: descriptor, resume, restrictCrossSessionMessaging: true, env: { CEZ_MOCK_ARGS_FILE: file, CEZ_HANDOFF_FILE: '', } } });
         expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
-        const rows = readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line));
-        if (backend === 'claude') expect(rows[0]).toContain('--mcp-config');
-        if (backend === 'pi') expect(rows[0].filter((item: string) => item === '--extension')).toHaveLength(4);
-        if (backend === 'omp') expect(rows[0].filter((item: string) => item === '--extension')).toHaveLength(1);
-        if (backend === 'codex') {
-          const config = rows.find(row => row.method === (resume ? 'thread/resume' : 'thread/start')).params.config;
-          expect(config['features.agent_message_board']).toBe(false);
-          // hearsay-tools/cezarion#1294: Codex asks before every MCP tool call unless the
-          // server's mode is `approve`; approval_policy stays the user's (#381).
-          expect(config[`mcp_servers.${descriptor.name}`]).toEqual({ command: descriptor.command, args: descriptor.args, env_vars: ['CEZ_TOOL_TOKEN', 'CEZ_TOOL_SOCKET', 'CEZ_AUTOMATIONS'], default_tools_approval_mode: 'approve' });
-          expect(config).not.toHaveProperty('approval_policy');
-        }
-        if (backend === 'opencode') {
-          const config = rows.find(row => row.type === 'runtime-config').config;
-          expect(config.mcp[descriptor.name].command).toEqual([descriptor.command, ...descriptor.args]);
-          expect(config.plugin).toEqual(runnerGolden(backend, 'runtimePlugins').map(shippedScriptPath));
-        }
+        const rows = readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line) as WireRow);
+        sessionWire(backend).expectCiWire(rows, { descriptor, resume, governed: true, backend });
       } finally { rmSync(dir, { recursive: true, force: true }); }
     }, 20_000);
   }
@@ -228,15 +215,18 @@ describe('U0 wait tools on every native wire', () => {
     { tool: 'cezar_done', args: {}, resume: false },
     { tool: 'cezar_done', args: {}, resume: true },
   ];
-  // hearsay-tools/cezarion#1305: pi admits the Squawk tools by name on a narrowed list, through no
-  // allowlist on the default list, and as the only names on an empty one.
-  const piLists = [
-    { label: 'the default tool list', toolGrant: { kind: 'step-default', tools: allowedToolsForStep(undefined, 'pi') } as ToolGrant },
-    { label: 'an empty tool list', toolGrant: { kind: 'explicit', tools: [] } as ToolGrant },
-  ];
+  // hearsay-tools/cezarion#1305: runners whose step-default bypasses the CLI allowlist admit
+  // Squawk tools by name on a narrowed list, through no allowlist on the default list, and as the
+  // only names on an empty one.
+  const bypassDrives = BUILT_IN_RUNNER_IDS
+    .filter(backend => runnerDefinition(backend).mock.defaultToolsBypassAllowlist)
+    .flatMap(backend => [
+      { label: 'the default tool list', toolGrant: { kind: 'step-default', tools: allowedToolsForStep(undefined, backend) } as ToolGrant },
+      { label: 'an empty tool list', toolGrant: { kind: 'explicit', tools: [] } as ToolGrant },
+    ].flatMap(list => [false, true].map(resume => ({ backend, ...cases[0]!, resume, ...list, label: ` with ${list.label}` }))));
   const drives = [
     ...BUILT_IN_RUNNER_IDS.flatMap(backend => cases.map(entry => ({ backend, ...entry, label: '', toolGrant: { kind: 'explicit', tools: ['Read'] } as ToolGrant }))),
-    ...piLists.flatMap(list => [false, true].map(resume => ({ backend: 'pi' as const, ...cases[0]!, resume, ...list, label: ` with ${list.label}` }))),
+    ...bypassDrives,
   ];
   for (const { backend, tool, args, resume, label, toolGrant } of drives.filter(entry => tools.includes(entry.tool))) {
     it(`${backend} U0 calls ${tool} through its native wire on ${resume ? 'resume' : 'fresh'}${label}`, async () => {
@@ -280,11 +270,11 @@ describe('U0 wait tools on every native wire', () => {
           expect(JSON.parse(json)).toEqual({ cancelled: true, wait_id: wait.id, open_waits: [] });
         }
         // Each allow-listing wire names both tools; the others admit the whole server.
-        const rows = readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line));
-        const argv: string[] | undefined = Array.isArray(rows[0]) ? rows[0] : undefined;
-        if (backend === 'claude') expect(argv![argv!.indexOf('--allowedTools') + 1]!.split(',')).toEqual(expect.arrayContaining(['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done'].map(name => `mcp__${session.descriptor.name}__${name}`)));
-        if (backend === 'pi' && !argv!.includes('--tools')) expect(argv).toContain('--no-builtin-tools');
-        else if (backend === 'pi' || backend === 'omp') expect(argv![argv!.indexOf('--tools') + 1]!.split(',')).toEqual(expect.arrayContaining(['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done']));
+        const rows = readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line) as WireRow);
+        sessionWire(backend).expectSquawkToolAdmission(rows, {
+          serverName: session.descriptor.name,
+          expectedTools: ['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done'],
+        });
         expect(readFileSync(file, 'utf8')).not.toContain(session.env.CEZ_TOOL_TOKEN);
       } finally { await controller.close(); rmSync(dir, { recursive: true, force: true }); }
     }, 20000);

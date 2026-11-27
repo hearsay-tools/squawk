@@ -6,9 +6,9 @@ import { PROVIDER_HOLD_ROW_IDS, RUN_ROWS } from './harness-parity-rows.testkit.t
 import { runRows, type RunRowCell } from './harness-parity-run-tier.rows.testkit.ts';
 import type { RunObservation } from './workflow-parity-core.testkit.ts';
 
-/** The opencode skill and provider failures that stay fatal, fresh and continued. */
-export const OPENCODE_FATAL_SCENARIOS = ['unscoped-provider-failure', 'scoped-skill-failure', 'scoped-frontmatter-failure'] as const;
-export type OpencodeFatalScenario = typeof OPENCODE_FATAL_SCENARIOS[number];
+/** The HTTP server skill and provider failures that stay fatal, fresh and continued. */
+export const SERVER_FATAL_SCENARIOS = ['unscoped-provider-failure', 'scoped-skill-failure', 'scoped-frontmatter-failure'] as const;
+export type ServerFatalScenario = typeof SERVER_FATAL_SCENARIOS[number];
 
 /** What R50 reads: the parked run after a headless open, after a restart, and after its answer. */
 export type OwnerObservation = { afterHeadless: string | undefined; afterRestart: string | undefined; answered: { ok: boolean; error?: string }; final: RunRecord | undefined };
@@ -18,7 +18,7 @@ export type RunCells = {
   readonly R44: (backend: string) => ObservedCell<RunObservation>;
   readonly R45: (backend: string) => ObservedCell<RunObservation>;
   readonly R46: (backend: string) => CellBody;
-  readonly opencodeFatal: (continuation: boolean, scenario: OpencodeFatalScenario) => CellBody;
+  readonly serverFatal: (backend: string, continuation: boolean, scenario: ServerFatalScenario) => CellBody;
   readonly runRow: RunRowCell;
   readonly R15: (backend: string) => CellBody;
   readonly R77: (backend: string) => CellBody;
@@ -50,13 +50,13 @@ export function runGroups(cells: RunCells) {
             }, cell.observe);
           }
           it(`${backend} R46 continued provider failures stay fatal and actionable`, cells.R46(backend), 45_000);
-        }
-        if (scope === 'once') {
-          for (const continuation of [false, true]) for (const scenario of OPENCODE_FATAL_SCENARIOS) {
-            it(`opencode ${continuation ? 'continued' : 'fresh'} ${scenario} remains fatal`, cells.opencodeFatal(continuation, scenario), 45_000);
+          if (scope !== 'once' && scope.runner.facts.transport === 'http') {
+            for (const continuation of [false, true]) for (const scenario of SERVER_FATAL_SCENARIOS) {
+              it(`${backend} ${continuation ? 'continued' : 'fresh'} ${scenario} remains fatal`, cells.serverFatal(backend, continuation, scenario), 45_000);
+            }
           }
         }
-      }, true);
+      });
     },
 
     run(r: HarnessRegistrar) {

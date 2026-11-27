@@ -1,5 +1,5 @@
 import { expect } from 'vitest';
-import type { SessionWire } from '../../workflows/native-session-wire.testkit.ts';
+import { systemFromPrepended, type SessionWire } from '../../workflows/native-session-wire.testkit.ts';
 function requests(wire: readonly unknown[], method: string): Record<string, unknown>[] {
   return wire.flatMap(row => typeof row === 'object' && row !== null && 'method' in row && row.method === method && 'params' in row
     ? [row.params as Record<string, unknown>] : []);
@@ -17,8 +17,19 @@ export const ANTIGRAVITY_SESSION_WIRE: SessionWire = {
   systemPrompt: recording => requests(recording.args, 'session/new').length
     ? requests(recording.args, 'session/new').map(params => (params._meta as { antigravity?: { systemPrompt?: { append?: string } } })?.antigravity?.systemPrompt?.append ?? '').join('\n')
     : prompts(recording.stdin)[0] ?? '',
+  systemPrompts: recording => {
+    const created = requests(recording.args, 'session/new')
+      .map(params => (params._meta as { antigravity?: { systemPrompt?: { append?: string } } })?.antigravity?.systemPrompt?.append)
+      .filter((text): text is string => typeof text === 'string' && text.length > 0);
+    return created.length > 0 ? created : prompts(recording.stdin).map(systemFromPrepended);
+  },
   skillTriggers: (recording, name) => prompts(recording.stdin).filter(text => name ? text.startsWith(`/${name} `) || text.startsWith(`/${name}\n`) || text === `/${name}` : /^\/[\w-]+(?:\s|$)/.test(text)),
   expectSkillTrigger: (recording, trigger) => {
     expect(prompts(recording.stdin)).toContain(`/${trigger.name}${trigger.args ? ` ${trigger.args}` : ''}${trigger.context ? `\n${trigger.context}` : ''}`);
   },
+  expectCiWire: (rows, { resume }) => {
+    const params = requests(rows, resume ? 'session/resume' : 'session/new')[0];
+    expect(params?.mcpServers).toEqual([expect.objectContaining({ type: 'http', name: 'squawk' })]);
+  },
+  expectSquawkToolAdmission: () => {},
 };

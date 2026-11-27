@@ -14,7 +14,7 @@ import { RunStore, type RunRecord } from '../runs/store.ts';
 import { createFixtureManager, drainFixtureManagers } from '../workflows/fixture-manager.testkit.ts';
 import { IDLE_TIMEOUT_MS } from '../workflows/run.ts';
 import { promptFor, waitFor } from './harness-parity-core.testkit.ts';
-import { runGroups, type OpencodeFatalScenario, type RunCells } from './harness-parity-run.rows.testkit.ts';
+import { runGroups, type ServerFatalScenario, type RunCells } from './harness-parity-run.rows.testkit.ts';
 import { driveObservedRun, openTimerWait, runRowCell, TERMINAL, timerWakeOf } from './harness-parity-run-tier.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
@@ -51,7 +51,7 @@ function skillWarningCell(backend: string, continuation: boolean) {
   };
 }
 
-const OPENCODE_FATAL_DETAIL: Readonly<Record<OpencodeFatalScenario, string>> = {
+const SERVER_FATAL_DETAIL: Readonly<Record<ServerFatalScenario, string>> = {
   'unscoped-provider-failure': 'restoring service',
   'scoped-skill-failure': '/skills/required/SKILL.md',
   'scoped-frontmatter-failure': '/skills/bad4/SKILL.md: Failed to parse YAML frontmatter',
@@ -130,13 +130,13 @@ const RUN_CELLS: RunCells = {
     expect(obs.record?.error?.trim()).toBeTruthy();
     expect(obs.events).toContainEqual(expect.objectContaining({ type: 'error' }));
   },
-  opencodeFatal: (continuation, scenario) => async () => {
+  serverFatal: (backend, continuation, scenario) => async () => {
     const prompt = `mock:${scenario}`;
-    const obs = continuation ? await continueDiagnosticRun('opencode', prompt)
-      : await driveRun('opencode', { prompt }, record => TERMINAL.includes(record?.status ?? ''));
+    const obs = continuation ? await continueDiagnosticRun(backend, prompt)
+      : await driveRun(backend, { prompt }, record => TERMINAL.includes(record?.status ?? ''));
     expect(obs.record?.status).toBe('failed');
     expect(obs.record?.error).toContain('provider');
-    expect(obs.record?.error).toContain(OPENCODE_FATAL_DETAIL[scenario]);
+    expect(obs.record?.error).toContain(SERVER_FATAL_DETAIL[scenario]);
   },
   runRow: runRowCell,
   R15: backend => async () => {
