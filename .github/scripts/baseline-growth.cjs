@@ -116,6 +116,17 @@ function deletedReaders(cwd, head, deleted) {
   }
 }
 
+// Ratchets kept one JSON file per source file (`<dir>/<source path>.json`), so concurrent PRs that
+// change different files never edit adjacent lines (hearsay-tools/squawk#4362). Each directory is one
+// ratchet keyed by source path: a new pin file is growth, and a deleted one is a dropped entry.
+const PIN_DIRS = ['packages/cezar/src/file-length.baseline'];
+
+function pinDirectory(cwd, rev, files, dir) {
+  const prefix = `${dir}/`;
+  return Object.fromEntries(files.filter(file => file.startsWith(prefix) && file.endsWith('.json'))
+    .map(file => [file.slice(prefix.length, -'.json'.length), readBaseline(cwd, rev, file)]));
+}
+
 function checkBaselineGrowth({ cwd = process.cwd(), base, head, allowGrowth = false }) {
   const baseFiles = tree(cwd, base);
   const beforeFiles = baseFiles.filter(file => file.endsWith('.baseline.json'));
@@ -128,6 +139,11 @@ function checkBaselineGrowth({ cwd = process.cwd(), base, head, allowGrowth = fa
     if (!beforeFiles.includes(file)) continue; // A new file starts a new ratchet.
     const changes = compareBaseline(readBaseline(cwd, base, file), after, '$', moved);
     if (!allowGrowth) reasons.push(...changes.map(change => `${file}: ${change}`));
+  }
+  for (const dir of PIN_DIRS) {
+    const after = pinDirectory(cwd, head, headFiles, dir); // Every head pin must still be valid JSON.
+    const changes = compareBaseline(pinDirectory(cwd, base, baseFiles, dir), after, '$', moved);
+    if (!allowGrowth) reasons.push(...changes.map(change => `${dir}: ${change}`));
   }
   const deleted = beforeFiles.filter(file => !afterFiles.has(file));
   if (deleted.length) {
@@ -170,4 +186,4 @@ async function checkPullRequest({ github, context, core, cwd = process.cwd() }) 
   else core.info(allowGrowth ? 'Baseline growth approved by label; owner merge required.' : 'Baseline ratchets did not grow.');
 }
 
-module.exports = { compareBaseline, movedBetween, checkBaselineGrowth, resolvePullRequest, checkPullRequest };
+module.exports = { PIN_DIRS, compareBaseline, movedBetween, checkBaselineGrowth, resolvePullRequest, checkPullRequest };

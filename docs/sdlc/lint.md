@@ -17,7 +17,8 @@ command, it fails closed, and it does not depend on which tests a change selects
    a match fails, so the lists only shrink to what the code still needs.
 
 3. **File length** (`file-length`, a runner check): every tracked non-test source file over 1,000 lines stays at or below its
-   pin in `packages/cezar/src/file-length.baseline.json`. Unpinned long files and grown pins fail.
+   pin, `packages/cezar/src/file-length.baseline/<source path>.json` holding `{ "lines": N }`. Unpinned long
+   files and grown pins fail. A local run lowers a pin, and deletes the pin of a file at or under the limit.
    To make room, move whole functions verbatim to a sibling module. Never join lines or squeeze
    statements to fit. Before you plan a change to a long file, print its lines left:
    `node packages/cezar/src/lint/file-length.ts headroom <path>...`. The command measures a file under
