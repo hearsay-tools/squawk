@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -647,7 +648,7 @@ describe('PreviewSplit', () => {
     expect(main.contains(header)).toBe(true)
     // Verify the shipped preview.css collapse rule hides the transcript while keeping ReadingPage's
     // frame, body wrapper, and RunHeader visible.
-    const previewCss = readFileSync(new URL('./preview.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const previewCss = readFileSync(resolve(import.meta.dirname, 'preview.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
     const collapseHideMatch = previewCss.match(/(\[data-slot='task-main'\]\[data-collapsed\][^{]+)\{\s*display:\s*none;\s*\}/)
     expect(collapseHideMatch, 'preview.css must declare the task-main collapse hide rule').not.toBeNull()
     const collapseHideSelector = collapseHideMatch![1]!.trim()
