@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { productEnv } from '../../core/product-env.ts';
+import { inTaskContext, productEnv } from '../../core/product-env.ts';
 import { commandText } from '../../home/command.ts';
 import type { Home } from '../../home/home.ts';
 import { discoverCockpitOrigin, type DiscoverOriginOptions } from '../../task-cli/discovery.ts';
@@ -79,7 +79,7 @@ async function runMcpTokenDispatch(
   writeOut: (line: string) => void,
   writeErr: (line: string) => void,
 ): Promise<number> {
-  if (productEnv('TASK_ID', env)?.trim()) {
+  if (inTaskContext(env)) {
     writeErr(commandText('cez mcp token is host-only and refuses to run inside a Squawk task (HSQ_TASK_ID / CEZ_TASK_ID is set).'));
     return 1;
   }
@@ -103,7 +103,7 @@ export async function runMcpCommand(argv: string[], env: NodeJS.ProcessEnv, deps
     if (parsed.positionals.length > 0) {
       throw new TaskCliError(64, { code: 'invalid_input', error: `unexpected argument '${parsed.positionals[0]}'` });
     }
-    if (productEnv('TASK_ID', env)?.trim()) {
+    if (inTaskContext(env)) {
       writeErr(commandText('cez mcp is for outside orchestrators and refuses to start inside a Squawk task (HSQ_TASK_ID / CEZ_TASK_ID is set).'));
       return 1;
     }

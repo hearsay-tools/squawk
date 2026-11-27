@@ -1,11 +1,11 @@
 // real-clock: static ISO timestamps passed to runInstall/runUninstall are explicit fixture inputs
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Home } from '../../home/home.ts';
 import { useTestHome } from '../../home/test-home.testkit.ts';
-import { createMcpToken, hasConfiguredMcpTokens, listMcpTokens, verifyMcpBearerToken } from '../../mcp-tokens.ts';
+import { createMcpToken, hasConfiguredMcpTokens, listMcpTokens, mcpTokenFile, verifyMcpBearerToken } from '../../mcp-tokens.ts';
 import { runInstall, runUninstall } from '../../server-install/engine.ts';
 import { createAutoUi } from '../../server-install/ui.ts';
 import type { PlatformStrategy } from '../../server-install/types.ts';
@@ -114,17 +114,29 @@ describe('hsq mcp token CLI and installer lifecycle (hearsay-tools/squawk#4402)'
     expect(hasConfiguredMcpTokens({}, 4323, home)).toBe(false);
   });
 
-  it('refuses `hsq mcp token` inside a Squawk task', async () => {
-    const out: string[] = [];
-    const err: string[] = [];
-    const code = await runMcpCommand(['token', 'list'], { HSQ_TASK_ID: 'task-1' }, {
-      stdout: (line) => out.push(line),
-      stderr: (line) => err.push(line),
-      home: () => home,
-    });
-    expect(code).toBe(1);
-    expect(out).toEqual([]);
-    expect(err.join('\n')).toContain('refuses to run inside a Squawk task');
+  it('refuses `hsq mcp` and `hsq mcp token` inside a Squawk task even if HSQ_TASK_ID is empty and CEZ_TASK_ID is set', async () => {
+    for (const env of [{ HSQ_TASK_ID: 'task-1' }, { HSQ_TASK_ID: '', CEZ_TASK_ID: 'task-1' }]) {
+      for (const argv of [['token', 'list'], []]) {
+        const out: string[] = [];
+        const err: string[] = [];
+        const code = await runMcpCommand(argv, env, {
+          stdout: (line) => out.push(line),
+          stderr: (line) => err.push(line),
+          home: () => home,
+        });
+        expect(code).toBe(1);
+        expect(out).toEqual([]);
+        expect(err.join('\n')).toContain('inside a Squawk task');
+      }
+    }
+  });
+
+  it('returns a structured exit-2 corrupt_store refusal when create encounters invalid JSON', async () => {
+    mkdirSync(home.mcpTokens, { recursive: true });
+    writeFileSync(mcpTokenFile(4326, home), '{ broken json', 'utf8');
+    const res = await execToken(['create', '--port', '4326']);
+    expect(res.code).toBe(2);
+    expect(res.json()).toMatchObject({ ok: false, code: 'corrupt_store' });
   });
 
   it('withdraws per-port MCP tokens on fresh server-install and server-uninstall, preserving them on resumed install', async () => {

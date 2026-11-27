@@ -11,7 +11,7 @@
  *   or systemd deployments alongside any per-port file tokens.
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { readdirSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { productEnv } from './core/product-env.ts';
@@ -125,36 +125,61 @@ function parsePortTokenJson(content: string, path: string): { tokens: StoredMcpT
     : { issue: `${path} is not a valid MCP token store` };
 }
 
+type PortTokenLoad = { tokens: StoredMcpToken[] } | { issue: string } | null;
+
+interface CachedPortTokenEntry {
+  readonly signature: string;
+  readonly loaded: PortTokenLoad;
+}
+
+const MAX_PORT_TOKEN_CACHE = 64;
+const portTokenCache = new Map<string, CachedPortTokenEntry>();
+
+function portFileSignature(path: string): string | null {
+  try {
+    const st = statSync(path);
+    return `${st.ino}:${st.size}:${st.mtimeMs}:${st.ctimeMs}`;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 'ENOENT';
+    return null;
+  }
+}
+
+/**
+ * Stat-validated cached read of one port's token file so per-request HTTP auth avoids repeating
+ * synchronous `HomeStore` lock acquisition and JSON parsing while picking up CLI writes live.
+ */
+function readPortTokenFileCached(port: number, home: Home): PortTokenLoad {
+  const path = mcpTokenFile(port, home);
+  const signature = portFileSignature(path);
+  if (signature === 'ENOENT') {
+    portTokenCache.delete(path);
+    return null;
+  }
+  if (signature !== null) {
+    const cached = portTokenCache.get(path);
+    if (cached && cached.signature === signature) return cached.loaded;
+  }
+  const loaded = readPortTokenFile(port, home);
+  if (signature !== null) {
+    if (portTokenCache.size >= MAX_PORT_TOKEN_CACHE) {
+      const oldest = portTokenCache.keys().next().value;
+      if (oldest !== undefined) portTokenCache.delete(oldest);
+    }
+    portTokenCache.set(path, { signature, loaded });
+  }
+  return loaded;
+}
+
 /** Read one port's token file. Never throws; malformed or unreadable files fail closed with `issue`. */
-function readPortTokenFile(port: number, home: Home): { tokens: StoredMcpToken[] } | { issue: string } | null {
+function readPortTokenFile(port: number, home: Home): PortTokenLoad {
   const path = mcpTokenFile(port, home);
   const loaded = readOptionalHomeFile(path, home);
   if (loaded === null || 'issue' in loaded) return loaded;
   return parsePortTokenJson(loaded.content, path);
 }
 
-/** True when at least one bearer token is configured for `port` (file or env). Read per request. */
-export function hasConfiguredMcpTokens(env: NodeJS.ProcessEnv, port: number | undefined, home: Home): boolean {
-  if (envMcpToken(env) !== undefined) return true;
-  if (port === undefined || !isPort(port)) return false;
-  const loaded = readPortTokenFile(port, home);
-  return loaded !== null && 'tokens' in loaded && loaded.tokens.length > 0;
-}
-
-/** Verify a raw bearer token against env and the port's hashed token file using constant-time digests. */
-export function verifyMcpBearerToken(
-  rawToken: string,
-  env: NodeJS.ProcessEnv,
-  port: number | undefined,
-  home: Home,
-): VerifiedMcpToken | null {
-  if (!rawToken) return null;
-  const envToken = envMcpToken(env);
-  if (envToken !== undefined && digestMatchesHex(rawToken, hashMcpToken(envToken))) {
-    return { source: 'env' };
-  }
-  if (port === undefined || !isPort(port)) return null;
-  const loaded = readPortTokenFile(port, home);
+function matchFileToken(rawToken: string, loaded: PortTokenLoad): VerifiedMcpToken | null {
   if (loaded === null || !('tokens' in loaded)) return null;
   let matched: StoredMcpToken | null = null;
   for (const entry of loaded.tokens) {
@@ -169,6 +194,55 @@ export function verifyMcpBearerToken(
     name: matched.name,
     ...(matched.project !== undefined ? { project: matched.project } : {}),
   };
+}
+
+export type McpRequestAuthResult =
+  | { status: 'unconfigured' }
+  | { status: 'unauthorized' }
+  | { status: 'ok'; verified: VerifiedMcpToken };
+
+/**
+ * Evaluate MCP endpoint availability and bearer authentication in a single cached load per request.
+ * Returns `unconfigured` (404) when no env or port token exists, `unauthorized` (401) when
+ * configured but credentials fail, or `ok` with the verified token identity.
+ */
+export function authenticateMcpRequest(
+  rawToken: string | null,
+  env: NodeJS.ProcessEnv,
+  port: number | undefined,
+  home: Home,
+): McpRequestAuthResult {
+  const envToken = envMcpToken(env);
+  const loaded = port !== undefined && isPort(port) ? readPortTokenFileCached(port, home) : null;
+  const hasFileTokens = loaded !== null && 'tokens' in loaded && loaded.tokens.length > 0;
+  if (envToken === undefined && !hasFileTokens) {
+    return { status: 'unconfigured' };
+  }
+  if (!rawToken) return { status: 'unauthorized' };
+  if (envToken !== undefined && digestMatchesHex(rawToken, hashMcpToken(envToken))) {
+    return { status: 'ok', verified: { source: 'env' } };
+  }
+  const verified = matchFileToken(rawToken, loaded);
+  return verified ? { status: 'ok', verified } : { status: 'unauthorized' };
+}
+
+/** True when at least one bearer token is configured for `port` (file or env). Read per request. */
+export function hasConfiguredMcpTokens(env: NodeJS.ProcessEnv, port: number | undefined, home: Home): boolean {
+  if (envMcpToken(env) !== undefined) return true;
+  if (port === undefined || !isPort(port)) return false;
+  const loaded = readPortTokenFileCached(port, home);
+  return loaded !== null && 'tokens' in loaded && loaded.tokens.length > 0;
+}
+
+/** Verify a raw bearer token against env and the port's hashed token file using constant-time digests. */
+export function verifyMcpBearerToken(
+  rawToken: string,
+  env: NodeJS.ProcessEnv,
+  port: number | undefined,
+  home: Home,
+): VerifiedMcpToken | null {
+  const result = authenticateMcpRequest(rawToken, env, port, home);
+  return result.status === 'ok' ? result.verified : null;
 }
 
 function listTokenPorts(home: Home): number[] {
@@ -242,11 +316,12 @@ export function createMcpToken(options: CreateMcpTokenOptions): CreatedMcpToken 
   store.transaction(() => {
     const existing = readPortTokenFile(port, home);
     if (existing !== null && 'issue' in existing) {
-      throw new Error(`Refusing to overwrite corrupt MCP token store: ${existing.issue}`);
+      throw new McpTokenRevokeError('corrupt_store', `Refusing to overwrite corrupt MCP token store: ${existing.issue}`);
     }
     const tokens = existing ? [...existing.tokens, record] : [record];
     store.writeJson(path, { tokens });
   }, [home.mcpTokens, path]);
+  portTokenCache.delete(path);
   return { ...toPublic(record, port), token: rawToken, path };
 }
 
@@ -288,6 +363,7 @@ export function revokeMcpToken(options: { home: Home; id?: string | undefined; p
       }
       store.replace(path, null);
     }, [home.mcpTokens, path]);
+    portTokenCache.delete(path);
     return { revoked, path };
   }
 
@@ -330,6 +406,7 @@ export function revokeMcpToken(options: { home: Home; id?: string | undefined; p
     else store.writeJson(targetPath, { tokens: remaining });
     revoked = toPublic(match.entry, match.port);
   }, [home.mcpTokens, ...candidatePaths]);
+  portTokenCache.delete(targetPath);
 
   return { revoked: revoked ? [revoked] : [], path: targetPath };
 }
@@ -344,5 +421,6 @@ export function clearMcpTokensForPort(port: number, home: Home): boolean {
   store.transaction(() => {
     store.replace(path, null);
   }, [home.mcpTokens, path]);
+  portTokenCache.delete(path);
   return true;
 }

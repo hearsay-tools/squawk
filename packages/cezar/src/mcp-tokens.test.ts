@@ -9,6 +9,7 @@ import { Home } from './home/home.ts';
 import { resolveHome } from './home/resolve.ts'; // test-home-read: fresh home test requires an unresolved scratch path with no marker.
 import { useTestHome } from './home/test-home.testkit.ts';
 import {
+  authenticateMcpRequest,
   clearMcpTokensForPort,
   createMcpToken,
   hasConfiguredMcpTokens,
@@ -38,8 +39,15 @@ describe('per-port hashed MCP bearer token store (hearsay-tools/squawk#4402)', (
 
   it('stores only SHA-256 hashes with mode 0600 and verifies per port', () => {
     expect(hasConfiguredMcpTokens({}, 4321, home)).toBe(false);
+    expect(authenticateMcpRequest(null, {}, 4321, home)).toEqual({ status: 'unconfigured' });
 
     const created = createMcpToken({ port: 4321, name: 'fleet-a', home });
+    expect(authenticateMcpRequest(null, {}, 4321, home)).toEqual({ status: 'unauthorized' });
+    expect(authenticateMcpRequest('wrong-token', {}, 4321, home)).toEqual({ status: 'unauthorized' });
+    expect(authenticateMcpRequest(created.token, {}, 4321, home)).toEqual({
+      status: 'ok',
+      verified: { source: 'file', id: created.id, name: 'fleet-a' },
+    });
     expect(created.token.startsWith(MCP_TOKEN_PREFIX)).toBe(true);
     expect(created.token.length).toBeGreaterThanOrEqual(MCP_TOKEN_PREFIX.length + 40);
     expect(created.port).toBe(4321);

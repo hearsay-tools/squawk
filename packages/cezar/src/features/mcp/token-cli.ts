@@ -159,19 +159,7 @@ function runRevokeAction(rest: string[], values: ParsedTokenValues, port: number
     return { ok: true, ...revokeMcpToken({ home, port, all: true }) };
   }
   if (rest.length !== 1) invalidInput('revoke requires a token <id> (or --all --port <n>)');
-  try {
-    return { ok: true, ...revokeMcpToken({ home, id: rest[0], port }) };
-  } catch (error) {
-    if (error instanceof McpTokenRevokeError) {
-      throw new TokenCliRefusal(2, {
-        ok: false,
-        code: error.code,
-        error: error.message,
-        ...(error.ports ? { ports: error.ports } : {}),
-      });
-    }
-    throw error;
-  }
+  return { ok: true, ...revokeMcpToken({ home, id: rest[0], port }) };
 }
 
 async function runTokenSubcommand(argv: string[], home: Home, io: McpTokenCliIo): Promise<Record<string, unknown>> {
@@ -197,6 +185,15 @@ export async function runMcpTokenCommand(
     io.stdout(JSON.stringify(await runTokenSubcommand(argv, home, io), null, 2));
     return 0;
   } catch (error) {
+    if (error instanceof McpTokenRevokeError) {
+      io.stdout(JSON.stringify({
+        ok: false,
+        code: error.code,
+        error: error.message,
+        ...(error.ports ? { ports: error.ports } : {}),
+      }, null, 2));
+      return 2;
+    }
     if (!(error instanceof TokenCliRefusal)) throw error;
     io.stdout(JSON.stringify(error.body, null, 2));
     return error.exitCode;
