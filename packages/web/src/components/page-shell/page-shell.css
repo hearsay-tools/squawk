@@ -2,6 +2,10 @@
  * Owns gutter, left-aligned content origin, template max-widths, header typography,
  * unified header action button sizing, and declared empty/sparse/full layout states. */
 
+/* Establish Tailwind v4's layer order before any @layer block because Vite may link this
+ * code-split stylesheet before index.css; otherwise @layer components would rank below @layer base. */
+@layer properties, theme, base, components, utilities;
+
 /* Default vertical padding sits in @layer components so documented route bottom-clearance
  * utilities (e.g. GitHub's md:pb-4 viewport fit and mobile safe-area pb-[...]) override it,
  * while padding-inline stays unlayered so PageShell always owns the horizontal gutter. */

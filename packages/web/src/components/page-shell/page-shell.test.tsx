@@ -131,8 +131,12 @@ describe('PageShell named templates', () => {
     expect(container.querySelector('[data-slot="page-shell-split-detail"]')?.textContent).toBe('Detail pane')
   })
 
-  it('layers default block padding in @layer components so bottom-clearance utilities apply while gutter stays unlayered', () => {
-    const css = readFileSync(resolve(import.meta.dirname, 'page-shell.css'), 'utf8')
+  it('declares Tailwind layer order before @layer components so default block padding beats @layer base and yields to utilities', () => {
+    const css = readFileSync(resolve(import.meta.dirname, 'page-shell.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const orderIdx = css.indexOf('@layer properties, theme, base, components, utilities;')
+    const componentsIdx = css.indexOf('@layer components')
+    expect(orderIdx).toBeGreaterThanOrEqual(0)
+    expect(componentsIdx).toBeGreaterThan(orderIdx)
     expect(css).toMatch(/@layer components\s*\{\s*\[data-slot='page-shell'\]\s*\{\s*padding-block:\s*28px 36px;\s*\}\s*\}/)
     expect(css).toMatch(/\[data-slot='page-shell'\]\s*\{[^}]*padding-inline:\s*var\(--page-shell-gutter\);/)
   })
