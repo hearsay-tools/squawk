@@ -313,6 +313,7 @@ describe('task thread', () => {
       browser.waitForFunction(`document.querySelector('${pin}').getAttribute('aria-checked') === '${!wasPinned}'`)
       browser.press('Escape')
       browser.waitForFunction(`document.querySelector('[data-slot="run-actions-menu"]') === null`)
+      openSessionActivity(browser)
       expect(workspaceOpen()).toBe(true)
       expect(waitForSettledSample(browser, `document.documentElement.scrollWidth <= innerWidth`)).toBe(true)
     }

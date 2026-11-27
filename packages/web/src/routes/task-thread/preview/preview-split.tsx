@@ -1,5 +1,5 @@
 import './preview.css'
-import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
+import { createContext, lazy, Suspense, useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 
@@ -22,6 +22,13 @@ import { PREVIEW_DOCK_QUERY, PREVIEW_PHONE_QUERY, useMediaQuery } from './use-me
 const PreviewPane = lazy(() => import('./preview-pane-connected').then(module => ({ default: module.ConnectedPreviewPane })))
 
 const KEY_STEP = 2
+
+const SplitPaneOpenContext = createContext(false)
+
+/** True whenever the right-hand split pane is open (live preview or report reader). */
+export function useSplitPaneOpen(): boolean {
+  return useContext(SplitPaneOpenContext)
+}
 
 /** The height of the shell's scrolling main: the pane sticks to it while the transcript scrolls. */
 function useScrollerHeight(element: { current: HTMLElement | null }): number | undefined {
@@ -93,7 +100,9 @@ export function PreviewSplit({ run, state, children, report }: { run: ApiRun | u
         data-collapsed={paneInFront && !phone ? '' : undefined}
         className="min-w-0 flex-1"
       >
-        {children}
+        <SplitPaneOpenContext.Provider value={showPane}>
+          {children}
+        </SplitPaneOpenContext.Provider>
       </div>
       {showPane ? (
         <>

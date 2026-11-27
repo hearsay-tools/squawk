@@ -109,15 +109,17 @@ it('keeps a short desktop session footer at the bottom', () => {
 it('keeps expanded activity popover and a long draft accessible on a short desktop viewport', () => {
   browser.setViewport(768, 640)
   browser.goto(`${baseUrl}/p/${project}/tasks/${runId}`)
-  openSessionActivityRow(browser, 'usage')
+  browser.waitForFunction(`document.querySelector('textarea') !== null`)
   browser.fill('textarea', Array.from({ length: 20 }, (_, index) => `Draft line ${index}`).join('\n'))
+  openSessionActivityRow(browser, 'usage')
   expect(waitForSettledSample(browser, geometry)).toMatchObject({
     footerVisible: true, footerAtBottom: true, overflow: false,
   })
   const details = waitForSettledSample(browser, `(() => {
     const popover = document.querySelector('[data-slot="run-activity-popover"]');
+    if (!popover) return null;
     popover.scrollTop = popover.scrollHeight;
-    return { mounted: popover !== null, reachedEnd: popover.scrollTop + popover.clientHeight >= popover.scrollHeight - 1 };
+    return { mounted: true, reachedEnd: popover.scrollTop + popover.clientHeight >= popover.scrollHeight - 1 };
   })()`)
   expect(details).toEqual({ mounted: true, reachedEnd: true })
 })

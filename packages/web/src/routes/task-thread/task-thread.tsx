@@ -65,6 +65,7 @@ import { AskOriginMarker, pinnedAnswerControl, pinnedAskFocus } from './pending-
 import { useRevealAskOrigin } from './use-reveal-ask-origin'
 import { useSessionViewport } from './session-viewport'
 import { ThreadDecisionZone } from './decision-zone'
+import { useSplitPaneOpen } from './preview/preview-split'
 import { usePreviewPane } from './preview/preview-state'
 import { useMediaQuery } from './preview/use-media-query'
 import {
@@ -417,8 +418,9 @@ function useThreadChromeState(runId: string) {
     setActivityPopoverOpen(false)
   }
   const previewPane = usePreviewPane()
+  const splitPaneOpen = useSplitPaneOpen() || previewPane?.open === true
   const ultrawide = useMediaQuery(ULTRAWIDE_ACTIVITY_QUERY, false)
-  const activityMode: 'popover' | 'sidebar' = ultrawide && previewPane?.open !== true ? 'sidebar' : 'popover'
+  const activityMode: 'popover' | 'sidebar' = ultrawide && !splitPaneOpen ? 'sidebar' : 'popover'
   const activityOpen = activityMode === 'sidebar' ? activitySidebarOpen : activityPopoverOpen
   const setActivityOpen = activityMode === 'sidebar' ? setActivitySidebarOpen : setActivityPopoverOpen
   const showActivitySidebar = activityMode === 'sidebar' && activitySidebarOpen
