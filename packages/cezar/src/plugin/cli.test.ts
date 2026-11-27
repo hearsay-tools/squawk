@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PluginLoadReport } from './loader.ts';
 
-const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: 0, runLifecycleListeners: 0, launchParts: [] };
+const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], httpRoutes: [], removalSlots: 0, runLifecycleListeners: 0, launchParts: [] };
 const report: PluginLoadReport = {
   folders: ['/squawk/dist/runners/', '/cfg/plugins'],
   loaded: [{ name: 'claude', source: 'bundled', path: '/squawk/dist/runners/claude', contributions: { ...none, runners: ['claude'] } }, { name: 'greeter', source: 'host', path: '/cfg/plugins/greeter', contributions: { ...none, cliCommands: ['greet'], runners: ['echo'], removalSlots: 1, launchParts: ['greeting', 'motd'] } }],
