@@ -283,12 +283,15 @@ export async function runInstall(strategy: PlatformStrategy, opts: RunOptions): 
     const { state } = ctx;
     // buildContext reconciles dry-run records first, so a preview of platform A
     // never blocks a real install of platform B (the reset clears `platform`).
+    const hasRecordedSteps = Object.keys(state.steps).length > 0;
     const freshInstall = setupInstallRecord(state, strategy, opts);
+    const freshMcpInstall = freshInstall && !hasRecordedSteps;
 
     await strategy.preflight(ctx); // throws PreflightError to refuse politely
-    // A grant or MCP token file left on this port belongs to a cockpit that is gone; a completed install keeps its own.
+    // A grant or MCP token file left on this port belongs to a cockpit that is gone; a completed install keeps its own,
+    // and resuming an incomplete real install preserves tokens created for its running cockpit.
     await withdrawRemoteSettings(ctx, state.primaryPort, 'a new install on this port', freshInstall);
-    await withdrawMcpTokens(ctx, state.primaryPort, 'a new install on this port', freshInstall);
+    await withdrawMcpTokens(ctx, state.primaryPort, 'a new install on this port', freshMcpInstall);
 
     const steps = strategy.steps(ctx);
     const knownIds = new Set(steps.map((s) => s.id));

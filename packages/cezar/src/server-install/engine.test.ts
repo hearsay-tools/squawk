@@ -12,6 +12,7 @@ import { createAutoUi } from './ui.ts';
 import type { InstallStep, PlatformStrategy, Runner } from './types.ts';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { enableRemoteSettings, readRemoteSettings } from '../remote-settings.ts';
+import { createMcpToken, listMcpTokens } from '../mcp-tokens.ts';
 
 const noRunner: Runner = { capture: async () => ({ code: 0, stdout: '', stderr: '' }), interactive: async () => 0 };
 
@@ -414,5 +415,32 @@ describe('engine — ledger preservation and uninstall safety (PR #423 review fi
     expect(real.run).toHaveBeenCalledOnce(); // did NOT report "already done"
     expect(res.state.installed).toBe(true);
     expect(loadServerState(undefined, testHome()).dryRun).toBeUndefined();
+  });
+
+  it('withdraws MCP tokens on fresh install and uninstall, but preserves them on resume and reconfigure', async () => {
+    const port = 4321;
+    // Leftover token from a previous removed cockpit on this port is cleared on a fresh install.
+    createMcpToken({ port, name: 'stale', home: testHome() });
+    const a = fakeStep('a');
+    const bFail = fakeStep('b', { run: vi.fn(async () => { throw new StepAborted('late failure'); }) });
+    const first = await runInstall(strategyOf([a, bFail]), opts({ port }));
+    expect(first.status).toBe('failed');
+    expect(first.state.installed).toBe(false);
+    expect(listMcpTokens(testHome(), port).tokens).toHaveLength(0);
+
+    // Resuming an incomplete install preserves tokens created for the running cockpit.
+    const duringResume = createMcpToken({ port, name: 'running', home: testHome() });
+    const resumed = await runInstall(strategyOf([fakeStep('a'), fakeStep('b')]), opts({ port }));
+    expect(resumed.status).toBe('complete');
+    expect(resumed.state.installed).toBe(true);
+    expect(listMcpTokens(testHome(), port).tokens.map((t) => t.id)).toEqual([duringResume.id]);
+
+    // Reconfiguring a completed install preserves tokens.
+    await runInstall(strategyOf([fakeStep('a'), fakeStep('b')]), opts({ port, reconfigure: new Set(['b']) }));
+    expect(listMcpTokens(testHome(), port).tokens.map((t) => t.id)).toEqual([duringResume.id]);
+
+    // Uninstalling withdraws tokens for that port.
+    await runUninstall(strategyOf([fakeStep('a'), fakeStep('b')]), opts({ port }));
+    expect(listMcpTokens(testHome(), port).tokens).toHaveLength(0);
   });
 });
