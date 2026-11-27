@@ -114,7 +114,7 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
             onChange={(event) => setRetention(event.target.value)}
             className="block w-32 rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
           />
-          <span className="text-xs text-soft-foreground">worktrees</span>
+          <span className="text-xs text-muted-foreground">worktrees</span>
           <SaveRow show={retentionSaved && !retentionInvalid && !save.isPending}>
             <Button
               type="button"
@@ -133,7 +133,7 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
             Enter a whole number from {WORKTREE_RETENTION_MIN} to {WORKTREE_RETENTION_MAX} (0 = unlimited).
           </p>
         ) : (
-          <p className="text-[11px] text-soft-foreground">
+          <p className="text-xs text-muted-foreground">
             {retentionNum === 0 ? 'Keeping every finished worktree.' : `Keeping the last ${retentionNum} finished worktree${retentionNum === 1 ? '' : 's'} on disk.`}
           </p>
         )}

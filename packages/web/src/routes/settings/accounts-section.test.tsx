@@ -588,8 +588,15 @@ describe('the global Agents section', () => {
     await waitFor(() => expect(head.querySelector('[data-slot="agent-installed"]')?.textContent).toBe('CLI installed'))
     expect(head.querySelector('[data-slot="account-status"]')).toBeNull()
     const line = row.querySelector('.settings-account-meta-line')!
-    expect(line.querySelector('[data-slot="account-status"]')).not.toBeNull()
-    expect(line.querySelector('[data-slot="account-missing"]')!.textContent).toBe('Not initialized')
+    // ONE readiness state: a green "Connected" beside "Not initialized" contradicted itself, so the
+    // folder's state takes the line and the sign-in state moves to the tooltip.
+    const missing = line.querySelector('[data-slot="account-missing"]')!
+    expect(missing.textContent).toBe('Not initialized')
+    expect(line.querySelector('[data-slot="account-status"]')).toBeNull()
+    expect(line.textContent).not.toContain('Connected')
+    expect(missing.parentElement?.getAttribute('title')).toBe('Sign-in: Connected')
+    // The status dot separates the name from the state; no middle dot sits between them.
+    expect(line.textContent).not.toContain('·')
     expect(row.querySelector('[data-slot="account-folder-guidance"]')).not.toBeNull()
   })
 
@@ -727,6 +734,8 @@ describe('the global Agents section', () => {
       expect(document.querySelector('[data-slot="agent-version"]')?.textContent).toBe('2.1.220'),
     )
     expect(document.querySelector('[data-slot="agent-installed"]')?.textContent).toBe('CLI installed')
+    // A middle dot, not parentheses: a version such as "mock (HSQ_DRY_RUN=1)" brings its own.
+    expect(document.querySelector('[data-slot="agent-installed"]')?.parentElement?.textContent).toBe('CLI installed·, version 2.1.220')
   })
 
   it('names the install command for an agent that is not on this machine', async () => {

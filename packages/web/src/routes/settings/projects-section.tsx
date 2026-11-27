@@ -360,15 +360,18 @@ function ProjectRow({
         </span>
       </th>
       <td className="px-3 py-2">
-        <span
-          data-slot="project-status"
-          className={project.status === 'missing' ? 'text-[12px] text-danger' : 'text-[12px] text-soft-foreground'}
-        >
-          {STATUS_LABEL[project.status]}
+        {/* A compact pill, not a bordered box: a full-width frame around "ok · local" read as a text field. */}
+        <span data-slot="project-status-pill" className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-0.5 text-[12px] leading-5">
+          <span data-slot="project-status" className={project.status === 'missing' ? 'text-danger' : 'text-foreground'}>
+            {STATUS_LABEL[project.status]}
+          </span>
+          {project.status !== 'missing' ? (
+            <>
+              <span aria-hidden="true" className="text-soft-foreground">·</span>
+              <span className="text-soft-foreground">{project.source}</span>
+            </>
+          ) : null}
         </span>
-        {project.status !== 'missing' ? (
-          <span className="ml-1 text-[11px] text-soft-foreground">· {project.source}</span>
-        ) : null}
       </td>
       <td className="px-3 py-2">
         <ProjectTagsEditor project={project} vocabulary={vocabulary} />

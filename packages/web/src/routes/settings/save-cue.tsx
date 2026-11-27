@@ -21,7 +21,7 @@ export function SaveCue({ show }: { show: boolean }) {
  */
 export function SaveRow({ show, children }: { show: boolean; children: ReactNode }) {
   return (
-    <span data-slot="settings-save-row" className="inline-flex shrink-0 items-center gap-3">
+    <span data-slot="settings-save-row" className="inline-flex shrink-0 items-center gap-3 [&>*]:m-0">
       {children}
       <SaveCue show={show} />
     </span>

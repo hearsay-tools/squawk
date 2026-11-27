@@ -139,14 +139,17 @@
 .settings-route [data-slot=project-general] { gap: 20px; }
 .settings-route [data-slot=project-general] > section { padding: 20px; border-radius: 10px; }
 .settings-route [data-slot=project-general] [data-slot=project-facts] { border-block-end: 1px solid var(--border); padding-block-end: 16px; }
+/* A wrapped Save row gets its distance from the row gap. A top margin on the button pushed it below
+   the "No unsaved changes" cue's centre line. */
 .settings-panel [data-slot=projects-section] .settings-field:has([data-slot=projects-browse-root]) > div:nth-child(2),
-.settings-panel [data-slot=projects-section] .settings-field:has([data-slot=projects-checkout-root]) > div:nth-child(2) { flex-wrap: wrap; }
-.settings-panel [data-slot=projects-section] .settings-field:has([data-slot=projects-browse-root]) button,
-.settings-panel [data-slot=projects-section] .settings-field:has([data-slot=projects-checkout-root]) button { margin-block-start: 8px; }
+.settings-panel [data-slot=projects-section] .settings-field:has([data-slot=projects-checkout-root]) > div:nth-child(2) { flex-wrap: wrap; row-gap: 8px; }
+/* Every Save button and its cue share one vertical centre: no margin on either side of the row. */
+.settings-panel [data-slot=settings-save-row] { align-items: center; }
+.settings-panel [data-slot=settings-save-row] > * { margin: 0; }
 .settings-panel [data-slot=projects-section] .overflow-x-auto { border: 0; }
 .settings-panel :is([data-slot=project-row],[data-slot=worktree-row]) > :is(th,td) { padding-inline-start: 0; padding-inline-end: 0; }
 .settings-panel :is([data-slot=project-row],[data-slot=worktree-row]) > th { font-size: 14px; }
-.settings-panel :is([data-slot=project-row],[data-slot=worktree-row]) > td:nth-child(2) { padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); }
+
 .settings-panel :is([data-slot=project-row],[data-slot=worktree-row]) > td:last-child { margin-block-start: 8px; padding-block-start: 20px; }
 @media (max-width: 767px) {
   .settings-panel [data-slot=accounts-defaults] label { flex-direction: column; align-items: stretch; }
@@ -270,13 +273,10 @@
 .settings-agent-accounts { display: flex; flex-direction: column; }
 .settings-account-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-inline: 16px; padding-block: 8px 12px; border-block-start: 1px solid var(--border); }
 .settings-account-readout { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
-.settings-account-meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; font-size: 12px; color: var(--muted-foreground); }
+.settings-account-meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; min-width: 0; font-size: 12px; color: var(--muted-foreground); }
 .settings-account-label { font-size: 13px; font-weight: 500; color: var(--foreground); }
 .settings-account-path { font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--muted-foreground); overflow-wrap: anywhere; }
 .settings-account-hint { font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
-/* Folder readiness beside the login state: a quiet outlined pill, never a status colour, because a
-   folder the CLI has not created yet is a normal first-run state, not a fault. */
-.settings-account-pill { display: inline-flex; align-items: center; min-height: 20px; padding-inline: 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--muted); font-size: 11px; font-weight: 500; line-height: 1; color: var(--foreground); white-space: nowrap; }
 .settings-account-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-inline: 16px; padding-block: 10px 12px; border-block-start: 1px solid var(--border); }
 .settings-agent-note { margin-inline: 16px; padding-block: 8px 12px; border-block-start: 1px solid var(--border); font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
 .settings-agent-card > section[aria-label="CLI installation"] { margin-inline: 16px; padding-block: 8px 12px; border-block-start: 1px solid var(--border); }

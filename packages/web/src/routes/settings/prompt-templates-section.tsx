@@ -164,7 +164,8 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                     value={template.label}
                     maxLength={80}
                     onChange={(event) => updateTemplate(template.id, { label: event.target.value })}
-                    className="flex-1"
+                    // The label and the instructions share one border and fill, so they read as one form pair.
+                    className="flex-1 border-control-border bg-background"
                   />
 
                 </div>
@@ -176,7 +177,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
                   value={template.text}
                   maxLength={2000}
                   onChange={(event) => updateTemplate(template.id, { text: event.target.value })}
-                  className="min-h-14 rounded-md border border-border bg-background text-[13px]"
+                  className="min-h-14 rounded-md border border-control-border bg-background text-[13px]"
                 />
                 <p className="text-sm">Apply automatically with skills</p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
@@ -235,6 +236,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
             value={newLabel}
             maxLength={80}
             onChange={(event) => setNewLabel(event.target.value)}
+            className="border-control-border bg-background"
           />
           <label htmlFor="new-template-text" className="text-sm">Instructions to insert</label>
           <Textarea
@@ -245,7 +247,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
             value={newText}
             maxLength={2000}
             onChange={(event) => setNewText(event.target.value)}
-            className="min-h-14 rounded-md border border-border bg-background text-[13px]"
+            className="min-h-14 rounded-md border border-control-border bg-background text-[13px]"
           />
           <Button
             type="button"

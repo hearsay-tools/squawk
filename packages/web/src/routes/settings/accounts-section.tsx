@@ -254,7 +254,8 @@ function InstallReadout({ entry, check }: { entry: RunnerEntry; check: BackendCh
   return (
     <span className="whitespace-nowrap">
       <span data-slot="agent-installed">CLI installed</span>
-      {check.version ? <> <span className="text-soft-foreground">(<span data-slot="agent-version">{check.version}</span>)</span></> : null}
+      {/* A middle dot, never parentheses: a version can carry its own, as in "mock (HSQ_DRY_RUN=1)". */}
+      {check.version ? <><span aria-hidden="true" className="settings-agent-summary-sep">·</span><span className="sr-only">, version </span><span data-slot="agent-version" className="text-soft-foreground">{check.version}</span></> : null}
     </span>
   )
 }
@@ -552,15 +553,16 @@ function AccountSignIn({ account, runners, status, editable }: {
   </>
 }
 
-/** The account folder's readiness, apart from its login: a pill on the status line and one
- *  line of guidance under the path. `null` when the folder is ready or not needed. */
+/** The account folder's readiness: when the folder is missing or unrecognised, its label replaces
+ *  the login state on the status line, and one line of guidance sits under the path. `null` when
+ *  the folder is ready or not needed. */
 function folderAdvisory(account: AgentProfile, runners: RunnersResponse, status: AgentProfile['status'], editable: boolean):
-  { slot: 'account-missing' | 'account-unrecognised'; pill: string; guidance: string } | null {
+  { slot: 'account-missing' | 'account-unrecognised'; label: string; guidance: string } | null {
   if (!status || status.requiresAccountHome === false) return null
   if (!account.exists) {
     return {
       slot: 'account-missing',
-      pill: 'Not initialized',
+      label: 'Not initialized',
       guidance: editable
         ? status.status === 'connected'
           ? 'Folder not created yet. Use Check again to refresh.'
@@ -571,7 +573,7 @@ function folderAdvisory(account: AgentProfile, runners: RunnersResponse, status:
   if (!account.looksValid && account.configDir) {
     return {
       slot: 'account-unrecognised',
-      pill: 'Unrecognized folder',
+      label: 'Unrecognized folder',
       guidance: `This folder does not look like ${canonicalRunnerName(account.provider, runnerDisplayName(runners, account.provider))} config yet.`,
     }
   }
@@ -592,10 +594,19 @@ function AccountRow({ account, runners, editable, onRemove, agent }: {
   const probed = useAgentAccountStatus(routeId, account.status === undefined)
   const status = account.status ?? probed.data?.status
   const presentation = status ? STATUS_PRESENTATION[status.status] : undefined
+  const advisory = folderAdvisory(account, runners, status, editable)
 
+  // ONE readiness state per account. A folder that is missing or unrecognised is the state that
+  // matters: a green "Connected" beside "Not initialized" contradicted itself, so the folder's label
+  // takes the line with an amber dot, and the sign-in state moves to the tooltip.
   // "Checking…" is a real, distinct state from any probe RESULT: the answer is not in yet.
   // Showing `unknown` here would claim a verification that never ran.
-  const statusReadout = (
+  const statusReadout = advisory ? (
+    <span className="inline-flex items-center gap-1.5" title={presentation ? `Sign-in: ${presentation.label}` : undefined}>
+      <StatusDot tone="pending" />
+      <span data-slot={advisory.slot} className="text-foreground">{advisory.label}</span>
+    </span>
+  ) : (
     <span className="inline-flex items-center gap-1.5">
       <StatusDot tone={presentation?.tone ?? 'neutral'} pulse={presentation === undefined} />
       <span data-slot="account-status" className="text-foreground">{presentation?.label ?? 'Checking…'}</span>
@@ -636,25 +647,20 @@ function AccountRow({ account, runners, editable, onRemove, agent }: {
       {shortPath(account.configDir)}
     </span>
   ) : null
-  const advisory = folderAdvisory(account, runners, status, editable)
-  const pill = advisory ? (
-    <span data-slot={advisory.slot} className="settings-account-pill">{advisory.pill}</span>
-  ) : null
   const guidance = advisory ? (
     <p data-slot="account-folder-guidance" className="settings-account-hint">{advisory.guidance}</p>
   ) : null
   const hint = status?.hint ? <p className="settings-account-hint">{status.hint}</p> : null
   const manage = editable && !account.isDefault ? <AccountManagement account={account} onRemove={onRemove} /> : null
-  // Every account line reads the same way: which login and its sign-in state, the folder's
-  // readiness as a pill, then the folder on its own line and what to do about it. The login state
-  // lives here, never in the card's top row, which describes the CLI alone.
+  // Every account line reads the same way: which login and its one readiness state, then the
+  // folder on its own line and what to do about it. The login state lives here, never in the
+  // card's top row, which describes the CLI alone. The status dot already separates the name from
+  // the state, so no middle dot sits between them.
   const readout = (
     <div className="settings-account-readout">
       <div className="settings-account-meta-line">
         {name}
-        <span aria-hidden="true" className="settings-agent-summary-sep">·</span>
         {statusReadout}
-        {pill}
       </div>
       {path}
       {guidance}

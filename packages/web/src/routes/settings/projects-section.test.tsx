@@ -219,6 +219,8 @@ describe('Global settings → Projects', () => {
     await waitFor(() => expect(rows()).toHaveLength(3))
     expect(row('shop-backend')?.textContent).toContain('/home/piotr/cezar/projects/shop-backend')
     expect(row('shop-backend')?.textContent).toContain('checkout')
+    // Status and source sit in one compact pill, not a bordered box that reads as a text field.
+    expect(row('shop-backend')?.querySelector('[data-slot="project-status-pill"]')?.textContent).toBe('ok·checkout')
     // The `missing` row (step 3.3 greys it out in the sidebar) is actionable HERE.
     expect(row('old-spike')?.textContent).toContain('folder not found')
     expect(removeButton('old-spike')?.disabled).toBe(false)

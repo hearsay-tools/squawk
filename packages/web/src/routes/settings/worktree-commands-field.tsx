@@ -160,13 +160,13 @@ export function WorktreeCommandsField({ config, copy }: { config: ConfigResponse
           readOnly={!editable}
           disabled={save.isPending}
           onChange={(event) => setText(event.target.value)}
-          className={`${control} min-h-24 w-full resize-y font-mono text-[13px] leading-relaxed`}
+          className={`${control} field-sizing-content min-h-24 max-h-[min(24rem,60dvh)] w-full resize-none overflow-y-auto font-mono text-[13px] leading-relaxed`}
         />
-        <p className="text-xs text-soft-foreground">
+        <p className="text-xs text-muted-foreground">
           Example only: <code>{copy.example}</code>. Commands run only after they are saved.
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-xs text-soft-foreground">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Timeout per command</span>
             <input
               type="number"

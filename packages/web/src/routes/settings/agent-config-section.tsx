@@ -40,7 +40,7 @@ function effectLabel(file: AgentConfigFile): string {
 
 export function AgentConfigSection() {
   const listing = useAgentConfig()
-  useSettingsAdminRefresh()
+  const refreshSettingsAdmin = useSettingsAdminRefresh()
   const health = useHealth()
   const runnersQuery = useRunners()
   const registered = runnersQuery.data
@@ -80,24 +80,32 @@ export function AgentConfigSection() {
       </p>
     )
   }
-  return <AgentConfigView listing={listing.data} descriptors={descriptors} installed={installed} />
+  return <AgentConfigView listing={listing.data} descriptors={descriptors} installed={installed} onOpenFile={refreshSettingsAdmin} />
 }
 
 function AgentConfigView({
   listing,
   descriptors,
   installed,
+  onOpenFile,
 }: {
   listing: AgentConfigListing
   descriptors: readonly AgentDescriptor[]
   installed: Runner[]
+  /** Re-reads the host's edit grant: the first file opens on load, so a click no longer mounts the
+   *  editor that used to re-read it. */
+  onOpenFile: () => Promise<void>
 }) {
   const [agentId, setAgentId] = useState<Runner>('claude')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // A saved or default agent id that no runner registered falls back to the first pane.
   const agent = descriptors.find((d) => d.id === agentId) ?? descriptors[0]
   if (agent === undefined) return null
-  const selected = listing.files.find((f) => f.id === selectedId) ?? null
+  // With nothing picked yet, the agent's first file opens, so the editor column always shows a file
+  // pane instead of a one-line hint over an empty column. A pick that left the agent's files falls
+  // back the same way.
+  const agentFiles = agentFileList(agent, listing)
+  const selected = agentFiles.find((f) => f.id === selectedId) ?? agentFiles[0] ?? null
 
   const pickAgent = (id: Runner) => {
     setAgentId(id)
@@ -154,22 +162,43 @@ function AgentConfigView({
 
       <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(17rem,24rem)_minmax(0,1fr)]">
         <nav data-slot="agent-config-nav" className="flex min-w-0 flex-col gap-5">
-          <AgentPane agent={agent} listing={listing} selectedId={selectedId} onSelect={setSelectedId} />
+          <AgentPane agent={agent} listing={listing} selectedId={selected?.id ?? null} onSelect={(id) => {
+            setSelectedId(id)
+            void onOpenFile()
+          }} />
         </nav>
         <div data-slot="agent-config-editor-pane" className="min-w-0">
           {selected ? (
             <FileEditor key={selected.id} file={selected} />
           ) : (
-            // A short note at the top of the editor column, not a full-height dashed box: before a
-            // file is chosen the column has nothing to show, and a tall empty frame read as a void.
+            // Only an agent with no files at all gets here: a short note, not a full-height empty frame.
             <p data-slot="agent-config-editor-empty" className="rounded-md border border-border bg-muted/40 px-4 py-3 text-[13px] text-soft-foreground">
-              Select a config file to view or edit it.
+              This agent has no config files to show.
             </p>
           )}
         </div>
       </div>
     </div>
   )
+}
+
+/** The agent's files in pane order. A file two groups list appears twice; only the first counts. */
+function agentFileList(agent: AgentDescriptor, listing: AgentConfigListing): AgentConfigFile[] {
+  return agent.groups.flatMap((g) => listing.files.filter(g.files))
+}
+
+/** The home folder as `~`. The server sends Claude's state file as an absolute path, while the file
+ *  labels already use `~/`: a user-scope file whose label starts with `~/` gives the home folder,
+ *  so both read the same way even when the server's home is not under /home or /Users. */
+function homeShortPath(path: string, files: readonly AgentConfigFile[]): string {
+  for (const file of files) {
+    if (!file.label.startsWith('~/')) continue
+    const rest = file.label.slice(1)
+    if (!file.path.endsWith(rest)) continue
+    const home = file.path.slice(0, file.path.length - rest.length)
+    if (home && (path === home || path.startsWith(`${home}/`))) return `~${path.slice(home.length)}`
+  }
+  return path.replace(/^\/(?:home|Users)\/[^/]+(?=\/|$)/, '~')
 }
 
 function AgentPane({
@@ -236,7 +265,7 @@ function AgentPane({
                 </li>
               ))}
             </ul>
-            {userMcp && <UserMcpBlock userMcp={userMcp} />}
+            {userMcp && <UserMcpBlock userMcp={userMcp} path={homeShortPath(userMcp.path, listing.files)} />}
           </section>
         )
       })}
@@ -246,13 +275,15 @@ function AgentPane({
 
 /** Claude's user/local MCP scopes live in ~/.claude.json (Claude's own state
  *  file) — listed read-only; Squawk never edits it. */
-function UserMcpBlock({ userMcp }: { userMcp: NonNullable<AgentConfigListing['userMcp']> }) {
+function UserMcpBlock({ userMcp, path }: { userMcp: NonNullable<AgentConfigListing['userMcp']>; path: string }) {
   return (
     <div data-slot="agent-config-user-mcp" className="mt-3">
       <h4 className="mb-1 text-[12px] font-semibold">User &amp; local scopes</h4>
       <p className="mb-2 text-[12px] text-soft-foreground">
-        Managed by <code className="font-mono">claude mcp add</code> in {userMcp.path} — Squawk does not edit
-        Claude’s state file.
+        {/* One unbroken code span: a wrap inside the command split it into a code half and a prose half. */}
+        Managed by <code data-slot="agent-config-user-mcp-command" className="whitespace-nowrap font-mono">claude mcp add</code> in{' '}
+        <code data-slot="agent-config-user-mcp-path" title={userMcp.path} className="break-all font-mono">{path}</code> — Squawk
+        does not edit Claude’s state file.
       </p>
       {userMcp.readable ? (
         userMcp.servers.length > 0 ? (
