@@ -12,6 +12,7 @@ import { useConfig, useRepo, useUiState, useWorkspaceConfig } from '@/api/querie
 import { useRunners } from '@/api/runners'
 import type { ProjectListEntry, WorkflowDef } from '@open-mercato/cezar-api-client'
 import { Composer, type ComposerHandle } from '@/components/composer/composer'
+import { FormPage } from '@/components/page-shell'
 import { chevron, chipClass } from '@/components/picker-pill'
 import { PromptTemplateMenu } from '@/components/prompt-template-menu'
 import { SkillPreviewDialog } from '@/components/skill-detail'
@@ -59,7 +60,7 @@ import {
   AgentOptions,
   ComposerFooterEnd,
   ExecutionSettings,
-  NewTaskHeader,
+  NewTaskQuickPrompts,
 } from './new-task-sections'
 import { PlanReview } from './plan-review'
 import './new-task.css'
@@ -157,17 +158,25 @@ export function NewTaskRoute() {
   const mode = draft.planFirst ? COMPOSER_MODE.plan : COMPOSER_MODE.start
   const unavailableReason = providerUnavailableReason(providers)
 
+  const isSparseDraft = plan === null && draft.text.trim() === ''
+  const showStartHint = providersReady && !starting && draft.text.trim() === ''
+
   return (
-    <div
-      data-route="new"
-      data-plan-review={plan !== null ? 'true' : undefined}
-      className="relative isolate flex min-h-full flex-col overflow-x-clip pb-16"
+    <FormPage
+      route="new"
+      density={isSparseDraft ? 'sparse' : 'full'}
+      rootProps={{ 'data-plan-review': plan !== null ? 'true' : undefined }}
+      className="relative isolate overflow-x-clip pb-16"
+      header={newTaskHeader(plan !== null)}
+      sparseFooter={newTaskSparseFooter(isSparseDraft, templates, composerRef)}
     >
-
-      <div data-slot="new-task-layout" data-persisted-draft={persisted || undefined} ref={draftPanelRef} style={plan !== null ? { display: 'none' } : undefined} className="relative z-[1] mx-auto w-full max-w-none px-4 md:px-9 pt-7">
-        <NewTaskHeader />
-
-
+      <div
+        data-slot="new-task-layout"
+        data-persisted-draft={persisted || undefined}
+        ref={draftPanelRef}
+        style={plan !== null ? { display: 'none' } : undefined}
+        className="relative z-[1] w-full"
+      >
         <Composer
           ref={composerRef}
           onSubmit={submit}
@@ -178,7 +187,7 @@ export function NewTaskRoute() {
             // Two lines at most: what Start does (or what it still needs), then where the run lands.
             <div data-slot="new-task-idle-feedback" className="flex flex-col gap-1">
               <div data-slot="new-task-mode-note" className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                {providersReady && !starting && draft.text.trim() === '' ? (
+                {showStartHint ? (
                   <span data-slot="new-task-start-hint">Describe a task above to start.</span>
                 ) : (
                   <span>{mode.note}</span>
@@ -268,7 +277,38 @@ export function NewTaskRoute() {
           }}
         />
       ) : null}
-    </div>
+    </FormPage>
+  )
+}
+
+function newTaskHeader(reviewingPlan: boolean) {
+  if (reviewingPlan) {
+    return {
+      title: 'New task / Plan first',
+      subtitle: 'Review the proposed chain before launching.',
+      headerSlot: 'plan-page-header',
+      hideSubtitleOnMobile: true,
+    }
+  }
+  return {
+    title: 'What should the agent work on?',
+    subtitle: 'Describe the outcome, then configure the run.',
+    subtitleSlot: 'page-description',
+    hideSubtitleOnMobile: true,
+  }
+}
+
+function newTaskSparseFooter(
+  isSparseDraft: boolean,
+  templates: readonly PromptTemplate[],
+  composerRef: { current: ComposerHandle | null },
+) {
+  if (!isSparseDraft) return undefined
+  return (
+    <NewTaskQuickPrompts
+      templates={templates}
+      onInsert={(text) => composerRef.current?.insertAtCaret(text)}
+    />
   )
 }
 

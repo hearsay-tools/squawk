@@ -449,6 +449,10 @@ are stable.
    the turn blocked. Each native ask kind that a human can answer needs an entry in
    `askResumeCases`. Prove the Squawk tools as
    [Waits](#ci-wait-tool-contract-474) requires.
+   Shared parity cells select a runner from its declared facts, mock metadata and wire reader rather than its id (`hearsay-tools/squawk#3998`):
+   - `facts.ts`: `transport` (`http` selects S25, F7, R44/R45, server-fatal diagnostics, durable-input owned cells, restricted-session checks and HTTP delivery-control cells), `turnStart` (`on-wire` selects F11; `on-write` vs later drives S37), `inputDelivery` (S12, S36, S40/S41, H2, I1/I2), `systemPromptOnResume` (S42, R53–R56, `freshSession`), `nativeAsk` (S11, R4, A9, U7h), `nativePermission` (P1–P8), `nativeSubagents` (`waits-subagents`), `childWork` (S9, R12, R15), `hookEvents` (R77, UI2), `humanPromptHold` (`humanPromptReadReleases`), `shutdownDescendants` (S27–S31), `nativeTimerTool` (U7).
+   - `mock.ts`: `sessionStore` (seeds known sessions on resume, drives `lostSession` and HTTP restricted-session cells), `resumeSessionId` (pins the mock's resumed session id in S14/S42/S44), `defaultToolsBypassAllowlist` (adds the `step-default`/`empty` tool-admission cells in R35 and U0), `implicitAutoResume` (runs S21 live), `promptResponseEndsTurn` (ACP turn-completion ACK behavior), `toolGrantObservation` (`permission-policy` probe mode), `nativeAskScenario` (scenario for S11).
+   - `session-wire.testkit.ts`: `resumed`, `freshSessions`, `started`, `prompts`, `systemPrompts`, `skillTriggers`, `expectSkillTrigger`, `expectCiWire`, `expectSquawkToolAdmission`, and `expectGovernedWire` (required when not exempt from D1).
 9. **Plumbing** — the `configFiles` part (`config-files.ts`) holds the native files that
    Settings → Agent config shows and the runner's `agentConfig` pane. The `cli` part's
    `openTarget` is the runner's "Open in" menu entry (label and icon key); the menu takes the

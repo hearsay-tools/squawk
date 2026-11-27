@@ -11,6 +11,7 @@ import { queryKeys, useGithubChecks, useGithubItem, useHealth, useProjectRepoBas
 import type { ApiRun, GithubItem } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { GithubItemDetail } from '@/components/github-item-detail'
+import { ReadingPage } from '@/components/page-shell'
 import { Button } from '@/components/ui/button'
 import { taskItemTabs, taskReferences } from '@/lib/tasks-table'
 import { isHttpUrl } from '@/lib/utils'
@@ -55,7 +56,7 @@ function ItemView({ run, kind }: { run: ApiRun; kind: 'issue' | 'pr' }) {
   const item = useGithubItem(kind, number, linked)
 
   return (
-    <div data-route="task-github-item" className="flex min-h-full flex-col">
+    <ReadingPage route="task-github-item" density={linked ? 'full' : 'empty'} flushPadding>
       <RunHeader run={run} tab={{ kind, number }} />
       {linked ? (
         <ItemBody run={run} kind={kind} number={number} repoBase={repoBase} item={item} />
@@ -75,7 +76,7 @@ function ItemView({ run, kind }: { run: ApiRun; kind: 'issue' | 'pr' }) {
           }
         />
       )}
-    </div>
+    </ReadingPage>
   )
 }
 

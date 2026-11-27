@@ -27,6 +27,7 @@ import { ApiError, createWorkflow, deleteWorkflow, parseWorkflow, postPlan } fro
 import { queryKeys, useRunnerSkills, useUiState, useWorkflows } from '@/api/queries'
 import type { WorkflowDef, WorkflowStepDef } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
+import { PageShellActionButton, SplitPage, pageShellDensity } from '@/components/page-shell'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { orderSkillsByUsage, searchSkills } from '@/lib/skills'
@@ -229,17 +230,14 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
 
   if (workflowsQuery.isError) {
     return (
-      <div
-        data-route="workflows"
-        className="@container min-h-full w-full px-4 pt-7 pb-9 md:px-9"
-      >
+      <SplitPage route="workflows" density="empty" className="@container">
         <CenteredState
           icon={<TriangleAlertIcon />}
           tone="danger"
           title="Could not load workflows"
           subtitle={workflowsQuery.error.message}
         />
-      </div>
+      </SplitPage>
     )
   }
   if (draft === null) return <WorkflowsLoading />
@@ -326,48 +324,44 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
   }
 
   return (
-    <div
-      data-route="workflows"
-      className="@container min-h-full w-full px-4 pt-7 pb-9 md:px-9"
-    >
-      <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-[26px] font-semibold tracking-tight leading-[1.2] text-foreground md:text-[28px]">Workflows</h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Portable skill chains. Steps run from top to bottom.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
+    <SplitPage
+      route="workflows"
+      density={pageShellDensity(steps.length)}
+      className="@container"
+      header={{
+        title: 'Workflows',
+        subtitle: 'Portable skill chains. Steps run from top to bottom.',
+        status: unchanged ? (
+          <span id={saveCueId} data-slot="wb-save-cue" className="whitespace-nowrap text-xs text-muted-foreground">
+            No unsaved changes
+          </span>
+        ) : undefined,
+        secondaryActions: (
+          <PageShellActionButton
             type="button"
             variant="outline"
             data-slot="wb-new"
-            className="min-h-11"
             onClick={() => setDraft(emptyDraft())}
           >
             <PlusIcon aria-hidden="true" className="size-4" />
             New workflow
-          </Button>
-          {/* A greyed Save reads as "not allowed" without a reason; say it is already saved. */}
-          {unchanged ? (
-            <span id={saveCueId} data-slot="wb-save-cue" className="whitespace-nowrap text-xs text-muted-foreground">
-              No unsaved changes
-            </span>
-          ) : null}
-          <Button
+          </PageShellActionButton>
+        ),
+        primaryAction: (
+          <PageShellActionButton
             type="button"
             variant="primary"
             data-slot="wb-save"
-            className="min-h-11"
             disabled={save.isPending || unchanged}
             aria-describedby={unchanged ? saveCueId : undefined}
             onClick={runSave}
           >
             <CheckIcon aria-hidden="true" className="size-4" />
             Save workflow
-          </Button>
-        </div>
-      </header>
+          </PageShellActionButton>
+        ),
+      }}
+    >
 
       <DndContext
         sensors={sensors}
@@ -509,7 +503,7 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
         onOverwrite={() => save.mutate(true)}
         onDelete={() => del.mutate(trimmedName)}
       />
-    </div>
+    </SplitPage>
   )
 }
 

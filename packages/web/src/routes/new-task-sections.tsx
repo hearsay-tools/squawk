@@ -15,6 +15,7 @@ import { TaskAccessControls } from '@/components/task-access-controls'
 import { PickerPill, PickerPillGroup, RunnerPill } from '@/components/picker-pill'
 import { SWITCH_THUMB_COLORS, SWITCH_TRACK_COLORS } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toaster'
+import type { PromptTemplate } from '@/lib/prompt-templates'
 import { submitShortcutHint } from '@/lib/use-submit-shortcut'
 import { webhookLabel, webhookNames, type TaskWebhookTarget } from '@/lib/webhook'
 import { cn } from '@/lib/utils'
@@ -29,17 +30,53 @@ type Engine = ReturnType<typeof useEngineSelection>
 type Accounts = ReturnType<typeof useAccountSelection>
 type DraftUpdate = (patch: Partial<NewTaskDraft>) => void
 
-export function NewTaskHeader() {
-  // The shared page header anatomy (Tasks, All tasks, Activity): the title, then one muted line.
+const STARTER_PROMPTS = [
+  { id: 'fix-bug', label: 'Fix a bug', body: 'Investigate and fix the issue, adding a regression test that reproduces it first.' },
+  { id: 'add-tests', label: 'Add tests', body: 'Add focused unit tests covering the edge cases and verify the suite passes.' },
+  { id: 'review-changes', label: 'Review changes', body: 'Review the recent changes for bugs, edge cases, and missing test coverage.' },
+] as const
+
+/** Compact starter-prompts and saved-templates strip rendered in the Form template's sparse state
+ *  when the composer draft is empty (hearsay-tools/squawk#4373). */
+export function NewTaskQuickPrompts({
+  templates,
+  onInsert,
+}: {
+  templates: readonly PromptTemplate[]
+  onInsert: (text: string) => void
+}) {
+  const items = templates.length > 0
+    ? templates.slice(0, 4).map((template) => ({
+        id: template.id,
+        label: template.label,
+        body: template.text,
+      }))
+    : STARTER_PROMPTS
+  const heading = templates.length > 0 ? 'Saved templates' : 'Quick start prompts'
   return (
-    <header data-slot="page-header" className="mb-6 flex flex-col gap-1 max-md:mb-4">
-      <h1 className="text-[24px] leading-[1.2] font-semibold tracking-tight text-foreground md:text-[28px]">
-        What should the agent work on?
-      </h1>
-      <p data-slot="page-description" className="text-[13px] text-muted-foreground max-md:hidden">
-        Describe the outcome, then configure the run.
-      </p>
-    </header>
+    <section
+      data-slot="new-task-quick-prompts"
+      aria-label={heading}
+      className="mt-5 flex flex-col gap-2.5 rounded-xl border border-border bg-card p-4"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-xs font-semibold text-foreground">{heading}</h2>
+        <span className="text-xs text-muted-foreground">Insert a starting prompt into the composer</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            data-slot="new-task-quick-prompt"
+            onClick={() => onInsert(item.body)}
+            className="inline-flex min-h-9 max-md:min-h-11 no-hover:min-h-11 items-center rounded-lg border border-border bg-background px-3 py-1.5 text-left text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </section>
   )
 }
 

@@ -1,6 +1,7 @@
 import { LoaderCircleIcon } from 'lucide-react'
 
 import { CenteredState } from '@/components/centered-state'
+import { ReadingPage } from '@/components/page-shell'
 
 const KIND_WORD = { issue: 'issue', pr: 'pull request' } as const
 
@@ -34,8 +35,8 @@ export function TaskGithubItemLoading({
   )
   if (heading === 'h2') return state
   return (
-    <div data-route="task-github-item" className="flex min-h-full flex-col">
+    <ReadingPage route="task-github-item" density="sparse" flushPadding>
       {state}
-    </div>
+    </ReadingPage>
   )
 }

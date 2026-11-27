@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 
 import type { ProjectsResponse } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
+import { ReadingPage } from '@/components/page-shell'
 
 /**
  * `/p/<unknown>/…` (multi-project spec, step 3.2): a deep link to a project this server has
@@ -27,7 +28,7 @@ export function UnknownProjectRoute({
     : [{ id: registry.bootProject, name: registry.bootProject }]
 
   return (
-    <div data-route="unknown-project" className="flex min-h-full flex-col">
+    <ReadingPage route="unknown-project" density="empty">
       <CenteredState
         icon={<FolderSearchIcon />}
         tone="neutral"
@@ -48,6 +49,6 @@ export function UnknownProjectRoute({
           ))}
         </ul>
       </CenteredState>
-    </div>
+    </ReadingPage>
   )
 }

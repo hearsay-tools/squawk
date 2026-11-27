@@ -50,7 +50,7 @@ export function RepoChangesSection() {
   return (
     <section data-slot="repo-changes" className="flex min-h-0 flex-1 flex-col">
       {changes.isPending ? (
-        <p data-slot="changes-loading" className="px-4 py-6 text-center text-xs text-muted-foreground md:px-9">
+        <p data-slot="changes-loading" className="py-6 text-center text-xs text-muted-foreground">
           Loading changes…
         </p>
       ) : changes.isError ? (
@@ -73,7 +73,7 @@ export function RepoChangesSection() {
         <>
           {/* Full width above both columns, like the task Changes toolbar: the Changed files card
               and the first diff card then start on one baseline. */}
-          <div data-slot="repo-changes-toolbar" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 pb-4 md:px-9 [&_button]:min-h-11">
+          <div data-slot="repo-changes-toolbar" className="flex flex-wrap items-center gap-x-3 gap-y-2 pb-4 [&_button]:min-h-11">
             {changes.data ? <AnimatedDiffStat stat={changes.data.stat} /> : null}
             <span className="ml-auto flex items-center gap-2">
               {/* Every width, like the task toolbar's — see `MarkdownPreviewToggle`. */}
@@ -85,7 +85,7 @@ export function RepoChangesSection() {
               </span>
             </span>
           </div>
-          <div className="flex min-h-0 flex-1 flex-col items-stretch gap-5 px-4 pb-9 pt-0 [--diff-sticky-top:1rem] md:flex-row md:items-start md:px-9">
+          <div className="flex min-h-0 flex-1 flex-col items-stretch gap-5 [--diff-sticky-top:1rem] md:flex-row md:items-start">
             {/* Same deal as the task Changes tab: sticky AND its own scroller, so a long file list
                 never has to drag the diff to the bottom to show its last row. */}
             <aside

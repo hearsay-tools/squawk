@@ -76,7 +76,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
   }
 
   return (
-    <section data-slot="repo-branches" className="grid min-w-0 grid-cols-1 gap-5 px-4 pt-0 pb-9 md:grid-cols-[minmax(0,1fr)_290px] md:px-9">
+    <section data-slot="repo-branches" className="grid min-w-0 grid-cols-1 gap-5 md:grid-cols-[minmax(0,1fr)_290px]">
       <div className="min-w-0 rounded-xl border border-border bg-card p-5">
         <h2 className="sr-only">Branches</h2>
         <label className="relative block">

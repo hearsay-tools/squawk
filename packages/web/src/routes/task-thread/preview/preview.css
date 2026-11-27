@@ -54,7 +54,9 @@
   }
 }
 [data-slot='task-main'][data-collapsed] [data-route] { min-height: 0; }
-[data-slot='task-main'][data-collapsed] [data-route] > :not([data-slot='run-header']) { display: none; }
+[data-slot='task-main'][data-collapsed] [data-route] > :not([data-slot='run-header']):not([data-slot='page-shell-frame']),
+[data-slot='task-main'][data-collapsed] [data-route] > [data-slot='page-shell-frame'] > :not([data-slot='page-shell-body']),
+[data-slot='task-main'][data-collapsed] [data-route] > [data-slot='page-shell-frame'] > [data-slot='page-shell-body'] > :not([data-slot='run-header']) { display: none; }
 
 /* On a phone the pane is the whole screen, over the shell's top bar and tab bar. */
 @media (max-width: 767px) {

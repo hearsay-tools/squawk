@@ -118,6 +118,15 @@ export interface RunnerMock {
    * `{ seq, sessions: { [id]: { id, title, prompts, permission? } } }`. Absent: the mock resumes any id.
    */
   readonly sessionStore?: { readonly env: string; readonly argsFileSuffix: string };
+  /** Fixed native session id the mock binds its turn events to on resume (e.g. Codex `th_mock_1`).
+   *  Absent: the mock binds to `PINNED_SESSION_ID`. */
+  readonly resumeSessionId?: string;
+  /** True when `step-default` bypasses the CLI allowlist so extension tools stay active (Pi's
+   *  `--no-builtin-tools`). Selects the extra `step-default`/`empty` tool-admission cells. */
+  readonly defaultToolsBypassAllowlist?: true;
+  /** True when the wire can report restored history on a fresh start without `--resume` (OMP's
+   *  `get_state.messageCount` implicit `autoResume`), running S21 live instead of exempt. */
+  readonly implicitAutoResume?: true;
   /**
    * How a resume reaches a session this mock does not hold, so the runner opens a fresh one
    * (`fallback-bootstrap` in `core/runner-skill-trigger.testkit.ts`). `unknown-id`: an id the

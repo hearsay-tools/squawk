@@ -29,6 +29,7 @@ import { runTitle } from '@/lib/task-groups'
 import type { RunSummary } from '@open-mercato/cezar-api-client'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
+import { ReadingPage } from '@/components/page-shell'
 import { RunDiff } from '@/components/run-diff'
 import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
@@ -126,7 +127,7 @@ export function TaskThreadRoute() {
   if (run.isError) {
     const notFound = run.error instanceof ApiError && run.error.status === 404
     return (
-      <div data-route="task-thread" className="flex min-h-full flex-col">
+      <ReadingPage route="task-thread" density="empty" flushPadding>
         <CenteredState
           icon={notFound ? <SearchXIcon /> : <MessageSquareTextIcon />}
           tone={notFound ? 'neutral' : 'danger'}
@@ -142,7 +143,7 @@ export function TaskThreadRoute() {
             </Button>
           }
         />
-      </div>
+      </ReadingPage>
     )
   }
 
@@ -275,7 +276,15 @@ export function ThreadView({
   }
 
   return (
-    <div ref={viewportRef} data-route="task-thread" data-run-id={run.id} className="flex h-full min-h-0 flex-col overflow-clip">
+    <ReadingPage
+      route="task-thread"
+      density={thread.turns.length === 0 ? 'empty' : 'full'}
+      fillHeight
+      flushPadding
+      rootRef={viewportRef}
+      rootProps={{ 'data-run-id': run.id }}
+      className="overflow-clip"
+    >
       <RunHeader
         run={run}
         onMarkedUnread={() => onMarkedUnread?.(run.id)}
@@ -356,7 +365,7 @@ export function ThreadView({
         recipientBackends={recipientBackends}
         onClose={() => setOpenAgentId(undefined)}
       />
-    </div>
+    </ReadingPage>
   )
 }
 

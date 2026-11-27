@@ -2,11 +2,12 @@ import * as React from 'react'
 import { queryScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 
 import { useActivityLive } from '@/api/activity-live'
+import { BoardPage, PageShellSparseFooter, pageShellDensity } from '@/components/page-shell'
 import { Button } from '@/components/ui/button'
 import { useActiveProjectId } from '@/lib/project-router'
 
 import { ActivityBoard } from './activity-board'
-import { ActivityHeader, ScopeSwitch, SummaryChips } from './activity-header'
+import { ActivityQuickLinks, ScopeSwitch, SummaryChips, activityHeaderProps } from './activity-header'
 import { ActivityLoading } from './activity-loading'
 import { projectNotice, summarize } from './activity-model'
 import { useActivityMotion } from './use-activity-motion'
@@ -31,26 +32,51 @@ export function ProjectActivityRoute() {
   const notice = project ? projectNotice(project) : undefined
   if (!project) {
     return (
-      <div data-route="activity" className="min-h-full w-full px-4 pb-6 md:px-9">
-        <ActivityHeader name={projectId ?? 'project'}><ScopeSwitch scope="project" projectId={projectId} /></ActivityHeader>
-        <div role="alert" className="mt-6 flex items-center gap-3 text-[13px] text-muted-foreground">
+      <BoardPage
+        route="activity"
+        density="empty"
+        header={activityHeaderProps({
+          name: projectId ?? 'project',
+          scopeSwitch: <ScopeSwitch scope="project" projectId={projectId} />,
+        })}
+      >
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-5 text-[13px] text-muted-foreground">
           {activity.error ? `Could not load activity: ${activity.error.message}` : 'This project has no activity snapshot.'}
           <Button size="sm" variant="outline" onClick={() => void activity.refetch()} className="max-md:min-h-11">Retry</Button>
         </div>
-      </div>
+      </BoardPage>
     )
   }
+  const density = pageShellDensity(project.tasks.length)
   return (
-    <div data-route="activity" data-activity-paused={paused ? 'true' : undefined} className="flex min-h-full w-full flex-col gap-3.5 px-4 pb-6 md:px-9">
-      <ActivityHeader name={project.name} now={now} updatedAt={activity.data?.generatedAt} stale={activity.isError}>
-        <ScopeSwitch scope="project" projectId={projectId ?? project.projectId} projectName={project.name} />
-      </ActivityHeader>
+    <BoardPage
+      route="activity"
+      density={density}
+      headerSpacing="compact"
+      rootProps={{ 'data-activity-paused': paused ? 'true' : undefined }}
+      bodyClassName="gap-3.5"
+      header={activityHeaderProps({
+        name: project.name,
+        now,
+        updatedAt: activity.data?.generatedAt,
+        stale: activity.isError,
+        scopeSwitch: <ScopeSwitch scope="project" projectId={projectId ?? project.projectId} projectName={project.name} />,
+      })}
+      sparseFooter={
+        !notice && project.tasks.length > 0 ? (
+          <PageShellSparseFooter
+            summary={`${project.tasks.length} active ${project.tasks.length === 1 ? 'task' : 'tasks'} running in ${project.name}. Start more work in parallel or inspect all tasks.`}
+            actions={<ActivityQuickLinks />}
+          />
+        ) : undefined
+      }
+    >
       <SummaryChips summary={summarize([project])} tasksTo="/" bumps={motion.bumps} />
       {notice ? (
-        <p data-slot="activity-project-notice" role="status" className="py-6 text-[13px] text-muted-foreground">{notice}</p>
+        <p data-slot="activity-project-notice" role="status" className="rounded-xl border border-border bg-card p-5 text-[13px] text-muted-foreground">{notice}</p>
       ) : (
         <ActivityBoard project={project} now={now} watchingSince={watchingSince} motion={motion} feed={feed} still={reduced} paused={paused} />
       )}
-    </div>
+    </BoardPage>
   )
 }

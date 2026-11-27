@@ -16,6 +16,7 @@ import { designGuardian } from './design-guardian.ts';
 import { mockLifecycleBoundary } from './mock-lifecycle-boundary.ts';
 import { mockScenarioBoundary } from './mock-scenario-boundary.ts';
 import { nativeMockSource } from './native-mock-source.ts';
+import { pageShellOverride } from './page-shell-override.ts';
 import { rawQuerySetter } from './raw-query-setter.ts';
 import { regexModuleSyntax } from './regex-module-syntax.ts';
 import { runFactReader } from './run-fact-reader.ts';
@@ -42,7 +43,7 @@ import { bundledFeatureImport } from './bundled-feature-import.ts';
 /** The rules that visit oxlint's syntax tree (hearsay-tools/squawk#3774). */
 export const AST_RULES: AstRule[] = [
   probeReleasePort, productEnvRead, homeBoundary, testHomeWrite, card2Contrast, contractRootImport,
-  designGuardian, layerImport, mockLifecycleBoundary, mockScenarioBoundary, nativeMockSource,
+  designGuardian, layerImport, mockLifecycleBoundary, mockScenarioBoundary, nativeMockSource, pageShellOverride,
   parityRunnerSubset, rawQuerySetter, regexModuleSyntax, runFactReader, runHistoryReader, runnerFactCombination,
   runnerIdBranch, runnerRosterLiteral, undocumentedEnvName,
   childKilledRead, runStoreTestkitImport, runnerCoreImport, runnerFolderEscape, bundledFeatureImport, launchReadOutsideResolver,

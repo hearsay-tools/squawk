@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeStableVersion,
+  formatOidcPublishHint,
   isReleaseBump,
   resolveReleaseTarget,
   stampStableManifests,
@@ -142,5 +143,34 @@ describe('resolveReleaseTarget', () => {
   it('refuses a version that is neither stable nor a release candidate', () => {
     expect(resolveReleaseTarget('patch', '0.1.5', { version: '0.1.6-nightly.1' })).toHaveProperty('error');
     expect(resolveReleaseTarget('patch', 'garbage')).toHaveProperty('error');
+  });
+});
+
+describe('formatOidcPublishHint', () => {
+  it('names the package, repository, workflow filename, and environment from GitHub Actions metadata', () => {
+    const hint = formatOidcPublishHint('@hearsay-tools/squawk', '0.19.0-rc.1', {
+      repository: 'hearsay-tools/squawk',
+      workflowRef: 'hearsay-tools/squawk/.github/workflows/release.yml@refs/heads/main',
+    });
+    expect(hint).toContain('@hearsay-tools/squawk@0.19.0-rc.1');
+    expect(hint).toContain('Trusted Publisher');
+    expect(hint).toContain('repository hearsay-tools/squawk');
+    expect(hint).toContain('workflow release.yml');
+    expect(hint).toContain('environment production');
+    expect(hint).toContain('docs/publishing.md#one-time-admin-setup');
+  });
+
+  it('falls back cleanly when repository or workflow ref metadata is absent', () => {
+    const hint = formatOidcPublishHint('@wjarka/cezarion', '0.19.0', {});
+    expect(hint).toContain('@wjarka/cezarion@0.19.0');
+    expect(hint).toContain('it must match workflow release.yml, environment production');
+  });
+
+  it('extracts a custom workflow filename when workflowRef names another file', () => {
+    const hint = formatOidcPublishHint('cezarion', '0.19.0', {
+      repository: 'hearsay-tools/squawk',
+      workflowRef: 'hearsay-tools/squawk/.github/workflows/custom-release.yml@refs/tags/v0.19.0',
+    });
+    expect(hint).toContain('workflow custom-release.yml');
   });
 });

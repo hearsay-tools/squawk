@@ -12,3 +12,8 @@ const MOCK_ROWS = await runnerDataRows<RunnerMock>('mock.ts', id => import(`../r
 export function mockRows(): Readonly<Record<string, RunnerMock>> {
   return MOCK_ROWS;
 }
+
+/** Package-relative mock script paths every built-in runner requires in the release tarball. */
+export function requiredTarballMockPaths(mocks: Readonly<Record<string, RunnerMock>> = mockRows()): string[] {
+  return Object.values(mocks).map(mock => `scripts/${mock.script}`);
+}

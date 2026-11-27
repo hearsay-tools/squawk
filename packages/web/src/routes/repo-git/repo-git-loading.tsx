@@ -3,6 +3,7 @@ import { LoaderCircleIcon } from 'lucide-react'
 import { useLocation } from 'react-router'
 
 import { CenteredState } from '@/components/centered-state'
+import { SplitPage } from '@/components/page-shell'
 
 import { stripProjectPrefix } from '@/lib/project-router'
 
@@ -16,7 +17,7 @@ export function RepoGitLoading() {
   const { pathname, search } = useLocation()
   const back = stripProjectPrefix(pathname) !== '/git' || new URLSearchParams(search).get('view') === 'repo'
   return (
-    <div data-route="repo-git" className="flex min-h-full flex-col">
+    <SplitPage route="repo-git" density="sparse" flushPadding>
       {back ? <RepoBackLink /> : null}
       <CenteredState
         icon={<LoaderCircleIcon className="motion-safe:animate-spin" />}
@@ -24,6 +25,6 @@ export function RepoGitLoading() {
         title="Loading repository…"
         subtitle="Fetching the repo's git state."
       />
-    </div>
+    </SplitPage>
   )
 }
