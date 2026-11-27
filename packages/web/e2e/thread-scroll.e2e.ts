@@ -11,6 +11,7 @@ import { waitForSettledSample } from './visual-ready'
 import { assistantWidthExpression } from './transcript-measurements'
 import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './fixture-server'
 import { AgentBrowser, bootProjectId, squawkCli, fixtureServeEnv } from './agent-browser'
+import { dismissWithEscape } from './contrast'
 import { expectedRowCount, largeThreadEvents } from './fixtures/make-large-thread'
 import recordJson from './fixtures/thread-run.record.json'
 // fixture-server starts: 1
@@ -390,8 +391,7 @@ describe('Activity header popover and ultra-wide sidebar (hearsay-tools/squawk#4
       return { dockTop: Math.round(dock.top), transcriptBottom: Math.round(transcript.bottom) }
     })()`)
     expect(after).toEqual({ dockTop: before.dockTop, transcriptBottom: before.transcriptBottom })
-    browser.press('Escape')
-    browser.waitForFunction(`document.querySelector('[data-slot="run-activity-popover"]') === null`)
+    dismissWithEscape(browser, { content: '[data-slot="run-activity-popover"]', focus: TRIGGER })
     browser.setViewport(1440, 900)
   }, 90_000)
 

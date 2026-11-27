@@ -757,21 +757,23 @@ function NotesPanel({ runId, onClose }: { runId: string; onClose: () => void }) 
   return (
     <div
       data-slot="notes-panel"
-      className="my-5 rounded-xl border border-border bg-card p-6"
+      className="my-5 flex max-h-[min(45dvh,420px)] flex-col overflow-hidden rounded-xl border border-border bg-card p-6"
     >
-      <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-lg font-medium">Notes / handoff</h2><Button variant="ghost" size="icon" aria-label="Close notes" onClick={onClose}><XIcon /></Button></div>
-      {handoff.isPending ? (
-        <p className="text-xs text-soft-foreground">Loading notes…</p>
-      ) : handoff.isError ? (
-        <p className="text-xs text-danger">{handoff.error.message}</p>
-      ) : handoff.data.trim().length > 0 ? (
-        <TaskFileScope runId={runId}><Markdown>{handoff.data}</Markdown></TaskFileScope>
-      ) : (
-        <p className="text-xs text-soft-foreground">
-          No notes yet — the handoff file is seeded when the task starts.
-        </p>
-      )}
-      <div className="mt-4 flex gap-3"><Button variant="outline" disabled={!handoff.data?.trim()} onClick={() => void copyToClipboard(handoff.data ?? '', 'Notes copied')}>Copy notes</Button><Button variant="outline" onClick={onClose}>Close</Button></div>
+      <div className="mb-4 flex shrink-0 items-center justify-between gap-3"><h2 className="text-lg font-medium">Notes / handoff</h2><Button variant="ghost" size="icon" aria-label="Close notes" onClick={onClose}><XIcon /></Button></div>
+      <div data-slot="notes-panel-body" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {handoff.isPending ? (
+          <p className="text-xs text-soft-foreground">Loading notes…</p>
+        ) : handoff.isError ? (
+          <p className="text-xs text-danger">{handoff.error.message}</p>
+        ) : handoff.data.trim().length > 0 ? (
+          <TaskFileScope runId={runId}><Markdown>{handoff.data}</Markdown></TaskFileScope>
+        ) : (
+          <p className="text-xs text-soft-foreground">
+            No notes yet — the handoff file is seeded when the task starts.
+          </p>
+        )}
+      </div>
+      <div className="mt-4 flex shrink-0 gap-3"><Button variant="outline" disabled={!handoff.data?.trim()} onClick={() => void copyToClipboard(handoff.data ?? '', 'Notes copied')}>Copy notes</Button><Button variant="outline" onClick={onClose}>Close</Button></div>
     </div>
   )
 }

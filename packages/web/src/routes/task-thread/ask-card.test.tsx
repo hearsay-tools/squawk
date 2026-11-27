@@ -336,7 +336,7 @@ describe('AskCard — unified decision surface (hearsay-tools/squawk#4374)', () 
     })
   })
 
-  it('opens Show context in a non-destructive sheet with a 44px Close control, restores focus on close, and offers Show where it was asked', () => {
+  it('opens Show context in a non-destructive sheet with a 44px Close control, restores focus on close, and offers Show where it was asked', async () => {
     const onShowOrigin = vi.fn()
     render(withRunners(
       <MemoryRouter>
@@ -359,7 +359,7 @@ describe('AskCard — unified decision surface (hearsay-tools/squawk#4374)', () 
     // Closing via Close restores focus to Show context while preserving selections.
     fireEvent.click(closeBtn)
     expect(screen.queryByRole('region', { name: 'Context' })).toBeNull()
-    expect(document.activeElement).toBe(showContext)
+    await waitFor(() => expect(document.activeElement).toBe(showContext))
     expect(screen.getByRole('button', { name: /date-fns/ }).getAttribute('aria-pressed')).toBe('true')
     // Reopening and choosing Show where it was asked invokes onShowOrigin with selection intact.
     fireEvent.click(showContext)

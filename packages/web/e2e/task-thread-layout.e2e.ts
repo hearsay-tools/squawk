@@ -7,7 +7,7 @@ import { expectEditorFitsViewport } from './session-layout'
 import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './fixture-server'
 import { openSessionActivityRow, SESSION_ACTIVITY_SUMMARY } from './session-activity'
 import { AgentBrowser, bootProjectId, squawkCli, fixtureServeEnv } from './agent-browser'
-import { contrastSampleExpression, focusWithKeyboard, type ContrastSample } from './contrast'
+import { contrastSampleExpression, dismissWithEscape, focusWithKeyboard, type ContrastSample } from './contrast'
 import { artifactsDir, LONG_RUN, RUN, RUN_ID, seedThreadDataRoot, STEP_RUN, TYPO_RUNS } from './task-thread-fixture'
 // fixture-server starts: 1
 
@@ -238,8 +238,7 @@ describe('task thread', () => {
     // Back on Session, opening Activity remembers which sections were expanded for this run.
     browser.click(SESSION_ACTIVITY_SUMMARY)
     expect(browser.waitForValue(`document.querySelector('[data-slot="run-activity-workspace"] > button')?.getAttribute('aria-expanded') ?? null`)).toBe('true')
-    browser.press('Escape')
-    browser.waitForFunction(`document.querySelector('[data-slot="run-activity-popover"]') === null && document.activeElement === document.querySelector('${SESSION_ACTIVITY_SUMMARY}')`)
+    dismissWithEscape(browser, { content: '[data-slot="run-activity-popover"]', focus: SESSION_ACTIVITY_SUMMARY })
     // Switching runs resets the header Activity popover to closed on every run.
     for (const id of [RUN_ID, LONG_RUN.id]) {
       backToList()
@@ -260,7 +259,7 @@ describe('task thread', () => {
     browser.click(SESSION_ACTIVITY_SUMMARY)
     browser.waitForFunction(`document.querySelector('[data-slot="run-activity-usage"] > button') !== null`)
     expect(browser.evaluate(`getComputedStyle(document.querySelector('[data-slot="run-activity-usage"] > button > svg:last-child')).transitionProperty`)).toBe('none')
-    browser.press('Escape')
+    dismissWithEscape(browser, { content: '[data-slot="run-activity-popover"]', focus: SESSION_ACTIVITY_SUMMARY })
     expect(browser.waitForValue(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}')?.getAttribute('aria-expanded') ?? null`)).toBe('false')
     browser.evaluate(`document.documentElement.classList.remove('light')`)
     browser.screenshot(`${artifactsDir}/phone-long-details-dark.png`, { viewport: true })
@@ -328,7 +327,7 @@ describe('task thread', () => {
       focusWithKeyboard(browser, SESSION_ACTIVITY_SUMMARY)
       browser.press('Enter')
       browser.waitForFunction(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}')?.getAttribute('aria-expanded') === 'true'`)
-      browser.press('Escape')
+      dismissWithEscape(browser, { content: '[data-slot="run-activity-popover"]', focus: SESSION_ACTIVITY_SUMMARY })
       browser.waitForFunction(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}')?.getAttribute('aria-expanded') === 'false'`)
       browser.evaluate(`document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light')`)
       browser.setViewport(1440, 900)
