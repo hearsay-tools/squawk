@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -28,6 +28,7 @@ function makeSetupFixture(t, {
   probeBareSuccess = true,
   probeNoSandboxSuccess = true,
   downloadReportsVersion = FIXTURE_PIN,
+  curlExitCode = 0,
 } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'cez-remote-setup-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -90,6 +91,7 @@ for arg do
   url=$arg
 done
 printf '%s\\n' "$url" >> "${join(root, 'curl.urls')}"
+[ "${curlExitCode}" = 0 ] || exit "${curlExitCode}"
 cat "$0.download" > "$out"
 exit 0
 `, { mode: 0o755 });
@@ -156,12 +158,13 @@ test('squeal-remote-setup retries headless probe with --no-sandbox when bare lau
 });
 
 test('squeal-remote-setup exits 0 with hint when google-chrome is absent and no root/sudo is available', (t) => {
-  const fx = makeSetupFixture(t, { hasChrome: false });
+  const fx = makeSetupFixture(t, { hasChrome: false, onPathBrowserVersion: null, curlExitCode: 7 });
   const run = spawnSync('/bin/sh', [join(fx.root, '.ai/scripts/squeal-remote-setup.sh')], {
     encoding: 'utf8', env: fx.env, timeout: 10_000,
   });
   assert.equal(run.status, 0, run.stderr);
   assert.match(run.stderr, /google-chrome is not installed.*squawk-runner/);
+  assert.equal(existsSync(join(fx.root, 'curl.urls')), false, 'must not require agent-browser download before no-Chrome fallback');
 });
 
 test('squeal-remote-setup fails non-zero when google-chrome is present but headless launch fails', (t) => {

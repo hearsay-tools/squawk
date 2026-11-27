@@ -147,8 +147,6 @@ probe_headless_chrome() {
   esac
 }
 
-ensure_pinned_agent_browser
-
 if ! command -v google-chrome >/dev/null 2>&1; then
   if ! install_chrome_linux; then
     # Keep unit tests running remotely when this template lacks both Chrome and root/sudo;
@@ -157,6 +155,8 @@ if ! command -v google-chrome >/dev/null 2>&1; then
     exit 0
   fi
 fi
+
+ensure_pinned_agent_browser
 
 if ! probe_headless_chrome; then
   if [ "$(uname -s 2>/dev/null || true)" = Linux ] && can_elevate; then
