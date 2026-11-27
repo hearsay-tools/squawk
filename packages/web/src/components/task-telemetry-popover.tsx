@@ -57,8 +57,9 @@ export function TaskTelemetryPopover({
       {open ? (
         <PopoverContent
           align="end"
+          collisionPadding={8}
           data-slot="task-telemetry-popover"
-          className="w-80 p-3.5"
+          className="max-h-(--radix-popover-content-available-height) w-80 max-w-[calc(100vw-16px)] overflow-y-auto overscroll-contain p-3.5"
         >
           <TelemetryPopoverBody
             model={model}
