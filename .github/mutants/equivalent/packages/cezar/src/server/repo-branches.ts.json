@@ -1,0 +1,84 @@
+[
+  {
+    "function": "classifyBranches",
+    "mutator": "ConditionalExpression",
+    "original": "!branch",
+    "replacement": "false",
+    "reason": "The map is read only with nonempty local head names, so undefined or empty branch keys cannot match; the guard remains for TypeScript narrowing."
+  },
+  {
+    "function": "classifyBranches",
+    "mutator": "LogicalOperator",
+    "original": "!pr || !run",
+    "replacement": "!pr && !run",
+    "reason": "The PR find checks has() on the same unchanged map and key that supplies run, so run exists exactly when pr exists; the guard keeps TypeScript narrowing."
+  },
+  {
+    "function": "deleteBranches",
+    "mutator": "ObjectLiteral",
+    "original": "{ diffStats: false }",
+    "replacement": "{}",
+    "reason": "Deletion never reads diffStat from the payload; this option only avoids computing unused stats."
+  },
+  {
+    "function": "deleteBranches",
+    "mutator": "BooleanLiteral",
+    "original": "false",
+    "replacement": "true",
+    "reason": "Deletion never reads diffStat from the payload; this option only avoids computing unused stats."
+  },
+  {
+    "function": "deleteBranches",
+    "mutator": "ConditionalExpression",
+    "original": "commits",
+    "replacement": "true",
+    "reason": "Only a single-name request drops commits, so assigning undefined here only replaces undefined."
+  },
+  {
+    "function": "deleteBranches",
+    "mutator": "StringLiteral",
+    "original": "''",
+    "replacement": "\"Stryker was here!\"",
+    "reason": "The sha fallback is unreachable because split always yields a first item.",
+    "site": "const [sha = "
+  },
+  {
+    "function": "deletionVerdicts",
+    "mutator": "LogicalOperator",
+    "original": "!entry || !tip",
+    "replacement": "!entry && !tip",
+    "reason": "The payload branches and tips are built one-to-one from the same heads, so entry exists exactly when tip exists."
+  },
+  {
+    "function": "forkPoints",
+    "mutator": "StringLiteral",
+    "original": "''",
+    "replacement": "\"Stryker was here!\"",
+    "reason": "The first selector default exists only for the type checker because split always has a first string.",
+    "site": "const [selector = "
+  },
+  {
+    "function": "forkPoints",
+    "mutator": "StringLiteral",
+    "original": "''",
+    "replacement": "\"Stryker was here!\"",
+    "reason": "The sha default cannot affect creationSha because an absent sha leaves an empty subject, which always returns null.",
+    "site": "const [selector = '', sha = "
+  },
+  {
+    "function": "localHeads",
+    "mutator": "StringLiteral",
+    "original": "''",
+    "replacement": "\"Stryker was here!\"",
+    "reason": "The first-name default exists only for the type checker because split always has a first string.",
+    "site": "const [name = "
+  },
+  {
+    "function": "mergedPrBranches",
+    "mutator": "ArrayDeclaration",
+    "original": "[]",
+    "replacement": "[\"Stryker was here\"]",
+    "reason": "A fallback string has no merged state and is skipped.",
+    "site": "for (const pr of byHead.get(d.head.name) ?? "
+  }
+]

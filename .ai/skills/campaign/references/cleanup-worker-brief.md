@@ -209,7 +209,7 @@ At the end: git checkout cez/<your 8-char id>; squeal stop in this worktree;
    Rescore requires scoring evidence from the current command; older stored
    results remain comparable but need a new measurement for exact rescoring.
    A rescore does not rerun tests or prove the current HEAD passes.
-   Rescore a result made before a targets.json or equivalent.json change
-   before you read any guard from it.
+   Rescore a result made before a change to targets.json or to a record under
+   .github/mutants/equivalent/ before you read any guard from it.
    If the initial test run times out, add --dry-run-timeout-minutes <n>.
 ```

@@ -1,0 +1,9 @@
+[
+  {
+    "function": "runAndReportServerCommand",
+    "mutator": "ConditionalExpression",
+    "original": "mode === 'uninstall'",
+    "replacement": "true",
+    "reason": "ServerCommandMode has three values and install and deploy with a complete status take the two earlier branches, so the third branch sees a complete status only in uninstall."
+  }
+]

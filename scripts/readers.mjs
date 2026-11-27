@@ -5,7 +5,7 @@
 //   node scripts/readers.mjs --runner <id> [name…]  also the saved-run readers of a runner id
 //   node scripts/readers.mjs -- --old-flag          a name that starts with `-` follows `--`
 //   node scripts/readers.mjs --moved <old> <new>    the readers of a moved file's old path, and the
-//                                                   JSON pins that name it, to rewrite in the same commit
+//                                                   JSON pins that name it, to rewrite or rename in the same commit
 //
 // It searches every tracked and untracked, not ignored, file of the checkout with `git grep`,
 // so no tree is left out by hand. A name that holds a `/` is a path: the sweep also searches
@@ -149,19 +149,38 @@ export function formatRunnerReaders(readers) {
     ...readers.map(entry => `${entry.found ? 'ok     ' : 'MISSING'} ${entry.file} — ${entry.reader} (anchor "${entry.anchor}")`)].join('\n');
 }
 
+/** The directories that hold one record per source file, at `<directory>/<source path>.json`.
+ *  Such a record names its file by its path, not its content, so a move renames it. */
+export const PATH_PIN_DIRS = [
+  '.github/mutants/equivalent',
+  'packages/cezar/src/file-length.baseline',
+];
+
+/** The tracked and untracked, not ignored, records under PATH_PIN_DIRS whose path names the file. */
+function searchPathPins(root, path) {
+  const names = PATH_PIN_DIRS.map(dir => `${dir}/${path}.json`);
+  const output = execFileSync('git', ['--literal-pathspecs', 'ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...names], { cwd: root, encoding: 'utf8' });
+  return [...new Set(output.split('\0').filter(Boolean))].map(file => ({ file, line: 0, text: `the record path names ${path}` }));
+}
+
 /** The JSON files that name a path: mutant targets and equivalents, the baselines and the lint lists.
- *  Each pins a file, or a function by its file, so a move rewrites them. */
+ *  Each pins a file, or a function by its file, so a move rewrites or renames them. A pin with
+ *  line 0 is a record whose path names the file: rename it to the new path. */
 export function searchPins(root, path) {
   // A pin may name the file below a directory, as the cockpit baselines do (`routes/x.tsx`).
   const segments = path.split('/');
   const tails = segments.slice(0, -1).map((_, k) => segments.slice(k).join('/'));
-  return parseHits(grep(root, tails.length ? tails : [path], '*.json'));
+  return [...searchPathPins(root, path), ...parseHits(grep(root, tails.length ? tails : [path], '*.json'))];
 }
+
+const renamedRecord = (file, from, to) => `${file.slice(0, -`${from}.json`.length)}${to}.json`;
 
 export function formatPins({ from, to }, hits) {
   const files = new Set(hits.map(hit => hit.file));
   return [`## JSON pins that name ${from}: ${hits.length} lines in ${files.size} files; rewrite each to ${to}`,
-    ...hits.map(hit => `  ${hit.file}:${hit.line}: ${hit.text.length > MAX_TEXT ? `${hit.text.slice(0, MAX_TEXT)}…` : hit.text}`),
+    ...hits.map(hit => hit.line === 0
+      ? `  ${hit.file}: ${hit.text}; rename it to ${renamedRecord(hit.file, from, to)}`
+      : `  ${hit.file}:${hit.line}: ${hit.text.length > MAX_TEXT ? `${hit.text.slice(0, MAX_TEXT)}…` : hit.text}`),
     'The guards that key on a directory, not a file, are listed in docs/areas/packages.md § Moving a source file.'].join('\n');
 }
 

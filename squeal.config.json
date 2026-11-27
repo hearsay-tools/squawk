@@ -192,6 +192,9 @@
       "AGENTS.md",
       ".github/agents-md.baseline.json"
     ],
+    ".github/scripts/mutants-equivalent.test.cjs": [
+      ".github/mutants/equivalent/**"
+    ],
     ".github/scripts/repository-skill-links.test.cjs": [
       ".gitignore",
       ".ai/skills/**",

@@ -215,7 +215,7 @@ test('equivalent mutants leave the tables, other counts and total; another mutat
 
 test('missing and empty lists keep the fixture artifact and comment byte-identical', () => {
   const hash = text => require('node:crypto').createHash('sha256').update(text).digest('hex');
-  const missing = readEquivalent('missing', { readFileSync() { throw Object.assign(new Error('missing'), { code: 'ENOENT' }); } });
+  const missing = readEquivalent('missing', { readdirSync() { throw Object.assign(new Error('missing'), { code: 'ENOENT' }); } });
   for (const entries of [missing.entries, []]) {
     const artifact = wrap(withEntries(entries));
     // Captured from the parent commit before integrating equivalent matching.
@@ -225,7 +225,7 @@ test('missing and empty lists keep the fixture artifact and comment byte-identic
 });
 
 test('an unreadable list keeps the report usable and its warning is bounded and escaped', () => {
-  const { entries, warning } = readEquivalent('denied', { readFileSync() { throw new Error('<script> @all | [link](https://example.com)'); } });
+  const { entries, warning } = readEquivalent('denied', { readdirSync() { throw new Error('<script> @all | [link](https://example.com)'); } });
   const artifact = { ...wrap(withEntries(entries)), warning };
   const clean = validateArtifact(artifact);
   assert.equal(clean.warning, warning);

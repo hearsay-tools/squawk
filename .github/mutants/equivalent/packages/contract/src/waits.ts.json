@@ -1,0 +1,9 @@
+[
+  {
+    "function": "workerWaitView",
+    "mutator": "ArrayDeclaration",
+    "original": "[]",
+    "replacement": "[\"Stryker was here\"]",
+    "reason": "The required fallback handles absent waits; its string element has no kind, so the worker filter drops it (one exact mutant match)."
+  }
+]

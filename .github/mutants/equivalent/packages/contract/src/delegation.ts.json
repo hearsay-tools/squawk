@@ -1,0 +1,25 @@
+[
+  {
+    "function": "parentFileRefusal",
+    "mutator": "OptionalChaining",
+    "original": "path.split('/').at(-1)?.toLowerCase",
+    "replacement": "path.split('/').at(-1).toLowerCase",
+    "reason": "split() always returns a nonempty array, so at(-1) is never undefined; the ?. satisfies the type checker"
+  },
+  {
+    "function": "(module)",
+    "mutator": "MethodExpression",
+    "original": "path.startsWith('/')",
+    "replacement": "path.endsWith('/')",
+    "reason": "A path that starts or ends with '/' has an empty segment, which the segment check already refuses.",
+    "site": "!/[\\\\\\u0000-\\u001f\\u007f:]/.test(path) && !"
+  },
+  {
+    "function": "(module)",
+    "mutator": "ArrayDeclaration",
+    "original": "[]",
+    "replacement": "[\"Stryker was here\"]",
+    "reason": "The default applies only when artifacts is absent; its string element has no kind, so the parent-file check skips it.",
+    "site": "}).strict().superRefine(({ artifacts = "
+  }
+]
