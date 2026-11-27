@@ -7,6 +7,7 @@ import type { ApiRun, RunEvent, UiAskQuestion } from '@open-mercato/cezar-api-cl
 import { askCardOf, pendingAskOf } from '@open-mercato/cezar-api-client/contract/pending-ask'
 
 import { archiveRun, getRunHistoryContext } from '@/api/client'
+import { onLiveReconcile } from '@/api/live-coordinator'
 import { queryKeys, useProjectRun } from '@/api/queries'
 import { runAddress } from '@/api/run-address'
 import { dropFinishVerdict } from '@/api/run-detail-refresh'
@@ -286,18 +287,35 @@ function DrawerContentBody({
   const fingerprint = taskLiveFingerprint(record)
   const seenFingerprint = useRef(fingerprint)
 
-  // Refresh the explicit-project run detail (dropping any stale Finish verdict first) whenever
-  // the live Activity snapshot reports a status, wait, or worker transition for this task.
+  // Refresh the explicit-project run detail (dropping any stale Finish verdict and cancelling any
+  // pre-transition in-flight GET, including a cold initial load) whenever the live Activity
+  // snapshot reports a status, wait, or worker transition for this task.
   useEffect(() => {
     if (seenFingerprint.current === fingerprint) return
     seenFingerprint.current = fingerprint
+    let cancelled = false
     const detailKey = [record.projectId, 'runs', 'detail', record.runId] as const
     dropFinishVerdict(queryClient, detailKey)
-    void queryClient.invalidateQueries({ queryKey: detailKey, exact: true })
+    void queryClient.cancelQueries({ queryKey: detailKey, exact: true }).then(() => {
+      if (!cancelled) void queryClient.refetchQueries({ queryKey: detailKey, exact: true, type: 'active' })
+    })
     if (record.kind === 'review') {
       void queryClient.invalidateQueries({ queryKey: [record.projectId, 'runs', 'diff', record.runId], exact: true })
     }
+    return () => { cancelled = true }
   }, [fingerprint, queryClient, record.kind, record.projectId, record.runId])
+
+  // Also refresh this open explicit-project detail when the live coordinator reconciles after an
+  // SSE reconnect or during periodic HTTP fallback, without invalidating inactive project caches.
+  useEffect(() => {
+    const detailKey = [record.projectId, 'runs', 'detail', record.runId] as const
+    return onLiveReconcile(() => {
+      dropFinishVerdict(queryClient, detailKey)
+      return queryClient.cancelQueries({ queryKey: detailKey, exact: true }).then(() =>
+        queryClient.refetchQueries({ queryKey: detailKey, exact: true, type: 'active' }),
+      )
+    })
+  }, [queryClient, record.projectId, record.runId])
 
   if (runQuery.isPending) {
     return <p data-slot="triage-loading" className="text-xs text-muted-foreground">Loading task details…</p>

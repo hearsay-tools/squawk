@@ -220,4 +220,50 @@ describe('ActivityTriageDrawer inline resolution', () => {
     view.rerender(ui(makeProj(null)))
     expect(document.querySelector('[data-slot="activity-triage-resolved"]')).not.toBeNull()
   })
+
+  it('cancels an in-flight cold detail GET when a worker starts so stale finishBlocked:null never enables Accept', async () => {
+    let detailCalls = 0
+    let resolveFirst!: (res: Response) => void
+    const firstPending = new Promise<Response>((resolve) => { resolveFirst = resolve })
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input), 'http://cockpit.test').pathname
+      if (path === '/api/v1/providers/status') return jsonResponse({ claude: { installed: true, authenticated: true } })
+      if (path === '/api/v1/accounts') return jsonResponse({ accounts: [] })
+      if (path === `/api/v1/p/acme/runs/${REVIEW_RUN_ID}/diff`) return new Response('', { status: 200 })
+      if (path === `/api/v1/p/acme/runs/${REVIEW_RUN_ID}`) {
+        detailCalls += 1
+        if (detailCalls === 1) return firstPending
+        return jsonResponse({ id: REVIEW_RUN_ID, title: 'Fix drawer padding', task: 'Fix', workflow: 'quick-task', runner: 'claude', status: RUN_STATUS.review, createdAt: iso(-90_000), tokensUsed: 0, steps: [], sessionActive: false, finishBlocked: '1 live worker still running' })
+      }
+      return jsonResponse({ error: `unexpected ${path}` }, 404)
+    })
+    const client = createQueryClient()
+    seedRunners(client)
+    const makeProj = (hasWorker: boolean) => project({
+      projectId: 'acme', name: 'acme', inReview: 1,
+      tasks: [run({
+        runId: REVIEW_RUN_ID, title: 'Fix drawer padding', status: RUN_STATUS.review, rung: 'needs-review', finishedAt: iso(-40_000),
+        workers: hasWorker ? [worker({ runId: 'w-new', title: 'Child worker', status: RUN_STATUS.running })] : [],
+      })],
+    })
+    const ui = (p: ReturnType<typeof makeProj>) => (
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/activity']}>
+          <ActivitySupervisionView projects={[p]} now={NOW} global grouped={false} projectOrder={['acme']} />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+    const view = render(ui(makeProj(false)))
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+    await waitFor(() => expect(detailCalls).toBe(1))
+
+    // Worker starts while the first GET is still in flight; then the first GET resolves with stale finishBlocked: null.
+    view.rerender(ui(makeProj(true)))
+    resolveFirst(jsonResponse({ id: REVIEW_RUN_ID, title: 'Fix drawer padding', task: 'Fix', workflow: 'quick-task', runner: 'claude', status: RUN_STATUS.review, createdAt: iso(-90_000), tokensUsed: 0, steps: [], sessionActive: false, finishBlocked: null }))
+
+    await waitFor(() => expect(detailCalls).toBe(2))
+    const drawer = await screen.findByRole('dialog')
+    await waitFor(() => expect(within(drawer).getByText('Review the changes before anything lands.')).toBeTruthy())
+    expect(within(drawer).queryByRole('button', { name: 'Accept' })).toBeNull()
+  })
 })
