@@ -341,7 +341,7 @@ describe('AskCard — unified decision surface (hearsay-tools/squawk#4374)', () 
     render(withRunners(
       <MemoryRouter>
         <AskCard
-          ask={{ ...twoQuestionAsk, placement: 'pinned', context: 'Full architectural rationale.' }}
+          ask={{ ...twoQuestionAsk, placement: 'pinned', context: 'Full architectural rationale in [decision](/tmp/decision.md).' }}
           run={activeRun}
           surface="decision-zone"
           onShowOrigin={onShowOrigin}
@@ -353,7 +353,10 @@ describe('AskCard — unified decision surface (hearsay-tools/squawk#4374)', () 
     fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
     const showContext = screen.getByRole('button', { name: /Show context/ })
     fireEvent.click(showContext)
-    expect(screen.getByRole('region', { name: 'Context' }).textContent).toContain('Full architectural rationale.')
+    const contextRegion = screen.getByRole('region', { name: 'Context' })
+    expect(contextRegion.textContent).toContain('Full architectural rationale')
+    const fileLink = within(contextRegion).getByRole('link', { name: 'decision' })
+    expect(fileLink.getAttribute('href')).toBe(`/tasks/${activeRun.id}/files?path=%2Ftmp%2Fdecision.md`)
     const closeBtn = screen.getByRole('button', { name: 'Close' })
     expect(closeBtn.className).toContain('size-11')
     // Closing via Close restores focus to Show context while preserving selections.

@@ -10,6 +10,7 @@ import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 
 import { Markdown } from './markdown'
+import { TaskFileScope } from './task-file-scope'
 
 export interface FreeTextReplyRenderProps {
   value: string
@@ -573,12 +574,14 @@ export function ShowOriginLink({
 export function AskContextSheet({
   open,
   onOpenChange,
+  runId,
   context,
   onShowOrigin,
   returnFocusRef,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  runId: string
   context: string
   onShowOrigin: (() => void) | undefined
   returnFocusRef?: RefObject<HTMLButtonElement | null> | undefined
@@ -623,7 +626,9 @@ export function AskContextSheet({
           aria-label="Context"
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain break-words px-5 py-4 text-sm text-foreground"
         >
-          <Markdown breaks>{context}</Markdown>
+          <TaskFileScope runId={runId}>
+            <Markdown breaks>{context}</Markdown>
+          </TaskFileScope>
         </div>
         {onShowOrigin ? (
           <div className="flex shrink-0 items-center justify-end border-t border-border px-5 py-3">

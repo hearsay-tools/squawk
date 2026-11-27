@@ -110,7 +110,7 @@ export function AskCard({
     return (
       <div className="flex flex-col gap-3">
         {inlineContext}
-        <RoutedAsk ask={ask} surface={surface} onShowOrigin={showOrigin} />
+        <RoutedAsk ask={ask} runId={run.id} surface={surface} onShowOrigin={showOrigin} />
       </div>
     )
   }
@@ -155,10 +155,12 @@ export function AskContext({ text }: { text: string }) {
 /** A worker's question sent to its parent task (#505): read-only here, answered there. */
 function RoutedAsk({
   ask,
+  runId,
   surface,
   onShowOrigin,
 }: {
   ask: ThreadAsk
+  runId: string
   surface: 'transcript' | 'decision-zone'
   onShowOrigin: (() => void) | undefined
 }) {
@@ -234,6 +236,7 @@ function RoutedAsk({
         <AskContextSheet
           open={contextOpen}
           onOpenChange={setContextOpen}
+          runId={runId}
           context={ask.context}
           onShowOrigin={onShowOrigin}
           returnFocusRef={contextButtonRef}
@@ -512,6 +515,7 @@ function PendingAsk({
         <AskContextSheet
           open={state.contextOpen}
           onOpenChange={state.setContextOpen}
+          runId={run.id}
           context={ask.context}
           onShowOrigin={onShowOrigin}
           returnFocusRef={contextButtonRef}
