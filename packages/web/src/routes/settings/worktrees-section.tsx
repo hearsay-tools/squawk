@@ -98,7 +98,7 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
     >
       <SettingsField
         title="Keep N finished worktrees"
-        hint="Older finished worktrees are reclaimed to free disk; their branch is kept so the work stays recoverable. 0 = unlimited. In-review and running tasks are never reclaimed, so the count on disk can exceed this."
+        hint="Older finished worktrees are removed to free disk; their branch stays, so the work is recoverable. 0 keeps all. Running and in-review tasks are never removed."
       >
         <div data-reports-dirty="" className="flex items-center gap-2">
           <input

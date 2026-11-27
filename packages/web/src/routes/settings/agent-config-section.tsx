@@ -417,7 +417,7 @@ function EditorFrame({
         <pre
           data-slot="agent-config-placeholder"
           aria-hidden="true"
-          className="pointer-events-none absolute inset-px m-0 overflow-hidden whitespace-pre px-3 py-2 font-mono text-xs leading-[1.7] text-soft-foreground/70"
+          className="pointer-events-none absolute inset-px m-0 overflow-hidden whitespace-pre px-3 py-2 font-mono text-xs leading-[1.7] text-muted-foreground/80"
         >
           {placeholderFor(file, isMcp)}
         </pre>

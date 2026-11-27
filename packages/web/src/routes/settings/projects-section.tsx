@@ -377,7 +377,12 @@ function ProjectRow({
         <ProjectTagsEditor project={project} vocabulary={vocabulary} />
       </td>
       <td className="px-3 py-2">
-        <MaxParallelSelect project={project} workspaceMax={workspaceMax} />
+        {/* The row is a vertical card with its column headers hidden, so the control carries its
+            own visible label. The select's accessible name starts with the same words. */}
+        <label data-slot="project-max-parallel-field" className="flex flex-col gap-1.5">
+          <span className="text-[12px] text-muted-foreground">Max parallel tasks</span>
+          <MaxParallelSelect project={project} workspaceMax={workspaceMax} />
+        </label>
       </td>
       <td className="px-3 py-2 tabular-nums text-soft-foreground">{shortDate(project.addedAt)}</td>
       <td className="px-3 py-2 text-right">
@@ -691,7 +696,7 @@ export function MaxParallelSelect({
           },
         )
       }}
-      className="block w-44 rounded-md border border-input bg-card px-2 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+      className="block w-full rounded-md border border-input bg-card px-2 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
     >
       <option value="">Inherit workspace ({workspaceMax})</option>
       {Array.from(

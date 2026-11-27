@@ -43,7 +43,7 @@ export const WORKTREE_COMMANDS_COPY: Record<'setup' | 'teardown', WorktreeComman
     issueKey: 'worktreeSetupIssue',
     slot: 'worktree-setup',
     title: 'Prepare new worktrees',
-    hint: 'Runs in every new task and worker worktree before the agent starts, in order, stopping at the first failure. Leave commands empty to skip setup.',
+    hint: 'Runs in order in every new task and worker worktree before the agent starts. The first failure stops setup.',
     empty: 'No setup commands configured. No commands will run in new worktrees.',
     label: 'Worktree setup commands, one per line',
     example: 'npm ci',
@@ -57,7 +57,7 @@ export const WORKTREE_COMMANDS_COPY: Record<'setup' | 'teardown', WorktreeComman
     issueKey: 'worktreeTeardownIssue',
     slot: 'worktree-teardown',
     title: 'Stop worker services before destroy',
-    hint: 'Runs in a worker’s worktree when the worker is destroyed, before destroy stops the worker’s processes, in order, stopping at the first failure. A failure is recorded on the worker and destroy goes on. Leave commands empty to skip teardown.',
+    hint: 'Runs in order in a worker’s worktree when the worker is destroyed, before its processes stop. The first failure stops teardown; destroy goes on and records it on the worker.',
     empty: 'No teardown commands configured. Destroy runs no commands in worker worktrees.',
     label: 'Worktree teardown commands, one per line',
     example: 'docker compose down',
@@ -170,9 +170,6 @@ export function WorktreeCommandsField({ config, copy }: { config: ConfigResponse
           onChange={(event) => setText(event.target.value)}
           className={`${control} field-sizing-content min-h-24 max-h-[min(24rem,60dvh)] w-full resize-none overflow-y-auto font-mono text-[13px] leading-relaxed`}
         />
-        <p className="text-xs text-muted-foreground">
-          Example only: <code>{copy.example}</code>. Commands run only after they are saved.
-        </p>
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Timeout per command</span>

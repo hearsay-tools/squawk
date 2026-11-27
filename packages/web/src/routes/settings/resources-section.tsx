@@ -163,7 +163,7 @@ function ResourcesForm({ config }: { config: WorkspaceConfigResponse }) {
 
       <SettingsField
         title="Auto-resume after a usage limit"
-        hint="Resume eligible tasks once the provider usage limit resets."
+        hint="Resumes eligible tasks at the reset time the provider reports. Saves automatically."
       >
         <Switch
           aria-label="Auto-resume after a usage limit"
@@ -172,9 +172,6 @@ function ResourcesForm({ config }: { config: WorkspaceConfigResponse }) {
           disabled={save.isPending}
           onCheckedChange={saveAutoResume}
         />
-        <p className="text-xs text-muted-foreground">
-          Applies to Claude Code, Codex and OpenCode — whenever the provider says when the limit lifts. Saves automatically.
-        </p>
       </SettingsField>
 
       <MemoryField
@@ -208,7 +205,7 @@ function MaxParallelField({
   return (
     <SettingsField
       title="Max parallel tasks"
-      hint="Limit simultaneously running tasks."
+      hint="Limits how many tasks run at once. Saves automatically."
     >
       <SettingsSelect
         aria-label="Max parallel tasks"
@@ -226,7 +223,6 @@ function MaxParallelField({
           ),
         )}
       </SettingsSelect>
-      <p data-slot="resources-autosave" className="text-xs text-muted-foreground">Saves automatically.</p>
       <p className="text-xs text-muted-foreground">
         Need a different limit for one project?{' '}
         <Link
@@ -257,7 +253,7 @@ function MaxMonitoringField({
   return (
     <SettingsField
       title="Extra monitoring sessions"
-      hint="Additional capacity reserved for monitoring."
+      hint="Extra slots reserved for monitoring sessions. Saves automatically."
     >
       <SettingsSelect
         aria-label="Extra monitoring sessions"
@@ -271,9 +267,8 @@ function MaxMonitoringField({
           <option key={n} value={n}>{n}</option>
         ))}
       </SettingsSelect>
-      <p data-slot="resources-autosave" className="text-xs text-muted-foreground">Saves automatically.</p>
       <p className="text-xs text-muted-foreground">
-        Capacity: {maxParallel} active + {maxMonitoringSessions ?? 2} monitoring. Set 0 to make monitoring share active slots.
+        Capacity: {maxParallel} active + {maxMonitoringSessions ?? 2} monitoring. 0 shares the active slots.
       </p>
     </SettingsField>
   )
@@ -338,9 +333,7 @@ function WakeField({
       </div>
       {showInvalid ? (
         <p data-slot="resources-monitoring-wake-invalid" className="text-xs text-danger">Enter a whole number from 1 to 60 minutes.</p>
-      ) : (
-        <p className="text-xs text-muted-foreground">Applied consistently to Claude Code, Codex and OpenCode.</p>
-      )}
+      ) : null}
     </SettingsField>
   )
 }
@@ -365,7 +358,7 @@ function MemoryField({
   return (
     <SettingsField
       title="Per-task memory limit"
-      hint="Leave blank for no limit."
+      hint="Applies to newly started tasks. Leave blank for no limit."
     >
       <div data-reports-dirty="" className="settings-resource-controls flex flex-wrap items-center gap-2">
         <input
@@ -399,9 +392,7 @@ function MemoryField({
         <p data-slot="resources-memory-invalid" className="text-xs text-danger">
           Enter a whole number of at least {MEMORY_MIN_MB} MiB, or leave empty for no limit.
         </p>
-      ) : (
-        <p className="text-xs text-muted-foreground">Applies to newly started tasks.</p>
-      )}
+      ) : null}
     </SettingsField>
   )
 }

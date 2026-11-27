@@ -76,7 +76,6 @@
 .settings-panel [data-slot=appearance-section] h2 + p { margin-block-start: 8px; }
 .settings-panel [data-slot=appearance-section] [role=radiogroup] { gap: 4px; }
 .settings-panel [data-slot=appearance-section] [role=radio] { border-radius: 6px; padding-block: 8px; padding-inline: 14px; font-weight: 400; }
-.settings-panel [data-slot=appearance-section] [aria-checked=true] { background: var(--card); color: var(--foreground); border-color: var(--border); }
 
 .settings-panel [data-slot=notifications-permission] { margin-block: 20px; margin-inline: 0; }
 .settings-panel [data-slot=notifications-permission][data-permission=denied] { color: var(--danger); }
@@ -319,14 +318,20 @@
 .settings-panel :is([data-slot=project-row],[data-slot=worktree-row]) > td:last-child { margin-block-start: 4px; padding-block-start: 12px; }
 .settings-panel .settings-form-actions { padding-block-start: 16px; }
 
-/* Appearance segments (pass 8): a card-white segment on a muted track all but vanished, and in the
-   dark theme the card is darker than the track. The active segment takes the calm accent tint the
-   section picker and selected file already use, with a matching hairline, so it reads in both themes. */
-.settings-panel [data-slot=appearance-section] [role=radiogroup] { background: var(--muted); }
+/* Appearance segments (pass 9): the one segmented grammar the composer, diff, activity, automations,
+   skills and agent config use. A muted track holds a raised card pill with a hairline, foreground
+   ink and a light shadow. Teal stays for filter chips and tab underlines. */
+.settings-panel [data-slot=appearance-section] [role=radiogroup] { background: color-mix(in oklch, var(--muted) 60%, transparent); }
 .settings-panel [data-slot=appearance-section] [role=radio][aria-checked=true] {
-  background: color-mix(in oklch, var(--accent-strong) 14%, var(--card));
-  border-color: color-mix(in oklch, var(--accent-strong) 45%, transparent);
-  color: var(--accent-text); font-weight: 500; box-shadow: var(--shadow-xs);
+  background: var(--card); border-color: var(--border);
+  color: var(--foreground); font-weight: 500; box-shadow: var(--shadow-xs);
+}
+
+/* Per-project Max parallel tasks (pass 9): 15rem holds "Inherit workspace (16)" whole with room to
+   spare; a phone gives it the full card width. The wrapper takes the width and the select fills it. */
+.settings-panel .settings-select:has(> select[data-slot=project-max-parallel]) { width: 15rem; max-width: 100%; }
+@media (max-width: 767px) {
+  .settings-panel .settings-select:has(> select[data-slot=project-max-parallel]) { width: 100%; }
 }
 
 /* The empty-file example overlays the code editor, so it follows the editor's 16px touch floor
