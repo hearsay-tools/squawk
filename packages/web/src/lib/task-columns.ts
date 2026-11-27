@@ -2,6 +2,49 @@
 export const TASK_COLUMN_IDS = [
   'status',
   'task',
+  'runner',
+  'workflow',
+  'branch',
+  'diff',
+  'reference',
+  'usage',
+  'tokens',
+  'cost',
+  'cpu',
+  'memory',
+  'started',
+] as const
+
+export type TaskColumnId = (typeof TASK_COLUMN_IDS)[number]
+export type TaskColumnIcon =
+  | 'runner'
+  | 'workflow'
+  | 'branch'
+  | 'diff'
+  | 'reference'
+  | 'usage'
+  | 'tokens'
+  | 'cost'
+  | 'cpu'
+  | 'memory'
+  | 'started'
+
+/** Columns rendered by the unified `<TaskTable />` summary/compact view across Project and Global Tasks. */
+export const UNIFIED_TABLE_COLUMN_IDS: readonly TaskColumnId[] = [
+  'task',
+  'runner',
+  'workflow',
+  'branch',
+  'diff',
+  'reference',
+  'usage',
+  'started',
+] as const
+
+/** Columns rendered by the optional Project Tasks detailed Resource columns table. */
+export const RESOURCE_TABLE_COLUMN_IDS: readonly TaskColumnId[] = [
+  'status',
+  'task',
   'workflow',
   'branch',
   'diff',
@@ -13,21 +56,11 @@ export const TASK_COLUMN_IDS = [
   'started',
 ] as const
 
-export type TaskColumnId = (typeof TASK_COLUMN_IDS)[number]
-export type TaskColumnIcon =
-  | 'workflow'
-  | 'branch'
-  | 'diff'
-  | 'reference'
-  | 'tokens'
-  | 'cost'
-  | 'cpu'
-  | 'memory'
-  | 'started'
-
 export interface TaskColumnDefinition {
   id: TaskColumnId
   label: string
+  /** Optional readable label used in `<TaskTable />` headers and the Columns popover. */
+  summaryLabel?: string
   canFold: boolean
   defaultExpanded: boolean
   align: 'left' | 'right'
@@ -45,12 +78,21 @@ export const TASK_COLUMNS = [
   { id: 'status', label: 'Status', canFold: false, defaultExpanded: true, align: 'left', width: '120px' },
   { id: 'task', label: 'Task', canFold: false, defaultExpanded: true, align: 'left', width: '320px' },
   {
+    id: 'runner',
+    label: 'Runner',
+    canFold: true,
+    defaultExpanded: false,
+    align: 'left',
+    width: '132px',
+    icon: 'runner',
+  },
+  {
     id: 'workflow',
     label: 'Workflow',
     canFold: true,
     defaultExpanded: true,
     align: 'left',
-    width: '84px',
+    width: '112px',
     icon: 'workflow',
   },
   {
@@ -59,18 +101,28 @@ export const TASK_COLUMNS = [
     canFold: true,
     defaultExpanded: false,
     align: 'left',
-    width: '120px',
+    width: '136px',
     icon: 'branch',
   },
-  { id: 'diff', label: '±', canFold: true, defaultExpanded: true, align: 'left', width: '84px', icon: 'diff' },
+  { id: 'diff', label: '±', summaryLabel: 'Changes', canFold: true, defaultExpanded: true, align: 'left', width: '104px', icon: 'diff' },
   {
     id: 'reference',
     label: 'Ref',
+    summaryLabel: 'Reference',
     canFold: true,
     defaultExpanded: true,
     align: 'left',
-    width: '104px',
+    width: '124px',
     icon: 'reference',
+  },
+  {
+    id: 'usage',
+    label: 'Usage',
+    canFold: true,
+    defaultExpanded: true,
+    align: 'right',
+    width: '128px',
+    icon: 'usage',
   },
   {
     id: 'tokens',
@@ -108,7 +160,7 @@ export const TASK_COLUMNS = [
     canFold: true,
     defaultExpanded: true,
     align: 'right',
-    width: '68px',
+    width: '72px',
     icon: 'started',
   },
 ] as const satisfies readonly TaskColumnDefinition[]
@@ -161,11 +213,23 @@ export function toggleExpandedColumn(raw: unknown, id: TaskColumnId): Record<str
   }
 }
 
+const RESOURCE_COLUMN_SET = new Set<TaskColumnId>(RESOURCE_TABLE_COLUMN_IDS)
+const UNIFIED_COLUMN_SET = new Set<TaskColumnId>(UNIFIED_TABLE_COLUMN_IDS)
+
+/** Ordered columns for the unified `<TaskTable />` (Project Tasks summary and Global Tasks). */
+export function unifiedTableColumns(): readonly TaskColumnDefinition[] {
+  return TASK_COLUMNS.filter((column) => UNIFIED_COLUMN_SET.has(column.id))
+}
+
+/** Ordered columns for the optional Project Tasks detailed Resource columns table. */
 export function taskColumnsForCapabilities(capabilities: {
   tokens: boolean
   cost: boolean
 }): readonly TaskColumnDefinition[] {
   return TASK_COLUMNS.filter((column: TaskColumnDefinition) => {
-    return column.capability === undefined || capabilities[column.capability]
+    return (
+      RESOURCE_COLUMN_SET.has(column.id) &&
+      (column.capability === undefined || capabilities[column.capability])
+    )
   })
 }

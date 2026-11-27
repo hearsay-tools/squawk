@@ -37,11 +37,13 @@ it('bounds rows, preserves focused controls and expansion, and follows pathname 
   expect(count).toBeLessThan(150)
   const first = browser.waitForValue(`document.querySelector('[data-slot="task-summary-row"]').dataset.runId`) as string
   const row = `[data-slot="task-summary-row"][data-run-id="${first}"]`
-  browser.click(`${row} button[aria-label^="Show resources"]`)
-  browser.waitForFunction(`document.querySelector('${row} button[aria-expanded="true"]') !== null`)
-  // Keyboard traversal crosses the spanning preview into the next logical run.
-  const next = browser.waitForValue(`(() => { const current=document.querySelector('${row}');const index=Number(current.getAttribute('aria-rowindex'))+2;return current.closest('[role="table"]').querySelector('[data-slot="task-summary-row"][aria-rowindex="'+index+'"]')?.dataset.runId })()`) as string
-  browser.evaluate(`const detail=document.querySelector('${row}').nextElementSibling;const controls=detail.querySelectorAll('a[href],button:not([disabled]),[tabindex="0"]');controls[controls.length-1].focus()`)
+  browser.click(`${row} button[data-task-control="usage"]`)
+  browser.waitForFunction(`document.querySelector('[data-slot="task-telemetry-popover"]') !== null`)
+  browser.press('Escape')
+  browser.waitForFunction(`document.querySelector('[data-slot="task-telemetry-popover"]') === null`)
+  // Keyboard traversal advances cleanly to the next logical run.
+  const next = browser.waitForValue(`(() => { const current=document.querySelector('${row}');const index=Number(current.getAttribute('aria-rowindex'))+1;return current.closest('[role="table"]').querySelector('[data-slot="task-summary-row"][aria-rowindex="'+index+'"]')?.dataset.runId })()`) as string
+  browser.evaluate(`const controls=document.querySelector('${row}').querySelectorAll('a[href],button:not([disabled]),[tabindex="0"]');controls[controls.length-1].focus()`)
   browser.press('Tab')
   expect(browser.waitForValue(`document.activeElement?.closest('[data-run-id]')?.dataset.runId`)).toBe(next)
   // Focus is pinned with its keyboard neighbours even when the viewport moves far away.
@@ -52,7 +54,7 @@ it('bounds rows, preserves focused controls and expansion, and follows pathname 
   browser.evaluate(`document.querySelector('input[aria-label="Search tasks"]').focus();document.querySelector('[data-slot="main"]').scrollTop=7000`)
   browser.waitForFunction(`document.querySelector('${row}') === null`)
   browser.evaluate(`document.querySelector('[data-slot="main"]').scrollTop=0`)
-  browser.waitForFunction(`document.querySelector('${row} button[aria-expanded="true"]') !== null`)
+  browser.waitForFunction(`document.querySelector('${row}') !== null`)
   settleVisual(browser, row, { idle: true })
   browser.click(`${row} [data-slot="row-rename"]`)
   browser.fill(`${row} input[aria-label="Task title"]`, 'Pinned rename draft')
@@ -91,15 +93,16 @@ it.each([undefined, 'Tab task 130'])('keeps the first visible row anchored after
   expect(Math.abs(after.top - before.top)).toBeLessThanOrEqual(2)
 })
 
-it('keeps global summary column headers accessible on phones', () => {
+it('renders global tasks as shared mobile cards on phones and table columns on desktop', () => {
   browser.setViewport(390, 844)
   browser.goto(`${fixture.origin}/tasks?tasks=virtual`)
-  browser.waitForFunction(`document.querySelector('[data-slot="global-task-row"]') !== null`)
-  const table = browser.waitForValue(`(() => { const table=document.querySelector('[data-slot="global-tasks-table"][role="table"]'); return table && { referenceColumn: table.dataset.referenceColumn, references: document.querySelectorAll('[data-slot="global-task-references"] a').length, headers: [...table.querySelectorAll('[role="columnheader"]')].map(cell=>({name:cell.textContent,hidden:[cell,cell.parentElement].some(node=>getComputedStyle(node).display==='none'||getComputedStyle(node).visibility==='hidden')})) } })()`) as { referenceColumn: string; references: number; headers: { name: string; hidden: boolean }[] }
-  // The Pull request column shows only while a task on the page has a reference; this fixture has none.
-  expect(table.references).toBe(0)
+  browser.waitForFunction(`document.querySelector('[data-density="card"] [data-slot="global-task-row"]') !== null`)
+  browser.setViewport(1440, 900)
+  browser.waitForFunction(`document.querySelector('[data-slot="global-tasks-table"] [role="table"]') !== null`)
+  const table = browser.waitForValue(`(() => { const wrap=document.querySelector('[data-slot="global-tasks-table"]'); const table=wrap?.querySelector('[role="table"]'); return table && { referenceColumn: wrap.dataset.referenceColumn, headers: [...table.querySelectorAll('[role="columnheader"]')].map(cell=>({name:cell.textContent,hidden:[cell,cell.parentElement].some(node=>getComputedStyle(node).display==='none'||getComputedStyle(node).visibility==='hidden')})) } })()`) as { referenceColumn: string; headers: { name: string; hidden: boolean }[] }
+  // The Reference column shows only while a task on the page has a reference; this fixture has none.
   expect(table.referenceColumn).toBe('false')
-  expect(table.headers).toEqual(['Task', 'Workflow', 'Changes', 'Started'].map(name => ({ name, hidden: false })))
+  expect(table.headers).toEqual(['Task', 'Workflow', 'Changes', 'Usage', 'Started'].map((name) => ({ name, hidden: false })))
 })
 
 it('paints rows on the first frame that contains a large list', async () => {
@@ -216,12 +219,10 @@ it.each([['project', 1440, 900], ['project', 360, 640], ['global', 1440, 900], [
 it.each([
   ['project', 1440, 900, 'fold'], ['project', 360, 640, 'fold'],
   ['global', 1440, 900, 'fold'], ['global', 360, 640, 'fold'],
-  ['project', 1440, 900, 'preview'], ['project', 360, 640, 'preview'],
-  ['global', 1440, 900, 'preview'], ['global', 360, 640, 'preview'],
   ['global', 1440, 900, 'storage'],
   ['project', 1440, 900, 'flat fold'], ['project', 360, 640, 'flat fold'], ['project', 360, 640, 'flat storage'],
 ] as const)('anchors %s at %s x %s after an earlier %s collapses', async (scope, width, height, kind) => {
-  const change = kind.replace('flat ', '') as 'fold' | 'preview' | 'storage'
+  const change = kind.replace('flat ', '') as 'fold' | 'storage'
   const large = await createTabFixture(process.cwd(), { taskList: scope, taskListSizes: { active: 310, archived: 0, projects: scope === 'global' ? 3 : 1 } })
   try {
     await large.control({ update: large.runs.slice(0, scope === 'global' ? 1 : kind.startsWith('flat') ? 80 : 120).map(run => ({ ...run, patch: { status: RUN_STATUS.done } })) })
@@ -232,26 +233,13 @@ it.each([
     const finished = `${route} [data-bucket="Finished"]`
     browser.waitForFunction(`document.querySelector('${finished} [data-run-id]') !== null && window.__cezIdle`)
     if (kind.startsWith('flat')) browser.waitForFunction(`document.querySelector('${finished} [data-slot="task-list-items"]').dataset.virtualized === 'false' && document.querySelector('${route} [data-bucket="Working"] [data-slot="task-list-items"]').dataset.virtualized === 'true'`)
-    const preview = `${finished} [data-run-id] button[data-task-control="resources"]`
-    if (change === 'preview') {
-      // Pin this control so the same expanded row remains mounted above the viewport.
-      browser.evaluate(`window.__collapsePreview=document.querySelector('${preview}');window.__collapsePreview.focus();window.__collapsePreview.click()`)
-      browser.waitForFunction(`window.__collapsePreview.getAttribute('aria-expanded') === 'true' && window.__cezIdle`)
-    }
     browser.evaluate(`(() => {const owner=document.querySelector('[data-slot="main"]'),group=document.querySelector('${route} [data-bucket="Working"]');owner.scrollTop+=group.getBoundingClientRect().top-owner.getBoundingClientRect().top+${scope === 'global' ? 12000 : 15000}})()`)
     const sample = `(() => {const owner=document.querySelector('[data-slot="main"]'),edge=owner.getBoundingClientRect().top;const row=[...document.querySelectorAll('${route} [data-bucket="Working"] [data-run-id]')].find(e=>e.getBoundingClientRect().bottom>edge&&e.getBoundingClientRect().top<edge+owner.clientHeight);return row?{id:row.dataset.runId,top:row.getBoundingClientRect().top}:null})()`
     const before = waitForSettledSample(browser, sample) as { id: string; top: number }
-    // The focused row must survive the scroll; a lost pin fails here, not at the collapse.
-    if (change === 'preview') browser.waitForFunction('window.__collapsePreview.isConnected')
     browser.evaluate(startFrames(before.id))
-    if (change !== 'preview') {
-      if (change === 'storage') browser.evaluate(`localStorage.setItem('cez-task-list-folds',JSON.stringify({[JSON.stringify([${JSON.stringify(scope === 'global' ? 'global' : 'project:boot')},'active','Finished'])]:true}));window.dispatchEvent(new StorageEvent('storage',{key:'cez-task-list-folds'}))`)
-      else browser.evaluate(`document.querySelector('${finished} [data-slot="status-group-toggle"]').click()`)
-      browser.waitForFunction(`document.querySelector('${finished} [data-slot="status-group-toggle"]').getAttribute('aria-expanded') === 'false'`)
-    } else {
-      browser.evaluate('window.__collapsePreview.click()')
-      browser.waitForFunction(`window.__collapsePreview.getAttribute('aria-expanded') === 'false'`)
-    }
+    if (change === 'storage') browser.evaluate(`localStorage.setItem('cez-task-list-folds',JSON.stringify({[JSON.stringify([${JSON.stringify(scope === 'global' ? 'global' : 'project:boot')},'active','Finished'])]:true}));window.dispatchEvent(new StorageEvent('storage',{key:'cez-task-list-folds'}))`)
+    else browser.evaluate(`document.querySelector('${finished} [data-slot="status-group-toggle"]').click()`)
+    browser.waitForFunction(`document.querySelector('${finished} [data-slot="status-group-toggle"]').getAttribute('aria-expanded') === 'false'`)
     const after = waitForSettledSample(browser, `(() => {const row=document.querySelector('${route} [data-run-id="${before.id}"]');return row?row.getBoundingClientRect().top:null})()`) as number
     expect(Math.abs(after - before.top)).toBeLessThanOrEqual(2)
     expectEveryFrame(browser, before.top)

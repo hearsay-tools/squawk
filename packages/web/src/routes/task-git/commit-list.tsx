@@ -3,7 +3,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Virtualizer } from 'virtua'
 
 import type { DiffStat } from '@open-mercato/cezar-api-client'
-import { DiffStatLabel } from '@/components/diff-stat'
+import { DiffStat as DiffStatPrimitive, SHA_DISPLAY_LENGTH, Sha } from '@/components/data-primitives'
 import { Input } from '@/components/ui/input'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
@@ -156,7 +156,7 @@ function CommitRow({ commit, selected }: { commit: CommitListItem; selected: boo
                 on the selected row's muted fill, where a muted chip would melt into it. */}
             <ShaChip sha={commit.sha} />
             <span className="min-w-0 truncate">{commit.author} · <span title={gitAgeTitle(commit.when, commit.at)}>{gitAge(commit.when, commit.at)}</span></span>
-            {commit.stat ? <DiffStatLabel stat={commit.stat} /> : null}
+            {commit.stat ? <DiffStatPrimitive stat={commit.stat} /> : null}
           </span>
         </span>
       </Link>
@@ -166,11 +166,7 @@ function CommitRow({ commit, selected }: { commit: CommitListItem; selected: boo
 
 /** The mono sha pill every commit row leads its meta line with — the task Commits list and the
  *  repo's Recently on main log draw this one chip, at one length (`SHA_CHIP_LENGTH`). */
-export const SHA_CHIP_LENGTH = 8
+export const SHA_CHIP_LENGTH = SHA_DISPLAY_LENGTH
 export function ShaChip({ sha }: { sha: string }) {
-  return (
-    <span data-slot="commit-sha" className="shrink-0 rounded-sm border border-border bg-card px-1.5 py-px font-mono text-xs text-muted-foreground" title={sha}>
-      {sha.slice(0, SHA_CHIP_LENGTH)}
-    </span>
-  )
+  return <Sha data-slot="commit-sha" sha={sha} variant="chip" />
 }

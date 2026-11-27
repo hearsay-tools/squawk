@@ -12,7 +12,8 @@ import { continuationMessageSchema, queuedMessageSchema } from './queued-message
 // The chain shapes belong to the workflows family; the run record embeds one, so this file
 // consumes them rather than redeclaring. One-way on purpose — see the header of `./workflows.ts`.
 import { workflowDefSchema, workflowStepDefSchema } from './workflows.ts';
-import { waitingOnSchema, waitSchema, waitRegistrationReceiptSchema } from './waits.ts';
+import { isUsageLimitHold } from './usage-limit-hold.ts';
+import { waitingOnSchema, waitSchema, waitRegistrationReceiptSchema, type WaitingOn } from './waits.ts';
 import { computeWaitingOn, hasResolvedWait, withRootLedger } from './waiting-on.ts';
 import { handoffRecordsSchema } from './handoff.ts';
 import { completionControlsShape, taskAccessShape } from './task-options.ts';
@@ -440,6 +441,13 @@ export type ApiRun = z.infer<typeof apiRunSchema>;
  * `toRunSummary` below is the only projection from a record to this shape. The route, the index
  * and the cockpit's stream patches all go through it, so a list and its stream cannot disagree.
  */
+/** Concise 1-line urgent or outcome preview carried on list summaries (hearsay-tools/squawk#4377). */
+export const runStatePreviewSchema = z.object({
+  kind: z.enum(['ask', 'permission', 'review', 'error']),
+  text: z.string().min(1).max(240),
+});
+export type RunStatePreview = z.infer<typeof runStatePreviewSchema>;
+
 export const runSummarySchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -542,6 +550,8 @@ export const runSummarySchema = z.object({
    *  labels a delegated peer by the agent actually running it, which can differ from `runner`. */
   currentStepBackend: runnerSchema.optional(),
   error: z.string().optional(),
+  /** Concise 1-line ask, permission, review, or error preview for urgent/failed task rows. */
+  statePreview: runStatePreviewSchema.optional(),
   /** Present while the run's isolated worktree exists — the breadcrumb says "Isolated worktree". */
   worktreePath: z.string().optional(),
 });
@@ -566,6 +576,45 @@ const SUMMARY_OPTIONAL_KEYS = [
   'groupId', 'variant', 'pinned', 'runner', 'removedRunner', 'model', 'notify', 'diffStat', 'inputTokens',
   'outputTokens', 'currentStepId', 'error', 'worktreePath',
 ] as const satisfies readonly (keyof RunSummary & keyof RunRecord)[];
+
+const STATE_PREVIEW_MAX = 240;
+
+function oneLinePreview(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const collapsed = raw.replace(/\s+/g, ' ').trim();
+  if (collapsed.length <= STATE_PREVIEW_MAX) return collapsed;
+  return `${collapsed.slice(0, STATE_PREVIEW_MAX - 1).trimEnd()}…`;
+}
+
+/** Derive a concise 1-line preview for urgent (`Needs you`) or failed runs without reading transcripts. */
+export function deriveRunStatePreview(
+  run: Pick<RunRecord, 'status' | 'archived' | 'hasPendingPermission' | 'waits' | 'doneAccepted' | 'error' | 'autoResumeAt'>,
+  waitingOn: WaitingOn | undefined,
+): RunStatePreview | undefined {
+  if (!run.archived) {
+    if (run.hasPendingPermission) return { kind: 'permission', text: 'Permission requested' };
+    if (waitingOn?.kind === 'human') {
+      const openHuman = (Array.isArray(run.waits) ? run.waits : []).filter(
+        (wait): wait is Extract<NonNullable<typeof run.waits>[number], { kind: 'human' }> =>
+          Boolean(wait) && typeof wait === 'object' && wait.phase === 'open' && wait.kind === 'human',
+      );
+      const question = openHuman.find((wait) => Array.isArray(wait.questions) && wait.questions.length > 0)?.questions?.[0]?.question;
+      const text = oneLinePreview(question);
+      if (text) return { kind: 'ask', text };
+      const budget = openHuman.some((wait) => wait.via === 'budget');
+      return { kind: 'ask', text: budget ? 'Automatic wakes used up' : 'Waiting for your reply' };
+    }
+    if (run.status === 'review') {
+      const text = oneLinePreview(run.doneAccepted?.summary);
+      return { kind: 'review', text: text || 'Ready for review' };
+    }
+  }
+  if (run.status === 'failed' && !isUsageLimitHold(run)) {
+    const text = oneLinePreview(run.error);
+    if (text) return { kind: 'error', text };
+  }
+  return undefined;
+}
 
 /**
  * The one projection from a run record to its list row (#817). Optional keys are copied only when
@@ -598,6 +647,8 @@ export function toRunSummary(run: RunRecord & { usage?: ProcessUsage | undefined
   // The parsed slim delegation, not the raw one: a malformed record must not throw here either.
   const waitingOn = computeWaitingOn({ ...run, delegation: withRootLedger(summary.delegation as RunSummary['delegation'], run.delegation) });
   if (waitingOn) summary.waitingOn = waitingOn;
+  const statePreview = deriveRunStatePreview(run, waitingOn);
+  if (statePreview) summary.statePreview = statePreview;
   if (hasResolvedWait(run)) summary.waitWakePending = true;
   if (run.usage) summary.usage = run.usage;
   const automationId = automationIdOf(run);
