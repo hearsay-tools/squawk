@@ -116,11 +116,13 @@
 }
 
 /* A soft edge under the sticky Session header: once the conversation scrolls, the turn above the
- * fold fades out under the tab bar instead of being sliced by its divider. The scroll timeline
- * keeps it invisible at the top; without scroll timelines it is always on, and still harmless. */
+ * fold fades out under the tab bar instead of being sliced by its divider. The first 12px stay
+ * solid, so a card's bottom border or the dashed "Question asked here" outline never peeks
+ * through as a stray line in either theme. The scroll timeline keeps it invisible at the top;
+ * without scroll timelines it is always on, and still harmless. */
 [data-route='task-thread'] [data-slot='run-header'][data-sticky]::after {
-  content: ''; position: absolute; inset-inline: 0; inset-block-start: 100%; block-size: 20px;
-  background: linear-gradient(to bottom, var(--background), transparent); pointer-events: none;
+  content: ''; position: absolute; inset-inline: 0; inset-block-start: 100%; block-size: 36px;
+  background: linear-gradient(to bottom, var(--background) 0, var(--background) 12px, transparent); pointer-events: none;
 }
 @supports (animation-timeline: scroll()) {
   [data-route='task-thread'] [data-slot='run-header'][data-sticky]::after {

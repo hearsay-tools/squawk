@@ -214,7 +214,7 @@ export function TasksOverview({
     <TaskTitleEditorProvider runs={archivedPages ? [...all, ...archivedPages.runs] : all} onRename={onRename}><TaskListFocusBoundary layout={`${desktop}:${detailedTable}`} revision={groups} visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, expandedColumns])} data-route="tasks" data-presentation={detailedTable ? 'resources' : 'summary'} className="flex min-h-full flex-col gap-3 px-4 pb-6 md:px-9 md:pb-9">
       {/* One set of search/view controls across breakpoints keeps query and selection intact.
           Mobile places search above the list filters. */}
-      <header ref={headerRef} className="flex shrink-0 flex-col gap-3">
+      <header ref={headerRef} className="flex shrink-0 flex-col gap-2.5">
         <TasksHeading projectName={projectName} detailedTable={detailedTable} />
         <div className="flex gap-6 border-b border-border">
           <ViewTab view="active" current={view} onSelect={onViewChange} count={derived.activeCount}>
@@ -540,7 +540,7 @@ function ProjectTaskResults({ view, query, origin, onShowAll, groups, folds, gro
   const showReference = open.some((group) => group.rows.flatMap(rowTasks).some((run) => taskReference(run) !== undefined))
   return (
     <>
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         {groups.map((group) => {
           const members = groupMembers(group)
           return (

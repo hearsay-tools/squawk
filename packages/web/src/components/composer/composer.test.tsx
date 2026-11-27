@@ -766,7 +766,7 @@ describe('disabled state', () => {
 
   it('the mic is hidden entirely when the Web Speech API is absent — no fake button', () => {
     renderComposer()
-    expect(screen.queryByText('Dictation')).toBeNull()
+    expect(screen.queryByLabelText('Start dictation')).toBeNull()
   })
 })
 

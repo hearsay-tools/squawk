@@ -30,15 +30,13 @@ type Accounts = ReturnType<typeof useAccountSelection>
 type DraftUpdate = (patch: Partial<NewTaskDraft>) => void
 
 export function NewTaskHeader() {
+  // The shared page header anatomy (Tasks, All tasks, Activity): the title, then one muted line.
   return (
-    <header className="mb-7 max-md:mb-4">
-      <p data-slot="page-eyebrow" className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-[var(--accent-text)] uppercase">
-        NEW TASK
-      </p>
-      <h1 className="text-[30px] leading-[normal] font-semibold tracking-[-0.9px] max-md:text-[22px] max-md:leading-[29px] max-md:tracking-[-0.6px]">
+    <header data-slot="page-header" className="mb-6 flex flex-col gap-1 max-md:mb-4">
+      <h1 className="text-[24px] leading-[1.2] font-semibold tracking-tight text-foreground md:text-[28px]">
         What should the agent work on?
       </h1>
-      <p data-slot="page-description" className="mt-2 hidden text-[13px] text-muted-foreground md:block">
+      <p data-slot="page-description" className="text-[13px] text-muted-foreground max-md:hidden">
         Describe the outcome, then configure the run.
       </p>
     </header>

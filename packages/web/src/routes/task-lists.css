@@ -48,9 +48,10 @@
   [data-presentation="summary"] [data-slot="global-task-actions"] > span { gap: 8px; }
 }
 
-[data-filter-details="false"] [data-slot="group-controls"],
-[data-filter-details="false"] [data-slot="tag-filters"],
-[data-filter-details="false"] [data-slot="no-tags-hint"] { display: none; }
+/* The Filters toggle discloses the whole facet panel: closed, the toolbar is two rows. */
+[data-filter-details="false"] [data-slot="global-tasks-filters"] { display: none; }
+/* A group's heading row already carries a 44px touch box, so its list starts close below it. */
+:is([data-route="tasks"], [data-route="global-tasks"]) [data-slot="task-status-group"] { row-gap: 6px; }
 [data-slot="global-tasks-filters"] > div:first-child { gap: 10px; }
 [data-slot="global-tasks-filters"] button { border-radius: 8px; }
 [data-slot="global-task-diff"] { display: none; }

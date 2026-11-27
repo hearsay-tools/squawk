@@ -372,12 +372,15 @@ export function RunHeader({
       <CompletionStatus run={run} />
       <div className="w-full">
         <WorkerParentLink run={run} />
-        {/* Pushed phone screen (#621): the shell's top bar carries back, the title and the run
-            actions. hearsay-tools/cezarion#1333 took the state line out of it: the run's status
-            lives in Session activity, the one card both viewports read. */}
+        {/* Pushed phone screen (#621): the shell's top bar carries back, the title with the
+            run's compact status pill under it, and the run actions. The full status line, with
+            its next check, stays in Session activity (hearsay-tools/cezarion#1333). */}
         {barSlot ? (
           <MobileRunBarPortal slot={barSlot}>
-            <MobileRunTitle run={run} />
+            <MobileRunTitle
+              run={run}
+              status={<Pill data-slot="mobile-run-status" dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="max-w-full self-start truncate px-2 py-px text-[11px]">{statusLine.label}</Pill>}
+            />
             <WorkerParentLink run={run} compact />
             {actionsKebab}
           </MobileRunBarPortal>
@@ -525,7 +528,7 @@ function EditableTitle({ run }: { run: ApiRun }) {
  *  button. The bar shows no status (hearsay-tools/cezarion#1333): the Session activity card does.
  *  The 44px input cannot sit in the 56px bar, so renaming opens it in a popover anchored under the
  *  pencil; the same `useTitleEditor` machine (Enter/blur commit, Escape cancel). */
-function MobileRunTitle({ run }: { run: ApiRun }) {
+function MobileRunTitle({ run, status }: { run: ApiRun; status: ReactNode }) {
   const { title, editor } = useRunTitleEditor(run)
   return (
     <Popover
@@ -536,7 +539,8 @@ function MobileRunTitle({ run }: { run: ApiRun }) {
       }}
     >
       <div data-slot="mobile-run-title" className="flex min-w-0 flex-1 flex-col gap-px">
-        <h1 className="line-clamp-2 break-words text-[15px] leading-tight font-semibold text-foreground" title={run.task}>{title}</h1>
+        <h1 className="line-clamp-1 break-words text-[15px] leading-tight font-semibold text-foreground" title={run.task}>{title}</h1>
+        {status}
       </div>
       <PopoverTrigger asChild>
         <button

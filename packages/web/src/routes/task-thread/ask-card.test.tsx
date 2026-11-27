@@ -107,6 +107,15 @@ it('hides Other for native option-only questions and still delivers an offered a
   expect(JSON.stringify(mutateAsync.mock.calls)).toContain('Library: date-fns')
 })
 
+it('spans Other across both columns only when it would sit alone in its row', () => {
+  const { unmount } = renderAsk(singleAsk)
+  // Two options fill the first row, so Other takes the whole second row.
+  expect(screen.getByRole('button', { name: 'Other' }).className).toContain('sm:col-span-2')
+  unmount()
+  renderAsk({ ...singleAsk, questions: singleAsk.questions.map(question => ({ ...question, options: [...(question.options ?? []), { label: 'Temporal' }] })) })
+  expect(screen.getByRole('button', { name: 'Other' }).className).not.toContain('sm:col-span-2')
+})
+
 const multiAsk: ThreadAsk = {
   kind: 'ask',
   id: 'ask_2',

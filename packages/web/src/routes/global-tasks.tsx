@@ -1,6 +1,7 @@
 import { useTaskListExpansion } from '@/lib/use-task-list-expansion'
 import { taskListRowIndexes } from '@/lib/task-list-render'
 import { GlobalTasksEmptyState, GlobalTasksLoadError, OtherProjects, TruncatedNotice } from './global-tasks-states'
+import { FilterBar, panelFacetCount } from './global-tasks-filter-bar'
 import { TaskListItems, TaskListFocusBoundary } from '@/components/task-list-items'
 import { runAddress } from '@/api/run-address'
 import { useRunCacheWriter } from '@/api/use-run-cache-writer'
@@ -8,11 +9,10 @@ import './task-lists.css'
 import { Dash, TaskPageHeader, ViewTab, fullTime, headingTone, taskTitleClass } from './task-list-parts'
 import { useMutation } from '@tanstack/react-query'
 import { ArchiveRestoreIcon, EyeIcon, EyeOffIcon } from 'lucide-react'
-import { ArchiveIcon, PlusIcon, SearchIcon, SlidersHorizontalIcon, XIcon } from '@/components/design-icons'
+import { ArchiveIcon, PlusIcon, SearchIcon, SlidersHorizontalIcon } from '@/components/design-icons'
 import * as React from 'react'
 import { useIsDesktop } from '@/lib/use-desktop'
 import { Link } from 'react-router'
-import { controlLocation } from '@open-mercato/cezar-api-client/contract/control-locations'
 import { archiveRun, setRunRead } from '@/api/client'
 import {
   rememberReferenceStatuses,
@@ -21,8 +21,7 @@ import {
   useProjects,
   useRunsIndex,
 } from '@/api/queries'
-import type { ProjectListEntry, RunIndexEntry } from '@open-mercato/cezar-api-client'
-import { FacetFilter, SegmentedControl, ToggleChip } from '@/components/facet-filter'
+import type { RunIndexEntry } from '@open-mercato/cezar-api-client'
 import { DiffStatLabel } from '@/components/diff-stat'
 import { Pill } from '@/components/pill'
 import { ReferenceList } from '@/components/reference-overflow'
@@ -42,27 +41,17 @@ import {
   type TaskReference,
 } from '@/lib/tasks-table'
 import {
-  GROUP_BY_OPTIONS,
   NO_FILTERS,
-  UNTAGGED,
-  allStatuses,
-  canReset,
-  allWorkflows,
-  facetCounts,
   filterGlobalTasks,
   urlStateFromSearchParams,
   urlStateToSearchParams,
   groupGlobalTasks,
   hasActiveFilters,
-  tagValuesOf,
   tasksExcludingFacet,
-  resetCount,
   toGlobalTasks,
   toggleFacetValue,
-  toggleGroupBy,
   withOrigin,
   truncatedProjectNames,
-  type AutomationNameOf,
   type FacetId,
   type GlobalTask,
   type GlobalTaskFilters,
@@ -71,7 +60,6 @@ import {
   type TaskGroup,
 } from '@/lib/global-tasks'
 import { scopeTo } from '@/lib/project-router'
-import { allProjectTags } from '@/lib/project-tags'
 import { canBeUnread, isReadDoneItem, isUnread, unreadMarkerTone } from '@/lib/read-state'
 import { BUCKET_ORDER, runTitle, type BucketLabel, type ListView } from '@/lib/task-groups'
 import { groupIndexedTasks, groupMembers, originCounts, rowTasks, type TaskOrigin, type TaskStatusGroup } from '@/lib/task-origin'
@@ -236,7 +224,9 @@ export function GlobalTasksRoute() {
   const setGroupBy = (groupBy: GroupBy) => commit((state) => ({ ...state, groupBy }))
   const setView = (nextView: ListView) => commit((state) => ({ ...state, view: nextView }))
 
-  const [filterDetailsOpen, setFilterDetailsOpen] = React.useState(groupBy !== 'none' || filters.tags.length > 0)
+  // Facet picks hidden behind the toggle still narrow the list; the toggle's badge counts them.
+  const narrowing = panelFacetCount(filters) + (groupBy === 'none' ? 0 : 1)
+  const [filterDetailsOpen, setFilterDetailsOpen] = React.useState(narrowing > 0)
   const [queryDraft, setQueryDraft] = useQueryDraft(filters.query, (query) => setFilters((current) => ({ ...current, query })))
 
   // Statuses the server already had, riding along with the rows that carry the references — so
@@ -312,7 +302,7 @@ export function GlobalTasksRoute() {
 
   return (
     <TaskListFocusBoundary layout={groupBy} revision={groups} visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, filterDetailsOpen])} data-route="global-tasks" data-presentation={groupBy === 'none' ? 'summary' : 'cards'} data-filter-details={filterDetailsOpen} className="flex min-h-full flex-col gap-3 px-4 pb-6 md:px-9 md:pb-9">
-      <header className="flex shrink-0 flex-col gap-3">
+      <header className="flex shrink-0 flex-col gap-2.5">
         <TaskPageHeader title="All tasks" subtitle={groupBy === 'none' ? 'Every project. One place to review what your agents have shipped.' : 'Filter across projects and act on each run without opening the session.'}
           action={<Button asChild variant="primary" data-slot="new-task-inline" className="min-h-11"><Link to={scopeTo(projects.data?.bootProject ?? 'default', '/new')}><PlusIcon aria-hidden="true" />New task</Link></Button>} />
         <div className="flex items-center gap-6 border-b border-border">
@@ -328,7 +318,18 @@ export function GlobalTasksRoute() {
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="min-w-0 basis-full md:flex-1 md:basis-auto">{search}</div>
-          <Button variant="outline" data-slot="filters-toggle" className={cn('max-md:min-h-11 md:h-9', filterDetailsOpen && 'border-accent-text/40 bg-muted text-accent-text')} aria-expanded={filterDetailsOpen} onClick={() => setFilterDetailsOpen((open) => !open)}><SlidersHorizontalIcon aria-hidden="true" />Filters</Button>
+          <Button
+            variant="outline"
+            data-slot="filters-toggle"
+            data-active={filterDetailsOpen || narrowing > 0}
+            className={cn('max-md:min-h-11 md:h-9', (filterDetailsOpen || narrowing > 0) && 'border-accent-strong bg-accent-strong/10 text-accent-text hover:bg-accent-strong/15 hover:text-accent-text')}
+            aria-expanded={filterDetailsOpen}
+            aria-controls="global-tasks-filters"
+            onClick={() => setFilterDetailsOpen((open) => !open)}
+          >
+            <SlidersHorizontalIcon aria-hidden="true" />Filters
+            {narrowing > 0 ? <span data-slot="filters-count" aria-hidden="true" className="rounded-full bg-accent-strong/20 px-1.5 text-[11px] leading-[18px] font-semibold tabular-nums">{narrowing}</span> : null}
+          </Button>
         </div>
         <TaskOriginRow origin={origin} counts={originTotals} automations={automations} onChange={setOrigin} labels={statusGroups.map((group) => group.label)} onSetAll={folds.setAll} />
       </header>
@@ -536,171 +537,6 @@ function useStatusGroups({ tasks, filters, view, groupBy, index, automationsOn }
   const revealed = new Set<BucketLabel>(filters.query.trim() !== '' ? statusGroups.map((group) => group.label) : [])
   const folds = useTaskListFolds('global', view, revealed)
   return { nameOf, visible, originTotals, statusGroups, folds }
-}
-
-/**
- * The filter row.
- *
- * Two shapes, chosen by what the facet IS rather than for variety:
- *
- *  - **Tags are laid out flat**, as one-click toggle chips. They are the reason this page exists
- *    ("show me the storefront work"), there are rarely more than a dozen, and seeing the whole
- *    set is most of the value — a popover would hide exactly what the user came to look at.
- *  - **Everything else is a searchable multi-select pill.** A workspace can hold forty projects
- *    and a dozen workflows; those do not lay out flat, and they do not need to.
- *
- * Every option carries the number of rows it would leave, counted against the list as the OTHER
- * facets narrow it — so a filter that would empty the table says so before it is clicked. And
- * every option list except the tags is derived from the tasks ACTUALLY on the page: an option
- * that can only ever produce an empty table is a dead end wearing a control's clothes. Tags are
- * the deliberate exception, taken from the registry, because a tag on a project with no tasks
- * yet is still the answer to "which repos are in this group?".
- */
-function FilterBar({
-  filters,
-  onToggle,
-  onClearFacet,
-  onClearAll,
-  groupBy,
-  onGroupByChange,
-  projects,
-  tasks,
-  view,
-  automationName,
-}: {
-  filters: GlobalTaskFilters
-  onToggle: (facet: FacetId, value: string) => void
-  onClearFacet: (facet: FacetId) => void
-  onClearAll: () => void
-  groupBy: GroupBy
-  onGroupByChange: (next: GroupBy) => void
-  projects: readonly ProjectListEntry[]
-  tasks: readonly GlobalTask[]
-  view: ListView
-  /** The list's automation-name lookup, so a name match counts in every facet. */
-  automationName: AutomationNameOf
-}) {
-  const tags = React.useMemo(() => allProjectTags(projects), [projects])
-
-  // One `tasksExcludingFacet` per facet: the counts a facet shows must not already assume that
-  // facet's own ticks, or unticking a value would promise fewer rows than it delivers.
-  const counts = React.useMemo(() => {
-    const per = (facet: FacetId, valueOf: (task: GlobalTask) => readonly string[]) =>
-      facetCounts(tasksExcludingFacet(tasks, filters, view, facet, automationName), valueOf)
-    return {
-      projects: per('projects', (task) => [task.run.projectId]),
-      tags: per('tags', tagValuesOf),
-      statuses: per('statuses', (task) => [task.run.status]),
-      workflows: per('workflows', (task) => [task.run.workflow]),
-    }
-  }, [tasks, filters, view, automationName])
-
-  const withCount = (map: Map<string, number>) => (option: { value: string; label: string }) => ({
-    ...option,
-    count: map.get(option.value) ?? 0,
-  })
-
-  return (
-    <div
-      data-slot="global-tasks-filters"
-      className="flex flex-col gap-2"
-    >
-      <div className="flex flex-wrap items-center gap-1.5">
-        <FacetFilter
-          slot="project"
-          label="Project"
-          selected={filters.projects ?? []}
-          onToggle={(value) => onToggle('projects', value)}
-          onClear={() => onClearFacet('projects')}
-          options={[...new Map(tasks.map((task) => [task.run.projectId, task.projectName])).entries()]
-            .map(([value, label]) => ({ value, label })).map(withCount(counts.projects))}
-          emptyLabel="No tasks to filter"
-        />
-        <FacetFilter
-          slot="status"
-          label="Status"
-          selected={filters.statuses}
-          onToggle={(value) => onToggle('statuses', value)}
-          onClear={() => onClearFacet('statuses')}
-          options={allStatuses(tasks)
-            .map((status) => ({ value: status, label: status }))
-            .map(withCount(counts.statuses))}
-          emptyLabel="No tasks to filter"
-        />
-        <FacetFilter
-          slot="workflow"
-          label="Workflow"
-          selected={filters.workflows}
-          onToggle={(value) => onToggle('workflows', value)}
-          onClear={() => onClearFacet('workflows')}
-          options={allWorkflows(tasks)
-            .map((workflow) => ({ value: workflow, label: workflow }))
-            .map(withCount(counts.workflows))}
-          emptyLabel="No tasks to filter"
-        />
-        <div data-slot="group-controls" className="flex flex-wrap items-center gap-2"><span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
-        <span className="text-[11px] font-medium text-soft-foreground">Group by</span>
-        {/* Pressing the pressed one releases it — see `toggleGroupBy`, which is why there is
-            no "None" button to hunt for. */}
-        <SegmentedControl
-          slot="group-by"
-          label="Group tasks by"
-          value={groupBy}
-          options={GROUP_BY_OPTIONS}
-          onChange={(picked) => onGroupByChange(toggleGroupBy(groupBy, picked))}
-        /></div>
-        {canReset({ filters, groupBy }) ? (
-          <button
-            type="button"
-            data-action="clear-filters"
-            onClick={onClearAll}
-            className="ml-auto inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <XIcon className="size-3" aria-hidden="true" />
-            Clear
-            {` (${resetCount({ filters, groupBy })})`}
-          </button>
-        ) : null}
-      </div>
-
-      {tags.length > 0 ? (
-        <div data-slot="tag-filters" className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-medium text-soft-foreground">Tags</span>
-          {tags.map((tag) => (
-            <ToggleChip
-              key={tag}
-              slot="tag-filter"
-              tone="tag"
-              label={tag}
-              count={counts.tags.get(tag) ?? 0}
-              selected={filters.tags.some((picked) => picked.toLowerCase() === tag.toLowerCase())}
-              onToggle={() => onToggle('tags', tag)}
-            />
-          ))}
-          {/* Last, and named as the leftovers it is: "which repos still need labelling?" is a
-              real question, and it is the one this chip answers. */}
-          <ToggleChip
-            slot="tag-filter"
-            label="Untagged"
-            count={counts.tags.get(UNTAGGED) ?? 0}
-            selected={filters.tags.includes(UNTAGGED)}
-            onToggle={() => onToggle('tags', UNTAGGED)}
-          />
-        </div>
-      ) : (
-        // Not silence: a workspace with no tags anywhere is the ONE state where the feature is
-        // invisible, and the sentence that fixes it is one line long — with the door in it,
-        // since the pane that fixes it is two clicks away and outside this page.
-        <p data-slot="no-tags-hint" className="text-[11px] text-soft-foreground">
-          Tag connected repositories in{' '}
-          <Link to="/settings/global/projects" className="font-medium text-accent-text hover:underline">
-            {controlLocation('projects')}
-          </Link>{' '}
-          to group their tasks together here.
-        </p>
-      )}
-    </div>
-  )
 }
 
 /** Each group owns a list of task cards, with the same scoped actions on desktop and mobile. */

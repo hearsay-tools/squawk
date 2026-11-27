@@ -215,10 +215,11 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
       data-resolved="false"
       data-pinned={ask.placement === 'pinned' ? 'true' : undefined}
       data-delivery={delivery.mode}
-      className="rounded-lg border border-accent-strong/25 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card px-3 py-2"
+      className="rounded-lg border border-accent-strong/25 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card px-3 pt-4 pb-2.5"
     >
-      {/* Tight rhythm: a two-question card with its Send row fits above the dock at 1440×900. */}
-      <div className="mb-1 flex items-center gap-2">
+      {/* Tight rhythm: a two-question card with its Send row fits above the dock at 1440×900. The
+          top padding keeps the heading clear of the border. */}
+      <div className="mb-1.5 flex items-center gap-2">
         <span className="text-xs font-medium text-link-foreground">The agent is asking</span>
       </div>
       <div className="flex flex-col gap-2">
@@ -346,7 +347,8 @@ function AskQuestionBlock({
       </div>
       {options ? (
         <>
-          {/* Choices sit in two columns from the small breakpoint; Other is the grid's last cell. */}
+          {/* Choices sit in two columns from the small breakpoint; Other is the grid's last cell,
+              and spans both columns when it would sit alone in its row. */}
           <div data-slot="ask-options" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 sm:gap-2">
             {options.map((option) => {
               const isSelected = selected.includes(option.label)
@@ -398,6 +400,7 @@ function AskQuestionBlock({
                 onClick={onOtherToggle}
                 className={cn(
                   'h-auto min-h-11 w-full justify-start px-2.5 py-1.5 text-left',
+                  options.length % 2 === 0 && 'sm:col-span-2',
                   isOther && 'border-accent-strong/60 bg-accent-strong/[0.06] [html:not(.light)_&]:bg-card',
                 )}
               >

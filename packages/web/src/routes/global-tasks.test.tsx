@@ -448,6 +448,30 @@ it('mounts summary actions only while the row is expanded', async () => {
       expect(search()).toBe('?group=project')
     })
 
+    it('keeps the facet panel behind a closed Filters toggle until something narrows the list', async () => {
+      stubFetch()
+      renderPage(createQueryClient(), '/tasks')
+      await screen.findByText('Add checkout endpoint')
+      const toggle = screen.getByRole('button', { name: 'Filters' })
+      expect(toggle.getAttribute('aria-expanded')).toBe('false')
+      expect(toggle.getAttribute('data-active')).toBe('false')
+      expect(toggle.getAttribute('aria-controls')).toBe('global-tasks-filters')
+      expect(document.querySelector('[data-route="global-tasks"]')?.getAttribute('data-filter-details')).toBe('false')
+      expect(toggle.querySelector('[data-slot="filters-count"]')).toBeNull()
+    })
+
+    it('opens and highlights Filters, with a count, when the URL restores a facet', async () => {
+      stubFetch()
+      renderPage(createQueryClient(), '/tasks?status=running&group=project')
+      await screen.findByText('Filter across projects and act on each run without opening the session.')
+      const toggle = screen.getByRole('button', { name: 'Filters' })
+      expect(toggle.getAttribute('aria-expanded')).toBe('true')
+      fireEvent.click(toggle)
+      // Closed, it still says the list is narrowed: one status and the grouping.
+      expect(toggle.getAttribute('data-active')).toBe('true')
+      expect(toggle.querySelector('[data-slot="filters-count"]')?.textContent).toBe('2')
+    })
+
     it('restores a filtered, grouped view from the query string alone', async () => {
       // The refresh case: a reload re-enters the route with only the URL to go on.
       stubFetch()

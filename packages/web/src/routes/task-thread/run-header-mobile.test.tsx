@@ -70,13 +70,15 @@ function renderScreen(entry = '/tasks/r1', run: ApiRun = record, tab: RunTab = '
 const topBar = () => document.querySelector('[data-slot="mobile-top-bar"]') as HTMLElement
 
 describe('pushed task screen top bar', () => {
-  it('shows back, the title and the run actions', () => {
+  it('shows back, the title, its compact status pill and the run actions', () => {
     renderScreen()
     const bar = topBar()
     expect(bar.getAttribute('data-mode')).toBe('task')
     expect(within(bar).getByRole('button', { name: 'Back' })).toBeTruthy()
     expect(within(bar).getByText('Reviewer agent presets')).toBeTruthy()
     expect(within(bar).getByRole('button', { name: 'Run actions' })).toBeTruthy()
+    // The compact pill states the status under the title; the raw status value never shows.
+    expect(bar.querySelector('[data-slot="mobile-run-status"]')?.textContent).toBe('Running')
     expect(bar.textContent).not.toContain('running')
     // The project chrome is gone: this is a pushed screen, not a list.
     expect(within(bar).queryByRole('button', { name: 'Search' })).toBeNull()

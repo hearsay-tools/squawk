@@ -152,7 +152,7 @@
 [data-route='new'] [data-slot='composer-submit-row'] > button:disabled {
   border: 1px solid color-mix(in oklch, var(--action) 55%, transparent);
   background: color-mix(in oklch, var(--action) 16%, var(--card));
-  color: color-mix(in oklch, var(--action) 45%, var(--foreground));
+  color: color-mix(in oklch, var(--action) 30%, var(--foreground));
   opacity: 1;
 }
 @media (max-width: 767px) {

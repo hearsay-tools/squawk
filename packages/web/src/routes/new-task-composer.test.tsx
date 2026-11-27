@@ -416,16 +416,18 @@ describe('picker data flows', () => {
   describe('the run-mode note (#793)', () => {
     const note = () => document.querySelector('[data-slot="run-mode-note"]')?.textContent
 
-    it('sits with the mode note under Start, with a hint while the prompt is empty', async () => {
+    it('sits under Start in two lines: the empty-prompt hint gives way to the mode note', async () => {
       serve()
       renderNewTask()
       await pillReady()
       const feedback = document.querySelector('[data-slot="composer-feedback"]') as HTMLElement
-      expect(feedback.querySelector('[data-slot="new-task-mode-note"]')?.textContent).toContain('Start immediately with the selected configuration.')
+      const modeNote = () => feedback.querySelector('[data-slot="new-task-mode-note"]')
       expect(feedback.querySelector('[data-slot="run-mode-note"]')).not.toBeNull()
-      await waitFor(() => expect(feedback.querySelector('[data-slot="new-task-start-hint"]')?.textContent).toBe('Describe a task above to start.'))
+      await waitFor(() => expect(modeNote()?.querySelector('[data-slot="new-task-start-hint"]')?.textContent).toBe('Describe a task above to start.'))
+      expect(feedback.querySelector('[data-slot="new-task-idle-feedback"]')?.children).toHaveLength(2)
       fireEvent.change(textarea(), { target: { value: 'Fix the bug' } })
       await waitFor(() => expect(feedback.querySelector('[data-slot="new-task-start-hint"]')).toBeNull())
+      expect(modeNote()?.textContent).toContain('Start immediately with the selected configuration.')
     })
 
     it('promises isolation only while the run will actually get a worktree', async () => {
