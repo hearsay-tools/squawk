@@ -34,7 +34,7 @@ const ROUTES = [
   { name: 'Git main', path: '/git', phoneQuery: '?view=repo', scoped: true, template: 'Split' },
   { name: 'Agent config', path: '/settings/agent-config', scoped: true, template: 'Split' },
   { name: 'New task', path: '/new', scoped: true, template: 'Form' },
-  { name: 'Settings general', path: '/settings/general', scoped: true, template: 'Form' },
+  { name: 'Settings defaults', path: '/settings/agent-defaults', scoped: true, template: 'Form' },
   { name: 'Activity', path: '/activity', scoped: true, template: 'Board' },
   { name: 'Not found', path: '/does-not-exist-shell-check', scoped: true, template: 'Reading' },
 ] as const
@@ -63,7 +63,7 @@ function measureShell(theme: 'light' | 'dark'): ShellSample {
         return r.width > 2 && r.height > 2 && s.display !== 'none' && s.visibility !== 'hidden' && Number(s.opacity) > 0
       }
       const actions = shell
-        ? [...shell.querySelectorAll('[data-slot="page-shell-header-actions"] :is(button, a)[data-slot="button"]')]
+        ? [...shell.querySelectorAll('[data-slot="page-shell-header-actions"] :is(button, a):is([data-slot="button"], [data-page-shell-action])')]
             .filter(painted)
             .map((el) => {
               const r = el.getBoundingClientRect()
@@ -118,7 +118,7 @@ describe('PageShell unified layout templates across themes and viewports', () =>
       for (const entry of ROUTES) {
         browser.goto(routeUrl(entry, false))
         browser.waitForFunction(
-          `document.querySelector('[data-slot="page-shell"][data-template=${JSON.stringify(entry.template)}]') !== null && document.querySelector('[data-slot="page-shell"] [data-slot="page-shell-header-title"], [data-slot="page-shell"] h1') !== null`,
+          `document.querySelector('[data-slot="page-shell"][data-template=${JSON.stringify(entry.template)}] [data-slot="page-shell-header-title"]') !== null`,
         )
         const sample = measureShell(theme)
         expect(sample.light, entry.name).toBe(theme === 'light')
@@ -155,7 +155,7 @@ describe('PageShell unified layout templates across themes and viewports', () =>
       for (const entry of ROUTES) {
         browser.goto(routeUrl(entry, true))
         browser.waitForFunction(
-          `document.querySelector('[data-slot="page-shell"][data-template=${JSON.stringify(entry.template)}]') !== null && document.querySelector('[data-slot="page-shell"] [data-slot="page-shell-header-title"], [data-slot="page-shell"] h1') !== null`,
+          `document.querySelector('[data-slot="page-shell"][data-template=${JSON.stringify(entry.template)}] [data-slot="page-shell-header-title"]') !== null`,
         )
         const sample = measureShell(theme)
         expect(sample.light, entry.name).toBe(theme === 'light')

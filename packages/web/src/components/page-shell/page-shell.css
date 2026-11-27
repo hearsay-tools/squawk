@@ -121,7 +121,7 @@
 
 /* Unified header action button size: 36px on desktop, 44px on mobile and coarse touch. */
 [data-slot='page-shell-header-actions'] :is(button, a)[data-slot='button'],
-[data-slot='page-shell-header-actions'] :is(button, a)[data-slot='page-shell-action'] {
+[data-slot='page-shell-header-actions'] :is(button, a)[data-page-shell-action] {
   height: 36px;
   min-height: 36px;
   padding-inline: 12px;
@@ -131,9 +131,9 @@
   line-height: 1;
 }
 
-@media (max-width: 767px), (hover: none) {
+@media (width < 48rem), (any-pointer: coarse) {
   [data-slot='page-shell-header-actions'] :is(button, a)[data-slot='button'],
-  [data-slot='page-shell-header-actions'] :is(button, a)[data-slot='page-shell-action'] {
+  [data-slot='page-shell-header-actions'] :is(button, a)[data-page-shell-action] {
     height: auto;
     min-height: 44px;
     min-width: 44px;
