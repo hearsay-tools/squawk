@@ -341,7 +341,11 @@ each built-in runner, and `SHARED_WAIT_FOLDS` groups the shared wait parts on `r
 keep each part's cells in its own module and let a per-runner file import only its part's or
 fold's module. The wait parity cells do this: `workflows/waits-parity-<part>-cells.testkit.ts`,
 `workflows/waits-parity-<fold>-fold.testkit.ts`, one shared fixture and a catalog, and the full
-registry for the guard file only (hearsay-tools/cezarion#3242). Vitest 4 fails a suite that registers no test,
+registry for the guard file only (hearsay-tools/cezarion#3242). A guard that only reads which
+rows register loads no workflow engine: a harness part whose bodies drive the engine keeps its
+registration in an engine-free `core/harness-parity-<part>.rows.testkit.ts`, its cells module
+passes the bodies by row id, and `core/harness-parity-inventory.testkit.ts` collects every
+part's rows through them (hearsay-tools/squawk#3962). Vitest 4 fails a suite that registers no test,
 so the file that runs the guard and the single-runner cells must not register
 a `describe` whose body holds only runner cells; `describeRunners` in
 `core/harness-parity-cells.testkit.ts` is the example
