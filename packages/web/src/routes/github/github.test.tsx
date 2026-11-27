@@ -171,6 +171,10 @@ describe('the GitHub tab lists', () => {
     expect(qualifier.className).toContain('font-normal')
     expect(qualifier.className).toContain('text-muted-foreground')
     expect(document.querySelector('[data-slot="gh-repo"]')?.textContent).toBe('acme/demo')
+    // Refresh is a page action on the title row, like the Tasks and Automations headers; the tab
+    // row holds only the two tabs.
+    expect(document.querySelector('[data-slot="gh-masthead"] [data-slot="gh-page-actions"] [data-slot="gh-refresh"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="gh-tabs"] [data-slot="gh-refresh"]')).toBeNull()
 
     const tabs = [...document.querySelectorAll('[data-slot="gh-tabs"] a')].map((a) => ({
       text: a.textContent,
@@ -300,7 +304,7 @@ describe('the GitHub tab lists', () => {
       document.querySelector(`[data-slot="gh-row"][data-number="${number}"] [data-slot="gh-row-meta"]`)!
     const dots = (number: string) => meta(number).querySelectorAll('[data-slot="gh-row-dot"]')
 
-    // #142: number · author · age · comments. #139 has no comments, so no trailing dot.
+    // Row 142: number · author · age · comments. Row 139 has no comments, so no trailing dot.
     expect(dots('142')).toHaveLength(3)
     expect(dots('139')).toHaveLength(2)
     for (const dot of dots('142')) expect(dot.getAttribute('aria-hidden')).toBe('true')

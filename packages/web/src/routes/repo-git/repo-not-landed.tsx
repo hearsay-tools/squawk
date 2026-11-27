@@ -300,16 +300,16 @@ function NotLandedTitleAndMeta({ entry, finishedAt }: {
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {entry.runId ? (
-          <Link to={`/tasks/${entry.runId}`} data-slot="not-landed-title" className="min-w-0 truncate rounded-[2px] text-[13px] text-foreground hover:underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring">
+          <Link to={`/tasks/${entry.runId}`} data-slot="not-landed-title" className="min-w-0 truncate rounded-[2px] text-[13px] font-medium text-foreground hover:underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring">
             {title}
           </Link>
         ) : (
-          <span data-slot="not-landed-title" className="min-w-0 truncate text-[13px] text-muted-foreground" title={title}>{title}</span>
+          <span data-slot="not-landed-title" className="min-w-0 truncate text-[13px] font-medium text-foreground" title={title}>{title}</span>
         )}
         {/* Mono for the branch only; counts and ages stay sans. Each separator is its own item, so
             the gap is the same on both sides of every dot. */}
         <span data-slot="not-landed-meta" className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="shrink-0 font-mono text-[11px]">{entry.name}</span>
+          <span className="shrink-0 font-mono text-xs">{entry.name}</span>
           <MetaDot />
           <span className="shrink-0">{entry.ahead} commit{entry.ahead === 1 ? '' : 's'}</span>
           {entry.diffStat ? <><MetaDot /><ChangeCounts adds={entry.diffStat.additions} dels={entry.diffStat.deletions} /></> : null}

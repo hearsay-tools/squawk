@@ -85,8 +85,10 @@
      the three pages' tab baselines sit at the same height; the 32px utilities center in it. */
   [data-route='github'] [data-slot='gh-tabs'] { gap: 24px; min-height: 0; margin-inline: -36px; padding-inline: 36px; }
   [data-route='github'] [data-slot='gh-tabs'] > a { min-height: 44px; padding-block: 0; padding-inline: 0; }
-  [data-route='github'] [data-slot='gh-tabs'] .gh-utility { height: 32px; min-height: 32px; padding-block: 0; padding-inline: 12px; margin-block: 6px; border-radius: 7px; font-size: 12px; line-height: 1; white-space: nowrap; }
+  /* The page actions on the title row: 32px utilities, like the Tasks and Automations headers. */
+  [data-route='github'] [data-slot='gh-page-actions'] .gh-utility { height: 32px; min-height: 32px; padding-block: 0; padding-inline: 12px; border-radius: 7px; font-size: 12px; line-height: 1; white-space: nowrap; }
   [data-route='github'] [data-slot='gh-filter-toolbar'] { gap: 10px; }
   [data-route='github'] [data-slot='gh-filter-toolbar'] :is(input, button) { min-height: 36px; height: 36px; padding-block: 0; border-radius: 7px; font-size: 12.5px; }
   [data-route='github'] [data-slot='gh-filter-toolbar'] [data-slot='gh-search'] { padding-inline-start: 32px; color: var(--foreground); }
+  [data-route='github'] [data-slot='gh-filter-toolbar'] [data-slot='gh-assigned-me'] { border-radius: 999px; }
 }

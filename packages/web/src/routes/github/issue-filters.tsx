@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { GithubData } from '@open-mercato/cezar-api-client'
-import { ChevronDownIcon, RefreshCwIcon, TriangleAlertIcon } from '@/components/design-icons'
+import { ChevronDownIcon, RefreshCwIcon, TriangleAlertIcon, UserRoundIcon } from '@/components/design-icons'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
@@ -215,8 +215,11 @@ export function IssueFilters({ data, assignees, projectId, onAssigneesChange, on
   return (
     <div className="contents" data-slot="gh-issue-filters">
       <IssueAssigneePicker options={options} assignees={assignees} onAssigneesChange={onAssigneesChange} />
-      <button ref={meRef} type="button" className={`${control} aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-background`} disabled={!data.viewerLogin} aria-pressed={isMe}
+      {/* A boolean filter chip, not a picker: a pill with a person glyph and no chevron, so it
+          never reads as one more dropdown beside Labels, Assignee and the board picker. */}
+      <button ref={meRef} type="button" data-slot="gh-assigned-me" className={`${control} inline-flex items-center gap-1.5 rounded-full aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-background`} disabled={!data.viewerLogin} aria-pressed={isMe}
         onClick={() => onAssigneesChange(isMe ? [] : [data.viewerLogin!])}>
+        <UserRoundIcon size={14} aria-hidden="true" className="size-3.5 shrink-0" />
         Assigned to me
       </button>
       <IssueProjectPicker data={data} projectId={projectId} onProjectChange={onProjectChange} pickerRef={pickerRef} />

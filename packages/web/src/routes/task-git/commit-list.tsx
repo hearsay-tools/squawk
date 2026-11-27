@@ -47,8 +47,6 @@ export interface CommitListItem {
   at?: string | undefined
   /** Where the row links to — the two consumers have different route prefixes. */
   href: string
-  /** The sha as displayed; the task list abbreviates, the repo log is already short. */
-  shaLabel: string
   /** Optional ± diff stat for the commit when already fetched. */
   stat?: DiffStat | undefined
 }
@@ -156,12 +154,23 @@ function CommitRow({ commit, selected }: { commit: CommitListItem; selected: boo
           <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             {/* One chip on every row: a bordered card surface reads the same on a plain row and
                 on the selected row's muted fill, where a muted chip would melt into it. */}
-            <span data-slot="commit-sha" className="shrink-0 rounded-sm border border-border bg-card px-1.5 py-px font-mono text-xs text-muted-foreground" title={commit.sha}>{commit.shaLabel}</span>
+            <ShaChip sha={commit.sha} />
             <span className="min-w-0 truncate">{commit.author} · <span title={gitAgeTitle(commit.when, commit.at)}>{gitAge(commit.when, commit.at)}</span></span>
             {commit.stat ? <DiffStatLabel stat={commit.stat} /> : null}
           </span>
         </span>
       </Link>
     </div>
+  )
+}
+
+/** The mono sha pill every commit row leads its meta line with — the task Commits list and the
+ *  repo's Recently on main log draw this one chip, at one length (`SHA_CHIP_LENGTH`). */
+export const SHA_CHIP_LENGTH = 8
+export function ShaChip({ sha }: { sha: string }) {
+  return (
+    <span data-slot="commit-sha" className="shrink-0 rounded-sm border border-border bg-card px-1.5 py-px font-mono text-xs text-muted-foreground" title={sha}>
+      {sha.slice(0, SHA_CHIP_LENGTH)}
+    </span>
   )
 }

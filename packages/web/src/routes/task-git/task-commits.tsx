@@ -110,7 +110,6 @@ function CommitsWorkspace({
           className="w-full"
           commits={commits.map((commit: RunCommit) => ({
             ...commit,
-            shaLabel: commit.sha.slice(0, 8),
             href: `/tasks/${run.id}/commits/${commit.sha}`,
             stat: commitStats.get(commit.sha),
           }))}

@@ -71,12 +71,18 @@ export function WbMetadata({
   onLoadWorkflow: (workflow: WorkflowDef) => void
 }) {
   return (
-    <section data-slot="wb-metadata" className="flex min-w-0 flex-col gap-4">
-      <div data-slot="wb-load" className="flex flex-col items-start gap-1.5">
+    // One metadata row: the workflow to load, its name and its description side by side once the
+    // builder is wide enough, so the step cards start higher. Narrower, the description wraps
+    // under the first two; a phone stacks all three.
+    <section
+      data-slot="wb-metadata"
+      className="grid min-w-0 grid-cols-1 gap-3 @xl:grid-cols-2 @4xl:grid-cols-[minmax(180px,240px)_minmax(200px,280px)_minmax(0,1fr)] @xl:items-start"
+    >
+      <div data-slot="wb-load" className="flex min-w-0 flex-col gap-1.5">
         <label htmlFor="workflow-load" className="text-xs font-medium text-foreground">
           Load an existing workflow
         </label>
-        <div className="relative inline-flex max-w-full items-center">
+        <div className="relative flex min-w-0 items-center">
           <select
             id="workflow-load"
             value={workflows.some((w) => w.name === trimmedName) ? trimmedName : ''}
@@ -84,7 +90,7 @@ export function WbMetadata({
               const workflow = workflows.find((w) => w.name === event.target.value)
               if (workflow) onLoadWorkflow(workflow)
             }}
-            className="h-10 min-w-[220px] max-w-full appearance-none rounded-lg border border-border bg-card pr-9 pl-3.5 text-xs font-medium text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:h-11"
+            className="h-10 w-full min-w-0 appearance-none rounded-lg border border-border bg-card pr-9 pl-3.5 text-xs font-medium text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:h-11"
           >
             <option value="" disabled>
               Choose a workflow
@@ -103,36 +109,34 @@ export function WbMetadata({
           <ChevronDownIcon aria-hidden="true" className="pointer-events-none absolute right-3 size-4 text-muted-foreground" />
         </div>
       </div>
-      <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-[minmax(200px,280px)_minmax(0,1fr)] md:items-start">
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <label htmlFor="workflow-name" className="text-xs font-medium text-foreground">
-            Workflow name
-          </label>
-          <Input
-            id="workflow-name"
-            ref={nameRef}
-            data-slot="wb-name"
-            aria-label="Workflow name"
-            spellCheck={false}
-            value={draft.name}
-            onChange={(event) => onDraft({ ...draft, name: event.target.value })}
-            className="h-10 bg-card text-sm max-md:h-11"
-          />
-        </div>
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <label htmlFor="workflow-description" className="text-xs font-medium text-foreground">
-            Description
-          </label>
-          <Textarea
-            id="workflow-description"
-            data-slot="wb-description"
-            aria-label="Description"
-            rows={1}
-            value={draft.description}
-            onChange={(event) => onDraft({ ...draft, description: event.target.value })}
-            className="min-h-10 bg-card px-3 py-2 text-sm max-md:min-h-11"
-          />
-        </div>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <label htmlFor="workflow-name" className="text-xs font-medium text-foreground">
+          Workflow name
+        </label>
+        <Input
+          id="workflow-name"
+          ref={nameRef}
+          data-slot="wb-name"
+          aria-label="Workflow name"
+          spellCheck={false}
+          value={draft.name}
+          onChange={(event) => onDraft({ ...draft, name: event.target.value })}
+          className="h-10 bg-card text-sm max-md:h-11"
+        />
+      </div>
+      <div className="flex min-w-0 flex-col gap-1.5 @xl:col-span-2 @4xl:col-span-1">
+        <label htmlFor="workflow-description" className="text-xs font-medium text-foreground">
+          Description
+        </label>
+        <Textarea
+          id="workflow-description"
+          data-slot="wb-description"
+          aria-label="Description"
+          rows={1}
+          value={draft.description}
+          onChange={(event) => onDraft({ ...draft, description: event.target.value })}
+          className="min-h-10 bg-card px-3 py-2 text-sm max-md:min-h-11"
+        />
       </div>
     </section>
   )

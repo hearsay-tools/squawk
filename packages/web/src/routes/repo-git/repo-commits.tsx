@@ -14,6 +14,8 @@ import { CommitDiffPanel } from '@/components/diff/commit-diff-panel'
 import { useIsDesktop } from '@/lib/use-desktop'
 import { cn } from '@/lib/utils'
 
+import { ShaChip } from '../task-git/commit-list'
+
 import { PullConfirmDialog } from './git-checkout-block'
 import { checkoutTracking, GIT_PHONE_MAIN_PATH, gitAge, gitAgeTitle, groupCommitsByDay } from './git-sections'
 import { useGitCheckout } from './use-git-checkout'
@@ -66,8 +68,7 @@ export function RepoCommitsSection({ repo, info }: { repo: RepoResponse; info: R
                 >
                   <span data-slot="commit-row-subject" className="truncate text-[13px] font-medium text-foreground">{commit.subject}</span>
                   <span data-slot="commit-row-meta" className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                    {/* The same sha chip as the task Commits list. */}
-                    <span className="shrink-0 rounded-sm border border-border bg-card px-1.5 py-px font-mono" title={commit.hash}>{commit.hash.slice(0, 8)}</span>
+                    <ShaChip sha={commit.hash} />
                     <span aria-hidden="true" className="shrink-0">·</span>
                     <span className="truncate">{commit.author} · <span title={gitAgeTitle(commit.when, commit.at)}>{gitAge(commit.when, commit.at)}</span></span>
                   </span>

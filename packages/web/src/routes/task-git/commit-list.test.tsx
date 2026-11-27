@@ -30,7 +30,6 @@ afterEach(() => {
 const commits = (count: number): CommitListItem[] =>
   Array.from({ length: count }, (_, index) => ({
     sha: `sha${index}`,
-    shaLabel: `sha${index}`.slice(0, 8),
     subject: `commit ${index}`,
     author: 'ada',
     when: '2h ago',
@@ -66,11 +65,22 @@ describe('CommitList', () => {
     expect(first.textContent).toContain('ada')
   })
 
+  it('leads each meta line with the shared 8-character sha pill', () => {
+    render(
+      <MemoryRouter>
+        <CommitList slot="task-commits" commits={[{ sha: '0123456789abcdef', subject: 's', author: 'ada', when: '2h ago', href: '/x' }]} />
+      </MemoryRouter>,
+    )
+    const chip = document.querySelector<HTMLElement>('[data-slot="commit-sha"]')!
+    expect(chip.textContent).toBe('01234567')
+    expect(chip.title).toBe('0123456789abcdef')
+    expect(chip.className).toContain('font-mono')
+  })
+
   it('keeps task and repo commit links inside the active project', () => {
     const scopedCommits: CommitListItem[] = [
       {
         sha: 'repo-sha',
-        shaLabel: 'repo-sha',
         subject: 'repo commit',
         author: 'ada',
         when: '2h ago',
@@ -78,7 +88,6 @@ describe('CommitList', () => {
       },
       {
         sha: 'task-sha',
-        shaLabel: 'task-sha',
         subject: 'task commit',
         author: 'ada',
         when: '2h ago',

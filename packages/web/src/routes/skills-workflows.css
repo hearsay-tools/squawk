@@ -18,14 +18,15 @@
 [data-slot="skill-body"] h2 { font-size: 18px; font-weight: 600; }
 [data-slot="skill-body"] h3 { font-size: 14px; font-weight: 600; }
 [data-slot="wb-metadata"] { gap: 14px; }
-[data-slot="wb-load"] { margin-block-end: 2px; }
 [data-slot="wb-load"] label { font-size: 12px; }
 [data-slot="wb-name"] { padding-inline: 12px; }
 [data-slot="wb-actions"] button { padding-inline: 12px; gap: 8px; border-radius: 8px; }
 [data-slot="wb-actions"] svg { width: 16px; height: 16px; }
 [data-slot="wb-auto-panel"] { border-color: color-mix(in oklch, var(--accent-strong) 35%, var(--border)); }
 [data-slot="wb-auto-cancel"] { border: 1px solid var(--border); background: var(--card); }
-[data-slot="wb-palette"] { margin-block-start: 16px; gap: 16px; }
+/* The Available skills list has the density of the cockpit's other lists: 4px between rows, and
+   from md up a 36px row with a 32px add target (phones keep the 44px touch rows). */
+[data-slot="wb-palette"] { margin-block-start: 12px; gap: 4px; }
 [data-slot="wb-skill"] { padding: 0; }
 [data-slot="wb-skill-add"] { width: 24px; }
 [data-slot="wb-aside"] h2 { font-size: 16px; }
@@ -163,6 +164,8 @@
 }
 @media (min-width: 768px) {
   [data-slot="skill-detail"] > div:first-child :is(h2,h3) { line-height: 38px; }
+  [data-slot="wb-skill"] { min-height: 36px; padding-block: 4px; }
+  [data-slot="wb-skill-add"] { height: 32px; }
 }
 
 [data-slot="wb-auto-panel"] > h2 { line-height: 29px; }

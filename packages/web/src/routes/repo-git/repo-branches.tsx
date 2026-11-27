@@ -154,7 +154,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
             id="new-branch-name"
             aria-label="New branch name"
             placeholder="new-branch-name"
-            className="h-11 bg-background"
+            className="h-11 bg-background placeholder:text-muted-foreground/70"
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
           />

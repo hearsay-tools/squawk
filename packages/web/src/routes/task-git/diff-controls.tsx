@@ -1,4 +1,4 @@
-import { EyeIcon, Rows2Icon, WrapTextIcon } from 'lucide-react'
+import { FileTextIcon, Rows2Icon, WrapTextIcon } from 'lucide-react'
 import { GitBranchIcon, Columns2Icon } from '@/components/design-icons'
 
 import type { DiffMode } from '@/components/diff'
@@ -70,7 +70,9 @@ export function WrapToggle({ wrap, onWrapChange, className = 'size-11 rounded-lg
  * the diff at once, and pressing it clears the per-file choices made in the cards. Like the
  * wrap switch it shows at every width: a rendered document reads better on a phone than
  * anywhere. Callers render it only when the diff holds a file `canPreviewMarkdown`
- * accepts, so the button never sits there doing nothing.
+ * accepts, so the button never sits there doing nothing. It carries a document icon and, from
+ * `sm` up, a visible "Preview MD" label, so it never reads as a twin of the per-file eye
+ * `Preview` switch inside each Markdown card below it.
  */
 export function MarkdownPreviewToggle({
   preview,
@@ -83,18 +85,19 @@ export function MarkdownPreviewToggle({
   return (
     <Button
       variant="outline"
-      size="icon-sm"
+      size="sm"
       data-slot="markdown-preview-toggle"
       aria-pressed={preview}
       aria-label="Preview Markdown"
       title={label}
       className={cn(
-        'size-11 rounded-lg',
+        'h-11 min-w-11 gap-1.5 rounded-lg px-0 text-xs font-medium sm:px-3',
         preview ? 'border-accent-text/40 bg-muted text-accent-text' : 'text-muted-foreground hover:text-foreground',
       )}
       onClick={() => onPreviewChange(!preview)}
     >
-      <EyeIcon aria-hidden="true" />
+      <FileTextIcon aria-hidden="true" className="size-4" />
+      <span aria-hidden="true" className="max-sm:hidden">Preview MD</span>
     </Button>
   )
 }

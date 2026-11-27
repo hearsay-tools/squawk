@@ -14,3 +14,16 @@ describe('pageTitleContext for automations', () => {
     expect(pageTitleContext(pathname)).toEqual({ pageLabel, taskId: null })
   })
 })
+
+describe('pageTitleContext for Git sections', () => {
+  it.each([
+    ['/p/acme-api/git', 'Git'],
+    ['/p/acme-api/git/commits/abc123', 'Git'],
+    ['/p/acme-api/git/not-landed', 'Git / Not landed'],
+    ['/p/acme-api/git/branches', 'Git / All branches'],
+    ['/p/acme-api/git/changes', 'Git / Uncommitted changes'],
+    ['/p/acme-api/git/cleanup', 'Git / Cleanup'],
+  ])('labels %s as %s', (pathname, pageLabel) => {
+    expect(pageTitleContext(pathname)).toEqual({ pageLabel, taskId: null })
+  })
+})

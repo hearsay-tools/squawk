@@ -2,7 +2,7 @@ import './github-layout.css'
 import { useQueryClient } from '@tanstack/react-query'
 import { LoaderCircleIcon } from 'lucide-react'
 import { Virtualizer } from 'virtua'
-import { CheckIcon, CircleDotIcon, ChevronDownIcon, GitPullRequestIcon, RefreshCwIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
+import { CheckIcon, CircleDotIcon, ChevronDownIcon, GitPullRequestIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
 import {
   useEffect,
   useRef,
@@ -15,7 +15,7 @@ import {
   type SetStateAction,
 } from 'react'
 import { useParams } from 'react-router'
-import { Link, Navigate } from '@/lib/project-router'
+import { Navigate } from '@/lib/project-router'
 
 import { putUiState } from '@/api/client'
 import { queryKeys, useGithubPages, useUiState } from '@/api/queries'
@@ -291,18 +291,11 @@ export function GithubRoute({
     // at maximum page scroll its tabs align with main's top without sticky overlap.
     // Phone stays stacked document-flow. (#523)
     <div ref={layout.routeRef} data-route="github" className="flex min-h-full flex-col gap-2.5 px-4 pt-7 pb-[calc(90px+env(safe-area-inset-bottom))] md:px-9 md:pt-7 md:pb-4">
-      <GithubMasthead view={view} activeFilter={activeFilter} isDesktop={isDesktop} rawFilterParam={rawFilterParam} n={n} gh={gh} />
+      <GithubMasthead view={view} activeFilter={activeFilter} isDesktop={isDesktop} rawFilterParam={rawFilterParam} n={n} gh={gh}
+        actions={{ automationsAvailable, refreshing: refresh.isPending, onRefresh }} />
       <div ref={layout.workspaceRef} data-slot="gh-workspace" data-stacked={layout.panesStacked} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:h-[calc(var(--gh-workspace-height,calc(100dvh-4rem))-1rem)] md:flex-none md:gap-5">
         <header data-slot="gh-header" className="flex shrink-0 flex-col gap-3 bg-background md:gap-4">
-          <GithubTabs
-            view={view}
-            isDesktop={isDesktop}
-            gh={gh}
-            automationsAvailable={automationsAvailable}
-            onSaveView={saveGithubView}
-            refreshing={refresh.isPending}
-            onRefresh={onRefresh}
-          />
+          <GithubTabs view={view} isDesktop={isDesktop} gh={gh} onSaveView={saveGithubView} />
           <GithubFilterToolbar
             view={view}
             gh={gh}
@@ -587,15 +580,12 @@ function GithubUnavailable({ reason, refreshing, onRetry }: {
   )
 }
 
-/** The Issues / Pull requests tabs with their open totals, and the tab's utilities. */
-function GithubTabs({ view, isDesktop, gh, automationsAvailable, onSaveView, refreshing, onRefresh }: {
+/** The Issues / Pull requests tabs with their open totals. */
+function GithubTabs({ view, isDesktop, gh, onSaveView }: {
   view: GithubView
   isDesktop: boolean
   gh: GithubData
-  automationsAvailable: boolean
   onSaveView: (next: GithubView) => void
-  refreshing: boolean
-  onRefresh: () => void
 }) {
   return (
     <div data-slot="gh-tabs" className="flex min-h-11 flex-wrap items-center gap-3">
@@ -606,24 +596,6 @@ function GithubTabs({ view, isDesktop, gh, automationsAvailable, onSaveView, ref
       <TabLink to="/github/prs" active={view === 'prs'} onClick={() => onSaveView('prs')}>
         Pull requests · {gh.prsTotal ?? gh.prs.length}
       </TabLink>
-      <div data-slot="gh-tab-actions" className="ml-auto flex flex-wrap items-center gap-2 max-md:ml-0">
-        {automationsAvailable ? (
-          <Link to="/automations/new" className="gh-utility">
-            Set up automations
-          </Link>
-        ) : null}
-        <button
-          type="button"
-          data-slot="gh-refresh"
-          title="Refresh from GitHub"
-          disabled={refreshing}
-          onClick={onRefresh}
-          className="gh-utility"
-        >
-          <RefreshCwIcon size={16} aria-hidden="true" className={cn('size-3.5', refreshing && 'motion-safe:animate-spin')} />
-          Refresh
-        </button>
-      </div>
     </div>
   )
 }
@@ -666,7 +638,7 @@ function GithubFilterToolbar({ view, gh, filters, labelOptions, labelColors, sea
         type="button"
         disabled={!filters.filtering}
         data-slot="gh-clear-filters"
-        className="min-h-11 min-w-11 rounded-md border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:text-muted-foreground disabled:opacity-60"
+        className="min-h-11 min-w-11 rounded-md border border-input bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:border-border disabled:bg-transparent disabled:text-muted-foreground"
         onClick={filters.clearFilters}
       >
         Clear filters
