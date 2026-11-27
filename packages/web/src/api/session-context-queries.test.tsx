@@ -17,7 +17,10 @@ describe('usePutSessionContext', () => {
   it('caches the saved file under the project the save started in, even after a project switch', async () => {
     let release!: () => void
     const held = new Promise<void>((resolve) => { release = resolve })
-    const saved = { path: '.ai/squawk/context.yaml', exists: true, content: 'version: 1\n', version: 'v2', writable: true, readOnlyReason: null }
+    const saved = {
+      local: { path: '.ai/squawk/context.local.yaml', exists: true, content: 'version: 1\n', version: 'v2', writable: true, readOnlyReason: null },
+      shared: { path: '.ai/squawk/context.yaml', exists: false, content: '', tracked: false, unreadableReason: null },
+    }
     vi.stubGlobal('fetch', vi.fn(async () => {
       await held
       return new Response(JSON.stringify(saved), { status: 200, headers: { 'content-type': 'application/json' } })

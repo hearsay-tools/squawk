@@ -164,9 +164,9 @@ export function useSessionContext() {
 }
 
 /** The server's render of a draft: its problems and each block. Keeps the last answer while the next loads. */
-export function useSessionContextPreview(content: string, role: SessionContextRole) {
+export function useSessionContextPreview(content: string, role: SessionContextRole, sharedKey = '') {
   return useQuery({
-    queryKey: queryKeys.sessionContextPreview(content, role),
+    queryKey: queryKeys.sessionContextPreview(content, role, sharedKey),
     queryFn: ({ signal }) => postSessionContextPreview({ content, role }, { signal }),
     placeholderData: keepPreviousData,
     staleTime: 0,

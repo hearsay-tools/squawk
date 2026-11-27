@@ -29,17 +29,26 @@ file again only for a later version. When the handoff could not be added (the fi
 unreadable, or it does not fit the limit), the system prompt keeps the instruction to read the file.
 The agent still has to keep the Progress log and the Resume notes up to date in both cases.
 
-## Project rules: `.ai/cezar/context.yaml`
+## Project rules: `context.yaml` and `context.local.yaml`
 
-Add project context with an optional `.ai/cezar/context.yaml` in the project root. Squawk reads
-it from the project root (the checkout Squawk runs in), not from the task worktree. A missing
-file means no custom rules, with no warning. Squawk's own `.ai/cezar/.gitignore` does not list
-it, so you can commit it. When your repository ignores the whole `.ai/cezar/` directory, ignore its
-contents instead and re-include the file; Git cannot re-include a file inside an ignored directory:
+Add project context with two optional YAML files in the project root (`.ai/squawk/` in a project
+that starts there or has moved; `.ai/cezar/` in a project that has not):
+
+- **`context.yaml`** (shared): committable team rules tracked in Git. Squawk’s own `.gitignore`
+  does not list it.
+- **`context.local.yaml`** (local): host-only rules and overrides. Squawk ignores it automatically
+  in `.ai/squawk/.gitignore`, `.ai/cezar/.gitignore`, and `.git/info/exclude`, so local edits never
+  dirty `git status`.
+
+Squawk reads both files from the project root (the checkout Squawk runs in), never from the task
+worktree, while `{{file:…}}` paths inside templates resolve inside each task’s worktree. A missing
+file means no rules from that layer, with no warning. When your repository ignores the whole
+`.ai/cezar/` or `.ai/squawk/` directory, ignore its contents instead and re-include `context.yaml`;
+Git cannot re-include a file inside an ignored directory:
 
 ```gitignore
-/.ai/cezar/*
-!/.ai/cezar/context.yaml
+/.ai/squawk/*
+!/.ai/squawk/context.yaml
 ```
 
 ```yaml
@@ -61,40 +70,62 @@ rules:
 | Key | Meaning |
 | --- | --- |
 | `version` | Required. Must be `1`. |
-| `rules` | A list. Rules are rendered in this order, after the handoff. |
-| `id` | Required and unique. 1–64 letters, digits, `.`, `_` or `-`, starting with a letter or digit. `handoff` is reserved. |
+| `rules` | A list. Rules are rendered in file order, after the handoff. |
+| `id` | Required and unique within a file. 1–64 letters, digits, `.`, `_` or `-`, starting with a letter or digit. `handoff` is reserved. |
 | `on` | Required. `session_start` is the only trigger. |
 | `target` | `parent`, `worker` or `both` (the default). `parent` is every task that is not an owned worker. |
-| `template` | Required. Text with `{{…}}` substitutions. |
+| `enabled` | Optional boolean (`true` by default). Set `enabled: false` to disable a rule or mute a shared rule locally (`template` may be omitted when `enabled: false`). |
+| `template` | Required unless `enabled: false`. Text with `{{…}}` substitutions. |
+
+### Layering and overrides
+
+Launches load the handoff block first, then shared rules from `context.yaml`, then local rules from
+`context.local.yaml`, all within the 65,536-byte cap:
+
+- **Cross-file `id` override:** A valid rule in `context.local.yaml` with the same `id` as a rule
+  in `context.yaml` replaces that shared rule in place (keeping its shared budget slot) and reports
+  `overrides context.yaml` in the launch lifecycle line.
+- **Local mute:** A rule in `context.local.yaml` with the same `id` and `enabled: false` mutes the
+  shared rule locally and reports `muted by context.local.yaml` (no `template` needed).
+- **Same-file duplicates:** Duplicate `id`s within a single file still skip every rule that carries
+  that `id` in that file.
+- **Layer isolation:** A malformed or unreadable `context.yaml` skips only shared rules; local
+  rules and the handoff still run (and vice versa).
 
 ### Edit the rules in the cockpit
 
-**Project Settings → Session context** shows the built-in handoff block, then the project's
-`context.yaml` in a YAML editor. It reads and writes the same file a launch reads: `.ai/squawk/`
-in a project that starts there or has moved, `.ai/cezar/` in a project that has not.
+**Project Settings → Session context** shows the built-in handoff block, then a **Local** /
+**Shared** workspace beside a **Combined preview**:
 
-- **Add rule** adds a starter rule. The chips insert a variable at the cursor. Squawk never
+- **Local (`context.local.yaml`, default):** Editable YAML editor with **Add rule** and variable
+  chips. Saving auto-ignores `context.local.yaml` so edits never dirty `git status`. Squawk never
   rewrites the YAML, so your comments and formatting stay.
-- The server checks the draft as you type. It lists each problem with its line: YAML that does
-  not parse, another `version`, a rule field that is not valid, the reserved `handoff` id and
-  every rule that shares an id. Save stays off until no problem is left, and the draft stays.
-- The preview renders the draft for a parent or a worker. It reads `{{file:…}}` paths from the
-  project checkout and shows sample values such as `<run.id>` for task variables, after a sample
-  handoff. Each block shows its status, its size and why it was skipped. The meter shows the bytes
-  used against the 65,536-byte limit.
-- A save is refused when the file changed on disk after you opened it. You can show the disk
-  version, or overwrite it. Your draft stays either way.
+- **Shared (`context.yaml`):** Read-only view showing whether the file is tracked in Git
+  (`Tracked in Git`, `Untracked · repo file`, or `Not in repo`). Team changes go through normal Git
+  review; host overrides go in **Local**.
+- The server checks the local draft as you type and lists each problem with its line: YAML that
+  does not parse, another `version`, a rule field that is not valid, the reserved `handoff` id and
+  every rule that shares an id in `context.local.yaml`. Save stays off until no problem is left,
+  and the draft stays. Broken shared YAML does not block fixing or saving local rules.
+- The **Combined preview** renders the handoff, shared `context.yaml` on disk, and the unsaved local
+  draft together for a parent or a worker. It reads `{{file:…}}` paths from the project checkout
+  and shows sample values such as `<run.id>` for task variables. Each block shows its layer
+  (`built in`, `shared`, `local`, or `local · overrides shared`), status, size and any skip reason.
+  The meter shows the bytes used against the 65,536-byte limit.
+- A save is refused when `context.local.yaml` changed on disk after you opened it. You can show the
+  disk version, or overwrite it. Your draft stays either way.
 - A file that is not valid UTF-8, too large, or not a regular file is read only. So is a copy in
   the fallback project directory, and a file reached through a symbolic link, so the editor cannot
   write another file such as `config.json`. Two saves never pass the version check together.
-- Squawk does not commit the file. The rules apply from the next session launch.
-- A remote cockpit can save the file without `remote-settings enable`. The file runs no host
-  command, and its file includes cannot leave the worktree
+- Squawk does not commit any file. The rules apply from the next session launch.
+- A remote cockpit can save `context.local.yaml` without `remote-settings enable`. The file runs no
+  host command, and its file includes cannot leave the worktree
   ([ADR 0055](adr/0055-grant-remote-settings-administration-from-the-host.md) gates only settings
   that persist host commands).
 
-The routes are `GET /api/v1/p/:projectId/session-context`, `PUT …/session-context` (with the
-version the editor read) and `POST …/session-context/preview`.
+The routes are `GET /api/v1/p/:projectId/session-context` (returning `{ local, shared }`),
+`PUT …/session-context` (saving `context.local.yaml` over its version and returning `{ local, shared }`)
+and `POST …/session-context/preview` (combined preview of shared on disk + local draft).
 
 ### Substitutions
 
@@ -150,10 +181,12 @@ handoff file.
 
 Errors never stop a launch:
 
-- A `context.yaml` that cannot be read or parsed, or has another `version`, skips every custom
-  rule. The handoff still applies.
-- An invalid rule, a duplicate `id` (every rule that has it), the reserved `handoff` id or an
-  unsupported `on` value skips that rule.
+- A `context.yaml` or `context.local.yaml` that cannot be read or parsed, or has another `version`,
+  skips only that layer’s rules. The handoff and the other file’s rules still apply.
+- An invalid rule, a duplicate `id` within the same file (every rule that has it), the reserved
+  `handoff` id or an unsupported `on` value skips that rule.
+- A rule with `enabled: false` is skipped (`muted by context.local.yaml` when it mutes a shared
+  rule, otherwise `disabled`).
 - An unknown or unavailable variable, or a missing, unreadable, non-UTF-8 or outside file, skips
   that rule.
 - A block over the limit is skipped.

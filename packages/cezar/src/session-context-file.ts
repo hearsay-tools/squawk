@@ -1,17 +1,27 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
-import { SESSION_CONTEXT_FILE_MAX_BYTES, type SessionContextFile } from '@open-mercato/cezar-contract/session-context';
+import {
+  SESSION_CONTEXT_FILE_MAX_BYTES,
+  type SessionContextFile,
+  type SessionContextSharedFile,
+  type SessionContextState,
+} from '@open-mercato/cezar-contract/session-context';
+import { ensureDataGitignore } from './data-gitignore.ts';
+import { runGit } from './git-command.ts';
 import { fallbackProjectWriteError, readProjectPath } from './project-paths.ts';
 import { parseSessionContextText } from './session-context.ts';
 
 /**
- * The cockpit's read and write of the project's `context.yaml` (hearsay-tools/squawk#4308). It reads
- * the same path a launch reads, and writes it back in place: atomically, only over the version the
- * editor read, and only text with no problems. Fallback project data stays read only, and so does a
- * file reached through a symbolic link: a remote user could otherwise point the editor at another
- * file, such as `config.json`, and write settings that need settings administration.
+ * The cockpit's read of both `context.yaml` (shared, read-only) and `context.local.yaml` (local,
+ * editable), and atomic write of `context.local.yaml` (hearsay-tools/squawk#4308, hearsay-tools/squawk#4341). Writing
+ * ensures `context.local.yaml` is gitignored so host edits never dirty `git status`. Fallback
+ * project data and symlinks stay read only so a remote user cannot redirect writes onto another
+ * file such as `config.json`.
  */
+
+const SHARED_FILE = 'context.yaml';
+const LOCAL_FILE = 'context.local.yaml';
 
 function hashBytes(content: string): string {
   return createHash('sha256').update(content, 'utf8').digest('hex');
@@ -67,6 +77,15 @@ async function readCurrent(projectRoot: string, path: string): Promise<Current> 
   }
 }
 
+async function isGitTracked(projectRoot: string, relPath: string): Promise<boolean> {
+  try {
+    const { stdout } = await runGit(['ls-files', '--cached', '--', relPath.replace(/\\/g, '/')], { cwd: projectRoot, timeout: 10_000 });
+    return stdout.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function answer(projectRoot: string, path: string, current: Current): SessionContextFile {
   const shown = relative(projectRoot, path);
   const fallback = fallbackProjectWriteError(path);
@@ -85,20 +104,36 @@ function answer(projectRoot: string, path: string, current: Current): SessionCon
   };
 }
 
-export async function readSessionContextFile(projectRoot: string): Promise<SessionContextFile> {
-  const path = readProjectPath(projectRoot, 'context.yaml');
-  return answer(projectRoot, path, await readCurrent(projectRoot, path));
+async function readSharedFile(projectRoot: string): Promise<SessionContextSharedFile> {
+  const path = readProjectPath(projectRoot, SHARED_FILE);
+  const shown = relative(projectRoot, path);
+  const current = await readCurrent(projectRoot, path);
+  if (!current.exists) {
+    const unreadableReason = current.unwritable ? `Squawk cannot read ${shown}: ${current.unwritable}.` : null;
+    return { path: shown, exists: false, content: '', tracked: false, unreadableReason };
+  }
+  const tracked = await isGitTracked(projectRoot, shown);
+  if ('unreadable' in current) {
+    return { path: shown, exists: true, content: '', tracked, unreadableReason: `Squawk cannot read ${shown}: ${current.unreadable}.` };
+  }
+  return { path: shown, exists: true, content: current.content, tracked, unreadableReason: null };
+}
+
+export async function readSessionContextState(projectRoot: string): Promise<SessionContextState> {
+  const localPath = readProjectPath(projectRoot, LOCAL_FILE);
+  const [localCurrent, shared] = await Promise.all([readCurrent(projectRoot, localPath), readSharedFile(projectRoot)]);
+  return { local: answer(projectRoot, localPath, localCurrent), shared };
 }
 
 export type SessionContextWrite =
-  | { ok: true; file: SessionContextFile }
+  | { ok: true; state: SessionContextState }
   | { ok: false; status: 400 | 409 | 500; error: string };
 
 /** One save at a time per file, so two saves over one version cannot both pass the check. */
 const writing = new Map<string, Promise<unknown>>();
 
 export function writeSessionContextFile(projectRoot: string, content: string, version: string | null): Promise<SessionContextWrite> {
-  const path = readProjectPath(projectRoot, 'context.yaml');
+  const path = readProjectPath(projectRoot, LOCAL_FILE);
   const previous = writing.get(path) ?? Promise.resolve();
   const next = previous.then(() => writeChecked(projectRoot, path, content, version));
   const settled = next.catch(() => undefined);
@@ -112,15 +147,16 @@ async function writeChecked(projectRoot: string, path: string, content: string, 
   if (!before.writable) return { ok: false, status: 409, error: before.readOnlyReason ?? `${before.path} is read only` };
   if (before.version !== version) {
     const error = before.exists
-      ? 'context.yaml changed on disk since you opened it. Show the disk version, or overwrite it.'
-      : 'context.yaml was deleted on disk since you opened it. Show the disk version, or overwrite it.';
+      ? 'context.local.yaml changed on disk since you opened it. Show the disk version, or overwrite it.'
+      : 'context.local.yaml was deleted on disk since you opened it. Show the disk version, or overwrite it.';
     return { ok: false, status: 409, error };
   }
-  const first = parseSessionContextText(content).problems[0];
+  const first = parseSessionContextText(content, 'local', before.path).problems[0];
   if (first) {
     const where = first.line === null ? '' : `line ${first.line}: `;
-    return { ok: false, status: 400, error: `context.yaml has problems; fix them to save (${where}${first.message})` };
+    return { ok: false, status: 400, error: `context.local.yaml has problems; fix them to save (${where}${first.message})` };
   }
+  ensureDataGitignore(projectRoot);
   // The rename replaces the path itself, never a file a link points to: the check above refuses links.
   const tmp = `${path}.hsq-tmp-${process.pid}-${randomUUID()}`;
   try {
@@ -131,12 +167,12 @@ async function writeChecked(projectRoot: string, path: string, content: string, 
     const staged = answer(projectRoot, path, await readCurrent(projectRoot, path));
     if (staged.version !== version || !staged.writable) {
       await rm(tmp, { force: true });
-      return { ok: false, status: 409, error: 'context.yaml changed on disk since you opened it. Show the disk version, or overwrite it.' };
+      return { ok: false, status: 409, error: 'context.local.yaml changed on disk since you opened it. Show the disk version, or overwrite it.' };
     }
     await rename(tmp, path);
   } catch (error) {
     await rm(tmp, { force: true });
     return { ok: false, status: 500, error: (error as Error).message };
   }
-  return { ok: true, file: answer(projectRoot, path, await readCurrent(projectRoot, path)) };
+  return { ok: true, state: await readSessionContextState(projectRoot) };
 }

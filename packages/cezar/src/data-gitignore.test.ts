@@ -23,9 +23,11 @@ describe('ensureDataGitignore', () => {
     const first = read();
     expect(first.split('\n')).toContain('voice/');
     expect(first.split('\n')).toContain('preview/');
+    expect(first.split('\n')).toContain('context.local.yaml');
     ensureDataGitignore(repo);
     expect(read()).toBe(first);
     expect(read().split('\n').filter((line) => line === 'preview/')).toHaveLength(1);
+    expect(read().split('\n').filter((line) => line === 'context.local.yaml')).toHaveLength(1);
   });
 
   it('gives a new project no voice rule', () => {
@@ -49,6 +51,8 @@ it('uses the common Git exclude in linked worktrees and leaves authored inputs c
     expect(existsSync(join(linked, '.ai/squawk'))).toBe(false);
     const exclude = readFileSync(join(root, '.git/info/exclude'), 'utf8');
     expect(exclude).toContain('/.ai/squawk/runs.db-shm');
+    expect(exclude).toContain('/.ai/cezar/context.local.yaml');
+    expect(exclude).toContain('/.ai/squawk/context.local.yaml');
     for (const tree of ['cezar', 'squawk']) {
       for (const file of ['workflows/authored.yaml', 'skills/authored.md', 'context.yaml']) {
         const path = join(linked, '.ai', tree, file);
@@ -56,6 +60,9 @@ it('uses the common Git exclude in linked worktrees and leaves authored inputs c
         writeFileSync(path, 'authored');
         expect(spawnSync('git', ['-C', linked, 'check-ignore', '--no-index', path], { encoding: 'utf8' }).status).toBe(1);
       }
+      const localContext = join(linked, '.ai', tree, 'context.local.yaml');
+      writeFileSync(localContext, 'version: 1\n');
+      expect(execFileSync('git', ['-C', linked, 'check-ignore', `.ai/${tree}/context.local.yaml`], { encoding: 'utf8' }).trim()).toBe(`.ai/${tree}/context.local.yaml`);
     }
     writeFileSync(join(linked, '.ai/squawk/runs.db'), 'runtime');
     expect(execFileSync('git', ['-C', linked, 'check-ignore', '.ai/squawk/runs.db'], { encoding: 'utf8' }).trim()).toBe('.ai/squawk/runs.db');

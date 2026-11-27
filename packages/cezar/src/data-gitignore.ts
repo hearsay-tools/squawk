@@ -44,6 +44,7 @@ export function ensureDataGitignore(repoRoot: string): void {
     'automations.reclaim*/',
     'automation-state.lock',
     'automation-state.reclaim*/',
+    'context.local.yaml', // host-local session context overrides (hearsay-tools/squawk#4341)
   ];
   try {
     // A tracked copy left in the fallback directory awaits the user's `git mv`: a new file at its

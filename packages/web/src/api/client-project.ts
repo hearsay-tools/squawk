@@ -31,9 +31,9 @@ import type {
   Runner,
   SaveWorkflowInput,
   SaveWorkflowResponse,
-  SessionContextFile,
   SessionContextPreview,
   SessionContextPreviewRequest,
+  SessionContextState,
   SetAgentConfigInput,
   SetConfigInput,
   SetConfigResponse,
@@ -292,16 +292,16 @@ export async function putAgentConfigFile(
   )
 }
 
-/** The selected project's `context.yaml`, as a launch reads it (hearsay-tools/squawk#4308). */
-export async function getSessionContext(opts: ReadOptions = {}): Promise<SessionContextFile> {
+/** The selected project's shared `context.yaml` and local `context.local.yaml` (hearsay-tools/squawk#4308, hearsay-tools/squawk#4341). */
+export async function getSessionContext(opts: ReadOptions = {}): Promise<SessionContextState> {
   return unwrap(
     await cez.api.v1.p[':projectId']['session-context'].$get({ param: { projectId: queryScope() } }, init(opts)),
     '/session-context',
   )
 }
 
-/** Save `context.yaml` over the version the editor read; 409 on a newer disk version, 400 on problems. */
-export async function putSessionContext(body: SetSessionContextInput): Promise<SessionContextFile> {
+/** Save `context.local.yaml` over the version the editor read; 409 on a newer disk version, 400 on problems. */
+export async function putSessionContext(body: SetSessionContextInput): Promise<SessionContextState> {
   return unwrap(
     await cez.api.v1.p[':projectId']['session-context'].$put({ param: { projectId: queryScope() }, json: body }),
     '/session-context',

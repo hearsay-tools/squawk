@@ -17,8 +17,10 @@ import { z } from 'zod';
 
 /** The complete injection prefix — labels and separators included — counted in UTF-8 bytes. */
 export const SESSION_CONTEXT_LIMIT_BYTES = 65_536;
-/** Project rules, relative to the project root. Optional: absent means no custom rules. */
+/** Shared project rules, relative to the project root. Optional: absent means no shared rules. */
 export const SESSION_CONTEXT_FILE = '.ai/cezar/context.yaml';
+/** Host-local project rules, relative to the project root (gitignored). Optional. */
+export const SESSION_CONTEXT_LOCAL_FILE = '.ai/cezar/context.local.yaml';
 /** The built-in handoff block's id; a custom rule cannot take it. */
 export const HANDOFF_CONTEXT_ID = 'handoff';
 /** Divides the prefix from the opening message. */
@@ -31,11 +33,15 @@ export const SESSION_CONTEXT_VARIABLES = [
 export type SessionContextVariable = typeof SESSION_CONTEXT_VARIABLES[number];
 
 export type SessionContextRole = 'parent' | 'worker';
+export type SessionContextRuleSource = 'shared' | 'local';
 
 export interface SessionContextRule {
   id: string;
   target: 'parent' | 'worker' | 'both';
   template: string;
+  enabled: boolean;
+  source: SessionContextRuleSource;
+  overridesShared?: boolean;
 }
 
 export const SESSION_CONTEXT_REPORT_STATUSES = ['applied', 'skipped'] as const;
@@ -64,14 +70,30 @@ const RULE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const TOKEN = /\{\{\s*([^{}]*?)\s*\}\}/g;
 /** A larger config file is refused unread. */
 const CONFIG_LIMIT_BYTES = SESSION_CONTEXT_FILE_MAX_BYTES;
-const CONFIG_REPORT_ID = 'context.yaml';
+const SHARED_CONFIG_FILE = 'context.yaml';
+const LOCAL_CONFIG_FILE = 'context.local.yaml';
 
-const ruleSchema = z.object({
+const ruleCommonFields = {
   id: z.string().regex(RULE_ID, 'id must be 1-64 letters, digits, ".", "_" or "-", starting with a letter or digit'),
   on: z.literal('session_start', { error: 'on must be session_start' }),
   target: z.enum(['parent', 'worker', 'both'], { error: 'target must be parent, worker or both' }).default('both'),
+};
+
+const enabledRuleSchema = z.object({
+  ...ruleCommonFields,
+  enabled: z.literal(true, { error: 'enabled must be true or false' }).default(true),
   template: z.string().min(1, 'template must not be empty'),
 }).strict();
+
+const disabledRuleSchema = z.object({
+  ...ruleCommonFields,
+  enabled: z.literal(false),
+  template: z.string().optional(),
+}).strict();
+
+function parseRule(raw: unknown) {
+  return isRecord(raw) && raw.enabled === false ? disabledRuleSchema.safeParse(raw) : enabledRuleSchema.safeParse(raw);
+}
 
 type ReadResult = { ok: true; text: string } | { ok: false; reason: string; missing?: boolean };
 
@@ -107,18 +129,55 @@ function readBoundedUtf8(path: string, limit: number): ReadResult {
   }
 }
 
+interface LoadedLayer {
+  rules: SessionContextRule[];
+  reports: SessionContextReport[];
+}
+
+function loadLayer(projectRoot: string, filename: typeof SHARED_CONFIG_FILE | typeof LOCAL_CONFIG_FILE, source: SessionContextRuleSource): LoadedLayer {
+  const fullPath = readProjectPath(projectRoot, filename);
+  const shown = relative(projectRoot, fullPath);
+  const file = readBoundedUtf8(fullPath, CONFIG_LIMIT_BYTES);
+  if (!file.ok) {
+    return file.missing ? { rules: [], reports: [] } : { rules: [], reports: [configSkip(filename, shown, file.reason)] };
+  }
+  const { rules, reports } = parseSessionContextText(file.text, source, shown);
+  return { rules, reports };
+}
+
 /**
- * Read and validate the project's rules. A missing file is no rules and no warning; a file that
- * cannot be read or parsed, or has another version, skips every custom rule with one report;
- * a bad, duplicate or reserved rule skips that rule alone.
+ * Layer local rules over shared rules: a valid local rule with the same `id` replaces the shared
+ * rule in place (preserving shared budget priority), and `enabled: false` mutes it locally.
+ * Local-only rules append after all shared rules. Same-file duplicates were already skipped per file.
+ */
+function mergeLayers(shared: LoadedLayer, local: LoadedLayer): LoadedLayer {
+  const localById = new Map(local.rules.map((rule) => [rule.id, rule]));
+  const consumed = new Set<string>();
+  const rules: SessionContextRule[] = [];
+  for (const rule of shared.rules) {
+    const override = localById.get(rule.id);
+    if (override) {
+      consumed.add(override.id);
+      rules.push({ ...override, overridesShared: true });
+    } else {
+      rules.push(rule);
+    }
+  }
+  for (const rule of local.rules) {
+    if (!consumed.has(rule.id)) rules.push(rule);
+  }
+  return { rules, reports: [...shared.reports, ...local.reports] };
+}
+
+/**
+ * Read and validate the project's shared (`context.yaml`) and local (`context.local.yaml`) rules.
+ * A missing file is no rules and no warning; a file that cannot be read or parsed skips only its
+ * own layer with one report; a bad, duplicate or reserved rule skips that rule alone.
  */
 export function loadSessionContextRules(projectRoot: string): { rules: SessionContextRule[]; reports: SessionContextReport[] } {
-  const file = readBoundedUtf8(readProjectPath(projectRoot, 'context.yaml'), CONFIG_LIMIT_BYTES);
-  if (!file.ok) {
-    return file.missing ? { rules: [], reports: [] } : { rules: [], reports: [configSkip(file.reason)] };
-  }
-  const { rules, reports } = parseSessionContextText(file.text);
-  return { rules, reports };
+  const shared = loadLayer(projectRoot, SHARED_CONFIG_FILE, 'shared');
+  const local = loadLayer(projectRoot, LOCAL_CONFIG_FILE, 'local');
+  return mergeLayers(shared, local);
 }
 
 /** One thing the cockpit editor must fix before it saves; `line` is 1-based, `rule` the 1-based rule. */
@@ -137,30 +196,43 @@ export interface ParsedSessionContext {
   problems: SessionContextProblem[];
 }
 
-/**
- * Parse `context.yaml` text once for both readers: a launch takes `rules` and `reports`, the
- * cockpit editor takes `problems`, each with the line it starts on.
- */
-export function parseSessionContextText(text: string): ParsedSessionContext {
+type FatalFactory = (reason: string, message: string, line: number | null) => ParsedSessionContext;
+
+function extractDocumentValue(text: string, fatal: FatalFactory) {
   const lineCounter = new LineCounter();
   const doc = parseDocument(text, { lineCounter });
-  const lineAt = (offset: number | undefined) => (offset === undefined ? null : lineCounter.linePos(offset).line);
-  const fatal = (reason: string, message: string, line: number | null): ParsedSessionContext => ({
-    rules: [], reports: [configSkip(reason)], problems: [{ line, rule: null, message }],
-  });
+  const lineAt: LineAt = (offset) => (offset === undefined ? null : lineCounter.linePos(offset).line);
   const firstError = doc.errors[0];
   if (firstError) {
     const detail = oneLine(firstError.message);
-    return fatal(`invalid YAML: ${detail}`, `Invalid YAML: ${detail}`, lineAt(firstError.pos[0]) ?? 1);
+    return { ok: false as const, result: fatal(`invalid YAML: ${detail}`, `Invalid YAML: ${detail}`, lineAt(firstError.pos[0]) ?? 1) };
   }
-  let value: unknown;
   try {
-    value = doc.toJS();
+    return { ok: true as const, doc, value: doc.toJS() as unknown, lineAt };
   } catch (error) {
     // An alias with no anchor parses cleanly and fails only here.
     const detail = oneLine(error instanceof Error ? error.message : String(error));
-    return fatal(`invalid YAML: ${detail}`, `Invalid YAML: ${detail}`, 1);
+    return { ok: false as const, result: fatal(`invalid YAML: ${detail}`, `Invalid YAML: ${detail}`, 1) };
   }
+}
+
+/**
+ * Parse a `context.yaml` or `context.local.yaml` text once for both readers: a launch takes `rules`
+ * and `reports`, the cockpit editor takes `problems`, each with the line it starts on.
+ */
+export function parseSessionContextText(
+  text: string,
+  source: SessionContextRuleSource = 'shared',
+  sourcePath?: string,
+): ParsedSessionContext {
+  const configId = source === 'local' ? LOCAL_CONFIG_FILE : SHARED_CONFIG_FILE;
+  const shownPath = sourcePath ?? (source === 'local' ? SESSION_CONTEXT_LOCAL_FILE : SESSION_CONTEXT_FILE);
+  const fatal: FatalFactory = (reason, message, line) => ({
+    rules: [], reports: [configSkip(configId, shownPath, reason)], problems: [{ line, rule: null, message }],
+  });
+  const extracted = extractDocumentValue(text, fatal);
+  if (!extracted.ok) return extracted.result;
+  const { doc, value, lineAt } = extracted;
   if (value === null || value === undefined) return { rules: [], reports: [], problems: [] };
   if (typeof value !== 'object' || Array.isArray(value)) {
     return fatal('expected a mapping with version and rules', 'The file must be a mapping with version and rules', 1);
@@ -177,7 +249,7 @@ export function parseSessionContextText(text: string): ParsedSessionContext {
 
   const seq = root?.get('rules', true);
   const nodes = isSeq(seq) ? seq.items : [];
-  return { ...validateRules(rules), problems: ruleProblems(rules, nodes as Array<YamlNode | undefined>, lineAt) };
+  return { ...validateRules(rules, source), problems: ruleProblems(rules, nodes as Array<YamlNode | undefined>, lineAt) };
 }
 
 type LineAt = (offset: number | undefined) => number | null;
@@ -204,7 +276,7 @@ function ruleProblems(rules: unknown[], nodes: Array<YamlNode | undefined>, line
     const id = ids[index];
     if (id === HANDOFF_CONTEXT_ID) add(lineOf('id'), `id "${HANDOFF_CONTEXT_ID}" is reserved for the built-in handoff block`);
     if (id !== undefined && (counts.get(id) ?? 0) > 1) add(lineOf('id'), `duplicate id "${id}"`);
-    const result = ruleSchema.safeParse(raw);
+    const result = parseRule(raw);
     if (result.success) return;
     for (const issue of result.error.issues) {
       if (issue.code === 'unrecognized_keys') {
@@ -232,12 +304,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Each rule on its own: one bad, duplicate or reserved rule never takes the others down. */
-function validateRules(rules: unknown[]): { rules: SessionContextRule[]; reports: SessionContextReport[] } {
+function validateRules(rules: unknown[], source: SessionContextRuleSource): { rules: SessionContextRule[]; reports: SessionContextReport[] } {
   const reports: SessionContextReport[] = [];
   const parsed: Array<SessionContextRule | undefined> = rules.map((raw, index) => {
     const rawId = raw && typeof raw === 'object' && typeof (raw as { id?: unknown }).id === 'string' ? (raw as { id: string }).id : undefined;
     const label = rawId && RULE_ID.test(rawId) ? rawId : `rules[${index}]`;
-    const result = ruleSchema.safeParse(raw);
+    const result = parseRule(raw);
     if (!result.success) {
       reports.push(skip(label, `invalid rule: ${oneLine(result.error.issues.map((issue) => `${issue.path.join('.') || 'rule'}: ${issue.message}`).join('; '))}`));
       return undefined;
@@ -246,7 +318,7 @@ function validateRules(rules: unknown[]): { rules: SessionContextRule[]; reports
       reports.push(skip(label, `id "${HANDOFF_CONTEXT_ID}" is reserved for the built-in handoff`));
       return undefined;
     }
-    return { id: result.data.id, target: result.data.target, template: result.data.template };
+    return { id: result.data.id, target: result.data.target, template: result.data.template ?? '', enabled: result.data.enabled, source };
   });
   // A duplicated id is ambiguous: skip every rule that carries it, not just the later ones.
   const counts = new Map<string, number>();
@@ -305,20 +377,30 @@ function assemble(
 
   reports.push(...loaded.reports);
   for (const rule of loaded.rules) {
+    if (!rule.enabled) {
+      reports.push(skip(rule.id, rule.overridesShared ? 'muted by context.local.yaml' : 'disabled'));
+      continue;
+    }
     if (rule.target !== 'both' && rule.target !== input.role) continue;
     const rendered = renderTemplate(rule.template, input);
     if (!rendered.ok) {
-      reports.push({ ...skip(rule.id, rendered.reason), sources: rendered.sources });
+      const reason = rule.overridesShared ? `${rendered.reason} (overrides context.yaml)` : rendered.reason;
+      reports.push({ ...skip(rule.id, reason), sources: rendered.sources });
       continue;
     }
     const block = renderBlock(rule.id, rendered.text);
     const bytes = Buffer.byteLength(block, 'utf8');
     if (!fits(block)) {
-      reports.push({ ...skip(rule.id, `does not fit the ${SESSION_CONTEXT_LIMIT_BYTES}-byte limit`), sources: rendered.sources, bytes });
+      const base = `does not fit the ${SESSION_CONTEXT_LIMIT_BYTES}-byte limit`;
+      const reason = rule.overridesShared ? `${base} (overrides context.yaml)` : base;
+      reports.push({ ...skip(rule.id, reason), sources: rendered.sources, bytes });
       continue;
     }
     blocks.push(block);
-    reports.push({ id: rule.id, status: 'applied', sources: rendered.sources, bytes });
+    reports.push({
+      id: rule.id, status: 'applied', sources: rendered.sources, bytes,
+      ...(rule.overridesShared ? { reason: 'overrides context.yaml' } : {}),
+    });
     onApplied?.(rule.id, rendered.text);
   }
   return { prefix: blocks.length ? blocks.join('\n\n') + SESSION_CONTEXT_SEPARATOR : '', handoffInjected, reports };
@@ -331,9 +413,11 @@ const SAMPLE_HANDOFF = '# Handoff — <task>\n\n## Goal\n\n<task>\n\n## Progress
 
 export interface SessionContextPreviewBlock {
   id: string;
+  source: 'built-in' | SessionContextRuleSource;
   /** `built-in` for the handoff; null for an entry the file could not name a target for. */
   target: SessionContextRule['target'] | 'built-in' | null;
   status: SessionContextReportStatus | 'not-for-role';
+  overridesShared: boolean;
   bytes: number | null;
   reason: string | null;
   sources: string[];
@@ -350,39 +434,50 @@ export interface SessionContextPreview {
 }
 
 /**
- * Render a draft `context.yaml` the way a launch would: against the project checkout, for one
- * role, with labelled sample values (`<run.id>`) for every task variable and a sample handoff.
+ * Render the combined launch output for one role: sample handoff, shared `context.yaml` on disk
+ * in `projectRoot`, and the unsaved `context.local.yaml` draft `content`. `problems` lists issues
+ * in the local draft only, so broken shared YAML does not block fixing or saving local rules.
  */
 export function previewSessionContext(options: { projectRoot: string; content: string; role: SessionContextRole }): SessionContextPreview {
-  const parsed = parseSessionContextText(options.content);
+  const shared = loadLayer(options.projectRoot, SHARED_CONFIG_FILE, 'shared');
+  const localPath = relative(options.projectRoot, readProjectPath(options.projectRoot, LOCAL_CONFIG_FILE));
+  const local = parseSessionContextText(options.content, 'local', localPath);
+  const merged = mergeLayers(shared, local);
   const variables = Object.fromEntries(SESSION_CONTEXT_VARIABLES.map((name) => [name, `<${name}>`])) as Record<SessionContextVariable, string>;
   variables.role = options.role;
   const input: SessionContextInput = {
     projectRoot: options.projectRoot, cwd: options.projectRoot, role: options.role, handoffPath: SAMPLE_HANDOFF_PATH, variables,
   };
   const texts = new Map<string, string>();
-  const context = assemble(input, { ok: true, text: SAMPLE_HANDOFF }, parsed, (id, body) => texts.set(id, body.replace(/\n+$/, '')));
-  // `assemble` reports the handoff first, then the file's own skips, then each rendered rule.
+  const context = assemble(input, { ok: true, text: SAMPLE_HANDOFF }, merged, (id, body) => texts.set(id, body.replace(/\n+$/, '')));
+  // `assemble` reports the handoff first, then the files' own skips, then each merged rule.
   // Valid rule ids are unique and never `handoff`; a skipped entry can share any id.
   const [handoffReport, ...rest] = context.reports;
-  const reportFor = new Map(rest.slice(parsed.reports.length).map((report) => [report.id, report]));
-  const block = (report: SessionContextReport, target: SessionContextPreviewBlock['target']): SessionContextPreviewBlock => {
+  const reportFor = new Map(rest.slice(merged.reports.length).map((report) => [report.id, report]));
+  const block = (
+    report: SessionContextReport,
+    source: SessionContextPreviewBlock['source'],
+    target: SessionContextPreviewBlock['target'],
+    overridesShared: boolean,
+  ): SessionContextPreviewBlock => {
     const text = texts.get(report.id) ?? null;
     return {
-      id: report.id, target, status: report.status, bytes: report.bytes ?? null, reason: report.reason ?? null, sources: report.sources,
+      id: report.id, source, target, status: report.status, overridesShared, bytes: report.bytes ?? null,
+      reason: report.reason ?? null, sources: report.sources,
       text: text === null ? null : text.slice(0, SESSION_CONTEXT_PREVIEW_TEXT_CHARS),
       truncated: text !== null && text.length > SESSION_CONTEXT_PREVIEW_TEXT_CHARS,
     };
   };
-  const blocks: SessionContextPreviewBlock[] = [block(handoffReport!, 'built-in')];
-  for (const rule of parsed.rules) {
+  const blocks: SessionContextPreviewBlock[] = [block(handoffReport!, 'built-in', 'built-in', false)];
+  for (const rule of merged.rules) {
     const report = reportFor.get(rule.id);
     blocks.push(report
-      ? block(report, rule.target)
-      : { id: rule.id, target: rule.target, status: 'not-for-role', bytes: null, reason: null, sources: [], text: null, truncated: false });
+      ? block(report, rule.source, rule.target, rule.overridesShared === true)
+      : { id: rule.id, source: rule.source, target: rule.target, status: 'not-for-role', overridesShared: rule.overridesShared === true, bytes: null, reason: null, sources: [], text: null, truncated: false });
   }
-  for (const report of parsed.reports) blocks.push({ ...block(report, null), text: null, truncated: false });
-  return { problems: parsed.problems, blocks, usedBytes: Buffer.byteLength(context.prefix, 'utf8'), limitBytes: SESSION_CONTEXT_LIMIT_BYTES };
+  for (const report of shared.reports) blocks.push({ ...block(report, 'shared', null, false), text: null, truncated: false });
+  for (const report of local.reports) blocks.push({ ...block(report, 'local', null, false), text: null, truncated: false });
+  return { problems: local.problems, blocks, usedBytes: Buffer.byteLength(context.prefix, 'utf8'), limitBytes: SESSION_CONTEXT_LIMIT_BYTES };
 }
 
 /** The one lifecycle line a launch reports: each block's outcome, never its contents. */
@@ -487,8 +582,8 @@ function readIncludedFile(cwd: string, path: string): ReadResult {
   return readBoundedUtf8(target, SESSION_CONTEXT_LIMIT_BYTES);
 }
 
-function configSkip(reason: string): SessionContextReport {
-  return { id: CONFIG_REPORT_ID, status: 'skipped', sources: [SESSION_CONTEXT_FILE], reason: `${reason}; custom rules skipped` };
+function configSkip(configId: string, sourcePath: string, reason: string): SessionContextReport {
+  return { id: configId, status: 'skipped', sources: [sourcePath], reason: `${reason}; custom rules skipped` };
 }
 
 function skip(id: string, reason: string): SessionContextReport {

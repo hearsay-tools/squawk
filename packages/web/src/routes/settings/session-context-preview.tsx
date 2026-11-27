@@ -11,6 +11,12 @@ const TARGET_LABEL: Record<NonNullable<SessionContextPreviewBlock['target']>, st
   both: 'both',
 }
 
+const SOURCE_LABEL: Record<SessionContextPreviewBlock['source'], string> = {
+  'built-in': 'built in',
+  shared: 'shared',
+  local: 'local',
+}
+
 const STATUS_CLASS: Record<SessionContextPreviewBlock['status'], string> = {
   applied: 'border-success/40 text-success',
   skipped: 'border-conflict/50 text-conflict',
@@ -20,8 +26,8 @@ const STATUS_CLASS: Record<SessionContextPreviewBlock['status'], string> = {
 const bytes = (n: number) => `${n.toLocaleString('en-US')} B`
 
 /**
- * The right half of Settings → Session context: what a session would receive from the draft,
- * block by block, and how much of the 64 KiB limit it uses.
+ * The right half of Settings → Session context: the combined launch output (handoff, shared
+ * `context.yaml`, then local `context.local.yaml` draft), block by block, against the 64 KiB cap.
  */
 export function SessionContextPreviewPanel({
   id,
@@ -48,18 +54,18 @@ export function SessionContextPreviewPanel({
     >
       <div className="flex flex-col gap-3 border-b border-border p-3">
         <div className="flex items-center gap-2">
-          <h3 id="session-context-preview-title" className="text-sm font-semibold">Preview</h3>
+          <h3 id="session-context-preview-title" className="text-sm font-semibold">Combined preview</h3>
           <span className="ml-auto text-[12px] text-soft-foreground">Updates as you type</span>
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <span id="session-context-role" className="text-[12px] text-soft-foreground">Preview as</span>
           <RoleRadios role={role} onRole={onRole} />
-          <span className="text-[12px] text-soft-foreground">Files come from the project checkout. Task values are samples.</span>
+          <span className="text-[12px] text-soft-foreground">Handoff, shared, then local. Files come from the project checkout.</span>
         </div>
         {preview ? <ByteMeter used={preview.usedBytes} limit={preview.limitBytes} blocks={preview.blocks} /> : <div className="h-[38px]" />}
       </div>
       <ul data-slot="session-context-blocks" className="divide-y divide-border">
-        {preview?.blocks.map((block, index) => <PreviewBlock key={`${block.id}-${index}`} block={block} role={role} />)}
+        {preview?.blocks.map((block, index) => <PreviewBlock key={`${block.source}-${block.id}-${index}`} block={block} role={role} />)}
       </ul>
     </section>
   )
@@ -133,15 +139,25 @@ function ByteMeter({ used, limit, blocks }: { used: number; limit: number; block
 
 function PreviewBlock({ block, role }: { block: SessionContextPreviewBlock; role: SessionContextRole }) {
   const status = block.status === 'not-for-role' ? `not for ${role}` : block.status
+  const sourceLabel = block.overridesShared ? 'local · overrides shared' : SOURCE_LABEL[block.source]
+  const accentSource = block.source === 'built-in' || block.overridesShared
+  const showReason = block.reason !== null && !(block.status === 'applied' && block.overridesShared)
   return (
-    <li data-slot="session-context-block" data-status={block.status} className="flex flex-col gap-1.5 p-3">
+    <li data-slot="session-context-block" data-status={block.status} data-source={block.source} className="flex flex-col gap-1.5 p-3">
       <div className="flex flex-wrap items-center gap-2">
         <code className="font-mono text-[12px] text-foreground">{block.id}</code>
-        {block.target && <Badge variant="outline" className="text-[11px]">{TARGET_LABEL[block.target]}</Badge>}
+        <Badge
+          data-slot="session-context-source"
+          variant="outline"
+          className={cn('text-[11px]', accentSource && 'border-accent-strong/40 text-link-foreground')}
+        >
+          {sourceLabel}
+        </Badge>
+        {block.target && block.target !== 'built-in' && <Badge variant="outline" className="text-[11px]">{TARGET_LABEL[block.target]}</Badge>}
         <span className="ml-auto font-mono text-[12px] text-soft-foreground">{block.bytes === null ? '—' : bytes(block.bytes)}</span>
         <Badge variant="outline" className={cn('text-[11px]', STATUS_CLASS[block.status])}>{status}</Badge>
       </div>
-      {block.reason && <p className="text-[12px] text-conflict">{block.reason}</p>}
+      {showReason && <p className="text-[12px] text-conflict">{block.reason}</p>}
       {block.text !== null && (
         // Scrolls, and takes keyboard focus, so every returned line can be read.
         <pre
