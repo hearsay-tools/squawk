@@ -250,6 +250,18 @@ export class AcpSession {
 
   close(): void { this.closed = true; this.turnCancelled = true; this.cancelPermissions(); this.events.flush(); this.transport.close(); }
 
+  updateHeldTool(id: string, output: string): void {
+    this.events.updateHeldTool(id, output);
+  }
+
+  completeHeldTool(id: string, status: 'completed' | 'failed' | 'declined', output?: string): void {
+    this.events.completeHeldTool(id, status, output);
+  }
+
+  reparentTools(match: (id: string) => boolean, parentItemId: string): void {
+    this.events.reparentTools(match, parentItemId);
+  }
+
   private requireSession(): string {
     if (!this.sessionId) throw new Error('ACP session is not open');
     return this.sessionId;

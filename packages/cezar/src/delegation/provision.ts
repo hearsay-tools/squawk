@@ -1,10 +1,11 @@
 import { commandText } from '../home/command.ts';
 import { productEnvEntries } from '../core/product-env.ts';
-import { knownRunnerIds } from '../core/runner-registry.ts';
+import { RUNNER_FACTS } from '../core/runner-facts.ts';
+import { isRegisteredRunner, knownRunnerIds, runnersSealed } from '../core/runner-registry.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import type { RunStore } from '../runs/store.ts';
+import type { RunRecord, RunStore } from '../runs/store.ts';
 import { CredentialRegistry } from './credentials.ts';
 import { messagingAllowed, workersAllowed } from '@open-mercato/cezar-contract/task-options';
 import { DelegationService, rootDelegation, type DelegationProject, type WorkerCleanupFactory } from './service.ts';
@@ -17,7 +18,7 @@ import { createDelegationApp, startDelegationTransport } from './transport.ts';
 import { delegationEndpoint } from './cli.ts';
 
 export type DelegationSession = { restrictCrossSessionMessaging: true; env: Record<string, string>; instructions: string; revoke(): void };
-export type DelegationProvisioner = (runId: string) => DelegationSession | undefined;
+export type DelegationProvisioner = (runId: string, runner?: string) => DelegationSession | undefined;
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 export function bundledWorkerInvocation(command: 'worker' | 'discover' | 'message' = 'worker'): string {
   // Source-mode dev uses this checkout's loader; a published installation needs only Node.
@@ -26,12 +27,46 @@ export function bundledWorkerInvocation(command: 'worker' | 'discover' | 'messag
   return [process.execPath, ...(source ? ['--import', import.meta.resolve('tsx')] : []), entry].map(quote).join(' ') + ` ${command}`;
 }
 
-export function provisionDelegationSession(options: { projectId: string; runId: string; store: RunStore; credentials: CredentialRegistry; url: string }): DelegationSession | undefined {
+function nativeSubagentsEnabled(runner: string | undefined): boolean {
+  if (!runner || !runnersSealed() || !isRegisteredRunner(runner)) return true;
+  return RUNNER_FACTS[runner]?.nativeSubagents !== 'none';
+}
+
+function nativeSubagentCopy(allow: boolean, messaging: string) {
+  const only = allow
+    ? `You may use native subagents and message them with your runner's tools. No agent channel to another task exists: tell the user instead.`
+    : `No agent channel to another task exists: tell the user instead.`;
+  const channel = [
+    ...(allow ? [`You may message your own native subagents with your runner's tools.`] : []),
+    `Reach another Squawk task only through ${messaging}; never use your runner's native tools for that.`,
+  ].join(' ');
+  return { only, channel };
+}
+
+function workerSessionInstructions(run: RunRecord, invocation: string, conversationGuidance: string, allowNativeSubagents: boolean, subagentMessaging: string): string {
+  const notice = run.delegation?.role === 'worker' ? workspaceKind(run.delegation.workspace).workerNotice : undefined;
+  return [
+    `You are an owned Squawk worker. Your parent run ID is ${supervisorIdOf(run)}.`,
+    ...(notice ? [notice] : []),
+    conversationGuidance,
+    `${maySpawn(run) ? `You may start one shared-workspace Squawk worker at a time; destroy it before you start the next. Run ${invocation} spawn --help first.` : `You cannot spawn Squawk workers.`} You cannot control peers, merge automatically, or accept your own review.`,
+    commandText(supervisedByFamilyRecord(run)
+      ? `Follow your assigned task and selected input context. Ask your parent with cez message request; any question you raise goes to your parent too, never to a human. Your parent answers or asks the human itself; do not wait for a human.`
+      : `Follow your assigned task and selected input context. Send every question to your parent as a request with cez message request and wait for its reply: no question card reaches your parent or a human. Do not wait for a human.`),
+    ...(allowNativeSubagents ? [`You may use native subagents for research, code reading and focused analysis.`] : []),
+    subagentMessaging,
+    `Commit reviewed work before your parent deliberately integrates it; report the summary, commits, tests and remaining concerns.`,
+    `When you park before finishing while your parent waits on you, Squawk tells your parent what you wait on and quotes your last message: end such a turn by saying what you wait on and what you have done.`,
+  ].join(' ');
+}
+
+export function provisionDelegationSession(options: { projectId: string; runId: string; store: RunStore; credentials: CredentialRegistry; url: string; runner?: string }): DelegationSession | undefined {
   delegationEndpoint(options.url);
   const run = options.store.getRun(options.runId);
   if (!run || run.delegation?.role === 'invalid') return;
   const invocation = bundledWorkerInvocation();
   const messaging = bundledWorkerInvocation('message');
+  const allowNativeSubagents = nativeSubagentsEnabled(options.runner ?? run.runner);
   const conversationGuidance = [
     `For task conversations, use ${messaging}. Root tasks can message peer root tasks in the same project and their owned workers; a worker may address only its parent and a worker it started. Use ${messaging} tasks [--all] [--offset <n>] to discover peers (32 per page); workers cannot list peers. Peer review/terminal tasks need their human to continue them; messages never resume a peer.`,
     `Use ${messaging} request <recipient-run-id> '<text>' --id <message-UUID> to request an explicit reply; use ${messaging} progress <recipient-run-id> '<text>' --id <message-UUID> for an update without an obligation.`,
@@ -50,12 +85,8 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Controller persistence prevents duplicate queue entries; a crash between provider acceptance and its delivery checkpoint can still make delivery ambiguous.`,
     `Credentials stay in the environment: never read, echo, forward, or persist them.`,
   ].join(' ');
-  // hearsay-tools/cezarion#2279: native subagents are allowed; tasks talk only through cez message.
-  const subagentOnly = `You may use native subagents and message them with your runner's tools. No agent channel to another task exists: tell the user instead.`;
-  const subagentMessaging = [
-    `You may message your own native subagents with your runner's tools.`,
-    `Reach another Squawk task only through ${messaging}; never use your runner's native tools for that.`,
-  ].join(' ');
+  // hearsay-tools/cezarion#2279: native subagents are allowed where the runner supports them; tasks talk only through cez message.
+  const { only: subagentOnly, channel: subagentMessaging } = nativeSubagentCopy(allowNativeSubagents, messaging);
 
   /** What the task may do only to workers it started itself: both the workers-on and the workers-off prompt say it. */
   const ownWorkersOnly = 'Message, steer and diff apply to workers you started yourself; a worker that one of your workers started is reached through that worker.';
@@ -78,11 +109,13 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
   if (!run.delegation) options.store.commitDelegation([{ id: run.id, delegation: rootDelegation() }]);
   const messagingOff = messagingOn ? [] : [`Task messaging is off for this task: you cannot list, message or wait on peer tasks; a human can turn it on in the task menu. Messages with your own workers, and replies to peer requests accepted earlier, still work.`];
   const rootInstructions = (): string[] => workersOn ? [
-    `Use native subagents for work that needs no separate worktree: research, code reading and focused analysis.`,
-    `For example, a subagent reads the parser and summarizes how it handles errors.`,
+    ...(allowNativeSubagents ? [
+      `Use native subagents for work that needs no separate worktree: research, code reading and focused analysis.`,
+      `For example, a subagent reads the parser and summarizes how it handles errors.`,
+    ] : []),
     `Use Squawk workers for work that needs its own worktree, its own commits or a lifecycle Squawk tracks.`,
     `Also use a Squawk worker when the task needs a model available only through another runner, even if the work is research or analysis.`,
-    `Native subagents need no Squawk worker, worktree, collection or destruction.`,
+    ...(allowNativeSubagents ? [`Native subagents need no Squawk worker, worktree, collection or destruction.`] : []),
     subagentMessaging,
     `Owned workers are available through the bundled command ${invocation}.`,
     `Commands return JSON.`,
@@ -132,7 +165,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `A worker may start one shared-workspace worker of its own at a time. ${ownWorkersOnly} Workers cannot message peers.`,
     `This is cooperative local supervision, not process isolation.`,
   ] : [
-    `Use native subagents for research, code reading and focused analysis.`,
+    ...(allowNativeSubagents ? [`Use native subagents for research, code reading and focused analysis.`] : []),
     subagentMessaging,
     WORKERS_OFF,
     ...(owned ? [`You still manage the workers you own with ${invocation} list, inspect, collect, steer, stop, destroy, diff and wait. ${ownWorkersOnly} Collect the latest settled revision of every worker before completing.`] : []),
@@ -146,19 +179,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     restrictCrossSessionMessaging: true,
     env: { ...productEnvEntries('DELEGATION_URL', options.url), ...productEnvEntries('DELEGATION_TOKEN', token) },
     instructions: run.delegation?.role === 'worker'
-      ? [
-        `You are an owned Squawk worker. Your parent run ID is ${supervisorIdOf(run)}.`,
-        ...(workspaceKind(run.delegation.workspace).workerNotice ? [workspaceKind(run.delegation.workspace).workerNotice!] : []),
-        conversationGuidance,
-        `${maySpawn(run) ? `You may start one shared-workspace Squawk worker at a time; destroy it before you start the next. Run ${invocation} spawn --help first.` : `You cannot spawn Squawk workers.`} You cannot control peers, merge automatically, or accept your own review.`,
-        commandText(supervisedByFamilyRecord(run)
-          ? `Follow your assigned task and selected input context. Ask your parent with cez message request; any question you raise goes to your parent too, never to a human. Your parent answers or asks the human itself; do not wait for a human.`
-          : `Follow your assigned task and selected input context. Send every question to your parent as a request with cez message request and wait for its reply: no question card reaches your parent or a human. Do not wait for a human.`),
-        `You may use native subagents for research, code reading and focused analysis.`,
-        subagentMessaging,
-        `Commit reviewed work before your parent deliberately integrates it; report the summary, commits, tests and remaining concerns.`,
-        `When you park before finishing while your parent waits on you, Squawk tells your parent what you wait on and quotes your last message: end such a turn by saying what you wait on and what you have done.`,
-      ].join(' ')
+      ? workerSessionInstructions(run, invocation, conversationGuidance, allowNativeSubagents, subagentMessaging)
       : rootInstructions().join(' '),
     revoke: () => options.credentials.revoke(run.id, generation),
   };
@@ -189,9 +210,9 @@ export class DelegationController {
     if (this.closed) return () => {};
     this.projects.get(project.id)?.detach();
     const unregister = this.service.registerProject(project);
-    const clear = project.manager.setDelegationProvisioner(runId => {
+    const clear = project.manager.setDelegationProvisioner((runId, runner) => {
       if (this.closed || !this.transport) return;
-      try { return provisionDelegationSession({ projectId: project.id, runId, store: project.store, credentials: this.credentials, url: this.transport.url }); }
+      try { return provisionDelegationSession({ projectId: project.id, runId, store: project.store, credentials: this.credentials, url: this.transport.url, ...(runner ? { runner } : {}) }); }
       catch { this.credentials.revoke(runId); this.unavailable(); return; }
     });
     const detach = () => {

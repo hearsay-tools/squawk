@@ -423,7 +423,7 @@ export class ContinuationSession {
     // The transcript retains the user's text. Only the runner receives the native trigger.
     state.liveSession.recordSessionError(undefined);
     if (this.sharedHost.workerExecutionStopped(runId)) { state.liveSession.cancel(); throw new Error('Worker stopped before launch'); }
-    const launch = await launchPreamble(this.launchPreambleHost, runId, state, settings.profile.env);
+    const launch = await launchPreamble(this.launchPreambleHost, runId, state, settings.profile.env, backend);
     const { delegation, launchParts, ciTools } = launch;
     // Stop/Finish can arrive while the local tool controller is starting.
     if (launch.stale) {

@@ -110,7 +110,7 @@
       "kind": "tool",
       "id": "call_9219432710315517155",
       "name": "Task",
-      "title": "Run invoke_subagent",
+      "title": "Task: Subagent Runner",
       "toolKind": "task",
       "status": "running",
       "input": {
@@ -118,25 +118,31 @@
         "Prompt": "Run the shell command `echo sub-ok` and report the output.",
         "Role": "Subagent Runner",
         "TypeName": "self",
-        "Workspace": "inherit"
+        "Workspace": "inherit",
+        "subagent_type": "self",
+        "description": "Subagent Runner",
+        "prompt": "Run the shell command `echo sub-ok` and report the output."
       }
     }
   },
   {
-    "type": "item.completed",
+    "type": "item.updated",
     "item": {
       "kind": "tool",
       "id": "call_9219432710315517155",
       "name": "Task",
-      "title": "Run invoke_subagent",
+      "title": "Task: Subagent Runner",
       "toolKind": "task",
-      "status": "completed",
+      "status": "running",
       "input": {
         "Model": "inherit",
         "Prompt": "Run the shell command `echo sub-ok` and report the output.",
         "Role": "Subagent Runner",
         "TypeName": "self",
-        "Workspace": "inherit"
+        "Workspace": "inherit",
+        "subagent_type": "self",
+        "description": "Subagent Runner",
+        "prompt": "Run the shell command `echo sub-ok` and report the output."
       }
     }
   },
@@ -750,6 +756,28 @@
     }
   },
   {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_9219432710315517155",
+      "name": "Task",
+      "title": "Task: Subagent Runner",
+      "toolKind": "task",
+      "status": "declined",
+      "input": {
+        "Model": "inherit",
+        "Prompt": "Run the shell command `echo sub-ok` and report the output.",
+        "Role": "Subagent Runner",
+        "TypeName": "self",
+        "Workspace": "inherit",
+        "subagent_type": "self",
+        "description": "Subagent Runner",
+        "prompt": "Run the shell command `echo sub-ok` and report the output."
+      },
+      "output": "Stopped by parent"
+    }
+  },
+  {
     "type": "item.started",
     "item": {
       "kind": "reasoning",
@@ -798,7 +826,7 @@
       "kind": "tool",
       "id": "call_2207926639632229690",
       "name": "Task",
-      "title": "Run invoke_subagent",
+      "title": "Task: Subagent Runner",
       "toolKind": "task",
       "status": "running",
       "input": {
@@ -806,25 +834,31 @@
         "Prompt": "Run the shell command `echo sub-ok` using the run_command tool (without quotes around the command string), and send its output back to me using send_message.",
         "Role": "Subagent Runner",
         "TypeName": "self",
-        "Workspace": "inherit"
+        "Workspace": "inherit",
+        "subagent_type": "self",
+        "description": "Subagent Runner",
+        "prompt": "Run the shell command `echo sub-ok` using the run_command tool (without quotes around the command string), and send its output back to me using send_message."
       }
     }
   },
   {
-    "type": "item.completed",
+    "type": "item.updated",
     "item": {
       "kind": "tool",
       "id": "call_2207926639632229690",
       "name": "Task",
-      "title": "Run invoke_subagent",
+      "title": "Task: Subagent Runner",
       "toolKind": "task",
-      "status": "completed",
+      "status": "running",
       "input": {
         "Model": "inherit",
         "Prompt": "Run the shell command `echo sub-ok` using the run_command tool (without quotes around the command string), and send its output back to me using send_message.",
         "Role": "Subagent Runner",
         "TypeName": "self",
-        "Workspace": "inherit"
+        "Workspace": "inherit",
+        "subagent_type": "self",
+        "description": "Subagent Runner",
+        "prompt": "Run the shell command `echo sub-ok` using the run_command tool (without quotes around the command string), and send its output back to me using send_message."
       }
     }
   },
@@ -1620,6 +1654,28 @@
           "b4c882c8-3d59-4f4d-8047-c6303345f94a"
         ]
       }
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_2207926639632229690",
+      "name": "Task",
+      "title": "Task: Subagent Runner",
+      "toolKind": "task",
+      "status": "declined",
+      "input": {
+        "Model": "inherit",
+        "Prompt": "Run the shell command `echo sub-ok` using the run_command tool (without quotes around the command string), and send its output back to me using send_message.",
+        "Role": "Subagent Runner",
+        "TypeName": "self",
+        "Workspace": "inherit",
+        "subagent_type": "self",
+        "description": "Subagent Runner",
+        "prompt": "Run the shell command `echo sub-ok` using the run_command tool (without quotes around the command string), and send its output back to me using send_message."
+      },
+      "output": "Stopped by parent"
     }
   },
   {

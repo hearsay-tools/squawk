@@ -50,8 +50,8 @@ export function registerDelegationIntegrationGroup(group: 'reviewed-integration'
     // Observe actual session provisioning and await existing asynchronous lifecycle
     // tasks at teardown; no scheduling, result, or runner method is replaced.
     const provision = manager.setDelegationProvisioner.bind(manager);
-    manager.setDelegationProvisioner = factory => provision(id => {
-      const session = factory(id);
+    manager.setDelegationProvisioner = factory => provision((id, runner) => {
+      const session = factory(id, runner);
       if (session) environments.set(id, session.env);
       return session;
     });

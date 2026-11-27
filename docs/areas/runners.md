@@ -553,12 +553,15 @@ note that says so. A native
 `ask_question` call ends the prompt with the question as text; Squawk shows it as a question
 card that keeps the free-text answer, and sends the chosen answer as the next prompt.
 
-Native subagents are off (`nativeSubagents: 'none'`). On CLI 1.5.14 a subagent's permission
-requests never reach the ACP client, so its commands time out. Each session gets `--add-dir` for a
-folder in its own temp folder, outside the checkout, whose `.agents/hooks.json` denies
-`invoke_subagent`, `define_subagent`, `manage_subagents`, `send_message`, `run_workflow` and
-`swarm`. The agent reads the denial and goes on; Squawk workers replace subagents. An added
-folder leaves the command cwd on the checkout (docs/runners/antigravity-wire.md).
+Native subagents run turn-held (`nativeSubagents: 'turn-held'`, `childWork: 'nested'`,
+hearsay-tools/squawk#4197). Since Antigravity CLI 1.5.15/1.5.16, `session/prompt` stays open while
+subagents run and child permission requests forward over ACP with `toolCallId: "<childId>:<callId>"`,
+governed by the same tool grant and Bash allowlist as the parent. `invoke_subagent` stays `running`
+until stopped via `manage_subagents` or the parent turn ends; child `send_message` deliveries
+(`sender=<childId>` in the parent transcript) update the running `Task` output without closing the
+task or child transcript tailer. Forwarded child calls and non-prompting child steps
+from `antigravity-cli/brain/<childId>/.system_generated/logs/transcript_full.jsonl` nest under the
+spawning `Task` call via `parentItemId` (`docs/runners/antigravity-wire.md`).
 
 The CLI sends no result for a read, an MCP call or a subagent tool, and sends no hook frame on ACP. Squawk reads both from the
 session's transcript in the account folder

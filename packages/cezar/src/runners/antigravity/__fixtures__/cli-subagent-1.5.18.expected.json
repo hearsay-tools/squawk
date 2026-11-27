@@ -1,0 +1,248 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "acp-turn-1"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-2",
+    "field": "reasoning",
+    "delta": "Request mandates spawning a recursive worker instance for shell execution while immediately halting further tool invocation. Initial instinct suggests chaining multiple operations in sequence, but constraints strictly require relinquishing control post-delegation to allow asynchronous processing.\n\n"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 13764,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "reasoning",
+      "id": "acp-item-2",
+      "text": "Request mandates spawning a recursive worker instance for shell execution while immediately halting further tool invocation. Initial instinct suggests chaining multiple operations in sequence, but constraints strictly require relinquishing control post-delegation to allow asynchronous processing.\n\n"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "call_5311290449871908198",
+      "name": "Task",
+      "title": "Task: Shell Runner",
+      "toolKind": "task",
+      "status": "running",
+      "input": {
+        "Prompt": "Read sample.txt, then run the shell command `echo sub-ok` using run_command, and report the output back to the parent.",
+        "Role": "Shell Runner",
+        "TypeName": "self",
+        "subagent_type": "self",
+        "description": "Shell Runner",
+        "prompt": "Read sample.txt, then run the shell command `echo sub-ok` using run_command, and report the output back to the parent."
+      }
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "call_5311290449871908198",
+      "name": "Task",
+      "title": "Task: Shell Runner",
+      "toolKind": "task",
+      "status": "running",
+      "input": {
+        "Prompt": "Read sample.txt, then run the shell command `echo sub-ok` using run_command, and report the output back to the parent.",
+        "Role": "Shell Runner",
+        "TypeName": "self",
+        "subagent_type": "self",
+        "description": "Shell Runner",
+        "prompt": "Read sample.txt, then run the shell command `echo sub-ok` using run_command, and report the output back to the parent."
+      }
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-3",
+    "field": "text",
+    "delta": "Started the Shell Runner subagent. Waiting for it to complete and report back."
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 14067,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-3",
+      "role": "assistant",
+      "text": "Started the Shell Runner subagent. Waiting for it to complete and report back."
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "7bb3c467-2cb1-4fdc-a962-db063faac0e6:call_17336341270670134121",
+      "name": "Bash",
+      "title": "echo sub-ok",
+      "toolKind": "execute",
+      "status": "pending",
+      "input": {
+        "command": "echo sub-ok"
+      },
+      "parentItemId": "call_5311290449871908198"
+    }
+  },
+  {
+    "type": "item.updated",
+    "item": {
+      "kind": "tool",
+      "id": "7bb3c467-2cb1-4fdc-a962-db063faac0e6:call_17336341270670134121",
+      "name": "Bash",
+      "title": "echo sub-ok",
+      "toolKind": "execute",
+      "status": "running",
+      "input": {
+        "command": "echo sub-ok"
+      },
+      "parentItemId": "call_5311290449871908198"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "7bb3c467-2cb1-4fdc-a962-db063faac0e6:call_17336341270670134121",
+      "name": "Bash",
+      "title": "echo sub-ok",
+      "toolKind": "execute",
+      "status": "completed",
+      "input": {
+        "command": "echo sub-ok"
+      },
+      "parentItemId": "call_5311290449871908198",
+      "output": "Created At: 2026-11-26T23:30:33+01:00\nCompleted At: 2026-11-26T23:30:34+01:00\nCommand exited with code 0.\n\nCommand output:\nsub-ok\r\n",
+      "diffs": [],
+      "exitCode": 0
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "\n\nCompleted both tasks:\n1."
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": " Contents of `/tmp/squawk-antigravity-970xLB/agy-subagent-probe"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "-VRVLAK/sample.txt`: `hello from sample file`\n2. Output of `echo sub-ok` (exit code 0"
+  },
+  {
+    "type": "item.delta",
+    "itemId": "acp-item-4",
+    "field": "text",
+    "delta": "): `sub-ok`"
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 14442,
+      "contextWindow": 1048576
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "acp-item-4",
+      "role": "assistant",
+      "text": "\n\nCompleted both tasks:\n1. Contents of `/tmp/squawk-antigravity-970xLB/agy-subagent-probe-VRVLAK/sample.txt`: `hello from sample file`\n2. Output of `echo sub-ok` (exit code 0): `sub-ok`"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "call_5311290449871908198",
+      "name": "Task",
+      "title": "Task: Shell Runner",
+      "toolKind": "task",
+      "status": "completed",
+      "input": {
+        "Prompt": "Read sample.txt, then run the shell command `echo sub-ok` using run_command, and report the output back to the parent.",
+        "Role": "Shell Runner",
+        "TypeName": "self",
+        "subagent_type": "self",
+        "description": "Shell Runner",
+        "prompt": "Read sample.txt, then run the shell command `echo sub-ok` using run_command, and report the output back to the parent."
+      }
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "acp-turn-1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 18354,
+      "output": 477,
+      "total": 42273,
+      "reasoning": 328,
+      "cacheRead": 23442,
+      "cacheWrite": 0
+    }
+  }
+]
