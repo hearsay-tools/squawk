@@ -37,6 +37,11 @@ The issue and the facts above are the approved plan. Ask the coordinator, and
 wait for the answer, before you change anything the issue does not name. A
 behavior question goes to the coordinator; the PR keeps the old behavior.
 
+Sandbox boundary: work that needs private credentials, endpoints or packages
+stays on the host. Never tunnel or route traffic from an external sandbox back
+into a host, localhost, home-network or private service (docs/workers.md § Work
+outside the host).
+
 The issue's numbers (counts, sizes, costs) are a hint, not a target. Measure the
 acceptance target before you start and again after each rebase or merge of main,
 with the command the issue names, or node scripts/import-reach.mjs for an import

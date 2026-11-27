@@ -94,6 +94,11 @@ the PR to the merge queue or remove it. A push refused with GH006 (the PR is
 queued) goes to the coordinator as a request; do not dequeue and do not push again. Commit attribution follows your runner's
 own prompt; this brief adds none.
 
+Sandbox boundary: work that needs private credentials, endpoints or packages
+stays on the host. Never tunnel or route traffic from an external sandbox back
+into a host, localhost, home-network or private service (docs/workers.md § Work
+outside the host).
+
 Deliver: <acceptance criteria and evidence checks>.
 Preserve: <existing guarantees>.
 Intentional changes: <approved old-to-new behavior>.
