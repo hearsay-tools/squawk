@@ -1,5 +1,5 @@
 # Harness parity: name-only groups apart from the engine-bound cells
-Status: active
+Status: done
 
 Issue: hearsay-tools/squawk#3962 (parent hearsay-tools/squawk#3956)
 
