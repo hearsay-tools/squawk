@@ -222,19 +222,23 @@ interface SectionDisclosure {
 
 type SessionActivity = ReturnType<typeof useSessionActivity>
 
-/** Everything the header and more than one section read, derived once per render. */
-function useSessionActivity(run: ApiRun, thread: ThreadState, currentThread: ThreadState, currentComplete: boolean, prNumbers: number[]) {
+/** Shared live status, agent, plan, worker and usage facts read by both the Activity panel and header trigger. */
+export function useActivityStatusFacts(
+  run: ApiRun,
+  thread: ThreadState,
+  currentThread: ThreadState,
+  currentComplete: boolean,
+) {
   const health = useHealth()
   const metrics = usageMetricVisibility(health.data)
   const runs = useRuns()
   const queuePosition = run.status === 'queued' ? queuePositions(runs.data ?? []).get(run.id) : undefined
   const line = runStatusLine(run, { queuePosition })
-  const conflicts = useConflictingPullRequests(prNumbers)
   const runIsTerminal = !isSessionOpen(run) && run.status !== 'queued'
   // A partial thread can miss agents the newest page starts after, so the section waits for the
   // whole current state rather than show a wrong count (hearsay-tools/cezarion#2588).
   const agents = useMemo(
-    () => currentComplete ? collectSubagents(currentThread.turns, runIsTerminal, thread.turns) : [],
+    () => (currentComplete ? collectSubagents(currentThread.turns, runIsTerminal, thread.turns) : []),
     [currentComplete, currentThread.turns, runIsTerminal, thread.turns],
   )
   const planEntries = latestPlanEntries(currentThread) ?? []
@@ -243,16 +247,26 @@ function useSessionActivity(run: ApiRun, thread: ThreadState, currentThread: Thr
   const agentCounts = subagentCounts(agents)
   const planCountsValue = planCounts(planEntries)
   return {
+    health,
     line,
     ...activityStatus(run, line, workers, currentComplete ? agentCounts : undefined, planCountsValue),
     ...usageValues(run, metrics),
-    conflicts,
-    waitReferences: ciWaitReferences(run),
     agents,
     agentCounts,
     planEntries,
     planCounts: planCountsValue,
-    automations: automationsAvailable(health.data),
+  }
+}
+
+/** Everything the header and more than one section read, derived once per render. */
+function useSessionActivity(run: ApiRun, thread: ThreadState, currentThread: ThreadState, currentComplete: boolean, prNumbers: number[]) {
+  const facts = useActivityStatusFacts(run, thread, currentThread, currentComplete)
+  const conflicts = useConflictingPullRequests(prNumbers)
+  return {
+    ...facts,
+    conflicts,
+    waitReferences: ciWaitReferences(run),
+    automations: automationsAvailable(facts.health.data),
   }
 }
 

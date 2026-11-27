@@ -1,22 +1,15 @@
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { ChevronDownIcon, LayersIcon } from '@/components/design-icons'
 
 import type { ApiRun } from '@open-mercato/cezar-api-client'
-import { isSessionOpen } from '@open-mercato/cezar-api-client/contract/run-predicates'
-import { useHealth, useRunRelationships, useRuns } from '@/api/queries'
+import { useRunRelationships } from '@/api/queries'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { queuePositions } from '@/lib/task-groups'
-import { formatCost } from '@/lib/tasks-table'
-import { usageMetricVisibility } from '@/lib/token-metrics'
 import { cn } from '@/lib/utils'
 
-import { planCounts } from './plan-dock'
-import { RunActivityDock, activityStatus } from './run-activity-dock'
-import { listsWorkers, useWorkersVerdict } from './run-relationships'
-import { runStatusLine } from './run-status'
+import { RunActivityDock, useActivityStatusFacts } from './run-activity-dock'
+import { listsWorkers } from './run-relationships'
 import { activeStepIndex, railSteps } from './step-rail'
-import { collectSubagents, subagentCounts } from './subagent-dock'
-import { latestPlanEntries, type ThreadState } from './thread-state'
+import type { ThreadState } from './thread-state'
 
 export const ULTRAWIDE_ACTIVITY_QUERY = '(min-width: 1600px)'
 
@@ -33,22 +26,9 @@ export interface ThreadActivityProps {
 }
 
 function useHeaderActivityFacts(run: ApiRun, thread: ThreadState, currentThread: ThreadState, currentComplete: boolean) {
-  const health = useHealth()
-  const metrics = usageMetricVisibility(health.data)
-  const runs = useRuns()
-  const queuePosition = run.status === 'queued' ? queuePositions(runs.data ?? []).get(run.id) : undefined
-  const line = runStatusLine(run, { queuePosition })
-  const runIsTerminal = !isSessionOpen(run) && run.status !== 'queued'
-  const agents = useMemo(
-    () => (currentComplete ? collectSubagents(currentThread.turns, runIsTerminal, thread.turns) : []),
-    [currentComplete, currentThread.turns, runIsTerminal, thread.turns],
-  )
-  const agentCounts = subagentCounts(agents)
-  const planEntries = latestPlanEntries(currentThread) ?? []
-  const planCountsValue = planCounts(planEntries)
+  const status = useActivityStatusFacts(run, thread, currentThread, currentComplete)
   const delegated = listsWorkers(run)
   const relationships = useRunRelationships(run.id, { enabled: delegated })
-  const workersVerdict = useWorkersVerdict(run)
   const workerCount = useMemo(() => {
     const receiptIds = run.delegation?.role === 'root' ? run.delegation.receipts.map((r) => r.workerId) : []
     const fetchedIds = relationships.data?.workers.map((w) => w.workerId) ?? []
@@ -56,16 +36,17 @@ function useHeaderActivityFacts(run: ApiRun, thread: ThreadState, currentThread:
   }, [run.delegation, relationships.data?.workers])
   const steps = railSteps(run)
   const activeStep = steps.length > 0 ? steps[activeStepIndex(run.currentStepId, steps)] : undefined
-  const cost = metrics.cost && run.costUsd !== undefined ? formatCost(run.costUsd) : undefined
-  const status = activityStatus(run, line, workersVerdict, currentComplete ? agentCounts : undefined, planCountsValue)
 
   return {
-    ...status,
+    statusText: status.statusText,
+    glyph: status.glyph,
+    allComplete: status.allComplete,
+    failed: status.failed,
     activeStepName: activeStep?.name,
     workerCount,
-    agentCounts,
-    cost,
-    nextCheckText: line.nextCheck?.text,
+    agentCounts: status.agentCounts,
+    cost: status.cost,
+    nextCheckText: status.line.nextCheck?.text,
   }
 }
 
@@ -80,13 +61,52 @@ function triggerAriaLabel(facts: ReturnType<typeof useHeaderActivityFacts>, mode
   return parts.join('; ')
 }
 
+function ActivityPopover({
+  props,
+  align,
+  sideOffset,
+  contentClassName,
+  children,
+}: {
+  props: ThreadActivityProps
+  align: 'center' | 'end'
+  sideOffset: number
+  contentClassName: string
+  children: ReactNode
+}) {
+  const { run, thread, currentThread, currentComplete, onOpenWorker, open, onOpenChange } = props
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>{children}</PopoverTrigger>
+      <PopoverContent
+        align={align}
+        sideOffset={sideOffset}
+        data-slot="run-activity-popover"
+        className={contentClassName}
+      >
+        <RunActivityDock
+          presentation="panel"
+          run={run}
+          thread={thread}
+          currentThread={currentThread}
+          currentComplete={currentComplete}
+          onOpenWorker={(id) => {
+            onOpenChange(false)
+            onOpenWorker(id)
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 /**
  * Desktop header Activity trigger (hearsay-tools/squawk#4374): sits in `RunHeader`'s status slot,
  * opening the Activity popover on standard desktop (`< 1600px` or when Live Preview is open) or
  * toggling the ultra-wide right-hand Activity sidebar (`>= 1600px`).
  */
 export function DesktopActivityHeaderControl(props: ThreadActivityProps) {
-  const { run, thread, currentThread, currentComplete, onOpenWorker, mode, open, onOpenChange } = props
+  const { run, thread, currentThread, currentComplete, mode, open, onOpenChange } = props
   const facts = useHeaderActivityFacts(run, thread, currentThread, currentComplete)
   const label = triggerAriaLabel(facts, mode)
   const statusColor = facts.allComplete ? 'text-success' : facts.failed ? 'text-danger' : 'text-foreground'
@@ -142,27 +162,14 @@ export function DesktopActivityHeaderControl(props: ThreadActivityProps) {
   if (mode === 'sidebar') return button
 
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>{button}</PopoverTrigger>
-      <PopoverContent
-        align="end"
-        sideOffset={6}
-        data-slot="run-activity-popover"
-        className="w-[380px] max-w-[calc(100vw-2rem)] max-h-[min(70dvh,540px)] overflow-y-auto overscroll-contain p-0"
-      >
-        <RunActivityDock
-          presentation="panel"
-          run={run}
-          thread={thread}
-          currentThread={currentThread}
-          currentComplete={currentComplete}
-          onOpenWorker={(id) => {
-            onOpenChange(false)
-            onOpenWorker(id)
-          }}
-        />
-      </PopoverContent>
-    </Popover>
+    <ActivityPopover
+      props={props}
+      align="end"
+      sideOffset={6}
+      contentClassName="w-[380px] max-w-[calc(100vw-2rem)] max-h-[min(70dvh,540px)] overflow-y-auto overscroll-contain p-0"
+    >
+      {button}
+    </ActivityPopover>
   )
 }
 
@@ -172,73 +179,58 @@ export function DesktopActivityHeaderControl(props: ThreadActivityProps) {
  * instead of between the active ask and reply input.
  */
 export function MobileActivityHeaderControl(props: ThreadActivityProps) {
-  const { run, thread, currentThread, currentComplete, onOpenWorker, open, onOpenChange } = props
+  const { run, thread, currentThread, currentComplete, open } = props
   const facts = useHeaderActivityFacts(run, thread, currentThread, currentComplete)
   const label = triggerAriaLabel(facts, 'popover')
   const statusColor = facts.allComplete ? 'text-success' : facts.failed ? 'text-danger' : 'text-muted-foreground'
 
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          data-slot="run-activity-trigger-mobile"
-          aria-expanded={open}
-          aria-label={label}
-          className={cn(
-            'flex min-h-11 w-full min-w-0 items-center gap-2 border-t border-border bg-background px-1 text-start text-[13px] text-foreground md:hidden',
-            'active:bg-muted focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring',
-          )}
-        >
-          <LayersIcon aria-hidden="true" className="size-4 shrink-0 text-accent-text" />
-          <span className="shrink-0 font-semibold">Activity</span>
-          <span data-slot="run-activity-status" className={cn('inline-flex min-w-0 items-center gap-1.5 truncate', statusColor)}>
-            {facts.glyph}
-            <span data-slot="run-activity-status-label" className="truncate">{facts.statusText}</span>
-          </span>
-          {facts.workerCount > 0 ? (
-            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground tabular-nums">
-              {facts.workerCount}w
-            </span>
-          ) : null}
-          {facts.agentCounts.total > 0 ? (
-            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground tabular-nums">
-              {facts.agentCounts.done}/{facts.agentCounts.total}
-            </span>
-          ) : null}
-          {facts.cost ? (
-            <span className="ms-auto shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
-              {facts.cost}
-            </span>
-          ) : null}
-          <ChevronDownIcon
-            aria-hidden="true"
-            className={cn(
-              'size-4 shrink-0 text-soft-foreground motion-safe:transition-transform motion-reduce:transition-none',
-              !facts.cost && 'ms-auto',
-              open && 'rotate-180',
-            )}
-          />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="center"
-        sideOffset={4}
-        data-slot="run-activity-popover"
-        className="w-[calc(100vw-1.5rem)] max-w-[420px] max-h-[min(65dvh,460px)] overflow-y-auto overscroll-contain p-0"
+    <ActivityPopover
+      props={props}
+      align="center"
+      sideOffset={4}
+      contentClassName="w-[calc(100vw-1.5rem)] max-w-[420px] max-h-[min(65dvh,460px)] overflow-y-auto overscroll-contain p-0"
+    >
+      <button
+        type="button"
+        data-slot="run-activity-trigger-mobile"
+        aria-expanded={open}
+        aria-label={label}
+        className={cn(
+          'flex min-h-11 w-full min-w-0 items-center gap-2 border-t border-border bg-background px-1 text-start text-[13px] text-foreground md:hidden',
+          'active:bg-muted focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring',
+        )}
       >
-        <RunActivityDock
-          presentation="panel"
-          run={run}
-          thread={thread}
-          currentThread={currentThread}
-          currentComplete={currentComplete}
-          onOpenWorker={(id) => {
-            onOpenChange(false)
-            onOpenWorker(id)
-          }}
+        <LayersIcon aria-hidden="true" className="size-4 shrink-0 text-accent-text" />
+        <span className="shrink-0 font-semibold">Activity</span>
+        <span data-slot="run-activity-status" className={cn('inline-flex min-w-0 items-center gap-1.5 truncate', statusColor)}>
+          {facts.glyph}
+          <span data-slot="run-activity-status-label" className="truncate">{facts.statusText}</span>
+        </span>
+        {facts.workerCount > 0 ? (
+          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground tabular-nums">
+            {facts.workerCount}w
+          </span>
+        ) : null}
+        {facts.agentCounts.total > 0 ? (
+          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground tabular-nums">
+            {facts.agentCounts.done}/{facts.agentCounts.total}
+          </span>
+        ) : null}
+        {facts.cost ? (
+          <span className="ms-auto shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
+            {facts.cost}
+          </span>
+        ) : null}
+        <ChevronDownIcon
+          aria-hidden="true"
+          className={cn(
+            'size-4 shrink-0 text-soft-foreground motion-safe:transition-transform motion-reduce:transition-none',
+            !facts.cost && 'ms-auto',
+            open && 'rotate-180',
+          )}
         />
-      </PopoverContent>
-    </Popover>
+      </button>
+    </ActivityPopover>
   )
 }
