@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -127,5 +129,11 @@ describe('PageShell named templates', () => {
     )
     expect(container.querySelector('[data-slot="page-shell-split-list"]')?.textContent).toBe('List pane')
     expect(container.querySelector('[data-slot="page-shell-split-detail"]')?.textContent).toBe('Detail pane')
+  })
+
+  it('layers default block padding in @layer components so bottom-clearance utilities apply while gutter stays unlayered', () => {
+    const css = readFileSync(resolve(import.meta.dirname, 'page-shell.css'), 'utf8')
+    expect(css).toMatch(/@layer components\s*\{\s*\[data-slot='page-shell'\]\s*\{\s*padding-block:\s*28px 36px;\s*\}\s*\}/)
+    expect(css).toMatch(/\[data-slot='page-shell'\]\s*\{[^}]*padding-inline:\s*var\(--page-shell-gutter\);/)
   })
 })

@@ -2,6 +2,15 @@
  * Owns gutter, left-aligned content origin, template max-widths, header typography,
  * unified header action button sizing, and declared empty/sparse/full layout states. */
 
+/* Default vertical padding sits in @layer components so documented route bottom-clearance
+ * utilities (e.g. GitHub's md:pb-4 viewport fit and mobile safe-area pb-[...]) override it,
+ * while padding-inline stays unlayered so PageShell always owns the horizontal gutter. */
+@layer components {
+  [data-slot='page-shell'] {
+    padding-block: 28px 36px;
+  }
+}
+
 [data-slot='page-shell'] {
   --page-shell-gutter: 16px;
   --page-shell-max-w: none;
@@ -11,7 +20,6 @@
   min-height: 100%;
   flex-direction: column;
   padding-inline: var(--page-shell-gutter);
-  padding-block: 28px 36px;
 }
 
 [data-slot='page-shell'][data-flush-padding='true'] {
