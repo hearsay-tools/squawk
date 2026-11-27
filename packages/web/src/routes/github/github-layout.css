@@ -54,7 +54,7 @@
 [data-slot='gh-row'][data-kind='issue'] > span:first-child > svg { display: none; }
 [data-slot='gh-row'][data-kind='issue'] > span { padding-inline-start: 0; }
 [data-slot='gh-row'] > span:first-child > span { font-weight: 400; white-space: normal; }
-[data-slot='gh-row'] > span:nth-child(2) { font-family: inherit; font-size: 11px; }
+[data-slot='gh-row'] > span:nth-child(2) { font-family: inherit; font-size: 12px; }
 [data-slot='gh-detail-inner'] { padding: 24px; }
 [data-slot='gh-hand'] { border-color: color-mix(in oklch, var(--accent-strong) 24%, var(--border)); }
 .gh-prompt-field { gap: 8px; }

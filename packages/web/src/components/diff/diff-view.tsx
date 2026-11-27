@@ -382,7 +382,7 @@ function DiffFileCard({
             </span>
           ) : null}
           <span className="ml-auto shrink-0">
-            <DiffStatLabel stat={{ adds: file.adds, dels: file.dels, files: 1 }} className="text-[11px]" />
+            <DiffStatLabel stat={{ adds: file.adds, dels: file.dels, files: 1 }} className="text-xs" />
           </span>
         </button>
         {/* A sibling of the collapse button, never inside it: one button cannot hold another.
@@ -621,7 +621,7 @@ function LineContent({ cell, tokens, wrap }: { cell: DiffCell; tokens: SynToken[
   const segments = overlaySegments(tokens, cell.spans, cell.line.text)
   const markClass = cell.line.kind === 'add' ? 'bg-diff-add-strong' : 'bg-diff-del-strong'
   return (
-    <span className={cn('min-w-0 flex-1 pr-4 max-sm:pr-1', wrap ? 'break-words whitespace-pre-wrap' : 'whitespace-pre')}>
+    <span className={cn('min-w-0 flex-1 pr-4 max-sm:pr-1 max-sm:pl-1.5', wrap ? 'break-words whitespace-pre-wrap' : 'whitespace-pre')}>
       {segments.map((segment, index) => (
         <span
           key={index}
@@ -637,23 +637,24 @@ function LineContent({ cell, tokens, wrap }: { cell: DiffCell; tokens: SynToken[
   )
 }
 
-/** A line-number cell. Below `sm` (a phone held upright) it narrows to 24px with a 2px gap,
+/** A line-number cell. Below `sm` (a phone held upright) it narrows to 28px with a 6px gap,
  *  still room for a three-digit number at 12px mono, so the code column keeps the width a long
  *  line needs to wrap in a few rows, not six. */
 function Gutter({ value, className }: { value: number | undefined; className?: string }) {
   return (
     <span
       data-slot="diff-gutter"
-      className={cn('w-10 shrink-0 pr-2 text-right text-muted-foreground tabular-nums select-none max-sm:w-6 max-sm:pr-0.5', className)}
+      className={cn('w-10 shrink-0 pr-2 text-right text-muted-foreground tabular-nums select-none max-sm:w-7 max-sm:pr-1.5', className)}
     >
       {value ?? ''}
     </span>
   )
 }
 
-/** The +/− marker column: 16px, 10px below `sm` (see `Gutter`). */
+/** The +/− marker column: 16px. Below `sm` it centres the sign, and the code cell adds a 6px
+ *  lead, so the number, the sign and the code never touch. */
 function Marker({ kind }: { kind: HunkLine['kind'] }) {
-  return <span className="w-4 shrink-0 text-muted-foreground select-none max-sm:w-2.5">{MARKER[kind]}</span>
+  return <span data-slot="diff-marker" className="w-4 shrink-0 text-muted-foreground select-none max-sm:text-center">{MARKER[kind]}</span>
 }
 
 function UnifiedRowView({

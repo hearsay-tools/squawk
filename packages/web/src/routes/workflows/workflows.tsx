@@ -20,7 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckIcon, PlusIcon, TriangleAlertIcon } from '@/components/design-icons'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 
 import { ApiError, createWorkflow, deleteWorkflow, parseWorkflow, postPlan } from '@/api/client'
@@ -122,6 +122,7 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
   const [autoText, setAutoText] = useState('')
   const [confirmOverwrite, setConfirmOverwrite] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const saveCueId = useId()
   const [dragging, setDragging] = useState<DragItem | null>(null)
   // The step id (or CANVAS_ID) the pointer is over mid-drag — drives the "drop to insert"
   // indicator between cards, the affordance the legacy `.wb-gap` slots gave (#wb-drop-line).
@@ -347,13 +348,19 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
             <PlusIcon aria-hidden="true" className="size-4" />
             New workflow
           </Button>
+          {/* A greyed Save reads as "not allowed" without a reason; say it is already saved. */}
+          {unchanged ? (
+            <span id={saveCueId} data-slot="wb-save-cue" className="whitespace-nowrap text-xs text-muted-foreground">
+              No unsaved changes
+            </span>
+          ) : null}
           <Button
             type="button"
             variant="primary"
             data-slot="wb-save"
             className="min-h-11"
             disabled={save.isPending || unchanged}
-            title={unchanged ? 'No unsaved changes' : undefined}
+            aria-describedby={unchanged ? saveCueId : undefined}
             onClick={runSave}
           >
             <CheckIcon aria-hidden="true" className="size-4" />

@@ -1,5 +1,5 @@
-import { FolderTreeIcon } from 'lucide-react'
-import { RefreshCwIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
+import { FileTextIcon, FolderTreeIcon } from 'lucide-react'
+import { ChevronRightIcon, RefreshCwIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useEffect, useState } from 'react'
@@ -70,7 +70,7 @@ function FilesView({ run }: { run: ApiRun }) {
         {root.isPending ? <p data-slot="files-loading" className="py-4 text-xs">Loading files…</p> : root.isError ? <CenteredState icon={refused ? <FolderTreeIcon /> : <TriangleAlertIcon size={16} />} tone={refused ? 'neutral' : 'danger'} heading="h2" title={refused ? 'No files to browse' : 'Could not load the files'} subtitle={root.error.message} /> : <FolderMemoryContext.Provider value={memory.folders}><FilesTree runId={run.id} selected={selected} onSelect={path => select('path', path)} /></FolderMemoryContext.Provider>}
         <section className="mt-4 border-t border-border pt-3" aria-label="Published artifacts">
           <h2 className="text-sm font-medium">Published artifacts</h2>
-          {artifacts.isPending ? <p className="py-2 text-xs">Loading published files…</p> : artifacts.isError ? <p role="alert" className="py-2 text-xs">Could not load published files.</p> : artifacts.data.artifacts.length === 0 ? <p className="py-2 text-xs text-muted-foreground">No published files yet.</p> : <ul>{artifacts.data.artifacts.map(artifact => <li key={artifact.id}><button type="button" aria-current={artifact.id === artifactId ? 'true' : undefined} className="min-h-11 w-full rounded px-2 py-2 text-left text-xs wrap-anywhere hover:bg-muted focus-visible:ring-2" onClick={() => select('artifact', artifact.id)}>{artifact.name}</button></li>)}</ul>}
+          {artifacts.isPending ? <p className="py-2 text-xs">Loading published files…</p> : artifacts.isError ? <p role="alert" className="py-2 text-xs">Could not load published files.</p> : artifacts.data.artifacts.length === 0 ? <p className="py-2 text-xs text-muted-foreground">No published files yet.</p> : <ul>{artifacts.data.artifacts.map(artifact => <li key={artifact.id}><button type="button" data-slot="artifact-row" aria-current={artifact.id === artifactId ? 'true' : undefined} className="group flex min-h-11 w-full items-center gap-2 rounded px-2 py-2 text-left text-xs text-foreground hover:bg-muted focus-visible:ring-2 aria-[current=true]:bg-muted aria-[current=true]:font-medium" onClick={() => select('artifact', artifact.id)}><FileTextIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 wrap-anywhere underline-offset-2 group-hover:underline">{artifact.name}</span><ChevronRightIcon size={16} aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground group-hover:text-foreground" /></button></li>)}</ul>}
           <Button variant="outline" size="sm" data-action="refresh-artifacts" className="mt-2 max-md:h-11 no-hover:h-11" onClick={() => void artifacts.refetch()}><RefreshCwIcon aria-hidden="true" />Refresh published files</Button>
         </section>
       </aside>

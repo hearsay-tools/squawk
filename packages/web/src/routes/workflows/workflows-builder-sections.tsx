@@ -73,7 +73,7 @@ export function WbMetadata({
   return (
     <section data-slot="wb-metadata" className="flex min-w-0 flex-col gap-4">
       <div data-slot="wb-load" className="flex flex-col items-start gap-1.5">
-        <label htmlFor="workflow-load" className="text-xs font-medium text-muted-foreground">
+        <label htmlFor="workflow-load" className="text-xs font-medium text-foreground">
           Load an existing workflow
         </label>
         <div className="relative inline-flex max-w-full items-center">
@@ -105,7 +105,7 @@ export function WbMetadata({
       </div>
       <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-[minmax(200px,280px)_minmax(0,1fr)] md:items-start">
         <div className="flex min-w-0 flex-col gap-1.5">
-          <label htmlFor="workflow-name" className="text-xs font-semibold text-foreground">
+          <label htmlFor="workflow-name" className="text-xs font-medium text-foreground">
             Workflow name
           </label>
           <Input
@@ -120,7 +120,7 @@ export function WbMetadata({
           />
         </div>
         <div className="flex min-w-0 flex-col gap-1.5">
-          <label htmlFor="workflow-description" className="text-xs font-semibold text-foreground">
+          <label htmlFor="workflow-description" className="text-xs font-medium text-foreground">
             Description
           </label>
           <Textarea

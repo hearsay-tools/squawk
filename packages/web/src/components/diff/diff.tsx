@@ -116,7 +116,7 @@ function FallbackFile({
           {fullPath}
         </span>
         <span className="ml-auto shrink-0">
-          <DiffStatLabel stat={{ adds: file.adds, dels: file.dels, files: 1 }} className="text-[11px]" />
+          <DiffStatLabel stat={{ adds: file.adds, dels: file.dels, files: 1 }} className="text-xs" />
         </span>
       </header>
       {shouldPreviewImage(file) ? (

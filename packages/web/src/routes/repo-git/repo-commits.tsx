@@ -65,7 +65,7 @@ export function RepoCommitsSection({ repo, info }: { repo: RepoResponse; info: R
                   className="flex min-h-[52px] min-w-0 flex-1 flex-col justify-center gap-0.5 px-4 py-2 focus-visible:outline-2 focus-visible:outline-ring"
                 >
                   <span data-slot="commit-row-subject" className="truncate text-[13px] font-medium text-foreground">{commit.subject}</span>
-                  <span data-slot="commit-row-meta" className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span data-slot="commit-row-meta" className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                     {/* The same sha chip as the task Commits list. */}
                     <span className="shrink-0 rounded-sm border border-border bg-card px-1.5 py-px font-mono" title={commit.hash}>{commit.hash.slice(0, 8)}</span>
                     <span aria-hidden="true" className="shrink-0">·</span>

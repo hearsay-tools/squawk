@@ -291,6 +291,22 @@ describe('the GitHub tab lists', () => {
     expect(badge('139')).toBeNull()
   })
 
+  it('separates a row\'s meta facts with middle dots, and adds none for a missing comment count', async () => {
+    stubFetch()
+    renderAt('/github')
+
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    const meta = (number: string) =>
+      document.querySelector(`[data-slot="gh-row"][data-number="${number}"] [data-slot="gh-row-meta"]`)!
+    const dots = (number: string) => meta(number).querySelectorAll('[data-slot="gh-row-dot"]')
+
+    // #142: number · author · age · comments. #139 has no comments, so no trailing dot.
+    expect(dots('142')).toHaveLength(3)
+    expect(dots('139')).toHaveLength(2)
+    for (const dot of dots('142')) expect(dot.getAttribute('aria-hidden')).toBe('true')
+    expect(meta('139').lastElementChild?.tagName).toBe('TIME')
+  })
+
   it('shows the exact open count from the single fast load — no 30+ guesswork (#664)', async () => {
     // The two-shot is gone: one fast fetch (limit 1000, no rollup) returns the whole open set, so
     // the tab reports the real count instead of the old fast-batch "30+" placeholder.

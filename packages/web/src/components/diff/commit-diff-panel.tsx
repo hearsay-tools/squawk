@@ -67,7 +67,7 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
         <>
           <div data-slot="commit-meta" className="mx-4 border-b border-border py-3 md:mx-9">
             <h2 className="text-sm font-semibold">{commit.data.subject}</h2>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
               <span>{commit.data.author}</span>
               <span aria-hidden="true">·</span>
               <span title={commit.data.when}>{gitAge(commit.data.when)}</span>

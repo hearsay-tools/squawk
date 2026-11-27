@@ -170,7 +170,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
             Create branch
           </Button>
         </form>
-        <p className="mt-3 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground">Switching branches changes your working tree. Review uncommitted changes first.</p>
+        <p data-slot="branch-create-note" className="mt-4 text-xs leading-relaxed text-muted-foreground">Switching branches changes your working tree. Review uncommitted changes first.</p>
       </div>
 
       {health.data?.forge?.available ? <ForgePullRequests /> : null}
@@ -185,7 +185,7 @@ function ForgePullRequests() {
   const github = useGithub({ limit: 20 })
   return (
     <div data-slot="repo-prs" className="min-w-0 rounded-xl border border-border bg-card p-5 md:col-span-2">
-      <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Open pull requests</h2>
+      <h2 className="text-base font-semibold">Open pull requests</h2>
       {github.isPending ? (
         <p className="mt-3 text-xs text-muted-foreground">Loading pull requests…</p>
       ) : github.isError ? (

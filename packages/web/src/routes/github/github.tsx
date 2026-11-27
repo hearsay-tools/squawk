@@ -9,7 +9,6 @@ import {
   useState,
   type CSSProperties,
   type Dispatch,
-  type DragEvent,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
@@ -18,7 +17,7 @@ import {
 import { useParams } from 'react-router'
 import { Link, Navigate } from '@/lib/project-router'
 
-import { getGithubComments, putUiState } from '@/api/client'
+import { putUiState } from '@/api/client'
 import { queryKeys, useGithubPages, useUiState } from '@/api/queries'
 import type {
   GithubData,
@@ -28,13 +27,12 @@ import type {
 } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { GithubIcon } from '@/components/icons'
-import { ChecksGlyph, CommentCount, GithubItemDetail, LabelChip } from '@/components/github-item-detail'
+import { GithubItemDetail } from '@/components/github-item-detail'
 import { TabLink } from '@/components/tab-link'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { toast } from '@/components/ui/toaster'
-import { shortAge } from '@/lib/format'
 import {
   DEFAULT_GITHUB_LIST_WIDTH,
   GITHUB_LIST_WIDTH_STEP,
@@ -44,7 +42,6 @@ import {
   readStoredGithubListWidth,
   writeStoredGithubListWidth,
 } from '@/lib/github-list-width'
-import { githubTaskPrompt } from '@/lib/github-task'
 import { cn } from '@/lib/utils'
 import { useAutomationsAvailable } from '@/lib/capabilities'
 
@@ -54,6 +51,7 @@ import { allLabels, labelChipStyle } from './github-filter'
 import { GithubFilterScreen } from './github-filter-screen'
 import { GithubLoading } from './github-loading'
 import { GithubMasthead } from './github-masthead'
+import { GithubRow } from './github-row'
 import { useGithubListPaging, type GithubListPaging, type GithubPagesQuery } from './github-paging'
 import {
   githubFilterPath, GITHUB_PAGE_SIZE, type GithubFilter,
@@ -1039,101 +1037,6 @@ function GithubNothingSelected({ view, number }: { view: GithubView; number: num
             `#${number} is not among the open ${view === 'issues' ? 'issues' : 'pull requests'}. Search for ${number} above to look it up on GitHub, closed and merged included.`
       }
     />
-  )
-}
-
-function GithubRow({
-  item,
-  view,
-  filter,
-  colors,
-  active,
-  queued,
-  checks,
-  comments,
-}: {
-  item: GithubItem
-  view: GithubView
-  /** The list's `?filter=`, carried into the detail URL so Back returns to the same list. */
-  filter: GithubFilter | null
-  colors: Record<string, string>
-  active: boolean
-  queued: boolean
-  /** Resolved checks glyph — the lazily-hydrated value overrides the list's `null` (#664). */
-  checks?: GithubItem['checks']
-  /** Resolved comment count; `undefined` while a deferred count has not landed (#1183). */
-  comments: number | undefined
-}) {
-  const Icon = item.kind === 'issue' ? CircleDotIcon : GitPullRequestIcon
-  const queryClient = useQueryClient()
-
-  // Warm the thread on hover/focus (#664) so opening the row is usually instant — best-effort,
-  // deduped by React Query, and it re-uses the mounted detail's exact query key/staleTime.
-  const prefetchThread = () => {
-    void queryClient.prefetchQuery({
-      queryKey: queryKeys.githubComments(item.kind, item.number),
-      queryFn: ({ signal }) => getGithubComments(item.kind, item.number, {}, { signal }),
-      staleTime: 60_000,
-    })
-  }
-
-  // Drag an issue/PR row into the composer — it prefills the same prompt "Run agent on this
-  // issue" uses (legacy parity); a textarea accepts the text/plain payload natively.
-  const onDragStart = (event: DragEvent) => {
-    try {
-      event.dataTransfer.setData('text/plain', githubTaskPrompt(item))
-      event.dataTransfer.effectAllowed = 'copy'
-    } catch {
-      // older engines — the drag just won't carry the prompt
-    }
-  }
-
-  return (
-    <Link
-      to={githubFilterPath(view, filter, item.number)}
-      draggable
-      onDragStart={onDragStart}
-      onMouseEnter={prefetchThread}
-      onFocus={prefetchThread}
-      data-slot="gh-row"
-      data-number={item.number}
-      data-kind={item.kind}
-      aria-current={active ? 'page' : undefined}
-      title="Drag into the composer to prefill a task"
-      className={cn(
-        'flex flex-col gap-2 rounded-md px-3 py-4 transition-colors hover:bg-muted',
-        active && 'bg-accent-strong/10 text-accent-text',
-      )}
-    >
-      <span className="flex min-w-0 items-start gap-2 md:items-center">
-        <Icon
-          aria-hidden="true" data-slot="gh-row-icon"
-          className={cn('mt-0.5 size-3.5 shrink-0 md:mt-0', item.kind === 'issue' ? 'text-success' : 'text-accent-icon')}
-        />
-        <span data-slot="gh-row-title" className={cn('line-clamp-2 min-w-0 text-[13px] font-medium md:block md:truncate', active && 'font-semibold')}>
-          {item.title}
-        </span>
-      </span>
-      <span data-slot="gh-row-meta" className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[22px] text-xs text-muted-foreground md:flex-nowrap md:gap-y-0">
-        <span className="tabular-nums">#{item.number}</span>
-        <span data-slot="gh-row-author" className="max-w-full shrink-0 truncate md:min-w-0 md:shrink">{item.author}</span>
-        <time dateTime={item.createdAt} title={new Date(item.createdAt).toLocaleString()}>{shortAge(item.createdAt)}</time>
-        <CommentCount count={comments} />
-        {checks ? <ChecksGlyph checks={checks} /> : null}
-        {queued ? (
-          <span data-slot="gh-queued-flag" className="font-sans font-medium text-accent-text">
-            ↗ run queued
-          </span>
-        ) : null}
-      </span>
-      {item.labels.length > 0 ? (
-        <span data-slot="gh-row-labels" className="flex flex-wrap gap-1 pl-[22px]">
-          {item.labels.map((label) => (
-            <LabelChip key={label} label={label} color={colors[label]} plain />
-          ))}
-        </span>
-      ) : null}
-    </Link>
   )
 }
 

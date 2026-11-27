@@ -399,15 +399,19 @@ describe('auto chain creator', () => {
 // ---- save --------------------------------------------------------------------------------------
 
 describe('save', () => {
-  it('keeps Save off while the canvas matches the saved file, and turns it on after an edit', async () => {
+  it('keeps Save off with a visible No unsaved changes cue while the canvas matches the saved file, and turns it on after an edit', async () => {
     stubFetch()
     renderAt('/workflows')
     await waitFor(() => expect(stepCards()).toHaveLength(2))
     const save = () => document.querySelector<HTMLButtonElement>('[data-slot="wb-save"]')!
+    const cue = () => document.querySelector('[data-slot="wb-save-cue"]')
     expect(save().disabled).toBe(true)
-    expect(save().title).toBe('No unsaved changes')
+    expect(cue()?.textContent).toBe('No unsaved changes')
+    expect(save().getAttribute('aria-describedby')).toBe(cue()?.id)
     fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Fix, then review.' } })
     expect(save().disabled).toBe(false)
+    expect(cue()).toBeNull()
+    expect(save().hasAttribute('aria-describedby')).toBe(false)
     fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Fix then review.' } })
     expect(save().disabled).toBe(true)
     fireEvent.change(nameInput(), { target: { value: 'ship-it-copy' } })

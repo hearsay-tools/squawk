@@ -146,7 +146,7 @@ function CommitsWorkspace({
               <div className="flex flex-wrap items-start gap-x-3 gap-y-2 border-b border-border px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <h3 className="break-words text-sm leading-snug font-semibold text-foreground">{activeCommit.data.subject}</h3>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
                     <span>{activeCommit.data.author}</span>
                     <span aria-hidden="true">·</span>
                     <span title={activeCommit.data.when}>{gitAge(activeCommit.data.when)}</span>
@@ -263,7 +263,7 @@ function CommitFiles({ runId, sha, files, onPick }: {
             >
               <FileCodeIcon size={16} aria-hidden="true" className="size-[15px] shrink-0" />
               <span className="min-w-0 flex-1 break-all">{file.path}</span>
-              <ChangeCounts adds={file.adds} dels={file.dels} className="font-mono text-[11px]" />
+              <ChangeCounts adds={file.adds} dels={file.dels} className="font-mono text-xs" />
             </button>
           </li>
         ))}

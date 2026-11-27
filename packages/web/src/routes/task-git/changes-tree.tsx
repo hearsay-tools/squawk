@@ -37,7 +37,7 @@ export function ChangesTree({
 /** ±12/−3 in miniature — the tree's per-row counts (the aggregate label lives in the toolbar). */
 function Counts({ adds, dels }: { adds: number; dels: number }) {
   return (
-    <span className="ml-auto shrink-0 pl-2 font-mono text-[11px] font-medium tabular-nums">
+    <span className="ml-auto shrink-0 pl-2 font-mono text-xs font-medium tabular-nums">
       {adds > 0 ? <span className="text-success">+{adds}</span> : null}
       {adds > 0 && dels > 0 ? ' ' : null}
       {dels > 0 ? <span className="text-danger">−{dels}</span> : null}

@@ -153,10 +153,10 @@ function CommitRow({ commit, selected }: { commit: CommitListItem; selected: boo
           <span data-slot="commit-row-subject" title={commit.subject} className="line-clamp-2 text-[13px] leading-snug font-medium break-words text-foreground">{commit.subject}</span>
           {/* The sha rides in the meta line, not beside the subject: the subject keeps the row's
               full width and wraps less beside a wide diff pane. */}
-          <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+          <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             {/* One chip on every row: a bordered card surface reads the same on a plain row and
                 on the selected row's muted fill, where a muted chip would melt into it. */}
-            <span data-slot="commit-sha" className="shrink-0 rounded-sm border border-border bg-card px-1.5 py-px font-mono text-[11px] text-muted-foreground" title={commit.sha}>{commit.shaLabel}</span>
+            <span data-slot="commit-sha" className="shrink-0 rounded-sm border border-border bg-card px-1.5 py-px font-mono text-xs text-muted-foreground" title={commit.sha}>{commit.shaLabel}</span>
             <span className="min-w-0 truncate">{commit.author} · <span title={gitAgeTitle(commit.when, commit.at)}>{gitAge(commit.when, commit.at)}</span></span>
             {commit.stat ? <DiffStatLabel stat={commit.stat} /> : null}
           </span>
