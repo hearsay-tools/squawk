@@ -22,6 +22,15 @@ const LABEL_GATES = Object.freeze({
 
 const newestRun = runs => runs.reduce((latest, run) => (!latest || run.id > latest.id ? run : latest), null);
 
+function matchesPull(run, pr) {
+  const prs = run.pull_requests ?? [];
+  if (prs.length > 0) return prs.some(item => item.number === pr.number);
+  // Fork pull_request_target runs can omit pull_requests; match by head branch and repo when present.
+  if (run.head_branch && pr.head?.ref && run.head_branch !== pr.head.ref) return false;
+  if (run.head_repository?.full_name && pr.head?.repo?.full_name && run.head_repository.full_name !== pr.head.repo.full_name) return false;
+  return true;
+}
+
 function matchingFailures(jobs, gates) {
   return gates.filter(gate => jobs.some(job =>
     job.name === gate.job
@@ -50,11 +59,12 @@ async function listAttemptJobs(github, repo, runId, attempt) {
   return jobs;
 }
 
-async function latestCiRun(github, repo, headSha) {
+async function latestCiRun(github, repo, pr) {
   const { data } = await github.request('GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs', {
-    ...repo, workflow_id: CI_WORKFLOW, event: 'pull_request_target', head_sha: headSha, per_page: 20,
+    ...repo, workflow_id: CI_WORKFLOW, event: 'pull_request_target', head_sha: pr.head.sha, per_page: 20,
   });
-  return newestRun(data?.workflow_runs ?? []);
+  const matching = (data?.workflow_runs ?? []).filter(run => (!run.head_sha || run.head_sha === pr.head.sha) && matchesPull(run, pr));
+  return newestRun(matching);
 }
 
 async function readRun(github, repo, runId) {
@@ -84,15 +94,15 @@ async function triggerRerun(github, repo, run, headSha, matched) {
   }
 }
 
-async function inspectCompletedRun({ github, repo, run, headSha, gates }) {
-  const latest = await latestCiRun(github, repo, headSha);
+async function inspectCompletedRun({ github, repo, run, pr, gates }) {
+  const latest = await latestCiRun(github, repo, pr);
   if (!latest || latest.id !== run.id) return { action: 'skip', reason: 'run-superseded', runId: run.id };
   if (run.conclusion === 'success') return { action: 'skip', reason: 'run-already-passed', runId: run.id, attempt: run.run_attempt };
   if (run.conclusion !== 'failure') return { action: 'skip', reason: 'run-not-failed', runId: run.id, attempt: run.run_attempt, conclusion: run.conclusion };
   const jobs = await listAttemptJobs(github, repo, run.id, run.run_attempt);
   const matched = matchingFailures(jobs, gates);
   if (matched.length === 0) return { action: 'skip', reason: 'no-matching-failed-gate', runId: run.id, attempt: run.run_attempt };
-  return triggerRerun(github, repo, run, headSha, matched);
+  return triggerRerun(github, repo, run, pr.head.sha, matched);
 }
 
 async function rerunLabelGates({
@@ -105,13 +115,14 @@ async function rerunLabelGates({
   const target = { owner, repo };
   const initial = await checkPullState(github, target, pullNumber, label);
   if (initial.skip) return initial.skip;
-  const headSha = initial.pr.head.sha;
-  let run = await latestCiRun(github, target, headSha);
+  let pr = initial.pr;
+  const headSha = pr.head.sha;
+  let run = await latestCiRun(github, target, pr);
   if (!run) return { action: 'skip', reason: 'no-ci-run', headSha };
   const deadline = now() + waitMs;
   let failedAttempt = null;
   for (;;) {
-    if (run.status === 'completed') return inspectCompletedRun({ github, repo: target, run, headSha, gates });
+    if (run.status === 'completed') return inspectCompletedRun({ github, repo: target, run, pr, gates });
     if (failedAttempt !== run.run_attempt) {
       const jobs = await listAttemptJobs(github, target, run.id, run.run_attempt);
       const matched = matchingFailures(jobs, gates);
@@ -129,11 +140,12 @@ async function rerunLabelGates({
     await sleep(Math.min(pollMs, remaining));
     const live = await checkPullState(github, target, pullNumber, label, headSha);
     if (live.skip) return live.skip;
+    pr = live.pr;
     run = await readRun(github, target, run.id);
   }
 }
 
 module.exports = {
   CI_WORKFLOW, DEFAULT_WAIT_MS, DEFAULT_POLL_MS, LABEL_GATES,
-  matchingFailures, hasPendingGate, rerunLabelGates,
+  matchesPull, matchingFailures, hasPendingGate, rerunLabelGates,
 };

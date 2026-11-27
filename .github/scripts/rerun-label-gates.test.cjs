@@ -13,8 +13,8 @@ function job(name, conclusion, steps = [], status = 'completed') {
 
 function harness({ pr, runs, jobsByAttempt, onRerun } = {}) {
   const state = {
-    pr: pr ?? { state: 'open', head: { sha: HEAD }, labels: [{ name: 'baseline-growth' }] },
-    runs: runs ?? [{ id: 100, status: 'completed', conclusion: 'failure', run_attempt: 1 }],
+    pr: pr ?? { number: 42, state: 'open', head: { sha: HEAD, ref: 'feat/a', repo: { full_name: 'hearsay-tools/squawk' } }, labels: [{ name: 'baseline-growth' }] },
+    runs: runs ?? [{ id: 100, head_sha: HEAD, pull_requests: [{ number: 42 }], status: 'completed', conclusion: 'failure', run_attempt: 1 }],
     jobsByAttempt: jobsByAttempt ?? {
       1: [job('Check baseline growth and test budget', 'failure', [['Reject baseline growth', 'failure']])],
     },
@@ -193,6 +193,30 @@ test('treats a 403/409 rerun race as already-rerunning only when the run is now 
     },
   });
   await assert.rejects(realForbidden.run(), /Resource not accessible/);
+});
+
+test('selects the newest run associated with this PR when another PR shares the same head SHA', async () => {
+  const shared = harness({
+    pr: { number: 42, state: 'open', head: { sha: HEAD, ref: 'feat/a', repo: { full_name: 'hearsay-tools/squawk' } }, labels: [{ name: 'baseline-growth' }] },
+    runs: [
+      { id: 100, head_sha: HEAD, pull_requests: [{ number: 42 }], status: 'completed', conclusion: 'failure', run_attempt: 1 },
+      { id: 105, head_sha: HEAD, pull_requests: [{ number: 99 }], status: 'completed', conclusion: 'success', run_attempt: 1 },
+    ],
+  });
+  const res = await shared.run();
+  assert.equal(res.action, 'rerun');
+  assert.equal(res.runId, 100);
+  assert.deepEqual(shared.state.reruns, [100]);
+
+  const fork = harness({
+    pr: { number: 42, state: 'open', head: { sha: HEAD, ref: 'fork-branch', repo: { full_name: 'contrib/squawk' } }, labels: [{ name: 'baseline-growth' }] },
+    runs: [
+      { id: 100, head_sha: HEAD, head_branch: 'fork-branch', head_repository: { full_name: 'contrib/squawk' }, pull_requests: [], status: 'completed', conclusion: 'failure', run_attempt: 1 },
+      { id: 105, head_sha: HEAD, head_branch: 'other-branch', head_repository: { full_name: 'hearsay-tools/squawk' }, pull_requests: [], status: 'completed', conclusion: 'success', run_attempt: 1 },
+    ],
+  });
+  assert.equal((await fork.run()).runId, 100);
+  assert.deepEqual(fork.state.reruns, [100]);
 });
 
 test('matchingFailures and hasPendingGate cover multi-gate labels accurately', () => {
