@@ -496,3 +496,24 @@ it.each(BUILT_IN_RUNNER_IDS)('%s preserves all layout env values while stripping
     expect(env.HSQ_HOME).toBeUndefined();
   }
 });
+
+describe('MCP bearer token env isolation (hearsay-tools/squawk#4402)', () => {
+  for (const fullFlag of ['0', '1']) {
+    it(`strips HSQ_MCP_TOKEN and CEZ_MCP_TOKEN from child and preview envs under HSQ_AGENT_ENV_FULL=${fullFlag}`, () => {
+      const source = {
+        PATH: '/bin',
+        HSQ_MCP_TOKEN: 'hsq_mcp_secret_token_value_1234567890',
+        CEZ_MCP_TOKEN: 'hsq_mcp_legacy_token_value_1234567890',
+        hsq_mcp_token: 'hsq_mcp_lower_token_value_1234567890',
+        HSQ_AGENT_ENV_FULL: fullFlag,
+        HSQ_ENV_PASSTHROUGH: 'HSQ_MCP_TOKEN,CEZ_MCP_TOKEN',
+      };
+      for (const backend of BUILT_IN_RUNNER_IDS) {
+        const child = buildChildEnv({ backend, source });
+        expect(Object.keys(child).filter((k) => ['HSQ_MCP_TOKEN', 'CEZ_MCP_TOKEN'].includes(k.toUpperCase()))).toEqual([]);
+      }
+      const cmd = buildCommandEnv({ source });
+      expect(Object.keys(cmd).filter((k) => ['HSQ_MCP_TOKEN', 'CEZ_MCP_TOKEN'].includes(k.toUpperCase()))).toEqual([]);
+    });
+  }
+});
