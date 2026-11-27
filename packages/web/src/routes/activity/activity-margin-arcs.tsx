@@ -187,10 +187,17 @@ export function ActivityMarginArcs({
   )
   const cometsRef = useComets(motion.comets, drawnRequestIds, paused)
 
-  if (edges.length === 0) return null
-
+  // Keep the SVG comet layer mounted even at 0 edges so `useComets` binds on mount and can
+  // animate the first peer request/reply that arrives later without needing a remount.
   return (
-    <div data-slot="activity-margin-arcs" aria-hidden="true" className="pointer-events-none absolute inset-0 z-[5] hidden overflow-visible md:block">
+    <div
+      data-slot="activity-margin-arcs"
+      aria-hidden="true"
+      className={cn(
+        'pointer-events-none absolute inset-0 z-[5] hidden overflow-visible',
+        edges.length > 0 && 'md:block',
+      )}
+    >
       <svg className="size-full overflow-visible">
         <defs>
           <marker id={markerId} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">

@@ -1,8 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { cleanup, render } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { iso, request } from './activity.testkit'
+import { NOW, iso, request } from './activity.testkit'
 import { peerWaitId, type PeerWait } from './activity-model'
-import { layoutMarginArcs, marginArcEdges, peerConnectedIds } from './activity-margin-arcs'
+import { EMPTY_MOTION } from './activity-motion'
+import { ActivityMarginArcs, layoutMarginArcs, marginArcEdges, peerConnectedIds } from './activity-margin-arcs'
+
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 describe('activity-margin-arcs', () => {
   it('collapses gutter to 0 when no peer edges connect visible rows', () => {
@@ -45,5 +52,21 @@ describe('activity-margin-arcs', () => {
     const wait: PeerWait = { id: peerWaitId('waiter', 'blocker'), waiterRunId: 'waiter', peerRunId: 'blocker', since: iso(-10_000), deadline: iso(60_000) }
     expect(peerConnectedIds('blocker', [req], [wait])).toEqual(new Set(['blocker', 'sender', 'waiter']))
     expect(peerConnectedIds(undefined, [req], [wait])).toEqual(new Set())
+  })
+
+  it('keeps the comet layer mounted at zero edges so a later peer request starts the comet loop', () => {
+    const raf = vi.fn(() => 1)
+    vi.stubGlobal('requestAnimationFrame', raf)
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const stage = document.createElement('div')
+    stage.innerHTML = '<div data-activity-row="a"></div><div data-activity-row="b"></div>'
+    document.body.appendChild(stage)
+    const view = render(<ActivityMarginArcs stage={stage} edges={[]} now={NOW} layoutKey="empty" motion={EMPTY_MOTION} />)
+    expect(raf).not.toHaveBeenCalled()
+    const edge = { kind: 'request' as const, id: 'req-1', from: 'a', to: 'b', createdAt: iso(-1000) }
+    const motion = { ...EMPTY_MOTION, comets: { 'req-1': { key: 1, requestId: 'req-1', reverse: false, tone: 'peer' as const } } }
+    view.rerender(<ActivityMarginArcs stage={stage} edges={[edge]} now={NOW} layoutKey="one" motion={motion} />)
+    expect(raf).toHaveBeenCalled()
+    stage.remove()
   })
 })

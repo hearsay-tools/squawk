@@ -7,7 +7,7 @@ import { Link } from '@/lib/project-router'
 import { runnerDisplayName, useRunners } from '@/api/runners'
 import { cn } from '@/lib/utils'
 
-import { hoverHandlers, LineText } from './activity-card'
+import { ActivityWorkers, hoverHandlers, LineText } from './activity-card'
 import { fullTimeOf, since, span } from './activity-format'
 import { lineTexts, type PeerWait, type RunEntry } from './activity-model'
 import { EMPTY_MOTION, type MotionState } from './activity-motion'
@@ -101,7 +101,7 @@ interface DecisionRowProps {
   global: boolean
   selected: boolean
   linked: boolean
-  entering: boolean
+  motion: MotionState
   onHover?: OnHover | undefined
   onTriage: (record: DecisionRecord, trigger: HTMLButtonElement | null) => void
 }
@@ -164,7 +164,7 @@ function DecisionRow({
   global,
   selected,
   linked,
-  entering,
+  motion,
   onHover,
   onTriage,
 }: DecisionRowProps) {
@@ -177,6 +177,8 @@ function DecisionRow({
   ].filter(Boolean).join(' · ')
   const unblocks = peerUnblocksText(record.runId, requests, waits, index)
   const href = activityTaskHref(record.projectId, record.runId, global)
+  const workerCtx = { now, titleOf: (runId: string) => index.get(runId)?.title ?? 'Unreadable task' }
+  const hasWorkers = task.workers.length > 0
 
   return (
     <article
@@ -193,7 +195,7 @@ function DecisionRow({
         LEFT_ACCENT[record.kind],
         selected && 'border-accent-text bg-accent-strong/[0.06]',
         linked && 'outline-2 outline-offset-1 outline-message-peer-accent',
-        entering && 'activity-card-enter',
+        record.runId in motion.entering && 'activity-card-enter',
       )}
     >
       <div className="flex min-w-0 flex-col gap-1.5">
@@ -244,6 +246,20 @@ function DecisionRow({
       <div className="flex items-center gap-2 max-md:w-full">
         <DecisionAction record={record} href={href} global={global} selected={selected} onTriage={onTriage} />
       </div>
+      {hasWorkers ? (
+        <div className="min-w-0 md:col-span-2">
+          <ActivityWorkers
+            task={task}
+            requests={requests}
+            index={index}
+            ctx={workerCtx}
+            motion={motion}
+            projectId={record.projectId}
+            global={global}
+            compact
+          />
+        </div>
+      ) : null}
       <LineText texts={lineTexts(record.runId, requests, index, waits)} />
     </article>
   )
@@ -279,7 +295,7 @@ export function ActivityQueue({
           global={global}
           selected={selectedRunId === record.runId}
           linked={linkedIds.has(record.runId)}
-          entering={record.runId in motion.entering}
+          motion={motion}
           onHover={onHover}
           onTriage={onTriage}
         />

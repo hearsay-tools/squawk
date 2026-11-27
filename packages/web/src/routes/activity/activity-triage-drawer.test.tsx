@@ -7,7 +7,7 @@ import { createQueryClient } from '@/api/query-client'
 import { jsonResponse } from '@/test/fetch-routes'
 import { seedRunners } from '@/test/runners.testkit'
 
-import { ACTIVITY_WAIT_KIND, NOW, RUN_STATUS, iso, project, run } from './activity.testkit'
+import { ACTIVITY_WAIT_KIND, NOW, RUN_STATUS, iso, project, run, worker } from './activity.testkit'
 import { ActivitySupervisionView } from './activity-supervision-view'
 
 const fetchMock = vi.fn<typeof fetch>()
@@ -163,5 +163,61 @@ describe('ActivityTriageDrawer inline resolution', () => {
     fireEvent.click(within(drawer).getByRole('button', { name: 'Archive' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(calls).toContain(`POST /api/v1/p/acme/runs/${FAILED_RUN_ID}/archive`)
+  })
+
+  it('preserves live worker rows on Attention roots, refetches Q2 after Q1, and marks externally resolved tasks', async () => {
+    let questionRound = 1
+    fetchMock.mockImplementation(async (input, init) => {
+      const path = new URL(String(input), 'http://cockpit.test').pathname
+      if (path === '/api/v1/providers/status') return jsonResponse({ claude: { installed: true, authenticated: true } })
+      if (path === '/api/v1/accounts') return jsonResponse({ accounts: [] })
+      if (path === `/api/v1/p/acme/runs/${ASK_RUN_ID}`) {
+        return jsonResponse({ id: ASK_RUN_ID, title: 'Webhook idempotency', task: 'Webhook', workflow: 'quick-task', runner: 'claude', status: RUN_STATUS.waiting, createdAt: iso(-60_000), tokensUsed: 0, steps: [], sessionActive: true, finishBlocked: null })
+      }
+      if (path === `/api/v1/p/acme/runs/${ASK_RUN_ID}/history-context`) {
+        const q = questionRound === 1
+          ? { requestId: 'ask-1', header: 'Q1', question: 'First question?', options: [{ label: 'Opt A' }, { label: 'Opt A2' }] }
+          : { requestId: 'ask-2', header: 'Q2', question: 'Second question?', options: [{ label: 'Opt B' }, { label: 'Opt B2' }] }
+        return jsonResponse({ asOfSeq: questionRound, contextEvents: [{ seq: questionRound, ts: iso(-10_000), type: 'ask.requested', requestId: q.requestId, questions: [{ header: q.header, question: q.question, options: q.options }] }] })
+      }
+      if (path === `/api/v1/p/acme/runs/${ASK_RUN_ID}/messages` && init?.method === 'POST') {
+        questionRound = 2
+        return jsonResponse({ ok: true })
+      }
+      return jsonResponse({ error: `unexpected ${path}` }, 404)
+    })
+    const client = createQueryClient()
+    seedRunners(client)
+    const makeProj = (question: string | null) => project({
+      projectId: 'acme', name: 'acme',
+      tasks: [run({
+        runId: ASK_RUN_ID, title: 'Webhook idempotency',
+        status: question ? RUN_STATUS.waiting : RUN_STATUS.running,
+        rung: question ? 'needs-you' : 'running',
+        ...(question ? { wait: { kind: ACTIVITY_WAIT_KIND.human, since: iso(-30_000), detail: { reason: 'question', question } } } : {}),
+        workers: [worker({ runId: 'w-live', title: 'Background parser', status: RUN_STATUS.running })],
+      })],
+    })
+    const ui = (p: ReturnType<typeof makeProj>) => (
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/activity']}>
+          <ActivitySupervisionView projects={[p]} now={NOW} global grouped={false} projectOrder={['acme']} />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+    const view = render(ui(makeProj('First question?')))
+    expect(document.querySelector('[data-activity-card="run-ask-1"] [data-slot="activity-worker"][data-run="w-live"]')).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
+    fireEvent.click(await within(await screen.findByRole('dialog')).findByRole('button', { name: 'Opt A' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+
+    view.rerender(ui(makeProj('Second question?')))
+    fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
+    expect(await within(await screen.findByRole('dialog')).findByRole('button', { name: 'Opt B' })).toBeTruthy()
+
+    // Leaving Attention externally replaces stale controls with a resolved notice.
+    view.rerender(ui(makeProj(null)))
+    expect(document.querySelector('[data-slot="activity-triage-resolved"]')).not.toBeNull()
   })
 })

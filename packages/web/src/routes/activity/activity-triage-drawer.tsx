@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLinkIcon, RotateCcwIcon } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link as RouterLink } from 'react-router'
 
 import type { ApiRun, RunEvent, UiAskQuestion } from '@open-mercato/cezar-api-client'
@@ -9,6 +9,7 @@ import { askCardOf, pendingAskOf } from '@open-mercato/cezar-api-client/contract
 import { archiveRun, getRunHistoryContext } from '@/api/client'
 import { queryKeys, useProjectRun } from '@/api/queries'
 import { runAddress } from '@/api/run-address'
+import { dropFinishVerdict } from '@/api/run-detail-refresh'
 import { ArchiveIcon, XIcon } from '@/components/design-icons'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -35,6 +36,8 @@ import { TONE_INK } from './activity-tone'
 
 export interface ActivityTriageDrawerProps {
   record: DecisionRecord | null
+  /** True when the open task left the Attention queue externally (answered elsewhere, cancelled, or resumed). */
+  resolved?: boolean | undefined
   now: number
   onClose: () => void
   onResolved: (runId: string) => void
@@ -152,9 +155,14 @@ function AskDrawerBody({
   run: ApiRun
   onResolved: () => void
 }) {
+  // Always read fresh history context when opening a question: answering Q1 and opening Q2
+  // on the same task within 5 minutes must never reuse Q1's cached options.
   const contextQuery = useQuery({
-    queryKey: [record.projectId, 'run-history-context', record.runId] as const,
+    queryKey: ['activity-triage', 'history-context', record.projectId, record.runId, record.ageSince ?? '', record.blockingReason] as const,
     queryFn: ({ signal }) => getRunHistoryContext(record.runId, { projectId: record.projectId, signal }),
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
   })
 
   if (contextQuery.isPending) {
@@ -260,6 +268,12 @@ function FailedDrawerBody({
   )
 }
 
+function taskLiveFingerprint(record: DecisionRecord): string {
+  const { task } = record
+  const workers = task.workers.map((w) => `${w.runId}:${w.status}`).join(',')
+  return `${task.status}|${task.rung}|${task.finishedAt ?? ''}|${task.error ?? ''}|${record.ageSince ?? ''}|${workers}`
+}
+
 function DrawerContentBody({
   record,
   onResolved,
@@ -267,7 +281,24 @@ function DrawerContentBody({
   record: DecisionRecord
   onResolved: () => void
 }) {
-  const runQuery = useProjectRun(record.projectId, record.runId, true)
+  const queryClient = useQueryClient()
+  const runQuery = useProjectRun(record.projectId, record.runId, true, { staleTime: 0, refetchOnMount: 'always' })
+  const fingerprint = taskLiveFingerprint(record)
+  const seenFingerprint = useRef(fingerprint)
+
+  // Refresh the explicit-project run detail (dropping any stale Finish verdict first) whenever
+  // the live Activity snapshot reports a status, wait, or worker transition for this task.
+  useEffect(() => {
+    if (seenFingerprint.current === fingerprint) return
+    seenFingerprint.current = fingerprint
+    const detailKey = [record.projectId, 'runs', 'detail', record.runId] as const
+    dropFinishVerdict(queryClient, detailKey)
+    void queryClient.invalidateQueries({ queryKey: detailKey, exact: true })
+    if (record.kind === 'review') {
+      void queryClient.invalidateQueries({ queryKey: [record.projectId, 'runs', 'diff', record.runId], exact: true })
+    }
+  }, [fingerprint, queryClient, record.kind, record.projectId, record.runId])
+
   if (runQuery.isPending) {
     return <p data-slot="triage-loading" className="text-xs text-muted-foreground">Loading task details…</p>
   }
@@ -297,6 +328,7 @@ function DrawerContentBody({
 
 export function ActivityTriageDrawer({
   record,
+  resolved = false,
   now,
   onClose,
   onResolved,
@@ -306,6 +338,8 @@ export function ActivityTriageDrawer({
   const handleResolved = () => {
     if (!record) return
     void queryClient.invalidateQueries({ queryKey: ['workspace', 'activity'] })
+    void queryClient.invalidateQueries({ queryKey: ['activity-triage', 'history-context', record.projectId, record.runId] })
+    void queryClient.invalidateQueries({ queryKey: [record.projectId, 'runs', 'detail', record.runId], exact: true })
     onResolved(record.runId)
   }
 
@@ -363,7 +397,16 @@ export function ActivityTriageDrawer({
               </div>
             </SheetHeader>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-              <DrawerContentBody key={`${record.projectId}:${record.runId}:${record.kind}`} record={record} onResolved={handleResolved} />
+              {resolved ? (
+                <div data-slot="activity-triage-resolved" role="status" className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 text-[13px] text-muted-foreground">
+                  <p className="text-foreground">This task no longer needs your decision.</p>
+                  <Button type="button" size="sm" variant="outline" className="min-h-11 self-start" onClick={onClose}>
+                    Close
+                  </Button>
+                </div>
+              ) : (
+                <DrawerContentBody key={`${record.projectId}:${record.runId}:${record.kind}`} record={record} onResolved={handleResolved} />
+              )}
             </div>
           </>
         ) : null}

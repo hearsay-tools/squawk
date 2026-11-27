@@ -139,11 +139,14 @@ export function ActivitySupervisionView({
     })
   }, [])
 
-  // Keep the open drawer live with the latest record while open, or keep its snapshot while closing.
-  const activeDecision = React.useMemo(() => {
+  // Track the live Attention item while open, and flag if it leaves Attention externally so the
+  // drawer never keeps stale interactive controls mounted for a resolved or cancelled task.
+  const liveDecision = React.useMemo(() => {
     if (!selectedRef) return null
-    return attention.find((item) => item.runId === selectedRef.runId && item.projectId === selectedRef.projectId) ?? selectedRef.snapshot
+    return attention.find((item) => item.runId === selectedRef.runId && item.projectId === selectedRef.projectId) ?? null
   }, [attention, selectedRef])
+  const activeDecision = liveDecision ?? selectedRef?.snapshot ?? null
+  const drawerResolvedExternally = selectedRef !== null && liveDecision === null
 
   const handleTriage = React.useCallback((record: DecisionRecord, trigger: HTMLButtonElement | null) => {
     triggerRef.current = trigger
@@ -234,6 +237,7 @@ export function ActivitySupervisionView({
       />
       <ActivityTriageDrawer
         record={activeDecision}
+        resolved={drawerResolvedExternally}
         now={now}
         onClose={handleClose}
         onResolved={handleResolved}
