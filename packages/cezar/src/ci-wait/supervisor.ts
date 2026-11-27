@@ -81,6 +81,17 @@ function checksScope(wait: CiWait, rows: GithubCheck[]): { scoped: GithubCheck[]
   const narrowed = wait.checks === 'required' && rows.some(c => c.required);
   return { scoped: narrowed ? rows.filter(c => c.required) : rows, narrowed };
 }
+/**
+ * `text` with the scope diagnostic after it, as a result's `diagnostic`. 4000 leaves room for the
+ * "N more." tail and the joining space under 4096 bytes; the scope note is left out when `text`
+ * leaves too little room for it.
+ */
+function scopeNoted(wait: CiWait, rows: GithubCheck[], narrowed: boolean, text: string): { diagnostic?: string } {
+  const room = 4000 - Buffer.byteLength(text);
+  const scope = room >= 256 ? scopeDiagnostic(wait, rows, narrowed, room) : undefined;
+  const joined = [text, scope].filter(Boolean).join(' ');
+  return joined ? { diagnostic: joined } : {};
+}
 /** What the result says about the scope: the checks it left out that are not done, or the fallback. */
 function scopeDiagnostic(wait: CiWait, rows: GithubCheck[], narrowed: boolean, budget: number): string | undefined {
   if (wait.checks !== 'required') return undefined;
@@ -285,10 +296,11 @@ export class CiWatcherSupervisor {
       const conflicting = conflict();
       if (conflicting) return conflicting;
       const { scoped, narrowed } = checksScope(wait, rows);
+      const noted = (text = '') => scopeNoted(wait, rows, narrowed, text);
       queued.observe(scoped);
       const diagnostic = queued.diagnostic();
-      if (diagnostic) return observe('stuck', {diagnostic});
-      if (deciding(rows).some(c => c.bucket === 'fail')) return observe('failed');
+      if (diagnostic) return observe('stuck', noted(diagnostic));
+      if (deciding(rows).some(c => c.bucket === 'fail')) return observe('failed', noted());
       workflowActive = false;
       if (scoped.some(c => c.bucket === 'pending')) return undefined;
       const runs = await this.github.workflowRuns(wait, signal);
@@ -297,11 +309,6 @@ export class CiWatcherSupervisor {
       workflowActive = runs.active && !narrowed;
       if (workflowActive) return undefined;
       const forced = runsOutcome(runs);
-      // 4000 leaves room for the "N more." tail and the joining space under 4096 bytes.
-      const noted = (text = '') => {
-        const joined = [text, scopeDiagnostic(wait, rows, narrowed, 4000 - Buffer.byteLength(text))].filter(Boolean).join(' ');
-        return joined ? { diagnostic: joined } : {};
-      };
       if (forced && (forced.outcome === 'startup_failure' || (rows.length && !narrowed))) return observe(forced.outcome, noted(forced.diagnostic));
       return rows.length ? observe(settledOutcome(scoped), noted()) : undefined;
     };

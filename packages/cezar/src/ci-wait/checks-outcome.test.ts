@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CiPrIdentity, CiWait } from '@open-mercato/cezar-contract';
 import { CiGithubError, GithubCiClient, type GithubCheck, type GithubChecksObservation, type GithubWorkflowRuns } from './github.ts';
 import { CI_DISCOVERY_MS, CI_PROBE_MS, CiWatcherSupervisor } from './supervisor.ts';
+import { CI_QUEUED_BOUND_MS } from './queued-checks.ts';
 
 /**
  * What a checks wait reports for the head's real state (hearsay-tools/squawk#3972): only required
@@ -208,6 +209,22 @@ describe('the checks scope (hearsay-tools/squawk#4392)', () => {
     github.runs = {active: false, failures: [{id: 5, workflow: 'Lint', conclusion: 'failure'}]};
     expect(await start(github, required).result).toMatchObject({outcome: 'passed',
       diagnostic: 'Not waited on, because they are not required: lint (FAILURE).'});
+  });
+
+  it('names the checks it left out on an early failure', async () => {
+    const github = new Github(); github.rows = [check('build', 'fail', {required: true}), check('e2e', 'pending', {required: true}), status('pre-pr-review', 'pending')];
+    expect(await start(github, required).result).toMatchObject({outcome: 'failed',
+      diagnostic: 'Not waited on, because they are not required: pre-pr-review (PENDING).'});
+  });
+
+  it('keeps the queued-check recovery first on a stuck result and adds the left-out checks', async () => {
+    vi.useFakeTimers();
+    const github = new Github(); github.rows = [check('build', 'pending', {required: true, state: 'QUEUED'}), status('pre-pr-review', 'pending')];
+    const {result} = start(github, required);
+    await vi.advanceTimersByTimeAsync(CI_QUEUED_BOUND_MS + CI_PROBE_MS);
+    const observed = await result;
+    expect(observed.outcome).toBe('stuck');
+    expect(observed.diagnostic).toMatch(/^Checks still queued: build .* Not waited on, because they are not required: pre-pr-review \(PENDING\)\.$/);
   });
 
   it('still reports a workflow that created no job', async () => {
