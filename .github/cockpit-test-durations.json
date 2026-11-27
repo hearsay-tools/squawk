@@ -5,53 +5,54 @@
     "root": "packages/web/e2e",
     "runs": [
       {
-        "id": 45824342776,
-        "headSha": "265976e09b37284fc84a962b88b9ea6a6c2009e4",
+        "id": 45995135829,
+        "headSha": "ba0c3f735561bfe1ece3a4b295880408bbc5be9e",
         "jobs": [
-          139924677132,
-          139924677221,
-          139924677266,
-          139924677275,
-          139924677279,
-          139924677309,
-          139924677313,
-          139924677457
+          140492631979,
+          140492631994,
+          140492632063,
+          140492632103,
+          140492632121,
+          140492632173,
+          140492632187,
+          140492632646
         ]
       },
       {
-        "id": 45822941498,
-        "headSha": "db6cd8a0ff318c59122b6cc3b8bb850b4a8252ec",
+        "id": 45988440068,
+        "headSha": "9e99dec2002c8421b57d1e4b2f5a6192c5a9f435",
         "jobs": [
-          139919785016,
-          139919785107,
-          139919785172,
-          139919785181,
-          139919785199,
-          139919785224,
-          139919785315,
-          139919785399
+          140470024516,
+          140470024518,
+          140470024519,
+          140470024568,
+          140470024596,
+          140470024604,
+          140470024606,
+          140470024683
         ]
       },
       {
-        "id": 45821188194,
-        "headSha": "5924bcc6c3faf5d3f0cc5ceda4164ba8bc8d6e10",
+        "id": 45983120800,
+        "headSha": "d4b50add6bc5e0b9cbb6f598653126dddb7e0834",
         "jobs": [
-          139913725075,
-          139913725105,
-          139913725112,
-          139913725122,
-          139913725133,
-          139913725153,
-          139913725168,
-          139913725239
+          140451975158,
+          140451975176,
+          140451975201,
+          140451975202,
+          140451975226,
+          140451975322,
+          140451975345,
+          140451975575
         ]
       }
     ],
     "estimatedFiles": [],
-    "baselineCommit": "265976e09b37284fc84a962b88b9ea6a6c2009e4",
+    "baselineCommit": "ba0c3f735561bfe1ece3a4b295880408bbc5be9e",
     "updatedFiles": [
-      "github-sidebar.e2e.ts",
-      "selection-states.e2e.ts"
+      "settings-session-context.e2e.ts",
+      "mobile-task-controls.e2e.ts",
+      "task-list-virtualization.e2e.ts"
     ],
     "remainingChanges": 0
   },
@@ -93,7 +94,7 @@
     "markdown-preview.e2e.ts": 8727,
     "mobile-projects.e2e.ts": 14052,
     "mobile-tab-bar.e2e.ts": 26652,
-    "mobile-task-controls.e2e.ts": 27270,
+    "mobile-task-controls.e2e.ts": 35248,
     "new-task-hierarchy.e2e.ts": 51825,
     "new-task-picker-layout.e2e.ts": 33396,
     "new-task.e2e.ts": 16487,
@@ -138,7 +139,7 @@
     "task-files.e2e.ts": 13596,
     "task-github-items.e2e.ts": 13607,
     "task-handoff.e2e.ts": 12886,
-    "task-list-virtualization.e2e.ts": 120606,
+    "task-list-virtualization.e2e.ts": 176138,
     "task-list-workload.e2e.ts": 28812,
     "task-pr-collection.e2e.ts": 24058,
     "task-status-groups.e2e.ts": 11763,
@@ -153,6 +154,7 @@
     "worker-relationships.e2e.ts": 53296,
     "workflows.e2e.ts": 18056,
     "worktree-setup.e2e.ts": 5612,
-    "agents-settings-mobile.e2e.ts": 5596
+    "agents-settings-mobile.e2e.ts": 5596,
+    "settings-session-context.e2e.ts": 16165
   }
 }
