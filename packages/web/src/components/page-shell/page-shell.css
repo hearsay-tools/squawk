@@ -133,7 +133,9 @@
 
 @media (width < 48rem), (any-pointer: coarse) {
   [data-slot='page-shell-header-actions'] :is(button, a)[data-slot='button'],
-  [data-slot='page-shell-header-actions'] :is(button, a)[data-page-shell-action] {
+  [data-slot='page-shell-header-actions'] :is(button, a)[data-page-shell-action],
+  [data-page-shell-sparse] :is(button, a),
+  [data-page-shell-empty] :is(button, a) {
     height: auto;
     min-height: 44px;
     min-width: 44px;

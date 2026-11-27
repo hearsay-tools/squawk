@@ -191,7 +191,7 @@ describe('PageShell unified layout templates across themes and viewports', () =>
     })
   }
 
-  it('preserves RunHeader inside ReadingPage during tablet (960x800) preview takeover', async () => {
+  it('preserves RunHeader inside ReadingPage during tablet (960x800) preview takeover when live preview is enabled', async () => {
     const response = await fetch(`${baseUrl}/api/v1/p/${encodeURIComponent(bootProject)}/runs`)
     const payload = (await response.json()) as { runs?: Array<{ id: string }> }
     const runId = payload.runs?.[0]?.id
@@ -201,22 +201,25 @@ describe('PageShell unified layout templates across themes and viewports', () =>
     browser.goto(`${baseUrl}/p/${bootProject}/tasks/${encodeURIComponent(runId)}`)
     browser.waitForFunction(`document.querySelector('[data-route="task-thread"] [data-slot="run-header"]') !== null`)
 
+    const hasPreviewToggle = browser.evaluate(
+      `document.querySelector('[data-slot="preview-toggle"]') !== null`,
+    ) as boolean
+    if (!hasPreviewToggle) return
+
+    browser.click('[data-slot="preview-toggle"]')
+    browser.waitForFunction(`document.querySelector('[data-slot="task-main"][data-collapsed]') !== null`)
+
     const state = waitForSettledSample(
       browser,
       `(() => {
-        const main = document.querySelector('[data-slot="task-main"]')
-        if (!main) return null
-        main.setAttribute('data-collapsed', '')
         const header = document.querySelector('[data-route="task-thread"] [data-slot="run-header"]')
         const body = document.querySelector('[data-route="task-thread"] [data-slot="session-conversation"]')
         const headerRect = header ? header.getBoundingClientRect() : null
-        const result = {
+        return {
           headerDisplay: header ? getComputedStyle(header).display : null,
           headerHeight: headerRect ? Math.round(headerRect.height) : 0,
           bodyDisplay: body ? getComputedStyle(body).display : null,
         }
-        main.removeAttribute('data-collapsed')
-        return result
       })()`,
     ) as { headerDisplay: string | null; headerHeight: number; bodyDisplay: string | null }
 

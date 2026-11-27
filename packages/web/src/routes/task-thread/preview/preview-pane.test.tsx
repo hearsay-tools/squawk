@@ -641,7 +641,17 @@ describe('PreviewSplit', () => {
     // Design 02: the title, tabs and Preview toggle stay above the pane; only the body steps aside.
     expect(main.hasAttribute('hidden')).toBe(false)
     expect(main.hasAttribute('data-collapsed')).toBe(true)
-    expect(main.contains(screen.getByText('header'))).toBe(true)
+    const header = screen.getByText('header')
+    const transcript = screen.getByTestId('transcript')
+    expect(main.contains(header)).toBe(true)
+    // Verify the preview.css collapse selectors hide transcript while keeping ReadingPage's frame,
+    // body wrapper, and RunHeader visible.
+    const collapseHideSelector =
+      "[data-slot='task-main'][data-collapsed] [data-route] > :not([data-slot='run-header']):not([data-slot='page-shell-frame']), " +
+      "[data-slot='task-main'][data-collapsed] [data-route] > [data-slot='page-shell-frame'] > :not([data-slot='page-shell-body']), " +
+      "[data-slot='task-main'][data-collapsed] [data-route] > [data-slot='page-shell-frame'] > [data-slot='page-shell-body'] > :not([data-slot='run-header'])"
+    expect(header.closest(collapseHideSelector)).toBeNull()
+    expect(transcript.matches(collapseHideSelector)).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Session' }))
     expect(main.hasAttribute('data-collapsed')).toBe(false)
     // The pane stays mounted, so the stream and the browser survive the glance at the conversation.

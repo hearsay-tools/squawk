@@ -25,6 +25,7 @@ export function PageShellEmptyState({
   return (
     <section
       data-slot={slot}
+      data-page-shell-empty=""
       aria-label={title}
       className={cn(
         'flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-6',
@@ -70,7 +71,7 @@ export function PageShellSparseFooter({
   className?: string | undefined
 }) {
   return (
-    <aside data-slot={slot} className={cn('min-w-0', className)}>
+    <aside data-slot={slot} data-page-shell-sparse="" className={cn('min-w-0', className)}>
       <div className="min-w-0 text-muted-foreground">{summary}</div>
       {actions ? (
         <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
@@ -96,9 +97,11 @@ export function PageShellSplitPane({
       <div data-slot="page-shell-split-list" className="flex min-h-0 min-w-0 flex-col">
         {list}
       </div>
-      <div data-slot="page-shell-split-detail" className="flex min-h-0 min-w-0 flex-col">
-        {detail}
-      </div>
+      {detail ? (
+        <div data-slot="page-shell-split-detail" className="flex min-h-0 min-w-0 flex-col">
+          {detail}
+        </div>
+      ) : null}
     </div>
   )
 }

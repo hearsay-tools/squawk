@@ -45,6 +45,24 @@ describe('cez/page-shell-override', () => {
     expect(
       scan('packages/web/src/routes/demo.tsx', 'export function Demo() { return <SplitPage route="demo" density="full" className={cn("min-h-0", flag && "max-w-[900px]")}>x</SplitPage> }'),
     ).toEqual([expect.stringContaining('max-w-[900px]')]);
+
+    expect(
+      scan('packages/web/src/routes/demo.tsx', 'export function Demo() { return <TablePage route="demo" density="full" style={{ maxWidth: 900 }}>x</TablePage> }'),
+    ).toEqual([expect.stringContaining('maxWidth')]);
+  });
+
+  it('blocks height and sizing overrides on PageShellActionButton', () => {
+    expect(
+      scan('packages/web/src/routes/demo.tsx', 'export function Demo() { return <PageShellActionButton style={{ height: 24, minHeight: 24 }}>Go</PageShellActionButton> }'),
+    ).toEqual([expect.stringContaining('height')]);
+
+    expect(
+      scan('packages/web/src/routes/demo.tsx', 'export function Demo() { return <PageShellActionButton className="h-8">Go</PageShellActionButton> }'),
+    ).toEqual([expect.stringContaining('h-8')]);
+
+    expect(
+      scan('packages/web/src/routes/demo.tsx', 'export function Demo() { return <PageShellActionButton size="sm">Go</PageShellActionButton> }'),
+    ).toEqual([expect.stringContaining('Do not pass size')]);
   });
 
   it('allows named PageShell templates without width/gutter overrides and exempt sticky headers', () => {
@@ -85,6 +103,20 @@ describe('pageShellStyleProblems', () => {
       pageShellStyleProblems(
         'packages/web/src/routes/demo.css',
         `[data-route="demo"] { max-width: 1100px; padding-inline: 24px; }`,
+      ),
+    ).toEqual([expect.stringContaining('page-shell-style')]);
+
+    expect(
+      pageShellStyleProblems(
+        'packages/web/src/routes/demo.css',
+        `[data-slot='page-shell-frame'] { padding-inline: 24px; max-inline-size: 900px; }`,
+      ),
+    ).toEqual([expect.stringContaining('page-shell-style')]);
+
+    expect(
+      pageShellStyleProblems(
+        'packages/web/src/routes/demo.css',
+        `[data-slot="page-shell-header-actions"] button { min-block-size: 28px; }`,
       ),
     ).toEqual([expect.stringContaining('page-shell-style')]);
   });

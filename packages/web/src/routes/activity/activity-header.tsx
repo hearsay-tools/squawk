@@ -80,10 +80,10 @@ export function activityHeaderProps({
 export function ActivityQuickLinks({ primary = false }: { primary?: boolean }) {
   return (
     <>
-      <Button variant={primary ? 'primary' : 'outline'} size="sm" asChild className="max-md:min-h-11">
+      <Button variant={primary ? 'primary' : 'outline'} size="sm" asChild className="h-auto min-h-8 py-1.5 max-md:min-h-11">
         <Link to="/new">New task</Link>
       </Button>
-      <Button variant="outline" size="sm" asChild className="max-md:min-h-11">
+      <Button variant="outline" size="sm" asChild className="h-auto min-h-8 py-1.5 max-md:min-h-11">
         <Link to="/">View tasks</Link>
       </Button>
     </>

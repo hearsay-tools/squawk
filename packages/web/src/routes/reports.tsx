@@ -223,7 +223,7 @@ export function ReportsRoute() {
             </div>
           }
           detail={
-            selected ? (
+            desktop && selected ? (
               <ReportPreviewPane
                 report={selected}
                 restoreKey={key}

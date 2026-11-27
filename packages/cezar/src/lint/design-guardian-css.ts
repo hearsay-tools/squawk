@@ -44,9 +44,9 @@ export function pageShellStyleProblems(file: string, source: string): string[] {
   const offenders: string[] = [];
   const css = input.lines.join('\n').replace(/\/\*[\s\S]*?\*\//g, '');
   const shellSlot = /data-slot=["']page-shell(?:-(?:frame|header|header-title|header-actions))?["']/;
-  const shellProp = /--page-shell-(?:max-w|gutter)|(?:^|[;\s])(?:max-width|padding|margin-inline|height|min-height|font-size)\s*:/;
+  const shellProp = /--page-shell-(?:max-w|gutter)|(?:^|[;\s])(?:max-width|max-inline-size|width|inline-size|padding(?:-(?:inline|block|left|right|top|bottom|inline-start|inline-end|block-start|block-end))?|margin-inline(?:-(?:start|end))?|margin-left|margin-right|height|min-height|max-height|block-size|min-block-size|max-block-size|font-size)\s*:/;
   const routeRoot = /(?:^|,)\s*\[data-route=[^\]]+\](?:\[[^\]]+\])*\s*(?:,|$)/;
-  const routeRootProp = /(?:^|[;\s])(?:max-width|padding-inline|padding-left|padding-right|margin-inline)\s*:/;
+  const routeRootProp = /(?:^|[;\s])(?:max-width|max-inline-size|padding-inline(?:-(?:start|end))?|padding-left|padding-right|margin-inline(?:-(?:start|end))?|margin-left|margin-right)\s*:/;
   for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const selector = match[1]!.trim(), body = match[2]!;
     if ((shellSlot.test(selector) && shellProp.test(body))
