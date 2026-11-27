@@ -37,7 +37,10 @@ A move that keeps every name passes the quality gates with no label:
 - `check-clones.cjs` carries a clone that moved with its code.
 - `Reject baseline growth` accepts a `*.baseline.json` entry or key that only follows its file to
   the new path. The old path must be gone, and the change must add the new one. Any other change to
-  a baseline still needs the owner's `baseline-growth` label.
+  a baseline still needs the owner's `baseline-growth` label. A per-file pin, such as
+  `packages/cezar/src/file-length.baseline/<source path>.json` or
+  `.github/mutants/equivalent/<source path>.json`, follows its file when the move renames it with
+  `git mv` to the new source path.
 
 These files name a source file by its path. Rewrite each one that names the old path in the same
 commit. `node scripts/readers.mjs --moved <old-path> <new-path>` lists every JSON pin that names
