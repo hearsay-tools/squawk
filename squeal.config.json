@@ -281,6 +281,16 @@
       "packages/web/e2e/environment.ts",
       ".ai/scripts/test-env-up.sh"
     ],
+    "scripts/squeal-remote-setup.test.mjs": [
+      "squeal.config.json",
+      ".ai/scripts/squeal-remote-setup.sh",
+      ".ai/scripts/build-squawk-runner.mjs",
+      ".ai/scripts/test-env.inputs.json",
+      ".ai/scripts/test-env-inputs.mjs",
+      ".ai/scripts/resolve-browser-launch.mjs",
+      ".ai/squeal-runner/Dockerfile",
+      ".ai/squeal-runner/README.md"
+    ],
     "scripts/test-changed.test.mjs": [
       "scripts/test-changed.mjs",
       ".github/scripts/change-surface.cjs",
@@ -369,6 +379,14 @@
   "store": {
     "retentionDays": 7,
     "maxSizeMb": null
+  },
+  "remote": {
+    "setup": ".ai/scripts/squeal-remote-setup.sh"
+  },
+  "requires": {
+    "commands": {
+      "packages/web/e2e/*.e2e.ts": ["google-chrome"]
+    }
   },
   "shared": {
     "ref": "refs/squeal"
