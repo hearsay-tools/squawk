@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { RUNNER_IDS, RUNNERS_RESPONSE } from '@/test/runners.testkit'
+import { RUNNER_IDS, RUNNERS_RESPONSE, RUNNERS_WITH_UNFAMILIAR } from '@/test/runners.testkit'
 import type { AgentConfigFile } from '@open-mercato/cezar-api-client'
 import { agentDescriptors } from './agent-descriptors'
 
@@ -45,6 +45,12 @@ describe('agentDescriptors', () => {
   // The guard #322 asked for: a runner shipped without a Settings → Agent config pane fails here,
   // the way a runner without a catalog adapter fails #321's. `RUNNER_IDS` is the fixture of the
   // server's `GET /api/v1/runners` answer.
+  it('labels each pane with the name its runner definition gives, for a runner the cockpit does not know too', () => {
+    expect(agentDescriptors(RUNNERS_WITH_UNFAMILIAR).map((d) => [d.id, d.label])).toEqual([
+      ['claude', 'Claude Code'], ['codex', 'Codex'], ['opencode', 'OpenCode'], ['pi', 'Pi'], ['omp', 'OMP'], ['zed-agent', 'Zed Agent'],
+    ])
+  })
+
   it('has exactly one entry per runner id, in runner order — a new runner must ship a pane', () => {
     expect(AGENT_DESCRIPTORS.map((d) => d.id)).toEqual(RUNNER_IDS)
   })

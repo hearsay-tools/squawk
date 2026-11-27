@@ -7,8 +7,7 @@ import { Link } from '@/lib/project-router'
 
 import { putConfig } from '@/api/client'
 import { hasAccountChoice } from '@/api/agent-accounts'
-import { runnerPickerLabel, useRunners } from '@/api/runners'
-import { canonicalRunnerName } from '@/routes/settings/agent-descriptors'
+import { runnerDisplayName, useRunners } from '@/api/runners'
 import { queryKeys } from '@/api/queries'
 import type { RepoResponse } from '@open-mercato/cezar-api-client'
 import { CompletionControls } from '@/components/completion-controls'
@@ -183,7 +182,7 @@ export function ExecutionSettings({
         <SlidersHorizontalIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />
         <span className="font-medium text-foreground">Execution settings</span>
         <span data-slot="execution-summary" hidden className="min-w-0 basis-full truncate pl-5 xl:ml-auto xl:basis-auto xl:pl-0">
-          {canonicalRunnerName(displayRunner, runnerPickerLabel(registered, displayRunner))}
+          {runnerDisplayName(registered, displayRunner)}
           {' · '}{engine.models.find((item) => item.id === engine.model)?.label ?? 'auto'}
         </span>
         <ChevronDownIcon aria-hidden="true" className="new-task-settings-chevron size-4 shrink-0" />

@@ -6,7 +6,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ZoomableImage } from '@/components/zoomable-image'
 import { Link } from '@/lib/project-router'
 import { runnerDisplayName, useRunners } from '@/api/runners'
-import { canonicalRunnerName } from '@/routes/settings/agent-descriptors'
 import { resolveApiUrl } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { isImageAttachmentName } from '@open-mercato/cezar-api-client/contract/attachments'
 import type { FileDiff, ToolKind, UiHookItem, UiToolItem } from '@open-mercato/cezar-api-client'
@@ -411,7 +410,7 @@ export function ProviderAuthRequiredCard({
 }) {
   const runners = useRunners().data
   if (!runners) return null
-  const label = canonicalRunnerName(incident.provider, runnerDisplayName(runners, incident.provider))
+  const label = runnerDisplayName(runners, incident.provider)
   return (
     <div
       role="alert"

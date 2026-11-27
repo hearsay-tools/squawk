@@ -327,7 +327,6 @@
     "packages/web/src/lib/task-origin.test.ts": 6,
     "packages/web/src/lib/tasks-table.test.ts": 8,
     "packages/web/src/routes.test.tsx": 1,
-    "packages/web/src/routes/automations/automations-list.test.tsx": 13,
     "packages/web/src/routes/automations/automations-route.test.tsx": 10,
     "packages/web/src/routes/automations/copy-as-cli-card.test.tsx": 1,
     "packages/web/src/routes/automations/editor-draft.test.ts": 1,

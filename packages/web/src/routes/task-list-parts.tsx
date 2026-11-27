@@ -4,6 +4,7 @@ import type { RunSummary } from '@open-mercato/cezar-api-client'
 
 import type { AttentionTone } from '@/lib/attention'
 import type { BucketLabel, ListView } from '@/lib/task-groups'
+import { runnerDisplayName, useRunners } from '@/api/runners'
 import { groupTone } from '@/lib/task-origin'
 import { cn } from '@/lib/utils'
 
@@ -109,4 +110,9 @@ export function BranchChip({ branch }: { branch: string }) {
       {branch}
     </span>
   )
+}
+
+/** A runner's name as its definition in `GET /api/v1/runners` gives it; the id until the list answers. */
+export function RunnerName({ runner }: { runner: string }) {
+  return runnerDisplayName(useRunners().data, runner)
 }

@@ -65,7 +65,7 @@
       "claude-sonnet-5",
       "claude-haiku-4-5"
     ],
-    "paneLabel": "Claude",
+    "paneLabel": "Claude Code",
     "showsUserMcp": true,
     "emptyGroups": []
   },

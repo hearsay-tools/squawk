@@ -8,7 +8,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAgentAccounts } from '@/api/agent-accounts'
 import { ApiError, continueRun } from '@/api/client'
 import { useConfig, useHealth, useRunnerModels } from '@/api/queries'
-import { useRunners } from '@/api/runners'
+import { runnerDisplayName, useRunners } from '@/api/runners'
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import type { ApiRun, ContinueResponse, AttachmentInput, Runner } from '@open-mercato/cezar-api-client'
 import { PickerPill, PickerPillGroup, RunnerPill } from '@/components/picker-pill'
@@ -19,7 +19,6 @@ import {
   resolveEffort,
   resolveModel,
 } from '@/routes/new-task-form'
-import { canonicalRunnerName } from '@/routes/settings/agent-descriptors'
 import { useContinuationProvider } from './continuation-provider'
 import { isStoppedBeforeStarting, runActionFlags } from './run-actions'
 
@@ -228,7 +227,7 @@ export function useContinueAction(run: ApiRun): ContinueAction {
       <EngineControls
         key={pickScope}
         compact={run.status === 'review'}
-        summary={`${canonicalRunnerName(runner)} · ${modelLabel} · ${effortLabel}`}
+        summary={`${runnerDisplayName(registered.data, runner)} · ${modelLabel} · ${effortLabel}`}
       >
 <PickerPillGroup>
         {/* Shown when there is a choice to make, or a signed-out runner to point at its Settings card

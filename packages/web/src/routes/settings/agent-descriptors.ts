@@ -60,26 +60,12 @@ function memberOf(agent: Runner, id: AgentGroup['id']): AgentGroup['files'] {
     : (f) => owned(f) && f.kind === id
 }
 
-const CANONICAL_RUNNER_NAMES: Readonly<Record<string, string>> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'OpenCode',
-  pi: 'Pi',
-  omp: 'OMP',
-  antigravity: 'Antigravity',
-}
-
-/** The one display name Settings shows for a runner; the given fallback (or the id) for an unknown one. */
-export function canonicalRunnerName(id: string, fallback?: string): string {
-  return CANONICAL_RUNNER_NAMES[id] ?? fallback ?? id
-}
-
 /** One runner's pane: its `agentConfig` from the runners list, with each group's file filter. */
 export function agentDescriptor(entry: RunnerEntry): AgentDescriptor {
   const { label, note, groups } = entry.agentConfig
   return {
     id: entry.id,
-    label: canonicalRunnerName(entry.id, label),
+    label,
     note,
     groups: groups.map(({ id, label: groupLabel, note: groupNote, empty, showsUserMcp }) => ({
       id,

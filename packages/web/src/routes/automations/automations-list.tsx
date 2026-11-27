@@ -111,7 +111,7 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
                   data-slot="automations-tab"
                   data-view="archived"
                   aria-pressed={archived}
-                  onClick={() => onArchivedChange(!archived)}
+                  onClick={() => onArchivedChange(true)}
                   className={cn(
                     '-mb-px flex min-h-11 items-center justify-center gap-1.5 border-b-2 border-transparent text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground',
                     archived && 'border-accent-text text-foreground',

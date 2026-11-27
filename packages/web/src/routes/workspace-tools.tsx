@@ -12,7 +12,6 @@ import { toast } from '@/components/ui/toaster'
 import { Link as RouterLink } from 'react-router'
 import { TOOL_SETTINGS_PATH, toolHint, toolSetupPath, toolStateLabel, toolTone } from '@/lib/tool-status'
 import { githubRepoBase } from '@/lib/tasks-table'
-import { canonicalRunnerName } from './settings/agent-descriptors'
 
 type HealthQuery = ReturnType<typeof useHealth>
 type ProjectsQuery = ReturnType<typeof useProjects>
@@ -47,20 +46,11 @@ function renderToolHint(raw: string): ReactNode {
   })
 }
 
-/** Capitalize an all-lowercase runner display name while preserving mixed-case and acronym names. */
-function formatRunnerLabel(label: string): string {
-  if (!label) return label
-  return label === label.toLowerCase() ? `${label[0]!.toUpperCase()}${label.slice(1)}` : label
-}
-
 /** Display label for a tool check: registered coding-agent runners show their canonical display
  *  name from `GET /api/v1/runners`; non-agent CLI tools stay raw monospace. */
 function toolDisplayName(name: string, runners: RunnersResponse | undefined): { label: string; isAgent: boolean } {
-  // One canonical name per agent (`Pi`, never `PI` or `pi`), the one Settings shows.
   const entry = runnerEntry(runners, name)
-  const canonical = canonicalRunnerName(name, '')
-  if (!entry) return canonical ? { label: canonical, isAgent: true } : { label: name, isAgent: false }
-  return { label: canonicalRunnerName(name, formatRunnerLabel(entry.displayName)), isAgent: true }
+  return entry ? { label: entry.displayName, isAgent: true } : { label: name, isAgent: false }
 }
 
 /** A dry-run server reports every agent CLI as `mock (HSQ_DRY_RUN=1)`. That is a mode, not a

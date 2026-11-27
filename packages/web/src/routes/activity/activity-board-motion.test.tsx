@@ -1,4 +1,5 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActivityProject } from '@open-mercato/cezar-api-client/contract/activity'
@@ -9,6 +10,10 @@ import type { ActivityTrigger } from './activity-diff'
 import { EMPTY_MOTION, applyMotion, planMotion, type MotionState } from './activity-motion'
 import { SummaryChips } from './activity-header'
 import { summarize } from './activity-model'
+import { createQueryClient } from '@/api/query-client'
+import { seedRunners } from '@/test/runners.testkit'
+
+const runnersClient = seedRunners(createQueryClient())
 
 /** The motion state drawn on the board: each trigger's mark on the cards, the lines and the rail. */
 
@@ -22,9 +27,9 @@ const motionOf = (...triggers: ActivityTrigger[]): MotionState => applyMotion(EM
 function renderBoard(value: ActivityProject, motion: MotionState, feed = [] as { id: number; at: number; tone: 'success'; text: string }[]) {
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1092)
   return render(
-    <MemoryRouter initialEntries={['/p/cezarion/activity']}>
+    <QueryClientProvider client={runnersClient}><MemoryRouter initialEntries={['/p/cezarion/activity']}>
       <ActivityBoard project={value} now={NOW} watchingSince={iso(-60_000)} motion={motion} feed={feed} />
-    </MemoryRouter>,
+    </MemoryRouter></QueryClientProvider>,
   )
 }
 
@@ -116,7 +121,7 @@ describe('the board in motion', () => {
   // Rule: docs/areas/web-ui.md § Activity view (reduced motion, motion cost).
   it('bumps a chip whose count changed', () => {
     const motion = motionOf({ kind: 'chip-changed', chip: 'working', from: 0, to: 1 })
-    render(<MemoryRouter><SummaryChips summary={summarize([project({ tasks: [A] })])} tasksTo="/" bumps={motion.bumps} /></MemoryRouter>)
+    render(<QueryClientProvider client={runnersClient}><MemoryRouter><SummaryChips summary={summarize([project({ tasks: [A] })])} tasksTo="/" bumps={motion.bumps} /></MemoryRouter></QueryClientProvider>)
     expect(document.querySelector('[data-chip="working"] strong')?.classList.contains('activity-bump')).toBe(true)
     expect(document.querySelector('[data-chip="queued"] strong')?.classList.contains('activity-bump')).toBe(false)
   })

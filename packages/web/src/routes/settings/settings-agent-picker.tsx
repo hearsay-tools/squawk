@@ -2,14 +2,12 @@ import { ChevronDownIcon, TerminalIcon } from '@/components/design-icons'
 
 import { useRef, type ComponentProps } from 'react'
 import { DefaultAgentPicker, type AgentPickerRow } from '@/components/default-agent-picker'
-import { canonicalRunnerName } from './agent-descriptors'
 
-/** A row's label with the runner part in its canonical name ("Claude Code", never "claude"),
- *  keeping any " · <account>" suffix. */
+/** A row's label with the runner part in its display name from `GET /api/v1/runners`
+ *  ("Claude Code", never "claude"), keeping any " · <account>" suffix. */
 function canonicalRow(row: AgentPickerRow): AgentPickerRow {
-  const name = canonicalRunnerName(row.runner.id, row.runner.pickerLabel)
   const suffix = row.label.startsWith(row.runner.pickerLabel) ? row.label.slice(row.runner.pickerLabel.length) : ''
-  return { ...row, label: `${name}${suffix}` }
+  return { ...row, label: `${row.runner.displayName}${suffix}` }
 }
 
 /** Settings presents the shared authenticated account choices in a compact disclosure.
@@ -23,7 +21,7 @@ export function SettingsAgentPicker(props: ComponentProps<typeof DefaultAgentPic
     <details ref={disclosure} className="settings-agent-picker">
       <summary>
         <TerminalIcon aria-hidden="true" className="size-4 text-accent-text" />
-        <span className="min-w-0 flex-1">{selected?.label ?? canonicalRunnerName(props.runner, fallback)}</span>
+        <span className="min-w-0 flex-1">{selected?.label ?? fallback ?? props.runner}</span>
         <ChevronDownIcon aria-hidden="true" className="size-4 text-muted-foreground" />
       </summary>
       <DefaultAgentPicker {...props} rows={rows} onPick={(...args) => {

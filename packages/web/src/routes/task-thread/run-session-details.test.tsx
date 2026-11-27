@@ -1,5 +1,5 @@
 import { STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
-import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
+import { RUNNERS_PATH, RUNNERS_RESPONSE, seedRunners } from '@/test/runners.testkit'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
@@ -89,7 +89,7 @@ function stubFetch(overrides: Record<string, () => Response> = {}): SentRequest[
 
 function renderCard(record: ApiRun) {
   return render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={seedRunners(createQueryClient())}>
       <MemoryRouter initialEntries={[`/tasks/${record.id}`]}>
         <Routes>
           <Route path="/tasks/:id" element={<RunActivityDock run={record} currentThread={reduceThread([])} />} />

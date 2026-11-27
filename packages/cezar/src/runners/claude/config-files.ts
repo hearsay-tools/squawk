@@ -118,7 +118,7 @@ export const CLAUDE_CONFIG_FILES: readonly RunnerConfigFile[] = [
 
 /** The Claude tab of Settings → Agent config (the `agentConfig` of its `configFiles` part). Data only. */
 export const CLAUDE_AGENT_CONFIG: RunnerAgentConfig = {
-  label: 'Claude',
+  label: 'Claude Code',
   groups: [
     { id: 'settings', label: 'Settings' },
     {

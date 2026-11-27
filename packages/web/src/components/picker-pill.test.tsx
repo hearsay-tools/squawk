@@ -4,7 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import type { Runner } from '@open-mercato/cezar-api-client'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { createQueryClient } from '@/api/query-client'
-import { seedRunners } from '@/test/runners.testkit'
+import { RUNNERS_WITH_UNFAMILIAR, seedRunners } from '@/test/runners.testkit'
 import { PickerPill, PickerPillGroup, RunnerPill } from './picker-pill'
 
 afterEach(cleanup)
@@ -342,5 +342,34 @@ describe('RunnerPill: runners that are not installed (hearsay-tools/squawk#4094)
   it('stays closed when disabled with no missing runner to link to', () => {
     renderRunnerPill(vi.fn(), true, [])
     expect((screen.getByRole('button', { name: 'Runner' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('RunnerPill: a registered runner the cockpit has no built-in name for', () => {
+  function renderPill(value: Runner, uninstalled: Runner[] = []) {
+    render(
+      <QueryClientProvider client={seedRunners(createQueryClient(), RUNNERS_WITH_UNFAMILIAR)}>
+        <MemoryRouter>
+          <RunnerPill runners={['claude', 'zed-agent']} uninstalled={uninstalled} value={value} onPick={vi.fn()} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+  }
+
+  it('names the runner by the display name the runners list sends, not its id or picker label', async () => {
+    renderPill('zed-agent')
+    const pill = screen.getByRole('button', { name: 'Runner' })
+    expect(pill.textContent).toContain('Zed Agent')
+    fireEvent.pointerDown(pill)
+    const choices = await screen.findAllByRole('menuitemradio')
+    expect(choices.map((item) => item.textContent)).toEqual([expect.stringContaining('Claude Code'), expect.stringContaining('Zed Agent')])
+    expect(choices[1]!.textContent).not.toMatch(/zed-agent|\bzed\b/)
+  })
+
+  it('names a missing unfamiliar runner by its display name in the install links', async () => {
+    renderPill('claude', ['zed-agent'])
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Runner' }))
+    const link = await screen.findByRole('menuitem', { name: /Zed Agent/ })
+    expect(link.textContent).toContain('Not installed')
   })
 })

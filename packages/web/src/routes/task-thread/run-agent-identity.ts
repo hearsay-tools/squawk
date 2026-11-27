@@ -4,7 +4,6 @@ import type { ApiRun, Runner } from '@open-mercato/cezar-api-client'
 import { removedRunnerLabel } from '@open-mercato/cezar-api-client/contract/runner'
 
 import { useRunners, runnerDisplayName } from '@/api/runners'
-import { canonicalRunnerName } from '@/routes/settings/agent-descriptors'
 import { hasAccountChoice, useAgentAccounts } from '@/api/agent-accounts'
 import type { RunnerAccountChoice } from '@/components/picker-pill'
 import { useAgentProfiles, useConfig } from '@/api/queries'
@@ -113,7 +112,7 @@ export function useAgentIdentity(run: ApiRun): AgentIdentity {
   const identity = run.modelIdentity && run.modelIdentity !== model ? run.modelIdentity : undefined
   return {
     // A task saved on a runner Squawk no longer ships names it, marked removed (hearsay-tools/squawk#3715).
-    runner: run.removedRunner !== undefined ? removedRunnerLabel(run.removedRunner) : canonicalRunnerName(runner, runnerDisplayName(registered.data, runner)),
+    runner: run.removedRunner !== undefined ? removedRunnerLabel(run.removedRunner) : runnerDisplayName(registered.data, runner),
     ...(account ? { account } : {}),
     model,
     effort,

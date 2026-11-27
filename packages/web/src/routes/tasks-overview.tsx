@@ -17,8 +17,7 @@ import { queryKeys, useArchivedRuns, useAutomationNames, useHealth, usePinRun, u
 import type { ArchivedRunsResponse, RunSummary } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { DiffStatLabel } from '@/components/diff-stat'
-import { canonicalRunnerName } from '@/routes/settings/agent-descriptors'
-import { BranchChip, Dash, TaskPageHeader, ViewTab, fullTime, headingTone, ResultCount, taskTitleClass } from './task-list-parts'
+import { BranchChip, Dash, RunnerName, TaskPageHeader, ViewTab, fullTime, headingTone, ResultCount, taskTitleClass } from './task-list-parts'
 import { DirectionalUsage, directionalUsageLabel } from '@/components/directional-usage'
 import { TitleEditInput } from '@/components/editable-title'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -1348,7 +1347,7 @@ const TaskCard = React.memo(function TaskCard({
         <span className="min-w-0 truncate"><RunOriginLine run={run} automationName={automationName} /></span>
       </div>
       <div data-slot="mobile-task-meta" className="flex min-w-0 items-center gap-3 text-xs text-muted-foreground">
-        <span data-slot="mobile-task-runner" className="min-w-0 flex-1 truncate">{run.runner ? canonicalRunnerName(run.runner) : null}</span>
+        <span data-slot="mobile-task-runner" className="min-w-0 flex-1 truncate">{run.runner ? <RunnerName runner={run.runner} /> : null}</span>
         {reference ? <TaskReferenceChip run={run} reference={reference} /> : null}
         {queuePosition !== null ? <span data-slot="queue-note">#{queuePosition} in queue</span> : run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}
         <span className="tabular-nums" title={fullTime(run.startedAt ?? run.createdAt)}>{shortAge(run.startedAt ?? run.createdAt, now)}</span>

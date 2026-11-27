@@ -15,8 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Link as RouterLink } from 'react-router'
 import { agentCardPath } from '@/lib/agents-settings-path'
-import { runnerEntries, useRunners } from '@/api/runners'
-import { canonicalRunnerName } from '@/routes/settings/agent-descriptors'
+import { runnerDisplayName, runnerEntries, useRunners } from '@/api/runners'
 
 /**
  * The composer's single-choice pill, factored out of new-task.tsx (#401) so the follow-up
@@ -478,7 +477,7 @@ export function RunnerPill({
   const options = available.flatMap((runner) => {
     const logins = accounts.filter((entry) => entry.provider === runner.id)
     // One login is not a choice, so it does not become a row of its own — the agent is the row.
-    const name = canonicalRunnerName(runner.id, runner.displayName)
+    const name = runner.displayName
     if (logins.length < 2) return [{ value: choiceValue(runner.id, null), label: name, desc: runner.pickerDescription }]
     return logins.map((login) => ({
       value: choiceValue(runner.id, login.id),
@@ -506,7 +505,7 @@ export function RunnerPill({
       fieldLabel={fieldLabel}
       slot="runner-pill"
       ariaLabel="Runner"
-      label={options.find((option) => option.value === value_)?.label ?? canonicalRunnerName(value)}
+      label={options.find((option) => option.value === value_)?.label ?? runnerDisplayName(registered, value)}
       value={value_}
       disabled={disabled && !linksOnly}
       choicesDisabled={linksOnly}
@@ -526,7 +525,7 @@ export function RunnerPill({
 export function UnavailableRunnerLinks({ uninstalled, signedOut }: { uninstalled: readonly Runner[]; signedOut: readonly Runner[] }) {
   const registered = useRunners().data
   const entries = runnerEntries(registered).flatMap((entry) => {
-    const name = canonicalRunnerName(entry.id, entry.displayName)
+    const name = entry.displayName
     if (uninstalled.includes(entry.id)) return [{ id: entry.id, name, state: 'Not installed', action: 'Install in Settings' }]
     if (signedOut.includes(entry.id)) return [{ id: entry.id, name, state: 'Not signed in', action: 'Sign in in Settings' }]
     return []

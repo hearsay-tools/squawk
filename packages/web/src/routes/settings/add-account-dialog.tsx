@@ -1,9 +1,8 @@
 import { SettingsSelect } from './settings-select'
-import { canonicalRunnerName } from './agent-descriptors'
 import { useState } from 'react'
 
 import { useCreateAgentProfile } from '@/api/queries'
-import { runnerEntry, useRunners } from '@/api/runners'
+import { runnerDisplayName, runnerEntry, useRunners } from '@/api/runners'
 import type { FsBrowseDir, ProviderId } from '@open-mercato/cezar-api-client'
 import { FolderBrowser } from '@/components/folder-browser'
 import { Button } from '@/components/ui/button'
@@ -120,7 +119,7 @@ export function AddAccountDialog({
             >
               {providers.map((id) => (
                 <option key={id} value={id}>
-                  {canonicalRunnerName(id)}
+                  {runnerDisplayName(runners, id)}
                 </option>
               ))}
             </SettingsSelect>

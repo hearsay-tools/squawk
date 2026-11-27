@@ -1,7 +1,8 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { MemoryRouter } from 'react-router'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import type { AutomationsResponse } from '@open-mercato/cezar-api-client'
 import { createQueryClient } from '@/api/query-client'
 import { AutomationsList } from './automations-list'
@@ -175,6 +176,27 @@ it('Archived filter shows only archived entries, counts them and links the run',
   expect(screen.getByRole('link', { name: 'Open task' }).getAttribute('href')).toBe('/tasks/run-9')
   expect(screen.getByText('Cancelled — no task was started.')).not.toBeNull()
   for (const name of ['Edit', 'Pause', 'Enable', 'Run now', 'Cancel']) expect(screen.queryByRole(name === 'Edit' ? 'link' : 'button', { name })).toBeNull()
+})
+
+// PR hearsay-tools/squawk#4358 review: the Archived tab selects Archived; a second press keeps it selected.
+it('activating the Archived tab twice keeps the Archived view', () => {
+  vi.useFakeTimers({ now: new Date('2030-01-16T10:00:00Z'), toFake: ['Date'] })
+  onTestFinished(() => { vi.useRealTimers() })
+  routed(() => undefined)
+  const archivedOnce = { ...once, enabled: false, nextRunAt: undefined, onceStatus: 'archived', archived: { at: '2030-01-15T08:00:05Z', outcome: 'launched', runId: 'run-9' } }
+  const onChange = vi.fn()
+  function Harness() {
+    const [archived, setArchived] = useState(false)
+    return <AutomationsList data={response([schedule, archivedOnce])} error="" refresh={vi.fn(async () => undefined)} archived={archived} onArchivedChange={(next) => { onChange(next); setArchived(next) }} />
+  }
+  render(<QueryClientProvider client={createQueryClient()}><MemoryRouter><Harness /></MemoryRouter></QueryClientProvider>)
+  const archivedTab = () => screen.getByRole('button', { name: /^Archived/ })
+  fireEvent.click(archivedTab())
+  fireEvent.click(archivedTab())
+  expect(onChange.mock.calls).toEqual([[true], [true]])
+  expect(archivedTab().getAttribute('aria-pressed')).toBe('true')
+  expect(screen.getByRole('link', { name: 'Open task' }).getAttribute('href')).toBe('/tasks/run-9')
+  expect(screen.queryByText('Morning digest')).toBeNull()
 })
 
 // Review of #1465: an archived schedule stays inspectable. Its card links to a read-only detail.

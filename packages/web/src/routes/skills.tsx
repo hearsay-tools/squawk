@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { getRunnerSkills } from '@/api/client'
-import { runnerDisplayName, useResolvedRunner, useRunners } from '@/api/runners'
+import { useResolvedRunner, useRunners } from '@/api/runners'
 import { useAgentAccounts } from '@/api/agent-accounts'
 import { queryKeys, useConfig, useRunnerSkills } from '@/api/queries'
 import { ChevronDownIcon, RefreshCwIcon, SearchIcon, TriangleAlertIcon } from '@/components/design-icons'
@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toaster'
 import { searchSkills } from '@/lib/skills'
 import { cn } from '@/lib/utils'
-import { canonicalRunnerName } from './settings/agent-descriptors'
 import { groupRunnerSkills, SkillGroups } from './skills-list'
 import type { Runner } from '@open-mercato/cezar-api-client'
 import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
@@ -72,12 +71,6 @@ function SkillsResult({ skills, search, openId, runner, account, unchecked }: {
   return <SkillGroups groups={groupRunnerSkills(matches)} openId={openId} searching={search.trim() !== ''} runner={runner} account={account} />
 }
 
-/** Capitalize an all-lowercase runner display name while preserving mixed-case and acronym names. */
-function formatRunnerLabel(label: string): string {
-  if (!label) return label
-  return label === label.toLowerCase() ? `${label[0]!.toUpperCase()}${label.slice(1)}` : label
-}
-
 /** Renders once the runners list has answered, so every button shows the runner's canonical name. */
 function RunnerSwitch({ runner, onChange }: { runner: Runner; onChange: (runner: Runner) => void }) {
   const runners = useRunners().data
@@ -87,7 +80,7 @@ function RunnerSwitch({ runner, onChange }: { runner: Runner; onChange: (runner:
       {runners.runners.map((entry) => (
         <button key={entry.id} type="button" aria-pressed={entry.id === runner} onClick={() => onChange(entry.id)}
           className="h-8 shrink-0 rounded-md border border-transparent px-3 text-[13px] font-normal text-muted-foreground transition-colors focus-visible:outline-2 aria-pressed:border-border aria-pressed:bg-card aria-pressed:font-semibold aria-pressed:text-foreground aria-pressed:shadow-xs pointer-hover:text-foreground max-md:h-11">
-          {canonicalRunnerName(entry.id, formatRunnerLabel(runnerDisplayName(runners, entry.id)))}
+          {entry.displayName}
         </button>
       ))}
     </div>

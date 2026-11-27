@@ -1,4 +1,5 @@
 import { act, cleanup, render } from '@testing-library/react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActivityProject, ActivitySnapshot } from '@open-mercato/cezar-api-client/contract/activity'
@@ -10,6 +11,10 @@ import type { Box } from './line-geometry'
 import { placeBoxes, samplePath } from './line-layout.testkit'
 import { useActivityMotion } from './use-activity-motion'
 import { REDUCED_MOTION_QUERY } from './use-reduced-motion'
+import { createQueryClient } from '@/api/query-client'
+import { seedRunners } from '@/test/runners.testkit'
+
+const runnersClient = seedRunners(createQueryClient())
 
 /**
  * The board driven by the real motion hook, snapshot after snapshot: the transitions the pure
@@ -69,8 +74,8 @@ function LiveBoard({ snapshot }: { snapshot: ActivitySnapshot }) {
 
 function renderLive(first: ActivitySnapshot, width: number) {
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width)
-  const view = render(<MemoryRouter><LiveBoard snapshot={first} /></MemoryRouter>)
-  return { rerender: (next: ActivitySnapshot) => view.rerender(<MemoryRouter><LiveBoard snapshot={next} /></MemoryRouter>) }
+  const view = render(<QueryClientProvider client={runnersClient}><MemoryRouter><LiveBoard snapshot={first} /></MemoryRouter></QueryClientProvider>)
+  return { rerender: (next: ActivitySnapshot) => view.rerender(<QueryClientProvider client={runnersClient}><MemoryRouter><LiveBoard snapshot={next} /></MemoryRouter></QueryClientProvider>) }
 }
 
 const A = run({ runId: 'a', title: 'Porting upstream SSE' })
@@ -114,13 +119,13 @@ describe('the live board', () => {
     })
     const peer = request({ senderRunId: 'd', recipientRunId: 'b' })
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1092)
-    const view = render(<MemoryRouter><ActivityBoard project={project({ tasks: [A, B, C, D], requests: [peer] })} now={NOW} watchingSince={iso(-60_000)} motion={EMPTY_MOTION} /></MemoryRouter>)
+    const view = render(<QueryClientProvider client={runnersClient}><MemoryRouter><ActivityBoard project={project({ tasks: [A, B, C, D], requests: [peer] })} now={NOW} watchingSince={iso(-60_000)} motion={EMPTY_MOTION} /></MemoryRouter></QueryClientProvider>)
     const start = () => samplePath(document.querySelector(`path[data-request="${peer.requestId}"]`)?.getAttribute('d') ?? '')[0]
     expect(start()).toEqual({ x: 300, y: 222 })
 
     // A leaves: D moves up into its place, and FLIP plays it from where it was.
     boxes.d!.y = 0
-    view.rerender(<MemoryRouter><ActivityBoard project={project({ tasks: [B, C, D], requests: [peer] })} now={NOW} watchingSince={iso(-60_000)} motion={EMPTY_MOTION} /></MemoryRouter>)
+    view.rerender(<QueryClientProvider client={runnersClient}><MemoryRouter><ActivityBoard project={project({ tasks: [B, C, D], requests: [peer] })} now={NOW} watchingSince={iso(-60_000)} motion={EMPTY_MOTION} /></MemoryRouter></QueryClientProvider>)
     expect(animations).toHaveLength(1)
     // A measure taken mid-flight reads the transformed card.
     boxes.d!.y = 120

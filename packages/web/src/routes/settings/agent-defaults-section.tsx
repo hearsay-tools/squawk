@@ -1,5 +1,4 @@
 import { SettingsSelect } from './settings-select'
-import { canonicalRunnerName } from './agent-descriptors'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { BotIcon } from '@/components/design-icons'
 
@@ -146,7 +145,7 @@ function AgentsForm({
     return (
       <label key={runner.id} className="settings-option-row">
         <div>
-          <h3>{canonicalRunnerName(runner.id, runner.pickerLabel)}</h3>
+          <h3>{runner.displayName}</h3>
         </div>
         {config.modelsLocked ? (
           <output

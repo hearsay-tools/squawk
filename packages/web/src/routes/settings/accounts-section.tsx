@@ -1,5 +1,4 @@
 import { SettingsSelect } from './settings-select'
-import { canonicalRunnerName } from './agent-descriptors'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { IdCardIcon } from 'lucide-react'
 import { CpuIcon } from '@/components/design-icons'
@@ -352,7 +351,7 @@ function AgentCard({
   onRemove: (account: AgentProfile) => void
 }) {
   const provider = entry.id
-  const title = canonicalRunnerName(entry.id, entry.displayName)
+  const title = entry.displayName
   // The managed installer reports its own installed and latest versions; it renders only under
   // `settingsAdmin`, so without that grant the host check is the readout.
   const managed = entry.managedInstall === true && settingsAdmin
@@ -481,13 +480,13 @@ function DefaultsForNewProjects({ runners }: { runners: RunnersResponse }) {
         <label className="settings-model-agent-choice">
           <span>Default model for</span>
           <SettingsSelect aria-label="Model agent" value={modelChoice} onChange={(event) => setModelRunner(event.target.value as Runner)}>
-            {runners.runners.map((entry) => <option key={entry.id} value={entry.id}>{canonicalRunnerName(entry.id, entry.displayName)}</option>)}
+            {runners.runners.map((entry) => <option key={entry.id} value={entry.id}>{entry.displayName}</option>)}
           </SettingsSelect>
         </label>
         {runners.runners.filter((entry) => entry.id === modelChoice).map((entry) => (
           <label key={entry.id} className="settings-account-model flex flex-wrap items-center gap-3">
             <CpuIcon className="size-4 text-accent-icon shrink-0" />
-            <span className="w-28 shrink-0 text-xs text-muted-foreground">{canonicalRunnerName(entry.id, entry.displayName)}</span>
+            <span className="w-28 shrink-0 text-xs text-muted-foreground">{entry.displayName}</span>
             <SettingsSelect
               aria-label={`Default model for ${entry.pickerLabel}`}
               data-slot="accounts-default-model"
@@ -591,7 +590,7 @@ function folderAdvisory(account: AgentProfile, runners: RunnersResponse, status:
     return {
       slot: 'account-unrecognised',
       label: 'Unrecognized folder',
-      guidance: `This folder does not look like ${canonicalRunnerName(account.provider, runnerDisplayName(runners, account.provider))} config yet.`,
+      guidance: `This folder does not look like ${runnerDisplayName(runners, account.provider)} config yet.`,
     }
   }
   return null
