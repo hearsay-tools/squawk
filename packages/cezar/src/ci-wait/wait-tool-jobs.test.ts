@@ -17,7 +17,7 @@ describe('cezar_wait without the jobs feature', () => {
     expect(fields().exit_file!.description).toContain('`hsq job start`');
     expect(fields().pid!.description).toContain('the job start command printed');
     // The text the default install sends, byte for byte.
-    expect(digest(waitToolDefinition.description)).toBe('014728f9839ed6afd2787d94f48eb8cf24fb90c23cdfd56e7296c283acb606e7');
+    expect(digest(waitToolDefinition.description)).toBe('99761679f270280c5026cbafbd9ad2d712eacd6c673c6ce2e5affb73bb56541c');
   });
 
   it('names no job command once the sealed CLI has no job command', () => {
