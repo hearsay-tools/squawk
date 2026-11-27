@@ -2,7 +2,9 @@
    EnginePills with layout="row" (GitHub hand-off, Inbox card). Mirrors routes/new-task.css
    (.new-task-agent-options): sized against its own box, not the viewport, because a wide sidebar
    can leave a desktop viewport narrow. engine-pills.tsx measures the same 550px / 767px
-   boundaries so DOM order (keyboard focus, #492) matches the visual order below. */
+   boundaries so DOM order (keyboard focus, #492) matches the visual order below. Model takes the
+   flexible track; PickerPillGroup's `fill` drops the prefixes before Model gets narrower than a
+   max-content sibling. */
 [data-slot='engine-row-box'] { container: engine-row / inline-size; min-width: 0; width: 100%; }
 .engine-row { display: grid; gap: 10px; grid-template-columns: max-content minmax(0, 1fr) max-content; }
 /* A disabled pill is wrapped in a span that owns the grid cell; the button owns the slot. */

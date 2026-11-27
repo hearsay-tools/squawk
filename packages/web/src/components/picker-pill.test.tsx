@@ -202,6 +202,50 @@ describe('PickerPillGroup (#541)', () => {
     expect(labels()).toEqual(['opencode', LONG, 'medium'])
   })
 
+  // #724: the engine row's Model takes the flexible track. `Runner · Claude Code` (205px),
+  // `Model · Default` (175px) and `Effort · auto` (138px) sum to 518px plus two 10px gaps, so
+  // they fit a 563px row, yet Model would get only 563 - 205 - 138 - 20 = 200px, less than Runner.
+  const engineRow = (fill?: string) => (
+    <PickerPillGroup fill={fill}>
+      <div style={{ display: 'grid', columnGap: '10px' }}>
+        {pillFor('runner-pill', 'Runner', 'Claude Code')}
+        {pillFor('model-pill', 'Model', 'Default')}
+        {pillFor('effort-pill', 'Effort', 'auto')}
+      </div>
+    </PickerPillGroup>
+  )
+
+  it('keeps the flexible pill at least as wide as its widest sibling before showing prefixes (#724)', () => {
+    Object.assign(full, { 'runner-pill': 205, 'model-pill': 175, 'effort-pill': 138 })
+    available = 563
+    const view = render(engineRow())
+    expect(labels()).toEqual(['Runner · Claude Code', 'Model · Default', 'Effort · auto'])
+    view.rerender(engineRow('model-pill'))
+    expect(labels()).toEqual(['Claude Code', 'Default', 'auto'])
+    // Three equal shares of the widest prefixed pill, plus the gaps: 3 × 205 + 20.
+    available = 635
+    resize()
+    expect(labels()).toEqual(['Runner · Claude Code', 'Model · Default', 'Effort · auto'])
+    available = 634
+    resize()
+    expect(labels()).toEqual(['Claude Code', 'Default', 'auto'])
+  })
+
+  it('fits a line without the flexible pill by the sum of its pills (#724)', () => {
+    Object.assign(full, { 'runner-pill': 205, 'model-pill': 175, 'effort-pill': 138 })
+    available = 353
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const slot = this.closest('[data-slot$="pill"]')?.getAttribute('data-slot') ?? ''
+      // The compact row: Runner and Effort share the top line, Model sits alone below them.
+      return { width: this.classList.contains('invisible') ? full[slot] : 0, top: slot === 'model-pill' ? 54 : 0 } as DOMRect
+    })
+    render(engineRow('model-pill'))
+    expect(labels()).toEqual(['Runner · Claude Code', 'Model · Default', 'Effort · auto'])
+    available = 352
+    resize()
+    expect(labels()).toEqual(['Claude Code', 'Default', 'auto'])
+  })
+
   it('stops counting a pill once it unmounts', () => {
     full['model-pill'] = 350
     const view = render(row(LONG))

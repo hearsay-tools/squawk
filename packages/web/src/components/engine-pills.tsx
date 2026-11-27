@@ -315,7 +315,7 @@ export function EnginePills({
   return (
     <div ref={boxRef} data-slot="engine-row-box">
       <div data-slot="engine-row" className="engine-row" role="group" aria-label="Agent settings">
-        <PickerPillGroup>
+        <PickerPillGroup fill="model-pill">
           {compact ? [runnerPill, effortPill, modelPill] : [runnerPill, modelPill, effortPill]}
         </PickerPillGroup>
       </div>
