@@ -87,7 +87,8 @@ it('shows a paused schedule with no next run, offers Enable, and still allows Ru
   mount(response([{ ...schedule, enabled: false, nextRunAt: undefined }], { scheduler: { state: 'idle' } }))
   expect(screen.getByText('Paused')).not.toBeNull()
   expect(screen.getByText('Next run: —')).not.toBeNull()
-  expect(screen.getByRole('button', { name: 'Enable' })).not.toBeNull()
+  // Enable is a neutral outline action: teal marks selection, not an action.
+  expect(screen.getByRole('button', { name: 'Enable' }).className).not.toMatch(/accent/)
   expect(screen.getByRole('button', { name: 'Run now' })).not.toBeNull()
   expect(screen.getByText(/Scheduler idle/)).not.toBeNull()
 })

@@ -90,7 +90,7 @@ export function RepoChangesSection() {
                 never has to drag the diff to the bottom to show its last row. */}
             <aside
               data-slot="changes-tree-pane"
-              className="md:sticky md:top-4 md:max-h-[calc(100dvh_-_64px_-_var(--diff-sticky-top)_-_1rem)] w-full md:w-60 shrink-0 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-3.5 lg:w-[250px]"
+              className="md:sticky md:top-4 md:max-h-[calc(100dvh_-_64px_-_var(--diff-sticky-top)_-_1rem)] w-full md:w-60 shrink-0 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-3.5 lg:w-[288px]"
             >
               <h2 data-slot="changes-tree-heading" className="mb-3 border-b border-border pb-3 text-xs font-semibold">Changed files</h2>
               <ChangesTree root={tree} selected={selected} onSelect={selectFile} />

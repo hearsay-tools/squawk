@@ -284,12 +284,12 @@ function CardActions({ automation, busy, confirmingCancel, cancelRef, onToggle, 
   const isOnce = automation.schedule?.type === 'once'
   return (
     // One button grammar: compact bordered buttons whose left edge lines up with the card's text.
-    // The state change leads; Enable on a paused card carries the accent so the next step reads first.
+    // The state change leads. Enable stays a neutral outline button: teal marks selection, not actions.
     <div data-slot="automation-actions" className="flex flex-wrap items-center gap-2">
       <Button
         variant="outline"
         size="sm"
-        className={cn(CARD_ACTION, !automation.enabled && 'border-accent-text/50 text-accent-text')}
+        className={CARD_ACTION}
         data-action="automation-toggle"
         disabled={busy}
         onClick={onToggle}

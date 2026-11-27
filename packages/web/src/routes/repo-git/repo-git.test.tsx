@@ -453,7 +453,7 @@ describe('the Git view All branches section', () => {
   it('lists every local branch, task branches included, labelled with its class and linked to its task', async () => {
     stubFetch()
     renderAt('/git/branches')
-    await waitFor(() => expect(document.querySelectorAll('[data-slot="branch-class"]')).toHaveLength(8))
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="branch-class"]')).toHaveLength(7))
     expect(document.querySelector('[data-slot="repo-meta"]')?.textContent).toBe('8 branches · on main')
     const labels = [...document.querySelectorAll<HTMLElement>('[data-slot="branch-row"]')].map((row) => [
       row.dataset.branch,
@@ -467,8 +467,10 @@ describe('the Git view All branches section', () => {
       ['cez/bbbbbbbb', 'merged'],
       ['cez/cccccccc', 'empty'],
       ['feature', 'yours'],
-      ['main', 'in use'],
+      // The checkout is in use by definition; its Current badge says so once.
+      ['main', undefined],
     ])
+    expect(document.querySelector('[data-slot="branch-create-base"]')?.textContent).toBe('Create from main.')
     // A task branch opens through its task, never through Switch.
     expect(document.querySelector('[data-branch="cez/51ab2d7e"] [data-action="switch-branch"]')).toBeNull()
     expect(document.querySelector('[data-branch="feature"] [data-action="switch-branch"]')).not.toBeNull()

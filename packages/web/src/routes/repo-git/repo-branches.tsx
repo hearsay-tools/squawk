@@ -94,7 +94,7 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
             const current = name === info.branch
             const entry = byName.get(name)
             return (
-              <li key={name} data-slot="branch-row" data-branch={name} data-branch-class={entry?.class} className="flex min-h-[56px] flex-col items-start justify-center gap-1.5 py-2 md:flex-row md:items-center md:justify-start md:gap-2.5">
+              <li key={name} data-slot="branch-row" data-branch={name} data-branch-class={entry?.class} className="flex min-h-[60px] flex-col items-start justify-center gap-1.5 py-2 md:flex-row md:items-center md:justify-start md:gap-2.5">
                 <span className="flex min-w-0 items-center gap-[8px]">
                   {entry?.runId ? (
                     <Link
@@ -108,7 +108,8 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
                   ) : (
                     <span className={cn('min-w-0 truncate font-mono text-[12px]', current && 'font-medium')}>{name}</span>
                   )}
-                  {entry ? <BranchClassLabel entry={entry} /> : null}
+                  {/* The checkout is in use by definition: Current already says so. */}
+                  {entry && !(current && entry.class === 'active') ? <BranchClassLabel entry={entry} /> : null}
                 </span>
                 {entry ? <BranchKeptReason entry={entry} /> : null}
                 {name.startsWith('cez/') && !current ? null : current ? (
@@ -146,7 +147,9 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
         <h2 className="text-base font-semibold">Create a branch</h2>
         <form data-slot="branch-create" className="mt-5 flex flex-col items-stretch gap-3" onSubmit={submitCreate}>
           <label htmlFor="new-branch-name" className="text-sm font-medium">Branch name</label>
-          <p className="-mt-1 text-xs text-muted-foreground">Create from the selected base.</p>
+          <p data-slot="branch-create-base" className="-mt-1 text-xs text-muted-foreground">
+            Create from <span className="font-mono text-[11px] text-foreground">{info.branch}</span>.
+          </p>
           <Input
             id="new-branch-name"
             aria-label="New branch name"

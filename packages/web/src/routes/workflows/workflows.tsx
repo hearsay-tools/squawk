@@ -247,6 +247,9 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
   const trimmedName = draft.name.trim()
   const savedFile = workflows.find((w) => w.name === trimmedName && w.source === 'file')
   const yaml = workflowYaml(draft.name, draft.description, steps)
+  // A saved file whose canvas still matches it has nothing to save; any edit, a new name or an
+  // unsaved canvas turns Save back on.
+  const unchanged = savedFile !== undefined && workflowYaml(savedFile.name, savedFile.description ?? '', savedFile.steps ?? []) === yaml
 
   /** Palette → canvas, at `at` (or the end). One rule for drop, click and keyboard: the
    *  server's 8-step limit answers a toast, never a silent no-op. */
@@ -349,7 +352,8 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
             variant="primary"
             data-slot="wb-save"
             className="min-h-11"
-            disabled={save.isPending}
+            disabled={save.isPending || unchanged}
+            title={unchanged ? 'No unsaved changes' : undefined}
             onClick={runSave}
           >
             <CheckIcon aria-hidden="true" className="size-4" />

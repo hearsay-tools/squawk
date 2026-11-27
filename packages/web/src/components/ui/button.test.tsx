@@ -11,8 +11,9 @@ describe('Button', () => {
     render(<Button className="bg-muted">Label</Button>)
     const button = screen.getByRole('button')
 
-    expect(button.className).toContain('bg-muted')
-    expect(button.className).not.toContain('bg-action')
+    const classes = button.className.split(' ')
+    expect(classes).toContain('bg-muted')
+    expect(classes).not.toContain('bg-action')
   })
 
   it('renders the child element instead of a button when asChild is set', () => {
@@ -35,11 +36,11 @@ describe('Button', () => {
     expect((button as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('turns a disabled primary button neutral at full opacity', () => {
+  it('dims a disabled primary button to the gold tint at full opacity', () => {
     render(<Button disabled>Label</Button>)
     const classes = screen.getByRole('button').className.split(' ')
 
-    for (const name of ['disabled:bg-muted', 'disabled:text-muted-foreground', 'disabled:border-border', 'disabled:opacity-100']) expect(classes).toContain(name)
+    for (const name of ['disabled:bg-action/20', 'disabled:text-foreground/80', 'disabled:border-action/35', 'disabled:opacity-100']) expect(classes).toContain(name)
     expect(classes).not.toContain('disabled:opacity-50')
   })
 })

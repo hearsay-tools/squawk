@@ -251,7 +251,7 @@ function ChangesLayout({
           high on the screen. */}
       <aside
         data-slot="changes-tree-pane"
-        className="w-full shrink-0 rounded-xl border border-border bg-card md:sticky md:top-4 md:max-h-[calc(100dvh_-_64px_-_var(--diff-sticky-top)_-_1rem)] md:w-60 md:overflow-y-auto md:overscroll-contain md:p-3.5 lg:w-[250px]"
+        className="w-full shrink-0 rounded-xl border border-border bg-card md:sticky md:top-4 md:max-h-[calc(100dvh_-_64px_-_var(--diff-sticky-top)_-_1rem)] md:w-60 md:overflow-y-auto md:overscroll-contain md:p-3.5 lg:w-[288px]"
       >
         <button
           type="button"

@@ -45,6 +45,10 @@ describe('CopyAsCliCard', () => {
     renderInProject(<CopyAsCliCard draft={draft} />)
     const toggle = screen.getByRole('button', { name: 'Show command' })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle.textContent).toBe('Show')
+    // The button base sets shrink-0; the toggle must give way so Copy stays inside the card.
+    expect(toggle.className.split(' ')).toContain('shrink')
+    expect(toggle.className.split(' ')).not.toContain('shrink-0')
     const box = document.getElementById(toggle.getAttribute('aria-controls')!)!
     expect(box.hidden).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }))

@@ -245,6 +245,8 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
   const formId = useId()
   // Like Start task on New task: nothing to save until the two required fields hold text.
   const missing = !draft.name.trim() ? 'Name' : !draft.prompt.trim() ? 'Prompt' : ''
+  const saveHint = saveHintOf(draft)
+  const saveHintId = useId()
   const saveLabel = automation ? 'Save changes' : draft.enabled ? 'Save and enable' : 'Save paused'
   const isSchedule = draft.kind === 'schedule'
   return (
@@ -252,17 +254,21 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
       title={automation ? 'Edit automation' : 'New automation'}
       subtitle="Define when it runs and the ordinary task it launches."
       action={
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" asChild><Link to="/automations">Cancel</Link></Button>
-          <Button
-            type="submit"
-            form={formId}
-            variant="primary"
-            disabled={saving || missing !== ''}
-            title={missing ? `${missing} is required` : undefined}
-          >
-            {saving ? 'Saving…' : saveLabel}
-          </Button>
+        <div className="grid justify-items-start gap-1.5 sm:justify-items-end">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" asChild><Link to="/automations">Cancel</Link></Button>
+            <Button
+              type="submit"
+              form={formId}
+              variant="primary"
+              disabled={saving || missing !== ''}
+              title={missing ? `${missing} is required` : undefined}
+              aria-describedby={saveHint ? saveHintId : undefined}
+            >
+              {saving ? 'Saving…' : saveLabel}
+            </Button>
+          </div>
+          {saveHint ? <p id={saveHintId} data-slot="automation-save-hint" className="text-xs text-muted-foreground">{saveHint}</p> : null}
         </div>
       }
     >
@@ -326,6 +332,12 @@ export function AutomationEditor({ automation, forge, timeZone, onSaved, onReloa
       </form>
     </PageFrame>
   )
+}
+
+/** The cue under a disabled Save: which of the two required fields still need text. */
+function saveHintOf(draft: AutomationDraft): string {
+  const fields = [!draft.name.trim() && 'a name', !draft.prompt.trim() && 'a prompt'].filter(Boolean)
+  return fields.length ? `Add ${fields.join(' and ')} to save.` : ''
 }
 
 /** Workflow / runner / model, from the composer's own sources. An unset runner or model means

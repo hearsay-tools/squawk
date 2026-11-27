@@ -16,7 +16,7 @@ import type { AutomationDraft } from './editor-draft'
  * that would create it — the flag form when every key has a flag, the JSON form otherwise. Built
  * from the body Save sends (`cliOf` → `toCreateBody`), so the two cannot disagree. The box shows
  * it one flag per line with backslash continuations; Copy takes the same lines. The box starts
- * folded behind "Show command": Copy works either way, and the open box wraps every token
+ * folded behind "Show": Copy works either way, and the open box wraps every token
  * inside the card instead of clipping it at the right edge.
  */
 export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
@@ -50,9 +50,10 @@ export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
 
   return (
     <section aria-labelledby="copy-as-cli-heading" data-slot="copy-as-cli" className="min-w-0 max-w-full overflow-hidden rounded-xl border bg-card px-4 py-3.5">
-      {/* One row at the 320px aside width: heading, the fold toggle, and Copy flush right. The
-          toggle gives way (truncates) before Copy would drop to a second line. */}
-      <div className="flex min-h-8 min-w-0 flex-nowrap items-center gap-x-1.5">
+      {/* One row at the 320px aside width: heading, the fold toggle, and Copy flush right inside
+          the card's padding. The toggle shrinks (the button base sets shrink-0) and truncates
+          before Copy would reach the card's edge. */}
+      <div className="flex min-h-8 min-w-0 flex-nowrap items-center justify-between gap-x-2">
         <h2 id="copy-as-cli-heading" className="shrink-0 text-[13px] font-medium text-muted-foreground">Copy as CLI</h2>
         <Button
           type="button"
@@ -61,10 +62,11 @@ export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
           data-slot="copy-as-cli-toggle"
           aria-expanded={open}
           aria-controls={boxId}
-          className="min-w-0 gap-1 px-1.5 text-[12px] font-medium max-md:h-11 no-hover:h-11"
+          aria-label={open ? 'Hide command' : 'Show command'}
+          className="min-w-0 shrink gap-1 px-1.5 text-[12px] font-medium max-md:h-11 no-hover:h-11"
           onClick={() => setOpen((value) => !value)}
         >
-          <span className="truncate">{open ? 'Hide command' : 'Show command'}</span>
+          <span className="truncate">{open ? 'Hide' : 'Show'}</span>
           <ChevronDownIcon aria-hidden="true" className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
         </Button>
         <Button type="button" variant="outline" size="sm" className="ms-auto gap-1.5 px-2 text-[12px] font-medium max-md:h-11 no-hover:h-11" onClick={() => void copy()}>
