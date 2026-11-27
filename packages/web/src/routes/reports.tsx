@@ -46,6 +46,13 @@ export function ReportsRoute() {
   const restored = useRef('')
   const key = location.pathname + location.search
   const reports = result.data?.pages.flatMap(page => page.reports) ?? []
+  const rememberPosition = (rowId: string) => {
+    positions.set(key, {
+      scroll: scroller.current?.scrollTop ?? 0,
+      row: rowId,
+      pages: result.data?.pages.length ?? 1,
+    })
+  }
   const [previewId, setPreviewId] = useState<string | null>(null)
   const desktop = useIsDesktop()
 
@@ -106,7 +113,7 @@ export function ReportsRoute() {
         <div ref={scroller} data-slot="reports-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <p role="status" className="py-4 text-sm text-muted-foreground">Loading reports…</p>
         </div>
-      ) : result.isError ? (
+      ) : result.isError && reports.length === 0 ? (
         <div ref={scroller} data-slot="reports-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div role="alert" className="flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-5">
             <p className="text-sm font-medium text-foreground">Could not load reports</p>
@@ -164,7 +171,7 @@ export function ReportsRoute() {
                             className="reports-open text-foreground no-underline"
                             to={`/tasks/${report.runId}/report?artifact=${report.id}`}
                             state={{ readerFrom: key, filesRestoreKey: key }}
-                            onClick={() => positions.set(key, { scroll: scroller.current?.scrollTop ?? 0, row: report.id, pages: result.data?.pages.length ?? 1 })}
+                            onClick={() => rememberPosition(report.id)}
                           >
                             <span className="min-w-0 truncate">{reportTitle(report)}</span>
                           </Link>
@@ -192,7 +199,7 @@ export function ReportsRoute() {
                         aria-label={`Preview ${reportTitle(report)}`}
                         aria-pressed={isPreviewed}
                         onClick={() => setPreviewId(report.id)}
-                        className="reports-preview-btn hidden h-8 shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:inline-flex"
+                        className="reports-preview-btn hidden min-h-8 min-w-8 shrink-0 items-center justify-center gap-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:inline-flex"
                       >
                         <EyeIcon aria-hidden="true" className="size-3.5" />
                       </button>
@@ -217,7 +224,11 @@ export function ReportsRoute() {
           }
           detail={
             selected ? (
-              <ReportPreviewPane report={selected} restoreKey={key} />
+              <ReportPreviewPane
+                report={selected}
+                restoreKey={key}
+                onOpenReader={() => rememberPosition(selected.id)}
+              />
             ) : null
           }
         />
@@ -226,7 +237,15 @@ export function ReportsRoute() {
   )
 }
 
-function ReportPreviewPane({ report, restoreKey }: { report: Report; restoreKey: string }) {
+function ReportPreviewPane({
+  report,
+  restoreKey,
+  onOpenReader,
+}: {
+  report: Report
+  restoreKey: string
+  onOpenReader: () => void
+}) {
   const hasQueryClient = useContext(QueryClientContext) !== undefined
   return (
     <section
@@ -241,10 +260,12 @@ function ReportPreviewPane({ report, restoreKey }: { report: Report; restoreKey:
             {report.taskTitle} · {publishedAge(report.createdAt)}
           </p>
         </div>
-        <Button variant="outline" size="sm" asChild className="h-8 shrink-0">
+        <Button variant="outline" size="sm" asChild className="h-auto min-h-8 shrink-0 py-1.5">
           <Link
+            data-slot="reports-preview-open"
             to={`/tasks/${report.runId}/report?artifact=${report.id}`}
             state={{ readerFrom: restoreKey, filesRestoreKey: restoreKey }}
+            onClick={onOpenReader}
           >
             Open reader
             <ArrowUpRightIcon aria-hidden="true" className="size-3.5" />

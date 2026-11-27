@@ -38,6 +38,8 @@ export interface PageShellHeaderProps {
   secondaryActions?: ReactNode
   /** Optional custom slot name on the outer header wrapper for existing route-specific selectors. */
   headerSlot?: string
+  /** Optional `data-slot` on the inline scope `<span>` (defaults to `page-header-scope`). */
+  scopeSlot?: string
   /** Optional `data-slot` on the subtitle `<p>` (defaults to `page-header-subtitle`). */
   subtitleSlot?: string
   /** Hide subtitle on mobile (`< md`), matching compact task/composer mobile headers when needed. */
@@ -106,6 +108,7 @@ function PageShellHeader({
   primaryAction,
   secondaryActions,
   headerSlot = 'page-header',
+  scopeSlot = 'page-header-scope',
   subtitleSlot = 'page-header-subtitle',
   hideSubtitleOnMobile = false,
   headerExtra,
@@ -128,7 +131,7 @@ function PageShellHeader({
               {scope ? (
                 <>
                   {' '}
-                  <span data-slot="page-header-scope" className="font-normal text-muted-foreground">
+                  <span data-slot={scopeSlot} className="font-normal text-muted-foreground">
                     · {scope}
                   </span>
                 </>

@@ -24,9 +24,8 @@ export function githubHeaderProps({ view, activeFilter, isDesktop, rawFilterPara
   return {
     headerSlot: 'gh-masthead',
     title: isDesktop ? (view === 'issues' ? 'Issues' : 'Pull requests') : 'GitHub',
-    scope: isDesktop ? (
-      <span data-slot="gh-title-qualifier">{ACTIVE_FILTER_LABEL[activeFilter]}</span>
-    ) : undefined,
+    scope: isDesktop ? ACTIVE_FILTER_LABEL[activeFilter] : undefined,
+    scopeSlot: 'gh-title-qualifier',
     subtitle: gh.repo ? (
       <span className="block min-w-0 truncate">
         <span data-slot="gh-repo">{gh.repo}</span>

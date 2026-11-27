@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 
 import type { PreviewClientMessage, PreviewServer, PreviewServerMessage } from '@open-mercato/cezar-api-client'
 import type { PreviewHandlers, PreviewTransport } from '@/api/preview-socket'
+import { ReadingPage } from '@/components/page-shell'
 
 const sockets: Array<{ handlers: PreviewHandlers; send: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> }> = []
 
@@ -607,10 +608,10 @@ function Harness({ open, session = false, port = 5173, servers }: { open: boolea
   }, [])
   return (
     <PreviewSplit run={servers ? ({ ...runRecord, previewServers: servers } as never) : run} state={state}>
-      <div data-route="task-thread">
+      <ReadingPage route="task-thread" density="full" flushPadding>
         <header data-slot="run-header">header</header>
         <div data-testid="transcript">transcript</div>
-      </div>
+      </ReadingPage>
     </PreviewSplit>
   )
 }

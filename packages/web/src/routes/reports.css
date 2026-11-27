@@ -6,12 +6,14 @@
 /* Touch: each line is its own 44px target. The two boxes stack edge to edge and never overlap,
    so a tap on the title never lands on the source-task link. The boxes replace the row's block
    padding and line gap, and the icon moves down to the title's centre. */
-@media (hover: none), (max-width: 767px) {
+@media (hover: none), (any-pointer: coarse), (max-width: 767px) {
   .reports-row { padding-block: 0; }
   .reports-lines { gap: 0; }
   .reports-icon { margin-block-start: 14px; }
   .reports-open { min-block-size: 44px; }
   .reports-task { min-block-size: 44px; }
+  .reports-preview-btn,
+  [data-slot='reports-preview-open'] { min-block-size: 44px; min-inline-size: 44px; }
 }
 .reports-open:focus-visible { outline: 2px solid transparent; }
 .reports-row:has(.reports-open:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }

@@ -88,6 +88,27 @@ describe('Reports shelf', () => {
     view.rerender(<MemoryRouter initialEntries={['/p/shop/reports']}><ReportsRoute /></MemoryRouter>)
     const updated = document.querySelector('[data-slot="page-shell"]')!
     expect(updated.getAttribute('data-density')).toBe('sparse')
-    expect(document.querySelector('[data-slot="page-shell-sparse-footer"]')?.textContent).toContain('Showing 1 report')
+    expect(document.querySelector('[data-slot="page-shell-sparse-footer"]')?.textContent).toContain('1 published report')
+  })
+
+  it('saves list position when opening the full reader from the preview pane', async () => {
+    mocks.useReports.mockReturnValue(result({
+      data: {
+        pages: [{
+          reports: [
+            { id: 'r1', runId: 'source', title: 'Audit', name: 'audit.html', taskTitle: 'Audit task', createdAt: SAMPLE_CREATED_AT },
+            { id: 'r2', runId: 'source-2', title: 'Summary', name: 'summary.html', taskTitle: 'Summary task', createdAt: SAMPLE_CREATED_AT },
+          ],
+          total: 2,
+          nextCursor: null,
+        }],
+      },
+    }))
+    mount('/p/shop/reports')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Summary' }))
+    const openReader = document.querySelector<HTMLAnchorElement>('[data-slot="reports-preview-open"]')!
+    expect(openReader.getAttribute('href')).toBe('/p/shop/tasks/source-2/report?artifact=r2')
+    fireEvent.click(openReader)
+    await waitFor(() => expect(screen.getAllByTestId('location')[0]!.textContent).toContain('/tasks/source-2/report?artifact=r2'))
   })
 })

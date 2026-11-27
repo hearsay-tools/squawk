@@ -102,7 +102,7 @@ function SkillsResult({ skills, matches, search, onClearSearch, onRefresh, openI
     return unchecked ? null : (
       <PageShellEmptyState
         icon={<SparklesIcon />}
-        title="No skills reported by this runner and account"
+        title="No skills reported by this runner and account."
         description="Add a skill to this repository or your runner home, then re-read to refresh the inventory."
         actions={<Button variant="outline" className="max-md:min-h-11" onClick={onRefresh}>Re-read skills</Button>}
       />
@@ -112,7 +112,7 @@ function SkillsResult({ skills, matches, search, onClearSearch, onRefresh, openI
     return (
       <PageShellEmptyState
         icon={<SearchIcon />}
-        title={`No skills match “${search.trim()}”`}
+        title={`No skills match “${search.trim()}”.`}
         description="Try a different keyword or clear the filter to browse every available skill."
         actions={<Button variant="outline" className="max-md:min-h-11" onClick={onClearSearch}>Clear filter</Button>}
       />
