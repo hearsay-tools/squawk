@@ -126,13 +126,19 @@ hearsay-tools/squawk#4401 and hearsay-tools/squawk#4402). It exposes `project_li
 HTTP (`POST /api/v1/mcp`) by reusing the shared operations in `task-cli/operations.ts`. Every
 `task_*` tool requires an explicit `project` (`task_list` also accepts `'all'` unless restricted
 by a project-scoped bearer token) with no `bootProject` fallback. `stdout` carries only JSON-RPC
-frames in stdio mode; diagnostics go to `stderr`. Starting `hsq mcp` or `hsq mcp token` inside a
-Squawk task (`HSQ_TASK_ID` / `CEZ_TASK_ID` set) is refused with exit 1. `hsq mcp token create`
-prints a raw `hsq_mcp_…` bearer token once and stores only its SHA-256 hash in
-`<config>/mcp-tokens/<port>.json` (mode `0600` via `HomeStore`, optional `--project <id>` scope);
-create and revoke take effect on the next HTTP request without restarting Squawk. Without
-`features/mcp/`, boot succeeds, `/api/v1/mcp` is omitted, and `hsq mcp` exits 1 with
-`unknown command: mcp`.
+frames in stdio mode; diagnostics go to `stderr`. Starting `hsq mcp` or `hsq mcp token` inside a Squawk task (`HSQ_TASK_ID` / `CEZ_TASK_ID` set) is
+refused with exit 1. When launched outside a registered repo without `--url` or `--repo`, `hsq mcp`
+discovery falls back to a single running local cockpit and refuses if multiple local cockpits are
+running. `hsq mcp token create [--port <n>] [--name <label>] [--project <id>]` prints a raw
+`hsq_mcp_…` bearer token once and stores only its SHA-256 hash in `<config>/mcp-tokens/<port>.json`
+(mode `0600` via `HomeStore`); omitting `--port` auto-detects the single cockpit running on
+`127.0.0.1:4321–4370` and exits 2 when zero or multiple cockpits are running. `hsq mcp token list
+[--port <n>]` lists token metadata across all ports (or one port). `hsq mcp token revoke <id>
+[--port <n>]` resolves `<id>` across ports and refuses if ambiguous; `hsq mcp token revoke --all
+--port <n>` revokes every token on one port. Create and revoke take effect on the next HTTP request
+without restarting Squawk; a static `HSQ_MCP_TOKEN` env var (see `docs/configuration.md`) is also
+accepted. Without `features/mcp/`, boot succeeds, `/api/v1/mcp` is omitted, and `hsq mcp` exits 1
+with `unknown command: mcp`.
 
 ## Legacy home recovery
 
