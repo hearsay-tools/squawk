@@ -3,7 +3,7 @@ import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-api-clie
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ApiRun, RunEvent } from '@open-mercato/cezar-api-client'
 import { createQueryClient } from '@/api/query-client'
@@ -26,12 +26,17 @@ vi.mock('@/api/queries', async (importOriginal) => {
   }
 })
 
+const FIXED_TIME = '2026-01-15T12:00:00.000Z'
+
+beforeEach(() => {
+  vi.useFakeTimers({ now: new Date(FIXED_TIME) })
+})
+
 afterEach(() => {
+  vi.useRealTimers()
   cleanup()
   vi.unstubAllGlobals()
 })
-
-const FIXED_TIME = '2026-01-15T12:00:00.000Z'
 
 const makeRun = (overrides: Partial<ApiRun> = {}): ApiRun => ({
   id: 'r-activity',
