@@ -239,7 +239,7 @@ describe('task thread', () => {
     browser.click(SESSION_ACTIVITY_SUMMARY)
     expect(browser.waitForValue(`document.querySelector('[data-slot="run-activity-workspace"] > button')?.getAttribute('aria-expanded') ?? null`)).toBe('true')
     browser.press('Escape')
-    browser.waitForFunction(`document.querySelector('[data-slot="run-activity-popover"]') === null`)
+    browser.waitForFunction(`document.querySelector('[data-slot="run-activity-popover"]') === null && document.activeElement === document.querySelector('${SESSION_ACTIVITY_SUMMARY}')`)
     // Switching runs resets the header Activity popover to closed on every run.
     for (const id of [RUN_ID, LONG_RUN.id]) {
       backToList()

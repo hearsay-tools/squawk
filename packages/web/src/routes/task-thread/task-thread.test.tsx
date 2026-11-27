@@ -447,7 +447,7 @@ describe('ThreadView', () => {
     expect(document.querySelector('[data-slot="follow-up-engine"]')).not.toBeNull()
   })
 
-  it('at the review gate the bottom decision zone pins the review action bar without a duplicate composer', async () => {
+  it('at the review gate the bottom decision zone pins the review action bar without showing a duplicate composer', async () => {
     renderView(
       <ThreadView
         run={run('review', {
@@ -462,9 +462,45 @@ describe('ThreadView', () => {
     const dock = document.querySelector<HTMLElement>('[data-slot="thread-dock"]')
     expect(dock?.dataset.decisionMode).toBe('review')
     expect(dock?.querySelector('[data-slot="review-panel"]')).not.toBeNull()
-    expect(dock?.querySelector('[data-slot="composer"]')).toBeNull()
+    expect(dock?.querySelector('[data-slot="thread-composer-slot"]')?.hasAttribute('hidden')).toBe(true)
+    expect(screen.queryByRole('textbox', { name: 'Reply to the agent' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Send back' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Accept' })).toBeTruthy()
+  })
+
+  it('preserves composer draft and pasted attachments across an arriving ask and reply-mode switches', async () => {
+    const runningRun = run('running')
+    const { rerender, queryClient } = renderView(<ThreadView run={runningRun} thread={reduceThread(EVENTS)} />)
+    const textarea = screen.getByRole('textbox', { name: 'Reply to the agent' }) as HTMLTextAreaElement
+    await waitFor(() => expect(textarea.disabled).toBe(false))
+    fireEvent.change(textarea, { target: { value: 'Draft before ask arrived' } })
+    const file = new File([new Uint8Array([9, 9])], 'notes.png', { type: 'image/png' })
+    fireEvent.paste(textarea, { clipboardData: { items: [{ kind: 'file', type: file.type, getAsFile: () => file }] } })
+    await screen.findByLabelText('Remove notes.png')
+
+    const askThread = reduceThread([
+      ...EVENTS,
+      line(10, 'ask.requested', {
+        requestId: 'arrived-ask',
+        questions: [{ header: 'Choice', question: 'Pick a path?', options: [{ label: 'Alpha' }, { label: 'Beta' }] }],
+      }),
+    ])
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <ThreadView run={run('waiting', { waits: [openHumanWait(10)] } as unknown as Partial<ApiRun>)} thread={askThread} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    // Switch to Write a reply: the running draft and pasted attachment survived untouched.
+    fireEvent.click(screen.getByRole('button', { name: 'Write a reply' }))
+    expect(screen.getByRole('textbox', { name: 'Reply to the agent' })).toHaveProperty('value', 'Draft before ask arrived')
+    expect(screen.getByLabelText('Remove notes.png')).toBeTruthy()
+    // Toggling back to Options and returning to Write a reply also retains the attachment.
+    fireEvent.click(screen.getByRole('button', { name: 'Options' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Write a reply' }))
+    expect(screen.getByRole('textbox', { name: 'Reply to the agent' })).toHaveProperty('value', 'Draft before ask arrived')
+    expect(screen.getByLabelText('Remove notes.png')).toBeTruthy()
   })
 
   it('closed but resumable → the action row holds exactly Continue; Archive stays in the header (#281)', async () => {
@@ -1496,11 +1532,13 @@ it.each([false, true].flatMap(fallback => (['pending', 'refused-human-attempt', 
   // The record holds the human wait while the question is open, as the server writes it.
   renderView(<ThreadView run={run('waiting', onWorkerWait({ deadline: '2026-09-07T12:00:00.000Z' }, expectedPending ? 10 : undefined))} thread={reduceThread(visibleEvents)} currentThread={reduceThread(currentEvents)} history={history} />)
   const dock = document.querySelector<HTMLElement>('[data-slot="thread-dock"]')
-  if (expectedPending) {
+  if (expectedPending && mode !== 'refused-human-attempt') {
     expect(dock?.dataset.decisionMode).toBe('ask')
     expect(dock?.textContent).toContain('Needs your answer')
   } else {
-    expect(document.querySelector('[data-slot="paused-hint"]')?.textContent).toContain('Waiting on 1 worker')
+    expect(document.querySelector('[data-slot="paused-hint"]')?.textContent).toContain(
+      expectedPending ? 'waiting for your reply' : 'Waiting on 1 worker',
+    )
   }
   expect(document.querySelector('[data-slot="pill"]')?.textContent?.toLowerCase()).toContain(expectedPending ? 'needs you' : 'waiting on 1 worker')
 })

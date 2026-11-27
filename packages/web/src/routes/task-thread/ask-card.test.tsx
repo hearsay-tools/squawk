@@ -165,14 +165,14 @@ describe('AskCard', () => {
     // Advance to question 2; Send stays disabled until question 2 is answered.
     fireEvent.click(screen.getByRole('button', { name: /Next/ }))
     expect(document.querySelector('[data-slot="ask-step-indicator"]')?.textContent).toBe('2 of 2')
-    const send = screen.getByRole('button', { name: 'Send answer' }) as HTMLButtonElement
-    expect(send.disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Send answer' }) as HTMLButtonElement).disabled).toBe(true)
     // Going back keeps question 1's selection intact.
     fireEvent.click(screen.getByRole('button', { name: /Back/ }))
     expect(screen.getByRole('button', { name: /date-fns/ }).getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: /Next/ }))
     // Both answered → one combined message.
     fireEvent.click(screen.getByRole('button', { name: /Relative/ }))
+    const send = screen.getByRole('button', { name: 'Send answer' }) as HTMLButtonElement
     expect(send.disabled).toBe(false)
     fireEvent.click(send)
     expect(mutateAsync).toHaveBeenCalledTimes(1)
@@ -336,7 +336,7 @@ describe('AskCard — unified decision surface (hearsay-tools/squawk#4374)', () 
     })
   })
 
-  it('opens Show context in a non-destructive sheet without losing drafts and offers Show where it was asked', () => {
+  it('opens Show context in a non-destructive sheet with a 44px Close control, restores focus on close, and offers Show where it was asked', () => {
     const onShowOrigin = vi.fn()
     render(withRunners(
       <MemoryRouter>
@@ -351,9 +351,18 @@ describe('AskCard — unified decision surface (hearsay-tools/squawk#4374)', () 
     // In decision-zone mode, context is behind Show context rather than bloating the fixed dock.
     expect(screen.queryByRole('region', { name: 'Context' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Show context/ }))
+    const showContext = screen.getByRole('button', { name: /Show context/ })
+    fireEvent.click(showContext)
     expect(screen.getByRole('region', { name: 'Context' }).textContent).toContain('Full architectural rationale.')
-    // Selection remains intact while reading context and after jumping to origin.
+    const closeBtn = screen.getByRole('button', { name: 'Close' })
+    expect(closeBtn.className).toContain('size-11')
+    // Closing via Close restores focus to Show context while preserving selections.
+    fireEvent.click(closeBtn)
+    expect(screen.queryByRole('region', { name: 'Context' })).toBeNull()
+    expect(document.activeElement).toBe(showContext)
+    expect(screen.getByRole('button', { name: /date-fns/ }).getAttribute('aria-pressed')).toBe('true')
+    // Reopening and choosing Show where it was asked invokes onShowOrigin with selection intact.
+    fireEvent.click(showContext)
     fireEvent.click(screen.getByRole('button', { name: 'Show where it was asked' }))
     expect(onShowOrigin).toHaveBeenCalledOnce()
     expect(screen.getByRole('button', { name: /date-fns/ }).getAttribute('aria-pressed')).toBe('true')

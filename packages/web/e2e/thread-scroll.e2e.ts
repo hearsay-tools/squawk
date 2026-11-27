@@ -371,12 +371,17 @@ describe('Activity header popover and ultra-wide sidebar (hearsay-tools/squawk#4
   it('opens Activity from the header on 1280px without shifting the transcript or bottom dock', () => {
     browser.setViewport(1280, 900)
     openThread()
-    expect(browser.count('[data-slot="thread-dock"] [data-slot="run-activity-dock"]')).toBe(0)
-    const before = waitForSettledSample<{ dockTop: number; transcriptBottom: number }>(browser, `(() => {
-      const dock = document.querySelector('[data-slot="thread-dock"]').getBoundingClientRect()
+    const before = waitForSettledSample<{ dockTop: number; transcriptBottom: number; activityInDock: boolean }>(browser, `(() => {
+      const dock = document.querySelector('[data-slot="thread-dock"]')
+      const dockRect = dock.getBoundingClientRect()
       const transcript = document.querySelector('[data-slot="thread-transcript"]').getBoundingClientRect()
-      return { dockTop: Math.round(dock.top), transcriptBottom: Math.round(transcript.bottom) }
+      return {
+        dockTop: Math.round(dockRect.top),
+        transcriptBottom: Math.round(transcript.bottom),
+        activityInDock: dock.querySelector('[data-slot="run-activity-dock"]') !== null,
+      }
     })()`)
+    expect(before.activityInDock).toBe(false)
     browser.click(TRIGGER)
     browser.waitForFunction(`document.querySelector('[data-slot="run-activity-popover"] [data-slot="run-activity-dock"]') !== null`)
     const after = waitForSettledSample<{ dockTop: number; transcriptBottom: number }>(browser, `(() => {
@@ -384,7 +389,7 @@ describe('Activity header popover and ultra-wide sidebar (hearsay-tools/squawk#4
       const transcript = document.querySelector('[data-slot="thread-transcript"]').getBoundingClientRect()
       return { dockTop: Math.round(dock.top), transcriptBottom: Math.round(transcript.bottom) }
     })()`)
-    expect(after).toEqual(before)
+    expect(after).toEqual({ dockTop: before.dockTop, transcriptBottom: before.transcriptBottom })
     browser.press('Escape')
     browser.waitForFunction(`document.querySelector('[data-slot="run-activity-popover"]') === null`)
     browser.setViewport(1440, 900)

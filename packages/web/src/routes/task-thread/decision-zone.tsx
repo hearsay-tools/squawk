@@ -1,8 +1,11 @@
+import { useState } from 'react'
+
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { Composer } from '@/components/composer/composer'
 import { StatusDot } from '@/components/status-dot'
 import type { deriveAttention } from '@/lib/attention'
 import { Link } from '@/lib/project-router'
+import { cn } from '@/lib/utils'
 
 import { AskCard } from './ask-card'
 import type { useAskAnswer } from './ask-answer'
@@ -45,9 +48,10 @@ export interface ThreadDecisionZoneProps {
 /**
  * Region 2 of the task thread (hearsay-tools/squawk#4374): fixed bottom decision zone
  * rendering the single active human action for the current task state — pending ask (with
- * embedded free-text mode), review gate action bar, running composer with one-line status,
- * or terminal follow-up. Activity telemetry lives in the header / ultra-wide sidebar so it
- * never separates an ask from its reply input.
+ * unified free-text mode), review gate action bar, running composer with one-line status,
+ * or terminal follow-up. Keeps one persistent `ThreadComposer` mounted across decision-mode
+ * transitions so drafts and pasted attachments survive arriving asks, reply-mode toggles,
+ * and review gates, while keeping the composer's Send/Stop toolbar pinned at the bottom.
  */
 export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
   const {
@@ -61,6 +65,16 @@ export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
   const canStop = runActionFlags(run, workersLive).cancel
   const hasPendingAsk = pinnedAsk !== undefined
   const isReviewGate = !hasPendingAsk && run.status === 'review'
+
+  const [askModeState, setAskModeState] = useState<{ askId: string | undefined; mode: 'options' | 'reply' }>({
+    askId: pinnedAsk?.id,
+    mode: 'options',
+  })
+  const askMode = askModeState.askId === pinnedAsk?.id ? askModeState.mode : 'options'
+  const setAskMode = (mode: 'options' | 'reply') => setAskModeState({ askId: pinnedAsk?.id, mode })
+
+  const unifiedReplyActive = hasPendingAsk && askMode === 'reply'
+  const composerHidden = isReviewGate || (hasPendingAsk && askMode === 'options')
 
   return (
     <div
@@ -77,7 +91,10 @@ export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
 
       <div
         data-slot="thread-footer-content"
-        className="mx-auto flex w-full max-w-[var(--measure)] flex-col gap-1.5 px-[14px] md:gap-2 md:px-16"
+        className={cn(
+          'mx-auto flex w-full max-w-[var(--measure)] flex-col px-[14px] md:px-16',
+          unifiedReplyActive ? 'gap-0' : 'gap-1.5 md:gap-2',
+        )}
       >
         {hasPendingAsk ? (
           <AskCard
@@ -85,32 +102,12 @@ export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
             ask={{ ...pinnedAsk, placement: 'pinned' }}
             run={run}
             surface="decision-zone"
+            mode={askMode}
+            onModeChange={setAskMode}
+            hideReplyBody
             onShowOrigin={onShowOrigin}
             onStop={canStop ? stopAction.stop : undefined}
             stopping={stopAction.stopping}
-            renderFreeTextReply={({ value, onValueChange, disabled }) => (
-              <Composer
-                {...threadSkillContext(run, continuable, continueAction)}
-                onStop={canStop ? stopAction.stop : undefined}
-                stopping={stopAction.stopping}
-                value={value}
-                onValueChange={onValueChange}
-                retainDraftUntilSuccess
-                compactFeedback
-                pendingLabel={reply.mode === 'resume' ? 'Continuing…' : 'Sending…'}
-                failureHint="Your draft is kept. Check the task status and connection, then retry."
-                onSubmit={async (text, images) => {
-                  const error = await reply.send(text, images)
-                  if (error !== undefined) throw new Error(error)
-                }}
-                disabled={disabled || providerBlocked}
-                disabledReason={providerBlocked ? providerReason : reply.reason}
-                placeholder="Reply — / for skills, @ for files…"
-                autocompleteSkills
-                quickReplies
-                getMentionCandidates={() => threadFilePaths(thread)}
-              />
-            )}
           />
         ) : isReviewGate ? (
           <ReviewPanel run={run} showDiff={false} />
@@ -126,25 +123,37 @@ export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
               startsNewConversation={continueAction.startsNewConversation}
               removedRunnerNotice={removedRunnerNotice}
             />
-            <ThreadComposer
-              run={run}
-              thread={thread}
-              canStop={canStop}
-              stopAction={stopAction}
-              finishAction={finishAction}
-              attention={attention}
-              needsAnswer={needsAnswer}
-              continuable={continuable}
-              continueAction={continueAction}
-              queued={queued}
-              sendMessage={sendMessage}
-              reply={reply}
-              providerBlocked={providerBlocked}
-              providerReason={providerReason}
-              sessionOpen={sessionOpen}
-            />
           </>
         )}
+
+        <div
+          data-slot="thread-composer-slot"
+          hidden={composerHidden}
+          className={cn(
+            composerHidden && 'hidden',
+            unifiedReplyActive &&
+              'rounded-b-xl border border-t-0 border-accent-strong/30 bg-accent-strong/[0.04] p-2.5 [html:not(.light)_&]:bg-card',
+          )}
+        >
+          <ThreadComposer
+            run={run}
+            thread={thread}
+            canStop={canStop}
+            hasPendingAsk={hasPendingAsk}
+            stopAction={stopAction}
+            finishAction={finishAction}
+            attention={attention}
+            needsAnswer={needsAnswer}
+            continuable={continuable}
+            continueAction={continueAction}
+            queued={queued}
+            sendMessage={sendMessage}
+            reply={reply}
+            providerBlocked={providerBlocked}
+            providerReason={providerReason}
+            sessionOpen={sessionOpen}
+          />
+        </div>
       </div>
     </div>
   )
@@ -254,43 +263,67 @@ type ThreadComposerProps = Pick<
   | 'sessionOpen'
 > & {
   canStop: boolean
+  hasPendingAsk: boolean
 }
 
-function ThreadComposer({
-  run, thread, canStop, stopAction, finishAction, attention,
-  needsAnswer, continuable, continueAction, queued, sendMessage, reply,
-  providerBlocked, providerReason, sessionOpen,
-}: ThreadComposerProps) {
+function resolveComposerDelivery(props: ThreadComposerProps) {
+  const { run, hasPendingAsk, continuable, continueAction, queued, sendMessage, reply, providerBlocked, providerReason, sessionOpen } = props
+  const sendViaAskReply = async (text: string, images: Parameters<typeof reply.send>[1]) => {
+    // Share the ask card's idle-close recovery. The composer clears its draft
+    // only on success, so convert the hook's returned failure to a rejection.
+    const error = await reply.send(text, images)
+    if (error !== undefined) throw new Error(error)
+  }
+  if (hasPendingAsk) {
+    return {
+      onSubmit: sendViaAskReply,
+      pendingLabel: reply.mode === 'resume' ? 'Continuing…' : 'Sending…',
+      disabled: providerBlocked || reply.blockedBy !== undefined,
+      disabledReason: providerBlocked ? providerReason : reply.reason,
+      placeholder: 'Reply — / for skills, @ for files…',
+    }
+  }
+  return {
+    onSubmit: continuable
+      ? (text: string, images: Parameters<typeof reply.send>[1]) => continueAction.continueWith(text, images ?? [])
+      : queued
+        ? (text: string, images: Parameters<typeof reply.send>[1]) => sendMessage.mutateAsync({ text, images })
+        : sendViaAskReply,
+    pendingLabel: continuable ? 'Continuing…' : 'Sending…',
+    disabled: providerBlocked || (!sessionOpen && !queued && !continuable),
+    disabledReason: providerBlocked ? providerReason : 'Session closed — no session to resume.',
+    placeholder: threadComposerPlaceholder(run, queued, continuable),
+  }
+}
+
+function ThreadComposer(props: ThreadComposerProps) {
+  const {
+    run, thread, canStop, hasPendingAsk, stopAction, finishAction, attention,
+    needsAnswer, continuable, continueAction, providerBlocked,
+  } = props
+  const delivery = resolveComposerDelivery(props)
+  const allowEmpty = !hasPendingAsk && continuable && !needsAnswer
+
   return (
     <Composer
       {...threadSkillContext(run, continuable, continueAction)}
       onStop={canStop ? stopAction.stop : undefined}
       onFinish={
-        offersComposerFinish(run)
+        !hasPendingAsk && offersComposerFinish(run)
           ? () => finishAction.mutateAsync().catch(() => undefined)
           : undefined
       }
       finishing={finishAction.isPending}
-      stopOnEmpty={composerStopsOnEmpty(run, attention, needsAnswer)}
+      stopOnEmpty={!hasPendingAsk && composerStopsOnEmpty(run, attention, needsAnswer)}
       stopping={stopAction.stopping}
       retainDraftUntilSuccess
       compactFeedback
-      pendingLabel={continuable ? 'Continuing…' : 'Sending…'}
+      pendingLabel={delivery.pendingLabel}
       failureHint="Your draft is kept. Check the task status and connection, then retry."
-      sessionControls={continuable ? continueAction.pills : undefined}
-      onSubmit={
-        continuable
-          ? (text, images) => continueAction.continueWith(text, images)
-          : queued ? (text, images) => sendMessage.mutateAsync({ text, images })
-          : async (text, images) => {
-              // Share the ask card's idle-close recovery. The composer clears its draft
-              // only on success, so convert the hook's returned failure to a rejection.
-              const error = await reply.send(text, images)
-              if (error !== undefined) throw new Error(error)
-            }
-      }
-      disabled={providerBlocked || (!sessionOpen && !queued && !continuable)}
-      disabledReason={providerBlocked ? providerReason : 'Session closed — no session to resume.'}
+      sessionControls={!hasPendingAsk && continuable ? continueAction.pills : undefined}
+      onSubmit={delivery.onSubmit}
+      disabled={delivery.disabled}
+      disabledReason={delivery.disabledReason}
       footerEnd={
         providerBlocked && !continueAction.providerPending ? (
           <Link
@@ -301,10 +334,10 @@ function ThreadComposer({
           </Link>
         ) : undefined
       }
-      allowEmptySubmit={continuable && !needsAnswer}
+      allowEmptySubmit={allowEmpty}
       emptySubmitVariant={run.status === 'review' ? 'outline' : 'primary'}
-      emptySubmitLabel={continuable && !needsAnswer ? 'Continue' : undefined}
-      placeholder={threadComposerPlaceholder(run, queued, continuable)}
+      emptySubmitLabel={allowEmpty ? 'Continue' : undefined}
+      placeholder={delivery.placeholder}
       autocompleteSkills
       quickReplies
       getMentionCandidates={() => threadFilePaths(thread)}

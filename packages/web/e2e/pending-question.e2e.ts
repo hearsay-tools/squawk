@@ -156,12 +156,12 @@ describe.each([
 
     // Embedded free-text reply mode lives inside the same decision surface with one send path.
     browser.click('[data-slot="ask-mode-reply"]')
-    browser.waitForFunction(`document.querySelector('${PINNED} textarea') !== null`)
-    browser.fill(`${PINNED} textarea`, 'Keep this reply draft')
+    browser.waitForFunction(`document.querySelector('[data-slot="thread-composer-slot"]:not([hidden]) textarea') !== null`)
+    browser.fill('[data-slot="thread-composer-slot"]:not([hidden]) textarea', 'Keep this reply draft')
     browser.click('[data-slot="ask-mode-options"]')
     browser.waitForFunction(`document.querySelector('${FIRST_CHIP}') !== null`)
     browser.click('[data-slot="ask-mode-reply"]')
-    expect(browser.waitForValue(`document.querySelector('${PINNED} textarea')?.value ?? null`, (v): v is string => v === 'Keep this reply draft')).toBe('Keep this reply draft')
+    expect(browser.waitForValue(`document.querySelector('[data-slot="thread-composer-slot"]:not([hidden]) textarea')?.value ?? null`, (v): v is string => v === 'Keep this reply draft')).toBe('Keep this reply draft')
     browser.click('[data-slot="ask-mode-options"]')
   })
 
@@ -186,7 +186,7 @@ describe.each([
     expect(context.text).toContain('Context paragraph 1:')
     expect(context.text).toContain('Context paragraph 40:')
     expect(context.content).toBeGreaterThan(height)
-    browser.evaluate(`document.querySelector('[data-slot="ask-context-sheet"] button:last-of-type').click()`)
+    browser.click('[data-slot="ask-context-sheet"] [data-slot="ask-show-origin"]')
     browser.waitForFunction(`document.querySelector('[data-slot="ask-answers"]') !== null`)
     expect(browser.text('[data-slot="ask-answers"]')).toContain('Which branch is the base?')
     expect(browser.text('[data-slot="ask-answers"]')).toContain('develop')

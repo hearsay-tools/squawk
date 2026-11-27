@@ -100,7 +100,7 @@ describe('task thread', () => {
         focusWithKeyboard(browser, link)
         browser.evaluate(`(() => {
           const target = document.querySelector(${JSON.stringify(link)})
-          const scroller = document.querySelector('[data-slot="main"]')
+          const scroller = document.querySelector('[data-slot="thread-transcript"]') ?? document.querySelector('[data-slot="main"]')
           scroller.scrollTop += target.getBoundingClientRect().top - 180
         })()`)
         const affordance = browser.evaluate(`(() => {

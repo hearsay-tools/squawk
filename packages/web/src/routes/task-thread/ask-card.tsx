@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 
 import type { ApiRun, UiAskQuestion } from '@open-mercato/cezar-api-client'
 import { Button } from '@/components/ui/button'
@@ -69,6 +69,9 @@ export function AskCard({
   renderFreeTextReply,
   onStop,
   stopping = false,
+  mode,
+  onModeChange,
+  hideReplyBody = false,
   surface = 'transcript',
 }: {
   ask: ThreadAsk
@@ -80,6 +83,11 @@ export function AskCard({
   /** Optional Stop action kept reachable while a pending ask waits for a reply. */
   onStop?: (() => void) | undefined
   stopping?: boolean | undefined
+  /** Controlled Options / Write a reply mode for hosts keeping a persistent composer mounted. */
+  mode?: 'options' | 'reply' | undefined
+  onModeChange?: ((next: 'options' | 'reply') => void) | undefined
+  /** Omit inner reply body when the host renders its persistent composer directly beneath the header. */
+  hideReplyBody?: boolean | undefined
   /** `decision-zone` pins the card at the viewport bottom and opens context in a sheet. */
   surface?: 'transcript' | 'decision-zone' | undefined
 }) {
@@ -117,6 +125,9 @@ export function AskCard({
         renderFreeTextReply={renderFreeTextReply}
         onStop={onStop}
         stopping={stopping}
+        controlledMode={mode}
+        onModeChange={onModeChange}
+        hideReplyBody={hideReplyBody}
       />
     </div>
   )
@@ -152,6 +163,7 @@ function RoutedAsk({
   onShowOrigin: (() => void) | undefined
 }) {
   const [contextOpen, setContextOpen] = useState(false)
+  const contextButtonRef = useRef<HTMLButtonElement>(null)
   const hasSheetContext = surface === 'decision-zone' && Boolean(ask.context)
   return (
     <div
@@ -166,6 +178,7 @@ function RoutedAsk({
         <span className="text-xs font-medium text-link-foreground">The agent is asking its parent</span>
         {hasSheetContext ? (
           <Button
+            ref={contextButtonRef}
             type="button"
             variant="ghost"
             size="sm"
@@ -218,19 +231,35 @@ function RoutedAsk({
         {!hasSheetContext && onShowOrigin ? <ShowOriginLink onShowOrigin={onShowOrigin} className="ms-auto" /> : null}
       </div>
       {hasSheetContext && ask.context ? (
-        <AskContextSheet open={contextOpen} onOpenChange={setContextOpen} context={ask.context} onShowOrigin={onShowOrigin} />
+        <AskContextSheet
+          open={contextOpen}
+          onOpenChange={setContextOpen}
+          context={ask.context}
+          onShowOrigin={onShowOrigin}
+          returnFocusRef={contextButtonRef}
+        />
       ) : null}
     </div>
   )
 }
 
-function usePendingAskState(ask: ThreadAsk, run: ApiRun) {
+function usePendingAskState(
+  ask: ThreadAsk,
+  run: ApiRun,
+  controlledMode?: 'options' | 'reply',
+  onModeChange?: (next: 'options' | 'reply') => void,
+) {
   const delivery = useAskAnswer(run)
   const blocked = delivery.blockedBy !== undefined
   const questions = ask.questions
   const stepped = questions.length > 1
   const commentStepIndex = questions.length
-  const [mode, setMode] = useState<'options' | 'reply'>('options')
+  const [uncontrolledMode, setUncontrolledMode] = useState<'options' | 'reply'>('options')
+  const mode = controlledMode ?? uncontrolledMode
+  const setMode = (next: 'options' | 'reply') => {
+    setUncontrolledMode(next)
+    onModeChange?.(next)
+  }
   const [stepIndex, setStepIndex] = useState(0)
   const [selections, setSelections] = useState<Record<number, string[]>>({})
   const [otherAnswers, setOtherAnswers] = useState<Record<number, string>>({})
@@ -309,7 +338,6 @@ function PendingAskBody({
         onValueChange={state.setFreeTextDraft}
         disabled={disabled}
         renderFreeTextReply={renderFreeTextReply}
-        onSubmit={state.sendFreeText}
       />
     )
   }
@@ -383,6 +411,9 @@ function PendingAsk({
   renderFreeTextReply,
   onStop,
   stopping,
+  controlledMode,
+  onModeChange,
+  hideReplyBody,
 }: {
   ask: ThreadAsk
   run: ApiRun
@@ -391,12 +422,17 @@ function PendingAsk({
   renderFreeTextReply: ((props: FreeTextReplyRenderProps) => ReactNode) | undefined
   onStop: (() => void) | undefined
   stopping: boolean
+  controlledMode: 'options' | 'reply' | undefined
+  onModeChange: ((next: 'options' | 'reply') => void) | undefined
+  hideReplyBody: boolean
 }) {
-  const state = usePendingAskState(ask, run)
+  const state = usePendingAskState(ask, run, controlledMode, onModeChange)
+  const contextButtonRef = useRef<HTMLButtonElement>(null)
   const resuming = state.delivery.mode === 'resume'
   const showModeSwitch = surface === 'decision-zone' || renderFreeTextReply !== undefined
   const hasSheetContext = surface === 'decision-zone' && Boolean(ask.context)
   const hasComment = state.additionalComment.trim() !== ''
+  const replyDockedOutside = state.mode === 'reply' && hideReplyBody
   const stopControl = onStop ? (
     <Button
       type="button"
@@ -418,7 +454,10 @@ function PendingAsk({
       data-ask-mode={state.mode}
       data-pinned={ask.placement === 'pinned' ? 'true' : undefined}
       data-delivery={state.delivery.mode}
-      className="rounded-xl border border-accent-strong/30 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card"
+      className={cn(
+        'rounded-xl border border-accent-strong/30 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card',
+        replyDockedOutside && 'rounded-b-none border-b-0',
+      )}
     >
       <PendingAskHeader
         stepped={state.stepped}
@@ -427,6 +466,7 @@ function PendingAsk({
         showModeSwitch={showModeSwitch}
         stepLabel={state.onCommentStep ? 'Comment (optional)' : `${state.stepIndex + 1} of ${state.questions.length}`}
         hasSheetContext={hasSheetContext}
+        showContextButtonRef={contextButtonRef}
         onOpenContext={() => state.setContextOpen(true)}
         onShowOrigin={!hasSheetContext ? onShowOrigin : undefined}
       />
@@ -442,55 +482,31 @@ function PendingAsk({
         />
       ) : null}
 
-      <div data-slot="ask-body" className="flex flex-col gap-2.5 px-3 py-2.5">
-        <PendingAskBody state={state} renderFreeTextReply={renderFreeTextReply} />
-      </div>
+      {!replyDockedOutside ? (
+        <>
+          <div data-slot="ask-body" className="flex flex-col gap-2.5 px-3 py-2.5">
+            <PendingAskBody state={state} renderFreeTextReply={renderFreeTextReply} />
+          </div>
 
-      <div
-        data-slot="ask-footer"
-        className="flex shrink-0 flex-col gap-2 border-t border-border/70 px-3 py-2"
-      >
-        {state.mode === 'options' ? (
-          state.stepped ? (
-            <SteppedFooterControls
-              stepIndex={state.stepIndex}
-              questionCount={state.questions.length}
-              answeredCount={state.answeredCount}
-              allAnswered={state.allAnswered}
+          <div
+            data-slot="ask-footer"
+            className="flex shrink-0 flex-col gap-2 border-t border-border/70 px-3 py-2"
+          >
+            <PendingAskFooter
+              state={state}
               hasComment={hasComment}
               resuming={resuming}
-              disabled={state.delivery.isPending || state.blocked}
-              onBack={() => state.setStepIndex((prev) => Math.max(0, prev - 1))}
-              onNext={() => state.setStepIndex((prev) => Math.min(state.commentStepIndex, prev + 1))}
-              onOpenComment={() => state.setStepIndex(state.commentStepIndex)}
-              onSend={state.sendAll}
-              questions={state.questions}
-              selections={state.selections}
-              otherAnswers={state.otherAnswers}
+              hasCustomReply={renderFreeTextReply !== undefined}
               stopControl={stopControl}
             />
-          ) : (
-            <SingleAskFooterControls
-              oneTap={state.oneTap}
-              hasOtherAnswer={state.hasOtherAnswer}
-              allowComment={state.questions[0]?.allowFreeText !== false}
-              commentOpen={state.singleCommentOpen}
-              hasComment={hasComment}
-              resuming={resuming}
-              disabled={state.delivery.isPending || state.blocked || !state.allAnswered}
-              onToggleComment={() => state.setSingleCommentOpen((open) => !open)}
-              onSend={state.sendAll}
-              stopControl={stopControl}
+            <AskDeliveryNotices
+              blockedBy={state.delivery.blockedBy}
+              reason={state.delivery.reason}
+              error={state.delivery.error}
             />
-          )
-        ) : null}
-
-        <AskDeliveryNotices
-          blockedBy={state.delivery.blockedBy}
-          reason={state.delivery.reason}
-          error={state.delivery.error}
-        />
-      </div>
+          </div>
+        </>
+      ) : null}
 
       {hasSheetContext && ask.context ? (
         <AskContextSheet
@@ -498,9 +514,77 @@ function PendingAsk({
           onOpenChange={state.setContextOpen}
           context={ask.context}
           onShowOrigin={onShowOrigin}
+          returnFocusRef={contextButtonRef}
         />
       ) : null}
     </div>
+  )
+}
+
+function PendingAskFooter({
+  state,
+  hasComment,
+  resuming,
+  hasCustomReply,
+  stopControl,
+}: {
+  state: ReturnType<typeof usePendingAskState>
+  hasComment: boolean
+  resuming: boolean
+  hasCustomReply: boolean
+  stopControl: ReactNode
+}) {
+  if (state.mode === 'reply') {
+    if (hasCustomReply) return null
+    return (
+      <div className="flex items-center justify-end gap-2">
+        {stopControl}
+        <Button
+          type="button"
+          size="sm"
+          className="min-h-11 min-w-11 px-3.5 md:min-h-8 md:min-w-0"
+          disabled={state.delivery.isPending || state.blocked || state.freeTextDraft.trim() === ''}
+          onClick={state.sendFreeText}
+        >
+          Send reply
+        </Button>
+      </div>
+    )
+  }
+  if (state.stepped) {
+    return (
+      <SteppedFooterControls
+        stepIndex={state.stepIndex}
+        questionCount={state.questions.length}
+        answeredCount={state.answeredCount}
+        allAnswered={state.allAnswered}
+        hasComment={hasComment}
+        resuming={resuming}
+        disabled={state.delivery.isPending || state.blocked}
+        onBack={() => state.setStepIndex((prev) => Math.max(0, prev - 1))}
+        onNext={() => state.setStepIndex((prev) => Math.min(state.commentStepIndex, prev + 1))}
+        onOpenComment={() => state.setStepIndex(state.commentStepIndex)}
+        onSend={state.sendAll}
+        questions={state.questions}
+        selections={state.selections}
+        otherAnswers={state.otherAnswers}
+        stopControl={stopControl}
+      />
+    )
+  }
+  return (
+    <SingleAskFooterControls
+      oneTap={state.oneTap}
+      hasOtherAnswer={state.hasOtherAnswer}
+      allowComment={state.questions[0]?.allowFreeText !== false}
+      commentOpen={state.singleCommentOpen}
+      hasComment={hasComment}
+      resuming={resuming}
+      disabled={state.delivery.isPending || state.blocked || !state.allAnswered}
+      onToggleComment={() => state.setSingleCommentOpen((open) => !open)}
+      onSend={state.sendAll}
+      stopControl={stopControl}
+    />
   )
 }
 

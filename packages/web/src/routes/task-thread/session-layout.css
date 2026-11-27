@@ -98,7 +98,16 @@
   min-block-size: 0;
 }
 
-[data-route='task-thread'] [data-slot='thread-footer-content'] > [data-slot='composer'] {
+[data-route='task-thread'] [data-slot='thread-footer-content'] [data-slot='thread-composer-slot'] {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-block-size: 0;
+}
+[data-route='task-thread'] [data-slot='thread-footer-content'] [data-slot='thread-composer-slot'][hidden] {
+  display: none;
+}
+[data-route='task-thread'] [data-slot='thread-footer-content'] [data-slot='composer'] {
   display: flex;
   flex-direction: column;
   min-block-size: 0;
@@ -108,6 +117,23 @@
 [data-route='task-thread'] [data-slot='composer-editor'] > textarea { min-block-size: 44px; flex-shrink: 1; }
 [data-route='task-thread'] [data-slot='composer-thumbs'] { flex-wrap: nowrap; flex-shrink: 0; max-block-size: 60px; overflow: auto; }
 [data-route='task-thread'] [data-slot='composer-toolbar'] { flex-shrink: 0; }
+
+/* Review gate inside the bounded decision zone: long review notes scroll internally instead of clipping. */
+[data-route='task-thread'] [data-slot='thread-dock'] [data-slot='review-panel'],
+[data-route='task-thread'] [data-slot='thread-dock'] [data-slot='review-banner'],
+[data-route='task-thread'] [data-slot='thread-dock'] [data-slot='review-actions'] {
+  min-block-size: 0;
+  max-block-size: var(--thread-footer-limit);
+}
+[data-route='task-thread'] [data-slot='thread-dock'] [data-slot='review-banner'] {
+  overflow-y: auto;
+  overscroll-behavior-block: contain;
+}
+[data-route='task-thread'] [data-slot='thread-dock'] [data-slot='review-notes'] {
+  max-block-size: min(24dvh, 180px);
+  overflow-y: auto;
+  overscroll-behavior-block: contain;
+}
 
 /* Pinned ask surface inside the decision zone: header & submit bar stay pinned, body scrolls. */
 [data-route='task-thread'] [data-slot='thread-dock'] [data-slot='ask-card'] {

@@ -1,9 +1,10 @@
-import { useId, type ReactNode } from 'react'
+import { useId, useRef, type ReactNode, type RefObject } from 'react'
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, FileTextIcon, MessageSquareTextIcon } from 'lucide-react'
+import { XIcon } from '@/components/design-icons'
 
 import type { UiAskQuestion } from '@open-mercato/cezar-api-client'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
@@ -44,6 +45,7 @@ export function PendingAskHeader({
   showModeSwitch,
   stepLabel,
   hasSheetContext,
+  showContextButtonRef,
   onOpenContext,
   onShowOrigin,
 }: {
@@ -53,6 +55,7 @@ export function PendingAskHeader({
   showModeSwitch: boolean
   stepLabel: string
   hasSheetContext: boolean
+  showContextButtonRef?: RefObject<HTMLButtonElement | null> | undefined
   onOpenContext: () => void
   onShowOrigin: (() => void) | undefined
 }) {
@@ -74,6 +77,7 @@ export function PendingAskHeader({
       <div className="ms-auto flex flex-wrap items-center gap-1.5">
         {hasSheetContext ? (
           <Button
+            ref={showContextButtonRef}
             type="button"
             variant="ghost"
             size="sm"
@@ -268,13 +272,11 @@ export function AskFreeTextBody({
   onValueChange,
   disabled,
   renderFreeTextReply,
-  onSubmit,
 }: {
   value: string
   onValueChange: (next: string) => void
   disabled: boolean
   renderFreeTextReply: ((props: FreeTextReplyRenderProps) => ReactNode) | undefined
-  onSubmit: () => void
 }) {
   const inputId = useId()
   if (renderFreeTextReply) {
@@ -298,11 +300,6 @@ export function AskFreeTextBody({
         onChange={(event) => onValueChange(event.target.value)}
         className="bg-card text-base md:text-[13px]"
       />
-      <div className="flex justify-end">
-        <Button type="button" size="sm" disabled={disabled || value.trim() === ''} onClick={onSubmit}>
-          Send reply
-        </Button>
-      </div>
     </div>
   )
 }
@@ -578,24 +575,47 @@ export function AskContextSheet({
   onOpenChange,
   context,
   onShowOrigin,
+  returnFocusRef,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   context: string
   onShowOrigin: (() => void) | undefined
+  returnFocusRef?: RefObject<HTMLButtonElement | null> | undefined
 }) {
+  const closingToOriginRef = useRef(false)
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
+        showCloseButton={false}
         data-slot="ask-context-sheet"
         className="flex w-full max-w-[540px] flex-col gap-0 p-0 sm:max-w-[540px]"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          if (closingToOriginRef.current) {
+            closingToOriginRef.current = false
+            return
+          }
+          returnFocusRef?.current?.focus()
+        }}
       >
-        <SheetHeader className="shrink-0 border-b border-border px-5 py-4 pr-12">
+        <SheetHeader className="relative shrink-0 border-b border-border px-5 py-4 pr-14">
           <SheetTitle>Question context</SheetTitle>
           <SheetDescription>
             Your selections and drafts stay intact while you read.
           </SheetDescription>
+          <SheetClose asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Close"
+              className="absolute inset-bs-2 end-2 size-11 md:size-9"
+            >
+              <XIcon aria-hidden="true" className="size-4" />
+            </Button>
+          </SheetClose>
         </SheetHeader>
         <div
           data-slot="ask-context"
@@ -611,8 +631,10 @@ export function AskContextSheet({
               type="button"
               variant="outline"
               size="sm"
+              data-slot="ask-show-origin"
               className="min-h-11 md:min-h-8"
               onClick={() => {
+                closingToOriginRef.current = true
                 onOpenChange(false)
                 onShowOrigin()
               }}

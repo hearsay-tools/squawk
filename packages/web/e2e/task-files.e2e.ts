@@ -102,15 +102,16 @@ const transcriptLink = '[data-slot="user-bubble"] a[data-streamdown="link"]'
 // https://github.com/hearsay-tools/cezarion/issues/664#issuecomment-5873034765
 async function scrollToTranscriptLink() {
   const scroller = waitForSettledSample<{ x: number; y: number; height: number }>(browser, `(() => {
-    const main = document.querySelector('[data-slot="main"]');
-    if (!main || !document.querySelector(${JSON.stringify(transcriptLink)})) return null;
-    const rect = main.getBoundingClientRect();
-    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, height: main.scrollHeight };
+    const transcript = document.querySelector('[data-slot="thread-transcript"]') ?? document.querySelector('[data-slot="main"]');
+    if (!transcript || !document.querySelector(${JSON.stringify(transcriptLink)})) return null;
+    const rect = transcript.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, height: transcript.scrollHeight };
   })()`)
   browser.evaluate(`window.__fileLinkWheel = null; window.addEventListener('wheel', event => {
+    const transcript = document.querySelector('[data-slot="thread-transcript"]') ?? document.querySelector('[data-slot="main"]');
     window.__fileLinkWheel = {
       trusted: event.isTrusted,
-      inMain: document.querySelector('[data-slot="main"]').contains(event.target),
+      inMain: transcript.contains(event.target),
       deltaY: event.deltaY,
     };
   }, { once: true, capture: true })`)
@@ -126,13 +127,13 @@ async function scrollToTranscriptLink() {
 function waitForTranscriptLink() {
   return browser.waitForStable<{ x: number; y: number; top: number } | null>(`(() => {
     const link = document.querySelector(${JSON.stringify(transcriptLink)});
-    const main = document.querySelector('[data-slot="main"]');
-    if (!link || !main) return null;
+    const transcript = document.querySelector('[data-slot="thread-transcript"]') ?? document.querySelector('[data-slot="main"]');
+    if (!link || !transcript) return null;
     const rect = link.getBoundingClientRect();
     const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
     const hit = document.elementFromPoint(x, y);
     return rect.width > 0 && rect.height > 0 && hit && link.contains(hit)
-      ? { x, y, top: main.scrollTop } : null;
+      ? { x, y, top: transcript.scrollTop } : null;
   })()`, { holdMs: 150 })!
 }
 
