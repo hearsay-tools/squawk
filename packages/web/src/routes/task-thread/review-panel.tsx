@@ -27,7 +27,8 @@ import { useFinishRun } from './use-finish-run'
  * only the surface is redesigned: a violet review banner, the diff as collapsible per-file
  * sections (`RunDiff` in components/run-diff.tsx),
  * a notes box with ↩ Send back (`POST /continue` with the `Review feedback:` prefix
- * — legacy semantics verbatim), Draft PR (`POST /pr`; 409 → the copyable `git merge` manual
+ * — legacy semantics verbatim; the box stays folded until the first Send back click, so the
+ * gate never shows a second empty text box above the composer), Draft PR (`POST /pr`; 409 → the copyable `git merge` manual
  * fallback), and ✓ Accept (the shared finish action from use-finish-run.ts).
  */
 export function ReviewPanel({ run }: { run: ApiRun }) {
@@ -61,6 +62,9 @@ function ReviewActions({ run }: { run: ApiRun }) {
   const queryClient = useQueryClient()
   const notesRef = useRef<HTMLTextAreaElement>(null)
   const [notes, setNotes] = useState('')
+  // The notes box stays folded until Send back asks for it: one empty text box (the composer)
+  // on screen, not two competing ones. Once open it stays open until the run leaves review.
+  const [notesOpen, setNotesOpen] = useState(false)
   const [manual, setManual] = useState<string | null>(null)
   const finish = useFinishRun(run.id)
   const continuation = useContinuationProvider(run)
@@ -99,7 +103,15 @@ function ReviewActions({ run }: { run: ApiRun }) {
     },
   })
 
+  useEffect(() => {
+    if (notesOpen) notesRef.current?.focus()
+  }, [notesOpen])
+
   const submitNotes = () => {
+    if (!notesOpen) {
+      setNotesOpen(true)
+      return
+    }
     const text = notes.trim()
     if (text.length === 0) {
       // Legacy `alertBar('Write what to change first.')` + focus.
@@ -136,13 +148,18 @@ function ReviewActions({ run }: { run: ApiRun }) {
           data-slot="review-send-back"
           variant="outline"
           size="sm"
-          title={continuation.reason ?? "Send the notes back into the agent's session"}
+          title={
+            continuation.reason ??
+            (notesOpen ? "Send the notes back into the agent's session" : 'Write notes for the agent')
+          }
           aria-describedby={!continuation.canContinue ? 'review-provider-guidance' : undefined}
+          aria-expanded={notesOpen}
+          aria-controls={notesOpen ? 'review-notes' : undefined}
           disabled={sendBack.isPending || !continuation.canContinue}
           onClick={submitNotes}
         >
           <CornerUpLeftIcon aria-hidden="true" />
-          Send back
+          {notesOpen ? 'Send back with notes' : 'Send back'}
         </Button>
         {isHttpUrl(run.pullRequestUrl) ? (
           // A PR already exists (agent-opened, spotted in the transcript) — a second Draft PR
@@ -187,8 +204,9 @@ function ReviewActions({ run }: { run: ApiRun }) {
           Accept
         </Button> : null}
       </div>
-      <Textarea
+      {notesOpen ? <Textarea
         ref={notesRef}
+        id="review-notes"
         data-slot="review-notes"
         aria-label="Notes for the agent"
         placeholder="Notes for the agent — what should change?"
@@ -214,7 +232,7 @@ function ReviewActions({ run }: { run: ApiRun }) {
           }
         }}
         className="min-h-11 text-base md:text-[13px]"
-      />
+      /> : null}
       {manual !== null ? <ManualMergeLine command={manual} /> : null}
     </div>
   )

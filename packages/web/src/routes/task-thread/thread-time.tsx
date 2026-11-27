@@ -17,7 +17,9 @@
  */
 
 /** One formatter per shape, built once: hundreds of thread rows format on every paint. */
-const CLOCK = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
+// 24-hour `14:32`, the same clock Activity prints (activity-format.ts), so one cockpit never
+// shows `1:07 AM` on a thread and `01:07` on the board for the same instant.
+const CLOCK = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 const EXACT = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' })
 const DAY = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 const DAY_WITH_YEAR = new Intl.DateTimeFormat(undefined, {
@@ -37,7 +39,7 @@ function parse(ts: string | undefined): Date | undefined {
   return Number.isFinite(at.getTime()) ? at : undefined
 }
 
-/** Short local time for an inline stamp — `14:32` / `2:32 PM`, per the reader's locale. */
+/** Short local 24-hour time for an inline stamp — `14:32`. */
 export function clockLabel(ts: string | undefined): string | undefined {
   const at = parse(ts)
   return at === undefined ? undefined : CLOCK.format(at)

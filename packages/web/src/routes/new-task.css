@@ -146,15 +146,9 @@
 
 /* One radius for every chip in the composer toolbar row. */
 .new-task-editor [data-slot='composer-footer-start'] :is(button, [data-slot$='pill']) { border-radius: 9px; }
-/* Start task uses the 13px call-to-action label. While it cannot start, it keeps a gold tint and
- * a gold hairline, so it still reads as the primary action in both themes, never a grey slab. */
-[data-route='new'] [data-slot='composer-submit-row'] > button { font-size: 13px; }
-[data-route='new'] [data-slot='composer-submit-row'] > button:disabled {
-  border: 1px solid color-mix(in oklch, var(--action) 55%, transparent);
-  background: color-mix(in oklch, var(--action) 16%, var(--card));
-  color: color-mix(in oklch, var(--action) 30%, var(--foreground));
-  opacity: 1;
-}
+/* Start task (the send button, last in the composer's action group) uses the 13px call-to-action
+ * label. Its disabled look is Button's shared dimmed-gold primary token; no local override. */
+[data-route='new'] [data-slot='composer-actions'] > button:last-child { font-size: 13px; }
 @media (max-width: 767px) {
   /* Phones: a slightly tighter stack keeps Execution settings above the bottom tab bar. */
   [data-route='new'] .new-task-composer { gap: 8px; }

@@ -283,6 +283,25 @@ describe('AskCard', () => {
 // The question outlives its session: an idle timeout, a Squawk restart, Finish or a cancel
 // closes the session with the card still unanswered. Before this, every tap posted to
 // `POST /messages` and died on its `409 session closed` — silently.
+describe('AskCard — the reply jump', () => {
+  it('type a reply below scrolls to the thread composer and puts the caret in it', () => {
+    const scrolled = vi.fn()
+    render(withRunners(
+      <MemoryRouter>
+        <div data-route="task-thread">
+          <AskCard ask={twoQuestionAsk} run={activeRun} />
+          <div data-slot="thread-dock"><div data-slot="composer-editor"><textarea aria-label="Reply" /></div></div>
+        </div>
+      </MemoryRouter>,
+    ))
+    const composer = screen.getByLabelText<HTMLTextAreaElement>('Reply')
+    composer.scrollIntoView = scrolled
+    fireEvent.click(screen.getByRole('button', { name: 'type a reply below' }))
+    expect(scrolled).toHaveBeenCalledWith(expect.objectContaining({ block: 'center' }))
+    expect(document.activeElement).toBe(composer)
+  })
+})
+
 describe('AskCard — answering after the session has ended', () => {
   it('a closed run resumes instead of replying, with the same answer text', async () => {
     renderAsk(singleAsk, closedRun)

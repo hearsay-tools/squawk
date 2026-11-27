@@ -285,18 +285,52 @@ function AskSubmit({ oneTap, hasOtherAnswer, resuming, disabled, questionCount, 
     </p>
   ) : null
   return (
-    <div className="mbs-2 flex items-center gap-2.5">
+    <div className="mbs-2 flex flex-wrap items-center gap-x-2.5">
       <Button size="sm" className="min-h-11" disabled={disabled} onClick={onSend}>
         {resuming ? 'Send answer & reopen' : 'Send answer'}
       </Button>
-      <span data-slot={resuming ? 'ask-resume-hint' : 'ask-hint'} className="text-[11px] text-soft-foreground">
-        {resuming
-          ? 'the session has ended — sending reopens it'
-          : hasOtherAnswer
-            ? `${questionCount > 1 ? 'answer each question above' : 'enter your answer above'} — or type a reply below`
-            : `${questionCount > 1 ? 'answer each question' : 'pick one or more'} — or type a reply below`}
-      </span>
+      {resuming ? (
+        <span data-slot="ask-resume-hint" className="text-[11px] text-soft-foreground">
+          the session has ended — sending reopens it
+        </span>
+      ) : (
+        <span data-slot="ask-hint" className="inline-flex flex-wrap items-center gap-x-1 text-[11px] text-soft-foreground">
+          <span>
+            {hasOtherAnswer
+              ? `${questionCount > 1 ? 'answer each question above' : 'enter your answer above'} — or`
+              : `${questionCount > 1 ? 'answer each question' : 'pick one or more'} — or`}
+          </span>
+          <ReplyJump />
+        </span>
+      )}
     </div>
+  )
+}
+
+/** The thread composer's text box, from inside the same task thread. */
+function threadComposerInput(from: HTMLElement): HTMLTextAreaElement | null {
+  const route = from.closest('[data-route="task-thread"]') ?? document
+  return route.querySelector<HTMLTextAreaElement>('[data-slot="thread-dock"] [data-slot="composer-editor"] textarea')
+}
+
+/** "type a reply below" as a control: on a phone the composer sits under the fold, so the hint
+ *  carries the reader there and puts the caret in it. */
+function ReplyJump() {
+  return (
+    <button
+      type="button"
+      data-slot="ask-reply-jump"
+      className="min-h-11 rounded-sm font-medium text-foreground underline underline-offset-4 hover:text-link-foreground focus-visible:outline-2 focus-visible:outline-ring"
+      onClick={(event) => {
+        const input = threadComposerInput(event.currentTarget)
+        if (!input) return
+        const still = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        input.scrollIntoView?.({ behavior: still ? 'auto' : 'smooth', block: 'center' })
+        input.focus({ preventScroll: true })
+      }}
+    >
+      type a reply below
+    </button>
   )
 }
 
@@ -349,7 +383,7 @@ function AskQuestionBlock({
         <>
           {/* Choices sit in two columns from the small breakpoint; Other is the grid's last cell,
               and spans both columns when it would sit alone in its row. */}
-          <div data-slot="ask-options" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 sm:gap-2">
+          <div data-slot="ask-options" className="grid grid-cols-1 gap-1 sm:grid-cols-2 sm:gap-2">
             {options.map((option) => {
               const isSelected = selected.includes(option.label)
               return (
@@ -360,7 +394,7 @@ function AskQuestionBlock({
                   aria-pressed={isSelected}
                   onClick={() => pick(option.label)}
                   className={cn(
-                    'flex min-h-11 w-full flex-col items-start justify-start content-start gap-0.5 rounded-md border px-2.5 py-1.5 text-left transition-colors',
+                    'flex min-h-11 w-full flex-col items-start justify-start content-start gap-0.5 rounded-md border px-2.5 py-1 text-left transition-colors sm:py-1.5',
                     'hover:border-accent-strong/50 hover:bg-accent-strong/[0.06] [html:not(.light)_&]:hover:bg-card disabled:pointer-events-none disabled:opacity-50',
                     isSelected ? 'border-accent-strong/60 bg-accent-strong/[0.06] [html:not(.light)_&]:bg-card' : 'border-border bg-card',
                   )}
@@ -399,7 +433,7 @@ function AskQuestionBlock({
                 disabled={disabled}
                 onClick={onOtherToggle}
                 className={cn(
-                  'h-auto min-h-11 w-full justify-start px-2.5 py-1.5 text-left',
+                  'h-auto min-h-11 w-full justify-start px-2.5 py-1 text-left sm:py-1.5',
                   options.length % 2 === 0 && 'sm:col-span-2',
                   isOther && 'border-accent-strong/60 bg-accent-strong/[0.06] [html:not(.light)_&]:bg-card',
                 )}

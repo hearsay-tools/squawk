@@ -65,7 +65,9 @@
   inset: -1px;
   border-radius: inherit;
   pointer-events: none;
-  box-shadow: 0 0 0 4px color-mix(in oklch, var(--pending) 16%, transparent), 0 0 24px color-mix(in oklch, var(--pending) 14%, transparent);
+  /* Blur only, no spread ring: a hard ring would draw a second edge above the border, and the
+   * waiting card would look a pixel taller than its running neighbour. */
+  box-shadow: 0 0 20px color-mix(in oklch, var(--pending) 18%, transparent);
   opacity: 0;
   animation: activity-glow 2.6s ease-in-out infinite;
 }

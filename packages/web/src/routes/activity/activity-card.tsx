@@ -179,8 +179,9 @@ export function ActivityCard({ task, requests, waits = NO_WAITS, index, ctx, den
       {...(ghost ? {} : hoverHandlers(task.runId, onHover))}
       className={cn(
         'relative min-w-0 rounded-xl border bg-card px-3.5 py-3',
-        // A live card wears its running tone as crisply as a waiting card wears pending.
-        box.action ? 'border-pending' : now.sweep ? 'border-status-running/60' : 'border-border',
+        // One 1px border on every card; only its tone changes, at a matched strength, so waiting
+        // and running neighbours share their top and bottom edges to the pixel.
+        box.action ? 'border-pending/70' : now.sweep ? 'border-status-running/60' : 'border-border',
         linked && !ghost && 'outline-2 outline-offset-2 outline-message-peer-accent',
         cardMotion(task, motion, ghost),
       )}

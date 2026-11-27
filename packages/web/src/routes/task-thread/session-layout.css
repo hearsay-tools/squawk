@@ -135,3 +135,7 @@
   }
 }
 @keyframes thread-top-fade { from { opacity: 0; } to { opacity: 1; } }
+/* A question waiting for an answer lands just under the header (thread-scroller's arrival). The
+ * fade would wash out the ask card's top border and corners, so it yields while the answer is
+ * pending — the same signal that drops the dock's fade above. */
+[data-route='task-thread']:has([data-slot='thread-dock'][data-pending-ask]) [data-slot='run-header'][data-sticky]::after { content: none; }
