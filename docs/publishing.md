@@ -231,7 +231,9 @@ version comments on it. A failed install through the alias after promotion files
 the same issue: that version is on `latest`, so [roll back](#rolling-back).
 So does a failed dist-tag check after promotion, which also stops the bump PR and the
 GitHub Release until a rerun passes, and a stable publish that stopped after some names
-already carry the version. A publish that failed before any name reached the registry
+already carry the version. The dist-tag check reads each tag again for up to 10
+minutes, because the registry CDN can serve the old tag for a few minutes after
+`npm publish`. A publish that failed before any name reached the registry
 files nothing: a rerun retries it. Before each publish, the workflow also checks that the
 candidate commit publishes the names the plan checked.
 
