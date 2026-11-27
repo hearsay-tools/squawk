@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { ChevronLeftIcon, ExternalLinkIcon, MessageSquareIcon } from 'lucide-react'
 import { ArrowLeftIcon, ChevronRightIcon } from '@/components/design-icons'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 
 import { Link } from '@/lib/project-router'
 
@@ -275,13 +275,20 @@ function GithubPrChanges({ item }: { item: GithubItem }) {
   const [filter, setFilter] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
   const data = query.data
-  const files = data?.available
-    ? data.files.filter((file) => file.path.toLowerCase().includes(filter.toLowerCase()))
+  const matching = (text: string) => data?.available
+    ? data.files.filter((file) => file.path.toLowerCase().includes(text.toLowerCase()))
     : []
-  const current = files.findIndex((file) => file.path === selected)
-  useEffect(() => {
-    if (files.length > 0 && !files.some((file) => file.path === selected)) setSelected(files[0]!.path)
-  }, [data?.available ? data.headSha : '', filter])
+  const files = matching(filter)
+  // Derived during render, so the first frame that shows the files already has one selected.
+  const activePath = files.some((file) => file.path === selected) ? selected : (files[0]?.path ?? null)
+  const current = files.findIndex((file) => file.path === activePath)
+  const changeFilter = (text: string) => {
+    setFilter(text)
+    const next = matching(text)
+    // An empty match list shows no file but keeps the reader's choice for when the filter widens.
+    const chosen = activePath ?? selected
+    if (next.length > 0 && !next.some((file) => file.path === chosen)) setSelected(next[0]!.path)
+  }
   const refresh = async () => {
     const oldHead = data?.available ? data.headSha : null
     // Taken before the await: `queryKeys` reads the live project scope, and a refresh that lands
@@ -307,7 +314,7 @@ function GithubPrChanges({ item }: { item: GithubItem }) {
     patch: file.patch ?? '',
   }))
   const fallback = isHttpUrl(item.url) ? `${item.url}/files` : null
-  const active = files.find((file) => file.path === selected)
+  const active = files.find((file) => file.path === activePath)
   return (
     <section data-slot="gh-pr-changes" className="mt-5 min-w-0">
       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -320,12 +327,12 @@ function GithubPrChanges({ item }: { item: GithubItem }) {
       {data.truncated ? <p role="status" className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">{data.reason ?? 'This response is incomplete.'} {fallback ? <a href={fallback} target="_blank" rel="noopener noreferrer" className="underline">Open all files on GitHub</a> : null}</p> : null}
       <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="min-w-0">
-          <input aria-label="Filter changed files" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter files…" className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm" />
-          <select aria-label="Select changed file" value={selected ?? ''} onChange={(e) => setSelected(e.target.value)} className="mt-2 min-h-11 w-full rounded-md border border-input bg-background px-2 text-sm lg:hidden">
+          <input aria-label="Filter changed files" value={filter} onChange={(e) => changeFilter(e.target.value)} placeholder="Filter files…" className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm" />
+          <select aria-label="Select changed file" value={activePath ?? ''} onChange={(e) => setSelected(e.target.value)} className="mt-2 min-h-11 w-full rounded-md border border-input bg-background px-2 text-sm lg:hidden">
             {files.map((file) => <option key={file.path}>{file.path}</option>)}
           </select>
           <ul className="mt-2 hidden max-h-[60vh] overflow-auto lg:block">
-            {files.map((file) => <li key={file.path}><button type="button" onClick={() => setSelected(file.path)} className={cn('min-h-11 w-full truncate rounded px-2 text-left text-xs', selected === file.path && 'bg-muted font-medium')} title={file.path}>{file.status} · {file.path} <span className="text-success">+{file.additions}</span> <span className="text-danger">−{file.deletions}</span></button></li>)}
+            {files.map((file) => <li key={file.path}><button type="button" onClick={() => setSelected(file.path)} className={cn('min-h-11 w-full truncate rounded px-2 text-left text-xs', activePath === file.path && 'bg-muted font-medium')} title={file.path}>{file.status} · {file.path} <span className="text-success">+{file.additions}</span> <span className="text-danger">−{file.deletions}</span></button></li>)}
           </ul>
         </aside>
         <div className="min-w-0">
@@ -334,7 +341,7 @@ function GithubPrChanges({ item }: { item: GithubItem }) {
             <Button aria-label="Next file" variant="outline" size="icon" className="min-h-11 min-w-11" disabled={current < 0 || current >= files.length - 1} onClick={() => setSelected(files[current + 1]?.path ?? null)}><ChevronRightIcon size={16} /></Button>
           </div>
           {files.length === 0 ? <p className="text-sm text-muted-foreground">No changed files match this filter.</p> : <>
-            <Diff files={diffFiles.filter((file) => file.path === selected)} wrap className="min-w-0" />
+            <Diff files={diffFiles.filter((file) => file.path === activePath)} wrap className="min-w-0" />
             {active && !active.patch ? <p className="rounded-b border border-border p-3 text-xs text-muted-foreground">Patch unavailable: {active.patchUnavailableReason ?? 'not-provided'}.</p> : null}
           </>}
         </div>

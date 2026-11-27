@@ -306,6 +306,7 @@ export function dragGithubList(from: number, to: number) {
 }
 
 export async function changesRequested(sent: SentRequest[], n: number) {
+  // bound: the lazy route chunk and its list queries load before the changes request goes out.
   await waitFor(() => expect(sent.map((request) => request.path)).toContain(`/api/v1/github/prs/${n}/changes`), { timeout: 10_000 })
 }
 
