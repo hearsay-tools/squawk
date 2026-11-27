@@ -128,7 +128,7 @@ function pullRequest(t, write) {
 test('trusted PR gate reads the live body and labels and writes the step summary', async (t) => {
   const p = pullRequest(t, r => r.write('src/new.test.ts', lines(1001)));
   await p.run();
-  assert.match(p.failures.pop(), /no non-empty `## Test budget` section[\s\S]*no `test-budget` label[\s\S]*re-run the failed classify-pr job/);
+  assert.match(p.failures.pop(), /no non-empty `## Test budget` section[\s\S]*no `test-budget` label[\s\S]*re-runs the failed pr-label-gates job automatically/);
   assert.match(p.summaries.pop(), /\+1001 net test lines/);
   p.pr.body = SECTION;
   p.pr.labels = [{ name: 'test-budget' }];

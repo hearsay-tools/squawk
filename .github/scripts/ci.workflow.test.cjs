@@ -18,17 +18,27 @@ function stepsText(job) {
   return JSON.stringify(job.steps);
 }
 
-test('the classifier fetches one commit, and history only for the events whose baseline check reads it', () => {
+test('the classifier and label-gate jobs fetch one commit, and history only for events that read it', () => {
   const { runInNewContext } = require('node:vm');
-  const job = workflow().jobs['classify-pr'];
-  const checkout = job.steps.find(step => step.name === 'Check out trusted classifier');
-  assert.equal(checkout.with['fetch-depth'], 1, 'a depth of 0 fetches every branch and tag');
-  const history = job.steps.find(step => step.name === 'Fetch the history the baseline check compares');
-  const fetches = (event, valid = '') => runInNewContext(history.if, { github: { event_name: event }, steps: { 'resolve-dispatch': { outputs: { valid } } } });
-  assert.deepEqual(['push', 'merge_group', 'workflow_dispatch', 'pull_request_target'].map(event => fetches(event)), [false, false, false, true]);
-  assert.equal(fetches('workflow_dispatch', 'true'), true, 'a dispatched release PR runs the baseline check');
-  assert.equal(job['timeout-minutes'], 5);
-  assert.equal(checkout.with['persist-credentials'], false);
+  const ci = workflow();
+  const classify = ci.jobs['classify-pr'];
+  const classifyCheckout = classify.steps.find(step => step.name === 'Check out trusted classifier');
+  assert.equal(classifyCheckout.with['fetch-depth'], 1, 'a depth of 0 fetches every branch and tag');
+  const patchHistory = classify.steps.find(step => step.name === 'Fetch the history the patch check compares');
+  const fetchesPatch = (event, valid = '') => runInNewContext(patchHistory.if, { github: { event_name: event }, steps: { 'resolve-dispatch': { outputs: { valid } } } });
+  assert.deepEqual(['push', 'merge_group', 'workflow_dispatch', 'pull_request_target'].map(event => fetchesPatch(event)), [false, false, false, true]);
+  assert.equal(classify['timeout-minutes'], 5);
+  assert.equal(classifyCheckout.with['persist-credentials'], false);
+
+  const gates = ci.jobs['pr-label-gates'];
+  const gatesCheckout = gates.steps.find(step => step.name === 'Check out trusted base');
+  assert.equal(gatesCheckout.with['fetch-depth'], 1, 'a depth of 0 fetches every branch and tag');
+  const baselineHistory = gates.steps.find(step => step.name === 'Fetch the history the baseline check compares');
+  const fetchesBaseline = (event, valid = '') => runInNewContext(baselineHistory.if, { github: { event_name: event }, steps: { 'resolve-dispatch': { outputs: { valid } } } });
+  assert.deepEqual(['push', 'merge_group', 'workflow_dispatch', 'pull_request_target'].map(event => fetchesBaseline(event)), [false, false, false, true]);
+  assert.equal(fetchesBaseline('workflow_dispatch', 'true'), true, 'a dispatched release PR runs the baseline check');
+  assert.equal(gates['timeout-minutes'], 5);
+  assert.equal(gatesCheckout.with['persist-credentials'], false);
 });
 
 test('dispatched verification checks out the attributed SHA even after its branch moves', () => {
@@ -50,7 +60,7 @@ function runShell(command, env = {}, cwd = repoRoot) {
   return spawnSync('bash', ['-e', '-c', command], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, CANCELLED: 'false', PREFLIGHT_RESULT: 'success', QUEUE_ADMISSION_RESULT: 'success', TYPECHECK_RESULT: 'success', UNIT_TESTS_RESULT: 'success', CLASSIFY_RESULT: 'success', SURFACE_RESULT: 'success', CLONE_GATE_RESULT: 'success', COMPLEXITY_GATE_RESULT: 'success', EVENT_NAME: 'pull_request_target', ...env },
+    env: { ...process.env, CANCELLED: 'false', PREFLIGHT_RESULT: 'success', QUEUE_ADMISSION_RESULT: 'success', TYPECHECK_RESULT: 'success', UNIT_TESTS_RESULT: 'success', CLASSIFY_RESULT: 'success', LABEL_GATES_RESULT: 'success', SURFACE_RESULT: 'success', CLONE_GATE_RESULT: 'success', COMPLEXITY_GATE_RESULT: 'success', EVENT_NAME: 'pull_request_target', ...env },
   });
 }
 
@@ -715,9 +725,9 @@ async function baselineGateSources(script, eventName) {
   return shown;
 }
 
-test('baseline growth is required through trusted classify-pr with default PR event types', async () => {
+test('baseline growth is required through trusted pr-label-gates with default PR event types', async () => {
   const ci = workflow();
-  const job = ci.jobs['classify-pr'];
+  const job = ci.jobs['pr-label-gates'];
   const checkIndex = job.steps.findIndex(step => step.name === 'Reject baseline growth');
   const checkoutIndex = job.steps.findIndex(step => step.uses?.startsWith('actions/checkout@'));
   assert.ok(checkIndex > checkoutIndex);
@@ -738,16 +748,34 @@ test('baseline growth is required through trusted classify-pr with default PR ev
   // A dispatch runs at the dispatched PR head, so only the checked-out trusted base may supply its gate.
   assert.deepEqual(await baselineGateSources(check.with.script, 'pull_request_target'), ['workflow-sha:.github/scripts/baseline-growth.cjs']);
   assert.deepEqual(await baselineGateSources(check.with.script, 'workflow_dispatch'), ['HEAD:.github/scripts/baseline-growth.cjs']);
-  assert.ok(ci.jobs.verify.needs.includes('classify-pr'));
+  assert.ok(ci.jobs.preflight.needs.includes('pr-label-gates'));
+  assert.ok(ci.jobs.verify.needs.includes('pr-label-gates'));
+  assert.equal(ci.jobs.vitest.needs.includes('pr-label-gates'), false, 're-running a label gate must not re-run Vitest shards');
+  assert.equal(ci.jobs['cockpit-browser'].needs.includes('pr-label-gates'), false);
   assert.equal(ci.on.pull_request_target.types, undefined, 'label changes must not cancel and restart CI');
 });
 
 test('the test line budget runs next to the baseline check from the same trusted commit', async () => {
-  const job = workflow().jobs['classify-pr'];
+  const { runInNewContext } = require('node:vm');
+  const job = workflow().jobs['pr-label-gates'];
   const baselineIndex = job.steps.findIndex(step => step.name === 'Reject baseline growth');
   const check = job.steps[baselineIndex + 1];
   assert.equal(check.name, 'Check the test line budget');
-  assert.equal(check.if, job.steps[baselineIndex].if);
+  const evalIf = (event, valid, checkout, history, cancelled = false) => runInNewContext(check.if, {
+    cancelled: () => cancelled,
+    github: { event_name: event },
+    steps: {
+      checkout: { outcome: checkout },
+      history: { outcome: history },
+      'resolve-dispatch': { outputs: { valid } },
+    },
+  });
+  assert.equal(evalIf('pull_request_target', '', 'success', 'success'), true);
+  assert.equal(evalIf('workflow_dispatch', 'true', 'success', 'success'), true);
+  assert.equal(evalIf('workflow_dispatch', '', 'skipped', 'skipped'), false);
+  assert.equal(evalIf('pull_request_target', '', 'failure', 'skipped'), false);
+  assert.equal(evalIf('pull_request_target', '', 'success', 'failure'), false);
+  assert.equal(evalIf('pull_request_target', '', 'success', 'success', true), false);
   const sources = ['.github/scripts/baseline-growth.cjs', '.github/scripts/test-budget.cjs'];
   assert.deepEqual(await baselineGateSources(check.with.script, 'pull_request_target'), sources.map(s => `workflow-sha:${s}`));
   assert.deepEqual(await baselineGateSources(check.with.script, 'workflow_dispatch'), sources.map(s => `HEAD:${s}`));
@@ -756,7 +784,7 @@ test('the test line budget runs next to the baseline check from the same trusted
 test('the patch check runs trusted workflow code after the history fetch for every PR base', async () => {
   const job = workflow().jobs['classify-pr'];
   const checkIndex = job.steps.findIndex(step => step.name === 'Require GitHub patches for changed text files');
-  const historyIndex = job.steps.findIndex(step => step.name === 'Fetch the history the baseline check compares');
+  const historyIndex = job.steps.findIndex(step => step.name === 'Fetch the history the patch check compares');
   assert.ok(historyIndex >= 0 && checkIndex > historyIndex);
   const check = job.steps[checkIndex];
   assert.equal(check.if, "github.event_name == 'pull_request_target'");
