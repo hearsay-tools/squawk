@@ -126,8 +126,18 @@ test('installed CLI completes owned-worker lifecycle with lost spawn reply and o
     sealRunners();
     // This process admits and settles workers from the installed tarball, so it seals the removal slots as an entry does.
     const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await load('built-in-run-slots.js') as typeof import('../../src/built-in-run-slots.ts');
+    // The bundled jobs feature's gate, as boot registers it through the plugin loader.
+    const { registerRunSlots } = await load('runs/removal-slots.js') as typeof import('../../src/runs/removal-slots.ts');
+    const { jobsDeletionGate } = await load('features/jobs/removal-slot.js') as typeof import('../../src/features/jobs/removal-slot.ts');
+    registerRunSlots({ gates: [jobsDeletionGate] });
     registerBuiltInRunSlots();
     sealBuiltInRunSlots();
+    const { registerBuiltInLaunchParts, sealBuiltInLaunchParts } = await load('built-in-launch-parts.js') as typeof import('../../src/built-in-launch-parts.ts');
+    registerBuiltInLaunchParts();
+    const { registerLaunchPart } = await load('core/launch-registry.js') as typeof import('../../src/core/launch-registry.ts');
+    const { jobsLaunchPart } = await load('features/jobs/index.js') as typeof import('../../src/features/jobs/index.ts');
+    registerLaunchPart(jobsLaunchPart);
+    sealBuiltInLaunchParts();
     const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await load('workflows/step-kind-registry.js') as typeof import('../../src/workflows/step-kind-registry.ts');
     registerBuiltInStepKinds();
     sealBuiltInStepKinds();

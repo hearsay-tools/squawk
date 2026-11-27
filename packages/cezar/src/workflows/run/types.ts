@@ -7,6 +7,7 @@ import type { UiEventSink } from '../../runs/ui-event-sink.ts';
 import type { DoneRequest } from './turn-boundary.ts';
 import type { ScheduleTaskAnswer, ScheduleTaskRequest, ScheduledTasksAnswer, ScheduledTasksRequest } from '@open-mercato/cezar-contract/scheduled-tasks';
 import type { ContentBlock, ToolGrant } from '../../core/agent-runner.ts';
+import type { ResolvedLaunchParts } from '../../core/launch-registry.ts';
 import type { CiToolSession } from '../../ci-wait/controller.ts';
 import type { LaunchConfig, LaunchSource } from './launch-read-resolver.ts';
 import type { WorkerAccountBinding } from '../../delegation/execution-identity.ts';
@@ -149,7 +150,7 @@ export type StepSessionLaunch = {
   profile: StepProfile;
   model: StepModel;
   delegation: LaunchDelegation;
-  webhooksPart: string | undefined;
+  launchParts: ResolvedLaunchParts;
   ciTools: LaunchCiTools;
 };
 
@@ -198,7 +199,7 @@ export type ContinuationSessionLaunch = {
   skills: ContinuationSkills;
   settings: ContinuationSettings;
   delegation: LaunchDelegation;
-  webhooksPart: string | undefined;
+  launchParts: ResolvedLaunchParts;
   ciTools: LaunchCiTools;
 };
 

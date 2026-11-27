@@ -45,7 +45,11 @@ function evidenceIdsIn(dir: string): string[] | undefined {
 
 /** Why a worker execution may not start, and the command that gets past it (hearsay-tools/squawk#867). */
 export class WorkerAdmissionRefusal extends Error {
-  constructor(cause: string, readonly next: string) { super(cause); }
+  readonly next: string;
+  constructor(cause: string, next: string) {
+    super(cause);
+    this.next = next;
+  }
 }
 
 export const SPAWN_NEXT = 'spawn a new worker with the instruction';

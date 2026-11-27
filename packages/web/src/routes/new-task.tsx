@@ -311,6 +311,7 @@ function ComposerFooterStart({
         source={sources.source}
         unchecked={sources.unchecked}
         ready={sources.sourcesReady}
+        skillsLoading={!sources.skillsSettled}
         skills={sources.skillList}
         skillUsage={sources.skillUsage}
         workflows={sources.workflowList}
@@ -645,12 +646,14 @@ function GlobalGroup({ global, skillItem }: {
  * describes what it will actually run.
  *
  * Groups render No skill, Most used (skills picked before, frequency descending), Project
- * skills (bold), Workflows, then Global.
+ * skills (bold), Workflows, then Global. The menu can open before the runner's skills arrive;
+ * until then a "Loading skills…" row stands where they will appear and the list is `aria-busy`.
  */
 function SourcePill({
   source,
   unchecked,
   ready,
+  skillsLoading,
   skills,
   skillUsage,
   workflows,
@@ -659,6 +662,8 @@ function SourcePill({
   source: TaskSource | null
   ready: boolean
   unchecked?: boolean
+  /** The runner's skill list is still on its way: the menu can open on its workflows first. */
+  skillsLoading: boolean
   skills: readonly RunnerSkill[]
   skillUsage: Readonly<Record<string, number>> | undefined
   workflows: readonly WorkflowDef[]
@@ -775,6 +780,7 @@ function SourcePill({
             <CommandList
               ref={listRef}
               data-slot="source-menu"
+              aria-busy={skillsLoading}
               className="max-h-[min(18rem,calc(var(--radix-popover-content-available-height)-3rem))]"
             >
               {search.trim() && !skills.some((skill) => skill.id === search.trim()) ? (
@@ -782,10 +788,15 @@ function SourcePill({
                   Use skill id “{search.trim()}” (unchecked)
                 </CommandItem></CommandGroup>
               ) : null}
-              {nothingMatches ? <CommandEmpty>Nothing matches.</CommandEmpty> : null}
+              {nothingMatches && !skillsLoading ? <CommandEmpty>Nothing matches.</CommandEmpty> : null}
               {/* Heading-less and first: "run it plain" is not a kind of skill, and the way out
                   of a selection has to be the thing you see when the list opens. */}
               {noneMatches ? <NoneGroup source={source} quickTask={quickTask} onPick={pick} /> : null}
+              {skillsLoading ? (
+                <div data-slot="source-skills-loading" role="status" className="px-2 py-1.5 text-xs text-muted-foreground">
+                  Loading skills…
+                </div>
+              ) : null}
               <SkillGroups ranked={ranked} mostUsed={mostUsed} project={project} skillItem={skillItem} />
               <WorkflowGroup source={source} matchedWorkflows={matchedWorkflows} toggle={toggle} />
               <GlobalGroup global={global} skillItem={skillItem} />

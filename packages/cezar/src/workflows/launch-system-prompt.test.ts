@@ -1,3 +1,4 @@
+import '../built-in-launch-parts.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { fakeRunnerFactory } from '../core/fake-runner-factory.testkit.ts';
 import { useRunners } from '../core/runners-under-test.testkit.ts';
@@ -10,7 +11,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { artifactInstructions } from '../artifacts/lifecycle.ts';
-import { jobInstructions } from '../jobs/command.ts';
+import { jobInstructions } from '../features/jobs/command.ts';
 import { automationCliCommand, automationsPrompt } from '../automations/prompts.ts';
 import type { AgentRunSpec } from '../core/agent-runner.ts';
 import { handoffInstructions } from '../handoff.ts';

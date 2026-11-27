@@ -1,3 +1,5 @@
+import { createElement } from 'react'
+import * as reportModule from './report-cards'
 import { agentInputSchema } from '@open-mercato/cezar-api-client/contract/delegation'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -44,6 +46,44 @@ import { seedRunners } from '@/test/runners.testkit'
 afterEach(() => {
   cleanup()
   clearOpenCardCache()
+})
+
+const markdownRender = vi.hoisted(() => vi.fn())
+vi.mock('./markdown', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./markdown')>()
+  return {
+    ...actual,
+    Markdown: (props: React.ComponentProps<typeof actual.Markdown>) => {
+      markdownRender(props)
+      return createElement(actual.Markdown, props)
+    },
+  }
+})
+
+describe('message memoization', () => {
+  it.each([
+    ['assistant', AssistantMessage],
+    ['reasoning', ReasoningItem],
+    ['user', UserBubble],
+  ] as const)('skips unchanged %s messages and updates changed text', (_, Component) => {
+    markdownRender.mockClear()
+    const reports = vi.spyOn(reportModule, 'ReportCards')
+    try {
+      const view = (text: string) => <div><Component text={text} /></div>
+      const { rerender } = render(view('Original message'))
+      const markdownCalls = markdownRender.mock.calls.length
+      const reportCalls = reports.mock.calls.length
+      expect(markdownCalls).toBeGreaterThan(0)
+      rerender(view('Original message'))
+      expect(markdownRender).toHaveBeenCalledTimes(markdownCalls)
+      expect(reports).toHaveBeenCalledTimes(reportCalls)
+      rerender(view('Updated message'))
+      expect(markdownRender.mock.calls.length).toBeGreaterThan(markdownCalls)
+      expect(screen.getByText('Updated message')).toBeTruthy()
+    } finally {
+      reports.mockRestore()
+    }
+  })
 })
 
 describe('ProviderAuthRequiredCard', () => {

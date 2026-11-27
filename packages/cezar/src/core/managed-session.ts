@@ -1,10 +1,28 @@
 import type { AgentEvent, AgentRunner, AgentRunSpec, AgentSession, SessionOptions } from './agent-runner.ts';
 import { DEFAULT_RUNNER_TIMINGS } from './runner-runtime.ts';
 import { classifyProviderError } from './provider-error.ts';
+import type { UiEvent } from './ui-events.ts';
 
 /** The events that show the model working again, which forget a provider-retry note. Session,
  *  usage and cost metadata do not (hearsay-tools/squawk#3337). */
 const MODEL_PROGRESS: ReadonlySet<AgentEvent['type']> = new Set(['text', 'tool-call', 'tool-result', 'image']);
+
+/** True for top-level model work in the v2 stream: a non-hook item outside a nested agent starts,
+ *  or a delta reaches one. `open` holds those items until they or their turn complete. A delta
+ *  carries no parent, so a nested or hook item's delta is not work here. */
+export function topLevelModelWork(open: Set<string>, event: UiEvent): boolean {
+  switch (event.type) {
+    case 'item.started':
+      if (event.item.kind === 'hook' || event.item.parentItemId !== undefined) return false;
+      if (event.item.kind === 'message' && event.item.role === 'user') return false;
+      open.add(event.item.id);
+      return true;
+    case 'item.delta': return open.has(event.itemId);
+    case 'item.completed': open.delete(event.item.id); return false;
+    case 'turn.completed': open.clear(); return false;
+    default: return false;
+  }
+}
 
 /** Wall-clock limits and open-turn liveness are independent. Native stream
  * activity refreshes this guard even when a mapper/coalescer emits no UI event.
@@ -26,6 +44,7 @@ export function startManagedSession(
   // The runner's last provider-retry note in this turn (hearsay-tools/squawk#3337): a kill during
   // the provider's own retries names it, so the run holds on the provider error instead of failing.
   let providerNote: string | undefined;
+  const openItems = new Set<string>();
   const pause = (): void => {
     phase += 1;
     turnOpen = false;
@@ -59,6 +78,7 @@ export function startManagedSession(
       onActivity: () => { activity(); opts.onActivity?.(); },
       onUiEvent: event => {
         if (event.type === 'turn.started') begin();
+        if (topLevelModelWork(openItems, event)) providerNote = undefined;
         // oxlint-disable-next-line cez/ask-requested-read-outside-projection -- Pause the transport on the event type; no payload is read.
         if (event.type === 'ask.requested') pause();
         if (event.type === 'permission.requested') { pendingPermissions.add(event.requestId); pause(); }

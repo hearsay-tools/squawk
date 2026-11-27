@@ -4,6 +4,7 @@ import { registerBuiltInTools, sealBuiltInTools } from '../src/built-in-tools.ts
 import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
 import { installPluginResolveHook } from '../src/plugin/resolve-hook.ts';
 import { registerBuiltInRunSlots, sealBuiltInRunSlots } from '../src/built-in-run-slots.ts';
+import { registerBuiltInLaunchParts, sealBuiltInLaunchParts } from '../src/built-in-launch-parts.ts';
 
 installPluginResolveHook();
 const { loadBundledRunners } = await import('../src/plugin/loader.ts');
@@ -18,6 +19,8 @@ export function prepareBenchmarkRuntime(): void {
   sealRunners();
   registerBuiltInRunSlots();
   sealBuiltInRunSlots();
+  registerBuiltInLaunchParts();
+  sealBuiltInLaunchParts();
   registerBuiltInStepKinds();
   sealBuiltInStepKinds();
   registerBuiltInWaitKinds();

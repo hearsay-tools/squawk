@@ -1,13 +1,8 @@
-import { describeHarnessPart, type HarnessPartScope, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
-import { PROVIDER_HOLD_ROW_IDS } from './harness-parity-rows.testkit.ts';
-import { RUN_CRITERIA, runRows } from './harness-parity-run-tier.testkit.ts';
+import { describeHarnessPart, type HarnessPartScope, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
+import { providerGroups } from './harness-parity-provider.rows.testkit.ts';
+import { runRowCell } from './harness-parity-run-tier.testkit.ts';
 
-export const PROVIDER_GROUPS = {
-  provider(r: HarnessRegistrar) {
-    const { describeRunners } = r;
-    describeRunners('provider', 'harness parity — provider error hold', () => runRows(r, RUN_CRITERIA.filter(row => PROVIDER_HOLD_ROW_IDS.includes(row.id))));
-  },
-} satisfies Readonly<Record<string, HarnessGroup>>;
+export const PROVIDER_GROUPS = providerGroups({ runRow: runRowCell });
 
 /** Register the provider part's cells for one runner: `harness-<runner>-provider-parity.test.ts`. */
 export function describeHarnessParity(scope: HarnessPartScope, registration?: HarnessRegistration): void {

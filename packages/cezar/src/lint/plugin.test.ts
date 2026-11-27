@@ -126,6 +126,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'run-store-testkit-import': ['packages/cezar/src/runs/kit-import.ts', "import { setRunStatus } from './run-store.testkit.ts';\n"],
   'runner-core-import': ['packages/cezar/src/runners/claude/kit-escape.ts', "// oxlint-disable-next-line cez/runner-folder-escape\nimport { productEnv } from '../../core/product-env.ts';\n"],
   'runner-folder-escape': ['packages/cezar/src/runners/claude/folder-escape.ts', "import { z } from 'zod';\n"],
+  'bundled-feature-import': ['packages/cezar/src/server/feature-reach.ts', "import setup from '../features/jobs/index.ts';\n"],
   'test-unpinned-clock-date': ['packages/web/src/clock-violation.test.ts', "const at = '2026-10-27T00:00:00Z';\n"],
   'stubborn-test-child': ['packages/cezar/src/stubborn-violation.test.ts', "spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)\"]);\n"],
 };
@@ -177,6 +178,9 @@ const APPROVED: Record<string, string> = {
   // runner-core-import: the runner kit's package entry, and a test that reaches outside its runner folder.
   'packages/cezar/src/runners/pi/kit-reader.ts': "import { productEnv } from '@hearsay-tools/squawk/plugin';\n",
   'packages/cezar/src/runners/pi/kit-reader.test.ts': "import { productEnv } from '../../core/product-env.ts';\n",
+  // bundled-feature-import: a feature that imports its own folder, and a test that reaches into one.
+  'packages/cezar/src/features/jobs/inner.ts': "import { jobRunsIn } from './job.ts';\n",
+  'packages/cezar/src/server/feature-reach.test.ts': "import { jobRunsIn } from '../features/jobs/job.ts';\n",
   // runner-folder-escape: node:*, kit subpaths, intra-folder URL/join/import, non-import.meta.url URLs, and .mjs runner files.
   'packages/cezar/src/runners/pi/self-contained.ts': "import { join } from 'node:path';\nimport { productEnv } from '@hearsay-tools/squawk/plugin/runtime';\nimport './pi-args.ts';\nconst ext = new URL('./extensions/x.mjs', import.meta.url);\nconst sub = join(here, 'extensions', 'x.mjs');\nconst other = new URL('../../dist/ci-wait/client.js', clientUrl);\n",
   'packages/cezar/src/runners/pi/extensions/self-contained.mjs': "import { existsSync } from 'node:fs';\nconst local = new URL('./helper.mjs', import.meta.url);\nexport default { existsSync, local };\n",

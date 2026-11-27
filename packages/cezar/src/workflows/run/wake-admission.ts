@@ -294,7 +294,7 @@ export class WakeAdmission {
   wakeHeld(run: RunRecord): boolean {
     const holds = this.context.semaphore.accountHolds();
     if (!holds.deadline.size && !holds.inFlight.size) return false;
-    return atTaskHead.heldFor(this.withExecutionAccount(run), holds, atTaskHead.recordedRunner(run) ?? DEFAULT_RUNNER_ID);
+    return atTaskHead.heldFor(this.withExecutionAccount(run), holds, atTaskHead.recordedRunner(run) ?? DEFAULT_RUNNER_ID, this.context);
   }
 
   /** The run with the account its next turn runs on (`executionAccount`): a live session's step

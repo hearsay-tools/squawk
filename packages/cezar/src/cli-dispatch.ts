@@ -67,7 +67,7 @@ Options:
 Zero config: uses your logged-in \`claude\` CLI (and \`gh\` for GitHub bits).
 Skills live in .ai/skills/, .ai/squawk/skills/ and your team skills repos
 workflows in .ai/squawk/workflows/. A project also reads .ai/cezar/, the old folder name.
-Plugins in <config>/plugins/ can add commands: run \`cez plugins\` to list them.`;
+Bundled features and plugins in <config>/plugins/ can add commands: run \`cez plugins\` to list them.`;
 }
 
 const ROOT_OPTIONS = {
@@ -89,35 +89,45 @@ const ROOT_OPTIONS = {
   version: { type: 'boolean', short: 'v', default: false },
 } as const;
 
-/**
- * Whether this command line needs the full boot (spec 2026-11-24-plugin-loader-and-runner-kit § 1).
- * Help, version and a built-in whose `runtimeMode` is false stay cold. A built-in runtime command
- * and an unknown command name boot fully, so plugins register their commands before the seal.
- */
-export function cliNeedsRuntime(argv: readonly string[]): boolean {
+function cliBootKind(argv: readonly string[]): 'cold' | 'help' | 'runtime' {
   const head = argv[0];
   const builtIn = head === undefined ? undefined : builtInCliCommand(head);
-  if (builtIn?.parseMode === 'subcommand') return commandNeedsRuntime(builtIn, argv.slice(1));
-  if (head !== undefined && !head.startsWith('-') && !builtIn) return true;
+  if (builtIn?.parseMode === 'subcommand') return commandNeedsRuntime(builtIn, argv.slice(1)) ? 'runtime' : 'cold';
+  if (head !== undefined && !head.startsWith('-') && !builtIn) return 'runtime';
   let parsed;
   try {
     parsed = parseArgs({ args: [...argv], options: ROOT_OPTIONS, allowPositionals: true });
   } catch {
     // Dispatch reports the parse error; that needs no runtime.
-    return false;
+    return 'cold';
   }
-  if (parsed.values.help || parsed.values.version) return false;
+  if (parsed.values.version) return 'cold';
+  if (parsed.values.help) return 'help';
   const command = parsed.positionals[0] ?? 'serve';
   const definition = builtInCliCommand(command);
-  return definition ? commandNeedsRuntime(definition, parsed.positionals.slice(1)) : true;
+  return !definition || commandNeedsRuntime(definition, parsed.positionals.slice(1)) ? 'runtime' : 'cold';
+}
+
+/**
+ * Whether this command line needs the full boot (spec 2026-11-24-plugin-loader-and-runner-kit § 1).
+ * Version and a built-in whose `runtimeMode` is false stay cold. A built-in runtime command
+ * and an unknown command name boot fully, so plugins register their commands before the seal.
+ */
+export function cliNeedsRuntime(argv: readonly string[]): boolean {
+  return cliBootKind(argv) !== 'cold';
 }
 
 /** Seal the command table the way this command line needs, before dispatch reads it. */
 async function bootCli(deps: CliDeps, argv: readonly string[]): Promise<void> {
   // An embedding caller (or a test) may seal its own table first.
   if (cliCommandsSealed()) return;
-  if (cliNeedsRuntime(argv)) await bootRuntime({ pluginsDir: hostPluginsDir(deps.resolveCliHome, line => deps.console.error(line)) });
-  else bootColdCli();
+  const kind = cliBootKind(argv);
+  if (kind === 'cold') {
+    bootColdCli();
+    return;
+  }
+  const warn = kind === 'help' ? () => {} : (line: string) => deps.console.error(line);
+  await bootRuntime({ pluginsDir: hostPluginsDir(deps.resolveCliHome, warn) });
 }
 
 /** Project commands finish an unfinished migration journal, then refuse a project under a

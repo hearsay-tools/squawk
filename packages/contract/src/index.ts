@@ -28,6 +28,7 @@ export * from './model-choices.ts';
 export * from './workflows.ts';
 export * from './skills.ts';
 export * from './agent-config.ts';
+export * from './session-context.ts';
 export * from './agent-profiles.ts';
 export * from './zoned-time.ts';
 export * from './automation-schedule.ts';

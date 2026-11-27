@@ -96,16 +96,18 @@ plugin API types and the runner kit. Paths are under `packages/cezar/src/` unles
   `agentDefaults.runner`, `disabledProviders`, the agent-account rows and selections, and the repo
   `defaultRunner` and `defaultModels`. HTTP write routes still refuse an unregistered runner id.
 
-### 6. Cold CLI stays cold
+### 6. Help loads commands; version and cold commands stay cold
 
-- `--help`, `--version` and every built-in command whose `runtimeMode` is `'none'` (or a
+- `--version`, `-v` and every built-in command whose `runtimeMode` is `'none'` (or a
   predicate that returns `false` for the arguments) call
   `bootColdCli()` and load no plugin, runner or store.
 - A built-in runtime command and an unknown command name call `bootRuntime()`. A plugin's CLI
   command therefore registers before the CLI registry seals and dispatches like a built-in. A
   name that no built-in and no plugin registers still fails with `unknown command`.
-- `hsq --help` lists the built-in commands only. Its footer says that plugins in
-  `<config>/plugins/` can add commands and points to `hsq plugins`.
+- `hsq --help` and `-h` call `bootRuntime()` and list core, bundled feature and host plugin
+  commands. An unresolvable home skips host discovery quietly, without preparing home.
+  The footer points to `hsq plugins`. Help for cold built-in commands stays cold.
+  This amends the original cold-help decision (hearsay-tools/squawk#4313).
 
 ### 7. The plugin API and runner kit are unstable
 
@@ -141,8 +143,8 @@ npm or git (owner decision 1); ADR 0065 records the amendment.
 - **Pass the kit only through the `api` object.** Rejected. Runner adapters and catalogs import
   helpers at module level, long after setup returns; an import resolved to the running copy keeps
   the built-in runner code unchanged.
-- **Load all plugins before `--help`.** Rejected. Cold commands would load plugin code, so a
-  broken plugin could slow or break `hsq --help`; `hsq plugins` lists what plugins add.
+- **Keep top-level help cold.** Superseded by hearsay-tools/squawk#4313: bundled features
+  register commands through the plugin API, so help must boot runtime to list them.
 - **Stop boot on a broken host plugin.** Rejected. One bad folder would take the cockpit down,
   against zero config.
 - **Make the API stable now.** Rejected by the owner. Only this team writes plugins while the

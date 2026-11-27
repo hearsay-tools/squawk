@@ -10,32 +10,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RunEvent, RunHistoryContext, RunHistoryPage } from '@open-mercato/cezar-api-client'
 import { queryScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { getRunHistory, getRunHistoryContext } from './client'
-import { useRunEvents } from './run-events'
+import { openItemSnapshots, orderedUnique, useRunEvents } from './run-events'
 
 const MAX_HISTORY_PAGES = 5
 const COMPACT_LIVE_AT_EVENTS = 200
 const MAX_LIVE_EVENTS = 5_000
 
-export function orderedUnique(...groups: readonly RunEvent[][]): RunEvent[] {
-  // Most updates append live frames after already ordered history pages.
-  const appended: RunEvent[] = []
-  let lastSeq = -Infinity
-  let increasing = true
-  for (const group of groups) {
-    for (const event of group) {
-      if (event.seq <= lastSeq) { increasing = false; break }
-      appended.push(event)
-      lastSeq = event.seq
-    }
-    if (!increasing) break
-  }
-  if (increasing) return appended
-  const bySeq = new Map<number, RunEvent>()
-  for (const group of groups) {
-    for (const event of group) bySeq.set(event.seq, event)
-  }
-  return [...bySeq.values()].sort((a, b) => a.seq - b.seq)
-}
+export { orderedUnique }
 
 type HistoryData = InfiniteData<RunHistoryPage, string | undefined>
 
@@ -238,6 +219,22 @@ export function useRunHistory(runId: string | undefined): RunHistoryState {
     }
   }, [refreshNewest, refreshPending, runId])
 
+  const pagedEvents = useMemo(
+    () => orderedUnique(...pages.map((page) => page.events as RunEvent[])),
+    [pages],
+  )
+  // Compaction restarts the stream at the new page. The page lacks the ephemeral deltas of an
+  // item still streaming, so keep one folded snapshot per such item until the stream sends its own.
+  // The pages before the refresh stay readable: the new page can start after the item opened.
+  const paged = useRef({ runId, current: pagedEvents, previous: [] as RunEvent[] })
+  if (paged.current.current !== pagedEvents || paged.current.runId !== runId) {
+    const previous = paged.current.runId === runId ? paged.current.current : []
+    paged.current = { runId, current: pagedEvents, previous }
+  }
+  const carryOpenItems = useCallback((live: RunEvent[]) => {
+    const { current, previous } = paged.current
+    return openItemSnapshots(orderedUnique(previous, current, live), live)
+  }, [])
   const liveEvents = useRunEvents(!fallback && newestPage && !refreshPending ? runId : undefined, {
     cursor: newestPage?.liveCursor,
     afterSeq: newestPage?.asOfSeq,
@@ -245,6 +242,7 @@ export function useRunHistory(runId: string | undefined): RunHistoryState {
     compactAt: COMPACT_LIVE_AT_EVENTS,
     onCompact: compactLive,
     onReset: recoverLive,
+    carryOver: carryOpenItems,
   })
 
   // Exit (#881): live frames die with this component. Fold them into the cached newest page so
@@ -255,10 +253,6 @@ export function useRunHistory(runId: string | undefined): RunHistoryState {
     if (liveCount.current > 0) compactLive()
   }, [compactLive])
 
-  const pagedEvents = useMemo(
-    () => orderedUnique(...pages.map((page) => page.events as RunEvent[])),
-    [pages],
-  )
   const visibleEvents = useMemo(
     () => fallback ? fallbackEvents : orderedUnique(pagedEvents, liveEvents),
     [fallback, fallbackEvents, pagedEvents, liveEvents],

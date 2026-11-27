@@ -115,6 +115,30 @@ describe('session context: budget', () => {
     expect(context.prefix).not.toContain('xxxx');
   });
 
+  it('stops reading included files once a block cannot fit, so repeats cannot grow it unbounded', () => {
+    writeFileSync(join(worktree, 'big.txt'), 'x'.repeat(40_000));
+    rules(`version: 1\nrules:\n${rule('repeat', '{{file:big.txt}}'.repeat(20))}${rule('small', 'Small rule')}`);
+    const context = buildSessionContext(input());
+    const repeat = byId(context, 'repeat')!;
+    expect(repeat).toMatchObject({ status: REPORT_STATUS.skipped, reason: `does not fit the ${SESSION_CONTEXT_LIMIT_BYTES}-byte limit` });
+    expect(repeat.sources.length).toBeLessThanOrEqual(2);
+    expect(byId(context, 'small')?.status).toBe('applied');
+  });
+
+  it('counts what the includes render to, not the token text, so many empty includes still fit', () => {
+    writeFileSync(join(worktree, 'empty.txt'), '');
+    rules(`version: 1\nrules:\n${rule('empties', `ok${'{{file:empty.txt}}'.repeat(4000)}`)}`);
+    const context = buildSessionContext(input());
+    expect(byId(context, 'empties')?.status).toBe('applied');
+    expect(context.prefix).toContain('\nok\n');
+  });
+
+  it('does not count trailing newlines that the block drops, so a block that fits still applies', () => {
+    writeFileSync(join(worktree, 'pad.txt'), '\n'.repeat(SESSION_CONTEXT_LIMIT_BYTES - 1));
+    rules(`version: 1\nrules:\n${rule('padded', 'ok{{file:pad.txt}}')}`);
+    expect(byId(buildSessionContext(input()), 'padded')?.status).toBe('applied');
+  });
+
   it('counts UTF-8 bytes, not characters', () => {
     // 4-byte characters: the prefix is within the limit in characters but over it in bytes.
     const fourByte = '😀';

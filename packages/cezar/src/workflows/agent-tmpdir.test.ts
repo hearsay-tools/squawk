@@ -24,7 +24,7 @@ import {
 } from '../runs/agent-tmpdir.ts';
 import { registerProject } from '../workspace/projects.ts';
 import { RunManager, agentDirectories } from './run.ts';
-import { jobStatus, startJob } from '../jobs/job.ts';
+import { jobStatus, startJob } from '../features/jobs/job.ts';
 
 sealTestRunners();
 
@@ -131,7 +131,7 @@ describe('RunManager — task-scoped agent TMPDIR (#785)', () => {
     const unexpected = vi.fn((): never => { throw new Error('nonterminal scratch must not read reap dependencies'); });
     expect(terminalScratchDisposition(run.id, store.getRun(run.id), {
       active: unexpected, starting: unexpected, queued: unexpected, claimed: unexpected,
-      autosaveBlocker: unexpected, privateWorkers: unexpected, jobHolds: unexpected,
+      autosaveBlocker: unexpected, privateWorkers: unexpected,
     })).toBe('keep');
     expect(unexpected).not.toHaveBeenCalled();
   });

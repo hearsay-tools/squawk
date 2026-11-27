@@ -15,7 +15,7 @@ import { pastedAttachmentsText, type PastedContent, type PersistedAttachment } f
 import type { AutosaveReason } from '../../autosave-commit.ts';
 import { continuationOpening } from './opening.ts';
 import { createSessionEventHandler, launchPreamble, type SessionEventHandler } from './session-events.ts';
-import { agentDirectories, composeSystemPrompt, leadingSlashSkillName } from './prompts.ts';
+import { composeSystemPrompt, leadingSlashSkillName } from './prompts.ts';
 import { continuationRunner } from './launch-settings.ts';
 import { preserveRunAfterDisposal } from './run-guards.ts';
 import { stepScope } from './steps.ts';
@@ -423,8 +423,8 @@ export class ContinuationSession {
     // The transcript retains the user's text. Only the runner receives the native trigger.
     state.liveSession.recordSessionError(undefined);
     if (this.sharedHost.workerExecutionStopped(runId)) { state.liveSession.cancel(); throw new Error('Worker stopped before launch'); }
-    const launch = await launchPreamble(this.launchPreambleHost, runId, state);
-    const { delegation, webhooksPart, ciTools } = launch;
+    const launch = await launchPreamble(this.launchPreambleHost, runId, state, settings.profile.env);
+    const { delegation, launchParts, ciTools } = launch;
     // Stop/Finish can arrive while the local tool controller is starting.
     if (launch.stale) {
       this.settleStaleContinuationLaunch(runId, stepId, state, { stepId, sessionId, backend, prompt, images });
@@ -440,7 +440,7 @@ export class ContinuationSession {
     }
     state.inputState.declareDelivery(inputDeliveryOf(runner)); state.inputState.resetUnreadInputs(); state.inputState.resetEarlyConsumption();
     const session = this.startContinuationSession(runId, state, runner, {
-      stepId, sessionId, prompt, setupNote, opening, skills, settings, delegation, webhooksPart, ciTools,
+      stepId, sessionId, prompt, setupNote, opening, skills, settings, delegation, launchParts, ciTools,
     }, onEvent, turn, sink);
     return this.awaitContinuationSession(runId, state, session, { stepId, sink, turn, delegation, ciTools });
   }
@@ -496,7 +496,7 @@ export class ContinuationSession {
     turn: SessionTurn,
     sink: UiEventSink,
   ): AgentSession {
-    const { delegation, ciTools, opening, skills, settings } = launch;
+    const { delegation, ciTools, opening, skills, settings, launchParts } = launch;
     let session: AgentSession | undefined;
     try {
       // The adapter selects the fallback only when it opens a fresh session.
@@ -512,8 +512,8 @@ export class ContinuationSession {
         ? { ...skills.fallback, args: this.sharedHost.sessionContextFor(runId, state, launch.stepId, '').prefix }
         : skills.fallback;
       const continuationTail = sessionEvents.launchSystemTail(this.context, this.sharedHost, {
-        extraSystemPrompt: settings.extraSystemPrompt, delegation, webhooksPart: launch.webhooksPart,
-        env: settings.profile.env, ciTools, handoffInjected: resumed.handoffInjected, runner: state.liveSession.delegationSettings?.runner,
+        extraSystemPrompt: settings.extraSystemPrompt, delegation, launchParts,
+        ciTools, handoffInjected: resumed.handoffInjected, runner: state.liveSession.delegationSettings?.runner,
       });
       session = startManagedSession(runner,
         {
@@ -529,8 +529,9 @@ export class ContinuationSession {
           ...(opening.openingImages.length ? { images: opening.openingImages } : {}),
           cwd: state.liveSession.cwd,
           toolGrant: settings.toolGrant,
-          additionalDirectories: agentDirectories(join(runDataDir(this.context.dataDir, runId), 'runs'), settings.profile.env),
-          env: { ...settings.profile.env, ...delegation?.env, ...ciTools?.env },
+          ...sessionEvents.launchSessionEnvironment(join(runDataDir(this.context.dataDir, runId), 'runs'), {
+            profileEnv: settings.profile.env, launchParts, delegation, ciTools,
+          }),
           ...(ciTools ? { squawkTools: ciTools.descriptor } : {}),
           ...(delegation ? { restrictCrossSessionMessaging: delegation.restrictCrossSessionMessaging } : {}),
           model: settings.backendModel,

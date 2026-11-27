@@ -48,7 +48,7 @@ describe('a claim on a run whose directory a shared worker works in (hearsay-too
     expect(held.has(SHARED)).toBe(false);
     const disposition = (id: string) => terminalScratchDisposition(id, runs.get(id), {
       active: () => false, starting: () => false, queued: () => false, claimed: () => held.has(id),
-      autosaveBlocker: () => undefined, privateWorkers: () => [], jobHolds: () => false,
+      autosaveBlocker: () => undefined, privateWorkers: () => [],
     });
     expect(disposition(SHARED)).toBe('schedule');
     expect(disposition(HOST)).toBe('keep');

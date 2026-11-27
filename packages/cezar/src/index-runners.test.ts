@@ -8,8 +8,8 @@ import { expect, it, vi } from 'vitest';
 
 // Cold processes prove metadata and HTTP/file commands never evaluate the service graph.
 it.each([
-  ['--help'], ['-h'], ['--version'], ['-v'],
-  ...['job', 'artifact', 'message', 'webhook', 'automation', 'backup', 'remote-settings'].map(command => [command, '--help']),
+  ['--version'], ['-v'],
+  ...['artifact', 'message', 'webhook', 'automation', 'backup', 'remote-settings'].map(command => [command, '--help']),
 ].map(argv => ({ argv, status: 0 })).concat(
   ['list', 'inspect', 'collect', 'wait'].map(operation => ({ argv: ['worker', operation], status: 1 })),
 ))('keeps the service and runner modules unloaded for $argv', ({ argv, status }) => {
@@ -82,4 +82,50 @@ it('migrates legacy accounts before remote-settings status in a cold process', (
     expect(result.error).toBeUndefined();
     expect(result.status, result.stderr).toBe(0);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it.each(['--help', '-h'])('boots runtime for %s and lists a host command without preparing home', flag => {
+  const root = mkdtempSync(join(tmpdir(), 'hsq-help-plugin-'));
+  const script = `
+    import { mkdirSync, writeFileSync } from 'node:fs';
+    import { join } from 'node:path';
+    import { Home } from './packages/cezar/src/home/home.ts';
+    const home = Home.sandbox(${JSON.stringify(root)});
+    mkdirSync(join(home.plugins, 'hello'), { recursive: true });
+    writeFileSync(join(home.plugins, 'hello', 'index.mjs'), 'export default api => api.registerCliCommand({ name: "hello", usage: ["  hsq hello"], parseMode: "subcommand", homeMode: "none", runtimeMode: "none", load: async () => async () => 0 });');
+    const { defaultCliDeps, main } = await import('./packages/cezar/src/cli-dispatch.ts');
+    await main({ ...defaultCliDeps, resolveCliHome: () => home,
+      prepareOperatorHome: () => { throw new Error('Unexpected home preparation'); },
+      readOwnVersion: () => 'test', process: { ...process, argv: [process.execPath, '/bin/hsq', ${JSON.stringify(flag)}] } });
+    const { runnersSealed } = await import('./packages/cezar/src/core/runner-registry.ts');
+    if (!runnersSealed()) throw new Error('Runtime did not boot');
+  `;
+  try {
+    // bound: a metadata command must finish without starting a service.
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script], {
+      cwd: fileURLToPath(new URL('../../../', import.meta.url)), encoding: 'utf8', timeout: 20_000,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('  hsq hello');
+    expect(result.stderr).toBe('');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it('prints help quietly when home cannot be resolved', () => {
+  const script = `
+    const { defaultCliDeps, main } = await import('./packages/cezar/src/cli-dispatch.ts');
+    await main({ ...defaultCliDeps,
+      resolveCliHome: () => { throw new Error('No home'); },
+      prepareOperatorHome: () => { throw new Error('Unexpected home preparation'); },
+      readOwnVersion: () => 'test', process: { ...process, argv: [process.execPath, '/bin/hsq', '--help'] } });
+  `;
+  // bound: metadata must finish without a writable home or running service.
+  const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script], {
+    cwd: fileURLToPath(new URL('../../../', import.meta.url)), encoding: 'utf8', timeout: 20_000,
+  });
+  expect(result.error).toBeUndefined();
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain('Squawk — local cockpit');
+  expect(result.stderr).toBe('');
 });

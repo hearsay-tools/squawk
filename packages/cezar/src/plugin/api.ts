@@ -6,6 +6,7 @@
  */
 import { checkAgentToolRegistration, registerAgentTool, type AgentToolDefinition } from '../ci-wait/tool-registry.ts';
 import { checkCliCommandRegistration, registerCliCommand, type CliCommandDefinition } from '../core/cli-registry.ts';
+import { checkLaunchPartRegistration, registerLaunchPart, type LaunchPartDefinition } from '../core/launch-registry.ts';
 import type { RunnerDefinition } from '../core/runner-definition.ts';
 import { checkRunnerRegistration, registerRunner } from '../core/runner-registry.ts';
 import type { RunLifecycleHandlers } from '../runs/lifecycle.ts';
@@ -22,6 +23,8 @@ export interface SquawkPluginApi {
   registerStepKind(step: StepKindDefinition): void;
   registerCliCommand(command: CliCommandDefinition): void;
   registerRemovalSlots(slots: Partial<RunSlots>): void;
+  /** Add env entries and a system-prompt part to every agent launch. */
+  registerLaunchPart(part: LaunchPartDefinition): void;
   onRunLifecycle(handlers: RunLifecycleHandlers): void;
 }
 
@@ -58,6 +61,9 @@ const stepKinds: KeyedTable<StepKindDefinition> = {
 const cliCommands: KeyedTable<CliCommandDefinition> = {
   name: 'CLI commands', key: value => value.name, check: checkCliCommandRegistration, commit: registerCliCommand,
 };
+const launchParts: KeyedTable<LaunchPartDefinition> = {
+  name: 'Launch parts', key: value => value.id, check: checkLaunchPartRegistration, commit: registerLaunchPart,
+};
 
 /** What one plugin's setup staged, in call order per registry. */
 interface StagedPlugin {
@@ -66,6 +72,7 @@ interface StagedPlugin {
   waitKinds: WaitKindRow[];
   stepKinds: StepKindDefinition[];
   cliCommands: CliCommandDefinition[];
+  launchParts: LaunchPartDefinition[];
   removalSlots: Array<Partial<RunSlots>>;
   lifecycle: RunLifecycleHandlers[];
 }
@@ -110,6 +117,7 @@ function checkStaged(staged: StagedPlugin): void {
   checkStagedRequestKinds(staged.waitKinds);
   checkKeyed(stepKinds, staged.stepKinds);
   checkKeyed(cliCommands, staged.cliCommands);
+  checkKeyed(launchParts, staged.launchParts);
   for (const slots of staged.removalSlots) checkSlots(slots);
   for (const handlers of staged.lifecycle) {
     if (typeof handlers !== 'object' || handlers === null) throw new Error('Run lifecycle listeners: handlers must be an object.');
@@ -123,6 +131,7 @@ function commitStaged(staged: StagedPlugin): void {
   for (const value of staged.waitKinds) waitKinds.commit(value);
   for (const value of staged.stepKinds) stepKinds.commit(value);
   for (const value of staged.cliCommands) cliCommands.commit(value);
+  for (const value of staged.launchParts) launchParts.commit(value);
   for (const slots of staged.removalSlots) registerRunSlots(slots);
   for (const handlers of staged.lifecycle) registerRunLifecycleListener(handlers);
 }
@@ -139,6 +148,7 @@ function stagingApi(staged: StagedPlugin, open: () => boolean): SquawkPluginApi 
     registerStepKind: stage(staged.stepKinds),
     registerCliCommand: stage(staged.cliCommands),
     registerRemovalSlots: stage(staged.removalSlots),
+    registerLaunchPart: stage(staged.launchParts),
     onRunLifecycle: stage(staged.lifecycle),
   };
 }
@@ -152,6 +162,7 @@ export interface PluginContributions {
   cliCommands: string[];
   removalSlots: number;
   runLifecycleListeners: number;
+  launchParts: string[];
 }
 
 function contributions(staged: StagedPlugin): PluginContributions {
@@ -163,6 +174,7 @@ function contributions(staged: StagedPlugin): PluginContributions {
     cliCommands: staged.cliCommands.map(value => value.name),
     removalSlots: staged.removalSlots.length,
     runLifecycleListeners: staged.lifecycle.length,
+    launchParts: staged.launchParts.map(value => value.id),
   };
 }
 
@@ -173,7 +185,7 @@ function contributions(staged: StagedPlugin): PluginContributions {
  * rethrows that error. The api refuses calls once setup has ended. Returns what it committed.
  */
 export async function runPluginSetup(plugin: SquawkPlugin): Promise<PluginContributions> {
-  const staged: StagedPlugin = { runners: [], tools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: [], lifecycle: [] };
+  const staged: StagedPlugin = { runners: [], tools: [], waitKinds: [], stepKinds: [], cliCommands: [], launchParts: [], removalSlots: [], lifecycle: [] };
   let open = true;
   try {
     await plugin(stagingApi(staged, () => open));

@@ -237,24 +237,6 @@
     },
     {
       "file": "packages/cezar/src/workflows/run/launch-context.ts",
-      "target": "packages/cezar/src/artifacts/lifecycle.ts",
-      "count": 1,
-      "reason": "feature:artifacts: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/launch-context.ts",
-      "target": "packages/cezar/src/automations/enabled.ts",
-      "count": 1,
-      "reason": "feature:automations: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/launch-context.ts",
-      "target": "packages/cezar/src/automations/prompts.ts",
-      "count": 1,
-      "reason": "feature:automations: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/launch-context.ts",
       "target": "packages/cezar/src/delegation/execution-identity.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
@@ -264,12 +246,6 @@
       "target": "packages/cezar/src/delegation/provision.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/launch-context.ts",
-      "target": "packages/cezar/src/webhooks/prompt.ts",
-      "count": 1,
-      "reason": "feature:webhooks: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
     },
     {
       "file": "packages/cezar/src/workflows/run/launch-read-resolver.ts",
@@ -345,12 +321,6 @@
     },
     {
       "file": "packages/cezar/src/workflows/run/run-settlement.ts",
-      "target": "packages/cezar/src/jobs/job.ts",
-      "count": 1,
-      "reason": "feature:jobs: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/run-settlement.ts",
       "target": "packages/cezar/src/preview/registration.ts",
       "count": 1,
       "reason": "feature:preview: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
@@ -360,18 +330,6 @@
       "target": "packages/cezar/src/delegation/policy.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/session-events.ts",
-      "target": "packages/cezar/src/artifacts/lifecycle.ts",
-      "count": 1,
-      "reason": "feature:artifacts: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/session-events.ts",
-      "target": "packages/cezar/src/jobs/command.ts",
-      "count": 1,
-      "reason": "feature:jobs: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
     },
     {
       "file": "packages/cezar/src/workflows/run/step-loop.ts",

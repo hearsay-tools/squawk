@@ -63,6 +63,8 @@ for (const [relative, why] of [
   ['packages/web/product-identity.ts', 'build or release source'],
   ['.oxlintrc.json', 'lint gate'],
   ['packages/cezar/src/lint/plugin.test.ts', 'guard test change'],
+  ['VISION.md', 'agent instructions or contracts'],
+  ['CONVENTIONS.md', 'agent instructions or contracts'],
 ]) test(`changing ${relative} requires owner review`, t => {
   const [before, after] = relative.endsWith('.json') ? ['{ "first": 1 }\n', '{ "first": 2 }\n'] : ['first: 1\nsecond: 2\n', 'first: 1\nsecond: 3\n'];
   const result = checkChange(t, relative, before, after);

@@ -339,6 +339,7 @@ export function createSseRoutes() {
             projectId: c.get('project').id, runId: id, afterSeq: requestedAfter,
             ...(query.cursor ? { cursor: query.cursor } : {}),
           }, {
+            snapshot: async event => { await stream.writeSSE({ event: 'ui-event', data: JSON.stringify(event) }); },
             event: async event => {
               await stream.writeSSE({ id: String(event.seq), event: isV2WireEventType(event.type) ? 'ui-event' : 'run-event', data: JSON.stringify(event) });
             },

@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { commandText } from '../home/command.ts';
+import { commandText } from '../../home/command.ts';
 import { JobError, SUPERVISE, jobDirectory, jobStatus, startJob, stopJob, superviseJob, tellAnswerFile, tellStarter } from './job.ts';
 
 const HELP = commandText(`Usage: cez job start <name> [--dir <dir>] -- <command> [args...]

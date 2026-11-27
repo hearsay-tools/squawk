@@ -7,12 +7,17 @@ import type { ScenarioName } from './harness-parity-core.testkit.ts';
  * engine and the server, so nothing outside Vitest can load them. They attach each row's
  * assertion by id. `scripts/parity-rows.ts` prints these rows.
  */
+/** A part's engine-free registration module, `harness-parity-<part>.rows.testkit.ts`, apart from its cells. */
+export const HARNESS_PARITY_ROWS_FILE = /^harness-parity-[\w-]+\.rows\.testkit\.ts$/;
+
 export interface ParityRow {
   /** Stable id the exemption table references. */
   readonly id: string;
   readonly scenario: ScenarioName;
   /** Absent where the row's cells carry the name in their own titles. */
   readonly name?: string;
+  /** How long the row's drive may take, where it differs from the tier's default. */
+  readonly timeoutMs?: number;
 }
 
 /** The seam tier: each runner class against its own offline mock. */
@@ -36,7 +41,9 @@ export const SEAM_ROWS = [
 
 /** The run tier: a real `RunManager` over the native wire, read once the run settles. */
 export const RUN_ROWS = [
-  { id: 'R17', scenario: 'provider-unavailable', name: 'R17 holds the run on an unavailable provider and preserves its failure reason' },
+  // Codex keeps its turn open and emits retryable errors (#550) until its no-progress bound ends
+  // the turn; the other wires answer 503 at once.
+  { id: 'R17', scenario: 'provider-unavailable', name: 'R17 holds the run on an unavailable provider and preserves its failure reason', timeoutMs: 75_000 },
   { id: 'R1', scenario: 'cezar-done', name: 'R1 takes a declared-complete run to its review gate' },
   { id: 'R2', scenario: 'provider-error', name: 'R2 fails the run on a provider request rejection instead of parking it as Needs You' },
   { id: 'R3', scenario: 'ask', name: 'R3 parks as waiting and emits exactly one ask card' },

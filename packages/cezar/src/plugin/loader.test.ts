@@ -82,7 +82,7 @@ describe('loadPluginFolder', () => {
     const { report, cli } = await load();
     expect(report.loaded).toEqual([{
       name: 'greeter', source: 'host', path: join(dir, 'greeter'),
-      contributions: { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: ['greet', 'wave'], removalSlots: 0, runLifecycleListeners: 0 },
+      contributions: { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: ['greet', 'wave'], removalSlots: 0, runLifecycleListeners: 0, launchParts: [] },
     }]);
     expect(cli.cliCommand('greet')?.name).toBe('greet');
   });
@@ -144,7 +144,7 @@ describe('loadPluginFolder', () => {
 });
 
 describe('pluginHealth', () => {
-  const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: 0, runLifecycleListeners: 0 };
+  const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: 0, runLifecycleListeners: 0, launchParts: [] };
   const failure = (name: string, reason: 'missing-entry' | 'no-setup' | 'import' | 'setup', error: string) =>
     ({ name, source: 'host' as const, path: `/srv/My Plugins/${name}`, reason, error });
   const report = {
@@ -240,5 +240,47 @@ describe('loadBundledRunners', () => {
     plugin('one', 'export const displayOrder = 10;\n');
     const loader = await import('./loader.ts');
     await expect(loader.loadBundledRunners(dir)).rejects.toThrow(/Bundled runner "one" failed to load: index\.mjs has no default-exported setup function/);
+  });
+});
+
+describe('loadBundledFeatures', () => {
+  it('accepts absent and empty folders without advertising them', async () => {
+    const loader = await import('./loader.ts');
+    await loader.loadBundledFeatures(join(dir, 'absent'));
+    expect(await loader.loadBundledFeatures(dir)).toEqual({ folders: [], loaded: [], failed: [] });
+  });
+
+  it('loads features in code-point order and commits bundled commands', async () => {
+    commandPlugin('b', ['feature-b']);
+    commandPlugin('A', ['feature-a']);
+    const loader = await import('./loader.ts');
+    const report = await loader.loadBundledFeatures(dir);
+    expect(order()).toEqual(['A', 'b']);
+    expect(report.folders).toEqual([dir]);
+    expect(report.loaded.map(({ name, source, contributions }) => [name, source, contributions.cliCommands]))
+      .toEqual([['A', 'bundled', ['feature-a']], ['b', 'bundled', ['feature-b']]]);
+  });
+
+  it.each([
+    ['import error', 'export default (;'],
+    ['missing default', 'export const setup = () => {};'],
+    ['setup throw', "export default () => { throw new Error('broken'); };"],
+  ])('stops on %s before loading later features', async (_case, source) => {
+    plugin('broken', source);
+    commandPlugin('next', ['next-feature']);
+    const loader = await import('./loader.ts');
+    await expect(loader.loadBundledFeatures(dir)).rejects.toThrow('Bundled feature "broken" failed to load:');
+    expect(order()).toEqual([]);
+  });
+
+  it('fails on a key conflict and rolls back partial registrations', async () => {
+    commandPlugin('a', ['shared-feature']);
+    commandPlugin('b', ['partial-feature', 'shared-feature']);
+    const loader = await import('./loader.ts');
+    await expect(loader.loadBundledFeatures(dir)).rejects.toThrow('Bundled feature "b" failed to load:');
+    const cli = await import('../core/cli-registry.ts');
+    cli.sealCliCommands();
+    expect(cli.hasCliCommand('shared-feature')).toBe(true);
+    expect(cli.hasCliCommand('partial-feature')).toBe(false);
   });
 });

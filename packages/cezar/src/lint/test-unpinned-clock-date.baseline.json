@@ -68,7 +68,7 @@
     "packages/cezar/src/home/test-marker-guard.test.ts": 1,
     "packages/cezar/src/index-project-paths.test.ts": 1,
     "packages/cezar/src/index-run-slots.test.ts": 1,
-    "packages/cezar/src/jobs/job.test.ts": 2,
+    "packages/cezar/src/features/jobs/job.test.ts": 2,
     "packages/cezar/src/merge-observations.test.ts": 3,
     "packages/cezar/src/merged-streams.test.ts": 9,
     "packages/cezar/src/preview/dev-server-windows.test.ts": 1,

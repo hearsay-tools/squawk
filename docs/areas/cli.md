@@ -75,7 +75,7 @@ entries (`run`, `init`, `artifact`, ...) only recover journals and never start a
 
 ## Rules
 
-Uses `node:util` `parseArgs`, no CLI framework. `serve` is the default command. All 21 built-in commands register lazily in `core/cli-registry.ts` from `built-in-cli-commands.ts` with `parseMode`, `homeMode`, `runtimeMode`, usage lines, and a lazy `load()` ([ADR 0069](../adr/0069-adopt-register-then-seal-registries-for-extension-tables.md)). Dispatch (`cli-dispatch.ts`) chooses the boot from the command line before it reads the table (`cliNeedsRuntime`): `--help`, `--version` and a built-in whose `runtimeMode` is false call `bootColdCli()`, which seals the CLI registry only and loads no plugin, runner or store. A built-in runtime command and an unknown command name call `bootRuntime({ pluginsDir })` (`boot.ts`), which registers the built-ins, loads the host plugins in `<config>/plugins/` (`plugin/loader.ts`, spec 2026-11-24-plugin-loader-and-runner-kit § 4), then seals every registry, so a plugin's CLI command dispatches like a built-in. `cli-dispatch.ts` generates `--help` from the table (built-ins only, since help stays cold; its footer points to `hsq plugins`) and `home/entry.ts` reads `homeMode` from it. `hsq plugins` lists the plugins this process loaded and skipped. A broken plugin is skipped with one `[hsq] plugin "<name>" skipped: <reason>` line on stderr and never stops the command. A host plugin runs in-process with all of Squawk's permissions and logins, and its API is unstable until Squawk installs plugins from npm or git; no command or route installs or removes one ([Plugins](../plugins.md), [ADR 0070](../adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md)). Headless `run` treats `review` as a terminal success status (exit 0). `serve` boots in a fixed order: bind the listener, open the boot store and build its `RunManager`, `recover()` the boot project, then `startServer`. So anything a recovered run needs (its cockpit address, for one) must reach the boot manager at construction, not from `startServer`. `init` never overwrites existing files. Keep `.ai/cezar/.gitignore` maintenance (`ensureDataGitignore`) in sync with any new state file.
+Uses `node:util` `parseArgs`, no CLI framework. `serve` is the default command. All 20 built-in commands register lazily in `core/cli-registry.ts` from `built-in-cli-commands.ts` with `parseMode`, `homeMode`, `runtimeMode`, usage lines, and a lazy `load()` ([ADR 0069](../adr/0069-adopt-register-then-seal-registries-for-extension-tables.md)); bundled features such as `jobs` register their own commands through `SquawkPluginApi` ([ADR 0072](../adr/0072-add-a-launch-slot-and-load-bundled-feature-plugins.md)). Dispatch (`cli-dispatch.ts`) chooses the boot from the command line before it reads the table (`cliNeedsRuntime`): `--version` and a built-in whose `runtimeMode` is false call `bootColdCli()`, which seals the CLI registry only and loads no plugin, runner or store. `--help`/`-h`, a built-in runtime command and an unknown command name call `bootRuntime({ pluginsDir })` (`boot.ts`), which registers the built-ins, loads bundled runners, bundled features, then host plugins in `<config>/plugins/` (`plugin/loader.ts`, spec 2026-11-24-plugin-loader-and-runner-kit § 4), then seals every registry, so a plugin's CLI command dispatches like a built-in. `cli-dispatch.ts` generates `--help` from the table (core, bundled feature and host plugin commands; its footer points to `hsq plugins`). Top-level help skips host discovery quietly when home cannot be resolved, without preparing home. `home/entry.ts` reads `homeMode` from it. `hsq plugins` lists the plugins this process loaded and skipped. A broken plugin is skipped with one `[hsq] plugin "<name>" skipped: <reason>` line on stderr and never stops the command. A host plugin runs in-process with all of Squawk's permissions and logins, and its API is unstable until Squawk installs plugins from npm or git; no command or route installs or removes one ([Plugins](../plugins.md), [ADR 0070](../adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md), [ADR 0072](../adr/0072-add-a-launch-slot-and-load-bundled-feature-plugins.md)). Headless `run` treats `review` as a terminal success status (exit 0). `serve` boots in a fixed order: bind the listener, open the boot store and build its `RunManager`, `recover()` the boot project, then `startServer`. So anything a recovered run needs (its cockpit address, for one) must reach the boot manager at construction, not from `startServer`. `init` never overwrites existing files. Keep `.ai/cezar/.gitignore` maintenance (`ensureDataGitignore`) in sync with any new state file.
 
 ## Task environments and the cockpit home
 
@@ -94,13 +94,15 @@ Inside a task they now resolve the default home because the cockpit's
 
 `hsq job start <name> -- <command>` runs a command under a supervisor that leads its own session,
 so it outlives the shell call, the turn and the agent session on every runner
-(hearsay-tools/cezarion#3097). `jobs/job.ts` owns the supervisor, its claim of the name and the
+(hearsay-tools/cezarion#3097). `hsq job` is the bundled jobs feature, `features/jobs/`, which registers
+its command, deletion gate and launch part through the plugin API. `features/jobs/job.ts` owns the supervisor, its claim of the name and the
 `<name>.<run>.log`, `<name>.<run>.exit` and `<name>.job.db` files; they live in `$TMPDIR` unless
 `--dir` names another directory. A task's `$TMPDIR` outlives the task while a job recorded in it
-runs (`jobRunsIn`; the archive asks it through the jobs deletion gate, `jobs/removal-slot.ts`): the task-end reap, archive and the startup sweep spare it, and the next of them
+runs (`jobRunsIn`; the archive asks it through the jobs deletion gate, `features/jobs/removal-slot.ts`): the task-end reap, archive and the startup sweep spare it, and the next of them
 that finds no job running removes it (hearsay-tools/squawk#3138). The end-time reap marks the end it
 kept the directory for, so later run events of that end, such as a read mark, keep it too
-(`jobHoldsScratch` in `workflows/run/run-settlement.ts`); once the run is archived, the mark holds
+(`jobHoldsScratch` in `features/jobs/removal-slot.ts`, which the reap reaches through the deletion
+gate with the run's end); once the run is archived, the mark holds
 nothing. `hsq job stop <name>` ends
 the job's whole process group, which the supervisor leads (hearsay-tools/squawk#3941). After the
 supervisor has exited, it ends the members left in the group only where the record's start token
@@ -108,8 +110,9 @@ proves this boot (Linux, the worker scope's rule in ADR 0032); elsewhere it repo
 signals nothing. Agents stop a job with it, never with
 `kill <pid>`: that signal reaches only the command, and a child that ignores SIGTERM keeps running.
 The launch prompt's
-"Long commands" part (`jobs/command.ts`) gives agents the full command; the `cezar_wait`
-description names it only as `hsq job start`, because the tool list also loads inside omp. A result is one JSON object on stdout and an error is one on stderr; `--help` prints text. The rules are in
+"Long commands" part (`features/jobs/command.ts`) gives agents the full command; the `cezar_wait`
+description names it only as `hsq job start`, because the tool list also loads inside omp. Without
+the jobs feature, the launch prompt has no such part and `cezar_wait` names no job command. A result is one JSON object on stdout and an error is one on stderr; `--help` prints text. The rules are in
 [the unified waits spec](../../.ai/specs/2026-10-17-unified-waits.md#the-job-command-2026-11-10).
 
 ## Legacy home recovery

@@ -52,8 +52,12 @@ function agentClient(url: string) {
   const replies = new Map<number, { resolve(msg: Reply): void; reject(error: Error): void }>();
   const waiters = new Set<{ method: string; sessionId: string; resolve(): void; reject(error: Error): void }>();
   let failure: Error | undefined;
+  let onFailure!: (error: Error) => void;
+  const failed = new Promise<never>((_resolve, reject) => (onFailure = reject));
+  failed.catch(() => undefined);
   const fail = (error: Error) => {
     failure ??= error;
+    onFailure(failure);
     for (const reply of replies.values()) reply.reject(failure);
     replies.clear();
     for (const waiter of waiters) waiter.reject(failure);
@@ -117,7 +121,9 @@ function agentClient(url: string) {
         if (error) fail(error);
       });
     });
-  return { ws, opened, send, next, phase: (name: string) => { phase = name; } };
+  /** `signal`, or the socket's failure when it closes or errs first. */
+  const whileOpen = <T>(signal: Promise<T>) => Promise.race([signal, failed]);
+  return { ws, opened, send, next, whileOpen, phase: (name: string) => { phase = name; } };
 }
 
 it('rejects pending and later commands and events when the agent socket closes', async () => {
@@ -158,6 +164,7 @@ it('reports the phase and method when an open socket never answers a command', a
 });
 
 describe('the agent drives the real preview browser (hearsay-tools/cezarion#784)', () => {
+  // bound: the test guards a hung launch or CDP step; the launch ends on its own limits.
   it.skipIf(process.platform === 'win32' || !bin)('navigates the page the pane streams, and cannot close the browser', async () => {
     vi.stubEnv('CEZ_PREVIEW', '1');
     const dataDir = mkdtempSync(join(tmpdir(), 'cez-agent-cdp-'));
@@ -168,7 +175,18 @@ describe('the agent drives the real preview browser (hearsay-tools/cezarion#784)
     }));
 
     const events: Array<Record<string, unknown>> = [];
-    const store = { getRun: () => ({ id: 'run-1' }), eventLog: { appendEvent: (_runId: string, event: Record<string, unknown>) => { events.push(event); return event; } } };
+    let browserConnected!: () => void;
+    const agentConnected = new Promise<void>(resolve => (browserConnected = resolve));
+    const store = {
+      getRun: () => ({ id: 'run-1' }),
+      eventLog: {
+        appendEvent: (_runId: string, event: Record<string, unknown>) => {
+          events.push(event);
+          if (event.type === 'preview.agent-browser' && event.state === 'connected') browserConnected();
+          return event;
+        },
+      },
+    };
     const ctx: RunContext = { runId: 'run-1', title: 'Agent drives', worktreePath: dataDir, dataDir, store: store as unknown as RunContext['store'] };
     const host = new PreviewHost({ home: testHome({ ...process.env, CEZ_PREVIEW_NO_SANDBOX: '1' }), env: { ...process.env, CEZ_PREVIEW_NO_SANDBOX: '1' } });
     // Release waits until the browser and its helpers are gone, so none writes the removed profile.
@@ -183,6 +201,10 @@ describe('the agent drives the real preview browser (hearsay-tools/cezarion#784)
     const agent = agentClient(previewCdpUrl(`http://127.0.0.1:${cockpitPort}`, grant.token)!);
     cleanups.push(() => { agent.ws.terminate(); });
     await agent.opened;
+    // The proxy holds the agent's commands until the host has launched Chromium on demand and
+    // linked the socket to it. The launch has its own limits (silence, one retry, a hang guard),
+    // so each command's budget below starts after it. A refused launch closes the socket.
+    await agent.whileOpen(agentConnected);
 
     agent.phase('list and attach page');
     // What agent-browser does on connect: list the pages, attach to the live one.

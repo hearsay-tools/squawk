@@ -228,13 +228,13 @@ describe('CLI metadata', () => {
 
 describe('boot choice', () => {
   it.each([
-    [['--help'], false], [['-h'], false], [['--version'], false], [['-v'], false], [['run', '--help'], false],
-    [['job', 'start', 'x'], false], [['artifact', 'publish', 'f'], false], [['message', 'inbox'], false],
+    [['--help'], true], [['-h'], true], [['--version'], false], [['-v'], false], [['run', '--help'], true],
+    [['artifact', 'publish', 'f'], false], [['message', 'inbox'], false],
     [['webhook'], false], [['automation', 'list'], false], [['backup', '--help'], false], [['remote-settings', '--help'], false],
     [['worker', 'list'], false], [['worker', 'inspect', 'id'], false], [['worker', 'collect'], false], [['worker', 'wait'], false],
     [['--no-such-flag'], false],
     [[], true], [['--port', '5000'], true], [['run', 'task'], true], [['init'], true], [['discover'], true], [['task'], true],
-    [['plugins'], true], [['worker', 'spawn'], true], [['backup', 'list'], true],
+    [['plugins'], true], [['worker', 'spawn'], true], [['backup', 'list'], true], [['job', 'start', 'x'], true],
     [['my-plugin-command'], true], [['nope', '--flag'], true], [['--repo', '/r', 'nope'], true],
   ] as const)('%j boots the runtime: %s', (argv, runtime) => {
     expect(cliNeedsRuntime(argv)).toBe(runtime);
@@ -244,6 +244,6 @@ describe('boot choice', () => {
     const f = fixture(['--help']);
     f.processStub.argv[1] = '/bin/hsq';
     await f.run();
-    expect(f.deps.console.log.mock.calls[0]![0]).toContain('Plugins in <config>/plugins/ can add commands: run `hsq plugins` to list them.');
+    expect(f.deps.console.log.mock.calls[0]![0]).toContain('Bundled features and plugins in <config>/plugins/ can add commands: run `hsq plugins` to list them.');
   });
 });

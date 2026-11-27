@@ -13,7 +13,7 @@ import { ProviderAuthService } from '../core/provider-auth.ts';
 import { createApp } from '../server/server.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from '../server/loopback-request.testkit.ts';
-import { agentWebhooksPart } from '../workflows/run/launch-context.ts';
+import { webhooksLaunchPart } from '../built-in-launch-parts.ts';
 import { createAutomationService } from '../automations/service.ts';
 import { AutomationStore } from '../automations/store.ts';
 import type { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
@@ -47,9 +47,9 @@ it('describes agent webhooks from the selected registry at launch', async () => 
   await mergeWriteWorkspaceConfig(config => {
     config.projects[0]!.webhooks = [{ id: 'selected-hook', name: 'Selected hook', url: 'https://selected.invalid/hook', tasks: false, agent: true }];
   }, selected);
-  const prompt = await agentWebhooksPart({ repoRoot: root, dataDir: root, store: {} as RunStore, home: selected },
-    { projectId: 'selected', origin: 'http://localhost:4321' });
-  expect(prompt).toContain('Selected hook');
+  const part = await webhooksLaunchPart.contribute({ runId: 'selected-run', repoRoot: root, dataDir: root, home: selected, env: {},
+    cockpit: { projectId: 'selected', origin: 'http://localhost:4321' } });
+  expect(part?.prompt).toContain('Selected hook');
 });
 
 it('validates automation models with the selected default runner', async () => {

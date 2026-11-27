@@ -1,14 +1,15 @@
 # Plugins
 
-A plugin adds a runner, an agent tool, a wait kind, a workflow step kind, a CLI command, a run
-removal slot or a run-lifecycle listener to Squawk. Squawk loads plugins from one folder on the
+A plugin adds a runner, an agent tool, a wait kind, a workflow step kind, a CLI command, a launch
+part, a run removal slot or a run-lifecycle listener to Squawk. Squawk loads plugins from one folder on the
 host: `<config>/plugins/` (see the [platform roots](migration.md#home-directories); with
 `HSQ_HOME` set, `$HSQ_HOME/config/plugins/`). Nothing needs to be configured: a folder that is
 not there loads nothing.
 
 [ADR 0070](adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md) records the loader and
 runner kit design; [ADR 0071](adr/0071-keep-runner-folders-self-contained.md) records the
-self-contained runner folder rules.
+self-contained runner folder rules; [ADR 0072](adr/0072-add-a-launch-slot-and-load-bundled-feature-plugins.md)
+records the launch slot and bundled feature plugins.
 
 ## Trust: a plugin runs as Squawk
 
@@ -56,7 +57,7 @@ export default function setup(api) {
 The fields of each registration are in the types that `@hearsay-tools/squawk/plugin` exports
 (`packages/cezar/src/plugin/index.ts`). The API object has `registerRunner`,
 `registerAgentTool`, `registerWaitKind`, `registerStepKind`, `registerCliCommand`,
-`registerRemovalSlots` and `onRunLifecycle`. The setup function may be `async`.
+`registerRemovalSlots`, `registerLaunchPart` and `onRunLifecycle`. The setup function may be `async`.
 
 A plugin imports Squawk code only from `@hearsay-tools/squawk/plugin` and these subpaths:
 `/runtime`, `/model-settings`, `/managed-cli` and `/pi-rpc`. Squawk maps them to its own running
@@ -93,8 +94,9 @@ A runner plugin folder is self-contained and needs no `npm install` or `node_mod
 
 ## Load order and failures
 
-- The runners that ship with Squawk load first, then the plugins in `<config>/plugins/`, in
-  ASCII order of folder name.
+- The bundled runners load first, then bundled features in ASCII folder-name order, then
+  host plugins in `<config>/plugins/` in ASCII folder-name order. Missing bundled features are
+  valid; a present bundled feature that fails to import or register stops boot.
 - Squawk applies a plugin's registrations only when its setup finishes with no error and no
   registration conflicts with an earlier one. Otherwise it applies none of them and skips the
   plugin. The cockpit still starts.
@@ -110,5 +112,6 @@ A runner plugin folder is self-contained and needs no `npm install` or `node_mod
 - `GET /api/v1/health` sends `plugins: { loaded, failed }`. A skipped plugin's `error` there is a
   short fixed text for the kind of failure; run `hsq plugins` on the host for the full error. A
   hosted cockpit sends no plugin paths.
-- `hsq --help` lists the built-in commands only, and loads no plugin. A plugin's command runs as
-  `hsq <name>` like a built-in.
+- `hsq --help` loads runtime and lists core, bundled feature and host plugin commands.
+  It skips host discovery quietly if home cannot be resolved, without preparing home.
+  A plugin's command runs as `hsq <name>` like a built-in.

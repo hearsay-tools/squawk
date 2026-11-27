@@ -29,6 +29,8 @@ export interface DraftEntry {
   firstSeq: number
   /** The seq of the latest event that changed this entry. */
   lastSeq: number
+  /** A v2 message or reasoning item that started and has not completed yet. */
+  streaming?: boolean | undefined
 }
 
 export interface DraftFailure {
@@ -296,7 +298,7 @@ function markV2Covered(fold: FoldState, turn: DraftTurn): void {
   turn.entries = turn.entries.filter((e) => !(e.origin === 'v1' && e.entry.kind === 'tool'))
 }
 
-export function upsertV2(fold: FoldState, turn: DraftTurn, raw: UiItem, key: string, ts?: string): void {
+export function upsertV2(fold: FoldState, turn: DraftTurn, raw: UiItem, key: string, ts?: string, streaming = false): void {
   // Clone: deltas append in place, and the event object off the wire must stay untouched.
   // Assistant (and rare in-stream user) messages carry the completing event's clock (#435).
   const item = raw.kind === 'message' && ts !== undefined ? { ...raw, ts } : { ...raw }
@@ -307,9 +309,10 @@ export function upsertV2(fold: FoldState, turn: DraftTurn, raw: UiItem, key: str
   if (existing && existing.turn === turn) {
     existing.entry.entry = item
     existing.entry.lastSeq = fold.eventSeq
+    existing.entry.streaming = streaming
     return
   }
-  const draft: DraftEntry = { origin: 'v2', entry: item, firstSeq: fold.eventSeq, lastSeq: fold.eventSeq }
+  const draft: DraftEntry = { origin: 'v2', entry: item, firstSeq: fold.eventSeq, lastSeq: fold.eventSeq, streaming }
   turn.entries.push(draft)
   fold.itemsById.set(key, { turn, entry: draft })
 }

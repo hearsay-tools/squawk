@@ -1,0 +1,60 @@
+[
+  {
+    "type": "session.started",
+    "sessionId": "session-partial",
+    "backend": "claude",
+    "model": "claude-haiku-5-5"
+  },
+  {
+    "type": "turn.started",
+    "turnId": "turn_1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "item_1",
+      "role": "assistant",
+      "text": ""
+    }
+  },
+  {
+    "type": "item.delta",
+    "itemId": "item_1",
+    "field": "text",
+    "delta": "hello streaming world."
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "item_1",
+      "role": "assistant",
+      "text": "hello streaming world."
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "turn_1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 2,
+      "output": 9,
+      "total": 12530,
+      "cacheRead": 0,
+      "cacheWrite": 12519
+    },
+    "costUsd": 0.0025085000000000003
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 2,
+      "output": 9,
+      "total": 12530,
+      "cacheRead": 0,
+      "cacheWrite": 12519
+    },
+    "costUsd": 0.0025085000000000003
+  }
+]

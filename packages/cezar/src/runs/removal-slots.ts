@@ -18,11 +18,22 @@ import type { RunRecord } from './store.ts';
  *  or of an orphan the startup sweep found. */
 export type DeletionKind = 'history' | 'worktree' | 'archive-tmp' | 'scratch';
 
+/** What the run-end scratch reap knows about the run it reaps. Other paths pass none. */
+export interface DeletionGateContext {
+  /** The end this reap follows; a Continue clears it and the next end sets a new one. */
+  readonly finishedAt?: string | undefined;
+  readonly archived?: boolean | undefined;
+}
+
 /** Refuses a deletion while the feature still needs what it removes. */
 export interface DeletionGate {
   readonly name: string;
-  /** A reason refuses the deletion; undefined lets it go ahead. `dataDir` is the run's data dir. */
-  refuse(runId: string, kind: DeletionKind, dataDir: string): string | undefined;
+  /** A reason refuses the deletion; undefined lets it go ahead. `dataDir` is the run's data dir.
+   *  `context` comes only from the scratch reap at a run's end. */
+  refuse(runId: string, kind: DeletionKind, dataDir: string, context?: DeletionGateContext): string | undefined;
+  /** A reason refuses removing a scratch directory that belongs to no known run (an orphan the
+   *  startup sweep found); undefined lets it go ahead. */
+  refuseDirectory?(dir: string, kind: 'scratch'): string | undefined;
 }
 
 /** The store topics a reclaim preparation reads and commits to. */
@@ -105,10 +116,20 @@ export function assertRunSlotsSealed(): void {
 }
 
 /** The first gate's reason to refuse this deletion, in registration order. */
-export function deletionRefusal(runId: string, kind: DeletionKind, dataDir: string): string | undefined {
+export function deletionRefusal(runId: string, kind: DeletionKind, dataDir: string, context?: DeletionGateContext): string | undefined {
   assertRunSlotsSealed();
   for (const gate of gates.values()) {
-    const reason = gate.refuse(runId, kind, dataDir);
+    const reason = gate.refuse(runId, kind, dataDir, context);
+    if (reason) return reason;
+  }
+  return undefined;
+}
+
+/** The first gate's reason to keep this un-keyed scratch directory, in registration order. */
+export function directoryDeletionRefusal(dir: string, kind: 'scratch'): string | undefined {
+  assertRunSlotsSealed();
+  for (const gate of gates.values()) {
+    const reason = gate.refuseDirectory?.(dir, kind);
     if (reason) return reason;
   }
   return undefined;

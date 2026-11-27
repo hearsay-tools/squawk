@@ -138,12 +138,12 @@ Read the matching document before you:
 
 ### Dev flow bindings
 
-Concrete values for this repo, in one place so every contributor — human
-or agent — reads the same ones. Rows are matched by label, so update a
-row's value when the thing it names changes, rather than its label.
+Concrete values for this repo. Match rows by label; update values in place.
 
 | Binding | Value |
 |---|---|
+| Product vision | `VISION.md` |
+| Code conventions | `CONVENTIONS.md` |
 | Default branch | `main` |
 | Branching model | GitHub flow — feature branches off `main`, pull requests based on `main` |
 | Code host | GitHub |

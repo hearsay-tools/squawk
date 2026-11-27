@@ -34,6 +34,11 @@ const shikiPlugin: CodeHighlighterPlugin = {
   },
 }
 
+const STREAMDOWN_PLUGINS = { code: shikiPlugin }
+const SHIKI_THEME: [typeof SYN_THEME, typeof SYN_THEME] = [SYN_THEME, SYN_THEME]
+const STREAMDOWN_CONTROLS = { code: { copy: true, download: false }, table: false, mermaid: false } as const
+const TASK_REHYPE_PLUGINS = [...Object.values(defaultRehypePlugins), markTaskLinks]
+
 interface MdastNode {
   type: string
   value?: string
@@ -214,6 +219,7 @@ export const Markdown = memo(function Markdown({
     const links = fileContext ? [[taskLinks, fileContext] satisfies [typeof taskLinks, typeof fileContext]] : []
     const images = document && imageSrc ? [[documentImages, instance] satisfies [typeof documentImages, typeof instance]] : []
     return {
+      key: instance.instance,
       remark: [...(breaks ? HARD_BREAKS : Object.values(defaultRemarkPlugins)), ...links, ...images],
       components: {
         ...(fileContext || document ? { a: ({ href, children, node }: { href?: string | undefined; children?: React.ReactNode; node?: object | undefined }) => {
@@ -230,11 +236,14 @@ export const Markdown = memo(function Markdown({
   }, [fileContext, breaks, document, imageSrc])
   return (
     <Streamdown
+      // Streamdown's memo comparator ignores plugins for parsing and custom components.
+      // Reset only when those contextual options change, never on a text append.
+      key={contextual.key}
       className={inline ? 'thread-markdown thread-markdown-inline' : 'thread-markdown'}
-      plugins={{ code: shikiPlugin }}
-      shikiTheme={[SYN_THEME, SYN_THEME]}
+      plugins={STREAMDOWN_PLUGINS}
+      shikiTheme={SHIKI_THEME}
       {...defined({
-        rehypePlugins: fileContext ? [...Object.values(defaultRehypePlugins), markTaskLinks] : undefined,
+        rehypePlugins: fileContext ? TASK_REHYPE_PLUGINS : undefined,
         remarkPlugins: fileContext || (document && imageSrc) ? contextual.remark : breaks ? HARD_BREAKS : undefined,
         allowedElements: inline ? INLINE_ELEMENTS : undefined,
         unwrapDisallowed: inline || undefined,
@@ -243,7 +252,7 @@ export const Markdown = memo(function Markdown({
       linkSafety={LINK_SAFETY}
       // Copy + language chip on every fence (the deliverable); download is file-manager noise
       // in a chat, and table export dropdowns are R5-territory chrome.
-      controls={{ code: { copy: true, download: false }, table: false, mermaid: false }}
+      controls={STREAMDOWN_CONTROLS}
       lineNumbers={false}
     >
       {children}

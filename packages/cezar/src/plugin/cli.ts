@@ -5,13 +5,14 @@ import { pluginLoadReport, type PluginLoadReport } from './loader.ts';
 const USAGE = `usage: cez plugins [--json]
 
 Lists the plugins this process loaded, what each one registered, and the plugins it skipped with
-the reason: first the runners bundled with Squawk (source "bundled"), then the plugins in
+the reason: first the runners and features bundled with Squawk (source "bundled"), then the plugins in
 <config>/plugins/ (source "host"). --json prints the same report as JSON.`;
 
 const CONTRIBUTION_LABELS: ReadonlyArray<[keyof PluginContributions, string]> = [
   ['cliCommands', 'commands'], ['runners', 'runners'], ['agentTools', 'agent tools'],
   ['waitKinds', 'wait kinds'], ['stepKinds', 'step kinds'],
   ['removalSlots', 'removal slots'], ['runLifecycleListeners', 'run lifecycle listeners'],
+  ['launchParts', 'launch parts'],
 ];
 
 function contributionLines(contributions: PluginContributions): string[] {

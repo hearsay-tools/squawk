@@ -1,3 +1,4 @@
+import '../built-in-launch-parts.testkit.ts';
 import { sealTestRunners } from '../core/runner-registry.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { TurnBookkeeper } from './run/turn-bookkeeping.ts';
@@ -14,7 +15,7 @@ import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { handoffInstructions } from '../handoff.ts';
 import { artifactInstructions } from '../artifacts/lifecycle.ts';
-import { jobInstructions } from '../jobs/command.ts';
+import { jobInstructions } from '../features/jobs/command.ts';
 import { RunStore, type RunRecord } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { WorkflowDef } from './types.ts';

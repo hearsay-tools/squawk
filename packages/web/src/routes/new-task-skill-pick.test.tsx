@@ -143,3 +143,29 @@ it('waits for account discovery before checking a deep link against the drafted 
   await waitFor(() => expect(document.querySelector('[data-slot="source-pill"]')?.textContent).toContain('Check'))
   expect(readDraft().source).toEqual({ source: 'skill', ref: 'plugin:check' })
 })
+
+it('marks the source menu busy until the runner skills arrive', async () => {
+  serve({ skills: [{ id: 'spec-writer', name: 'spec-writer', scope: 'repo' }] })
+  const fallback = globalThis.fetch
+  let release!: () => void
+  const held = new Promise<void>((resolve) => { release = resolve })
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes('/runner-skills?')) await held
+    return fallback(input, init)
+  })
+  renderNewTask()
+  await pillReady()
+  fireEvent.click(screen.getByRole('button', { name: 'Choose a skill or workflow' }))
+  await screen.findByPlaceholderText('search skills & workflows…')
+  const menu = document.querySelector<HTMLElement>('[data-slot="source-menu"]')!
+  expect(menu.getAttribute('aria-busy')).toBe('true')
+  expect(document.querySelector('[data-slot="source-skills-loading"]')?.textContent).toBe('Loading skills…')
+  expect(document.querySelector('[data-source-kind="skill"][data-slot="source-option"]')).toBeNull()
+  fireEvent.change(screen.getByPlaceholderText('search skills & workflows…'), { target: { value: 'zzz' } })
+  expect(screen.queryByText('Nothing matches.')).toBeNull()
+  fireEvent.change(screen.getByPlaceholderText('search skills & workflows…'), { target: { value: '' } })
+  await act(async () => { release() })
+  await waitFor(() => expect(menu.getAttribute('aria-busy')).toBe('false'))
+  expect(document.querySelector('[data-slot="source-skills-loading"]')).toBeNull()
+  expect(document.querySelector('[data-source-kind="skill"][data-slot="source-option"][data-source-ref="spec-writer"]')).not.toBeNull()
+})

@@ -1,7 +1,8 @@
+import { SESSION_CONTEXT_FILE_MAX_BYTES } from '@open-mercato/cezar-contract/session-context';
 import { readProjectPath } from './project-paths.ts';
 import { closeSync, constants, fstatSync, openSync, readSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
-import { parse as parseYaml } from 'yaml';
+import { LineCounter, isMap, isScalar, isSeq, parseDocument, type Node as YamlNode } from 'yaml';
 import { z } from 'zod';
 
 /**
@@ -62,13 +63,13 @@ export interface SessionContext {
 const RULE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const TOKEN = /\{\{\s*([^{}]*?)\s*\}\}/g;
 /** A larger config file is refused unread. */
-const CONFIG_LIMIT_BYTES = 256 * 1024;
+const CONFIG_LIMIT_BYTES = SESSION_CONTEXT_FILE_MAX_BYTES;
 const CONFIG_REPORT_ID = 'context.yaml';
 
 const ruleSchema = z.object({
   id: z.string().regex(RULE_ID, 'id must be 1-64 letters, digits, ".", "_" or "-", starting with a letter or digit'),
   on: z.literal('session_start', { error: 'on must be session_start' }),
-  target: z.enum(['parent', 'worker', 'both']).default('both'),
+  target: z.enum(['parent', 'worker', 'both'], { error: 'target must be parent, worker or both' }).default('both'),
   template: z.string().min(1, 'template must not be empty'),
 }).strict();
 
@@ -116,20 +117,118 @@ export function loadSessionContextRules(projectRoot: string): { rules: SessionCo
   if (!file.ok) {
     return file.missing ? { rules: [], reports: [] } : { rules: [], reports: [configSkip(file.reason)] };
   }
-  let doc: unknown;
-  try {
-    doc = parseYaml(file.text);
-  } catch (error) {
-    return { rules: [], reports: [configSkip(`invalid YAML: ${oneLine(error instanceof Error ? error.message : String(error))}`)] };
-  }
-  if (doc === null || doc === undefined) return { rules: [], reports: [] };
-  if (typeof doc !== 'object' || Array.isArray(doc)) return { rules: [], reports: [configSkip('expected a mapping with version and rules')] };
-  const { version, rules } = doc as { version?: unknown; rules?: unknown };
-  if (version !== 1) return { rules: [], reports: [configSkip(`unsupported version ${JSON.stringify(version ?? null)}; expected 1`)] };
-  if (rules === undefined || rules === null) return { rules: [], reports: [] };
-  if (!Array.isArray(rules)) return { rules: [], reports: [configSkip('rules must be a list')] };
+  const { rules, reports } = parseSessionContextText(file.text);
+  return { rules, reports };
+}
 
-  return validateRules(rules);
+/** One thing the cockpit editor must fix before it saves; `line` is 1-based, `rule` the 1-based rule. */
+export interface SessionContextProblem {
+  line: number | null;
+  rule: number | null;
+  message: string;
+}
+
+export interface ParsedSessionContext {
+  /** The rules a launch renders, as `loadSessionContextRules` returns them. */
+  rules: SessionContextRule[];
+  /** What a launch reports for the file and its skipped rules. */
+  reports: SessionContextReport[];
+  /** Every problem in the text, sorted by line. Empty means the file is safe to save. */
+  problems: SessionContextProblem[];
+}
+
+/**
+ * Parse `context.yaml` text once for both readers: a launch takes `rules` and `reports`, the
+ * cockpit editor takes `problems`, each with the line it starts on.
+ */
+export function parseSessionContextText(text: string): ParsedSessionContext {
+  const lineCounter = new LineCounter();
+  const doc = parseDocument(text, { lineCounter });
+  const lineAt = (offset: number | undefined) => (offset === undefined ? null : lineCounter.linePos(offset).line);
+  const fatal = (reason: string, message: string, line: number | null): ParsedSessionContext => ({
+    rules: [], reports: [configSkip(reason)], problems: [{ line, rule: null, message }],
+  });
+  const firstError = doc.errors[0];
+  if (firstError) {
+    const detail = oneLine(firstError.message);
+    return fatal(`invalid YAML: ${detail}`, `Invalid YAML: ${detail}`, lineAt(firstError.pos[0]) ?? 1);
+  }
+  let value: unknown;
+  try {
+    value = doc.toJS();
+  } catch (error) {
+    // An alias with no anchor parses cleanly and fails only here.
+    const detail = oneLine(error instanceof Error ? error.message : String(error));
+    return fatal(`invalid YAML: ${detail}`, `Invalid YAML: ${detail}`, 1);
+  }
+  if (value === null || value === undefined) return { rules: [], reports: [], problems: [] };
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return fatal('expected a mapping with version and rules', 'The file must be a mapping with version and rules', 1);
+  }
+  const root = isMap(doc.contents) ? doc.contents : undefined;
+  const { version, rules } = value as { version?: unknown; rules?: unknown };
+  if (version !== 1) {
+    const found = describeValue(version);
+    const message = version === undefined ? 'version: 1 is required' : `version must be 1, not ${found}`;
+    return fatal(`unsupported version ${found}; expected 1`, message, keyLine(root, 'version', lineAt) ?? 1);
+  }
+  if (rules === undefined || rules === null) return { rules: [], reports: [], problems: [] };
+  if (!Array.isArray(rules)) return fatal('rules must be a list', 'rules must be a list', keyLine(root, 'rules', lineAt) ?? 1);
+
+  const seq = root?.get('rules', true);
+  const nodes = isSeq(seq) ? seq.items : [];
+  return { ...validateRules(rules), problems: ruleProblems(rules, nodes as Array<YamlNode | undefined>, lineAt) };
+}
+
+type LineAt = (offset: number | undefined) => number | null;
+
+/** The line a mapping's `key` starts on, or undefined when the key is absent. */
+function keyLine(map: unknown, key: string, lineAt: LineAt): number | undefined {
+  if (!isMap(map)) return undefined;
+  const pair = map.items.find((item) => isScalar(item.key) && item.key.value === key);
+  const keyNode = pair?.key as YamlNode | undefined;
+  return lineAt(keyNode?.range?.[0]) ?? undefined;
+}
+
+/** The editor's view of each rule: every schema issue, the reserved id and each duplicate id. */
+function ruleProblems(rules: unknown[], nodes: Array<YamlNode | undefined>, lineAt: LineAt): SessionContextProblem[] {
+  const ids = rules.map((raw) => (isRecord(raw) && typeof raw.id === 'string' ? raw.id : undefined));
+  const counts = new Map<string, number>();
+  for (const id of ids) if (id !== undefined) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const problems: SessionContextProblem[] = [];
+  rules.forEach((raw, index) => {
+    const node = nodes[index];
+    const ruleLine = lineAt(node?.range?.[0]);
+    const lineOf = (key: string) => keyLine(node, key, lineAt) ?? ruleLine;
+    const add = (line: number | null, message: string) => problems.push({ line, rule: index + 1, message });
+    const id = ids[index];
+    if (id === HANDOFF_CONTEXT_ID) add(lineOf('id'), `id "${HANDOFF_CONTEXT_ID}" is reserved for the built-in handoff block`);
+    if (id !== undefined && (counts.get(id) ?? 0) > 1) add(lineOf('id'), `duplicate id "${id}"`);
+    const result = ruleSchema.safeParse(raw);
+    if (result.success) return;
+    for (const issue of result.error.issues) {
+      if (issue.code === 'unrecognized_keys') {
+        for (const key of issue.keys) add(lineOf(key), `unknown key "${key}"`);
+        continue;
+      }
+      const key = issue.path[0];
+      if (typeof key !== 'string') add(ruleLine, 'A rule must be a mapping with id, on and template');
+      else if (isRecord(raw) && !(key in raw)) add(ruleLine, `${key} is required`);
+      else add(lineOf(key), issue.message.startsWith(key) ? issue.message : `${key}: ${issue.message}`);
+    }
+  });
+  return problems.sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
+}
+
+/** A rejected value for a message: scalars as JSON, collections by kind (they can be circular). */
+function describeValue(value: unknown): string {
+  if (Array.isArray(value)) return 'a list';
+  if (typeof value === 'object' && value !== null) return 'a mapping';
+  return JSON.stringify(value ?? null);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** Each rule on its own: one bad, duplicate or reserved rule never takes the others down. */
@@ -172,13 +271,23 @@ export interface SessionContextInput {
 
 /** Build one launch's prefix: read the handoff and the rules now, render for this recipient. */
 export function buildSessionContext(input: SessionContextInput): SessionContext {
+  return assemble(input, readBoundedUtf8(input.handoffPath, SESSION_CONTEXT_LIMIT_BYTES), loadSessionContextRules(input.projectRoot));
+}
+
+type RenderedBlock = (id: string, body: string) => void;
+
+function assemble(
+  input: SessionContextInput,
+  handoff: ReadResult,
+  loaded: { rules: SessionContextRule[]; reports: SessionContextReport[] },
+  onApplied?: RenderedBlock,
+): SessionContext {
   const reports: SessionContextReport[] = [];
   const blocks: string[] = [];
   let handoffInjected = false;
   const fits = (block: string) =>
     Buffer.byteLength([...blocks, block].join('\n\n') + SESSION_CONTEXT_SEPARATOR, 'utf8') <= SESSION_CONTEXT_LIMIT_BYTES;
 
-  const handoff = readBoundedUtf8(input.handoffPath, SESSION_CONTEXT_LIMIT_BYTES);
   if (!handoff.ok) {
     reports.push({ ...skip(HANDOFF_CONTEXT_ID, handoff.reason), sources: [input.handoffPath] });
   } else {
@@ -188,12 +297,12 @@ export function buildSessionContext(input: SessionContextInput): SessionContext 
       blocks.push(block);
       handoffInjected = true;
       reports.push({ id: HANDOFF_CONTEXT_ID, status: 'applied', sources: [input.handoffPath], bytes });
+      onApplied?.(HANDOFF_CONTEXT_ID, handoff.text);
     } else {
       reports.push({ ...skip(HANDOFF_CONTEXT_ID, `does not fit the ${SESSION_CONTEXT_LIMIT_BYTES}-byte limit`), sources: [input.handoffPath], bytes });
     }
   }
 
-  const loaded = loadSessionContextRules(input.projectRoot);
   reports.push(...loaded.reports);
   for (const rule of loaded.rules) {
     if (rule.target !== 'both' && rule.target !== input.role) continue;
@@ -210,8 +319,70 @@ export function buildSessionContext(input: SessionContextInput): SessionContext 
     }
     blocks.push(block);
     reports.push({ id: rule.id, status: 'applied', sources: rendered.sources, bytes });
+    onApplied?.(rule.id, rendered.text);
   }
   return { prefix: blocks.length ? blocks.join('\n\n') + SESSION_CONTEXT_SEPARATOR : '', handoffInjected, reports };
+}
+
+/** The preview keeps this many characters of each block's text; its byte count stays whole. */
+export const SESSION_CONTEXT_PREVIEW_TEXT_CHARS = 2_000;
+const SAMPLE_HANDOFF_PATH = '<handoff.path>';
+const SAMPLE_HANDOFF = '# Handoff — <task>\n\n## Goal\n\n<task>\n\n## Progress log\n\n## Resume notes\n';
+
+export interface SessionContextPreviewBlock {
+  id: string;
+  /** `built-in` for the handoff; null for an entry the file could not name a target for. */
+  target: SessionContextRule['target'] | 'built-in' | null;
+  status: SessionContextReportStatus | 'not-for-role';
+  bytes: number | null;
+  reason: string | null;
+  sources: string[];
+  /** The rendered text, cut to `SESSION_CONTEXT_PREVIEW_TEXT_CHARS`; null when nothing rendered. */
+  text: string | null;
+  truncated: boolean;
+}
+
+export interface SessionContextPreview {
+  problems: SessionContextProblem[];
+  blocks: SessionContextPreviewBlock[];
+  usedBytes: number;
+  limitBytes: number;
+}
+
+/**
+ * Render a draft `context.yaml` the way a launch would: against the project checkout, for one
+ * role, with labelled sample values (`<run.id>`) for every task variable and a sample handoff.
+ */
+export function previewSessionContext(options: { projectRoot: string; content: string; role: SessionContextRole }): SessionContextPreview {
+  const parsed = parseSessionContextText(options.content);
+  const variables = Object.fromEntries(SESSION_CONTEXT_VARIABLES.map((name) => [name, `<${name}>`])) as Record<SessionContextVariable, string>;
+  variables.role = options.role;
+  const input: SessionContextInput = {
+    projectRoot: options.projectRoot, cwd: options.projectRoot, role: options.role, handoffPath: SAMPLE_HANDOFF_PATH, variables,
+  };
+  const texts = new Map<string, string>();
+  const context = assemble(input, { ok: true, text: SAMPLE_HANDOFF }, parsed, (id, body) => texts.set(id, body.replace(/\n+$/, '')));
+  // `assemble` reports the handoff first, then the file's own skips, then each rendered rule.
+  // Valid rule ids are unique and never `handoff`; a skipped entry can share any id.
+  const [handoffReport, ...rest] = context.reports;
+  const reportFor = new Map(rest.slice(parsed.reports.length).map((report) => [report.id, report]));
+  const block = (report: SessionContextReport, target: SessionContextPreviewBlock['target']): SessionContextPreviewBlock => {
+    const text = texts.get(report.id) ?? null;
+    return {
+      id: report.id, target, status: report.status, bytes: report.bytes ?? null, reason: report.reason ?? null, sources: report.sources,
+      text: text === null ? null : text.slice(0, SESSION_CONTEXT_PREVIEW_TEXT_CHARS),
+      truncated: text !== null && text.length > SESSION_CONTEXT_PREVIEW_TEXT_CHARS,
+    };
+  };
+  const blocks: SessionContextPreviewBlock[] = [block(handoffReport!, 'built-in')];
+  for (const rule of parsed.rules) {
+    const report = reportFor.get(rule.id);
+    blocks.push(report
+      ? block(report, rule.target)
+      : { id: rule.id, target: rule.target, status: 'not-for-role', bytes: null, reason: null, sources: [], text: null, truncated: false });
+  }
+  for (const report of parsed.reports) blocks.push({ ...block(report, null), text: null, truncated: false });
+  return { problems: parsed.problems, blocks, usedBytes: Buffer.byteLength(context.prefix, 'utf8'), limitBytes: SESSION_CONTEXT_LIMIT_BYTES };
 }
 
 /** The one lifecycle line a launch reports: each block's outcome, never its contents. */
@@ -231,20 +402,53 @@ function renderBlock(id: string, body: string, source?: string): string {
 type Rendered = { ok: true; text: string; sources: string[] } | { ok: false; reason: string; sources: string[] };
 
 /**
+ * The bytes a block body will have, counted as its pieces arrive. A run of LF at the end is held
+ * apart: `renderBlock` drops it, so it counts only once later text follows it.
+ */
+class RenderedSize {
+  private committed = 0;
+  private lfRun = 0;
+
+  add(text: string): void {
+    const body = text.replace(/\n+$/, '');
+    const run = text.length - body.length;
+    if (body === '') {
+      this.lfRun += run;
+      return;
+    }
+    this.committed += this.lfRun + Buffer.byteLength(body, 'utf8');
+    this.lfRun = run;
+  }
+
+  get over(): boolean {
+    return this.committed > SESSION_CONTEXT_LIMIT_BYTES;
+  }
+}
+
+/**
  * Expand a template in one pass over the template text only: a value or file content that
  * holds `{{…}}` stays literal. Every token is resolved before anything is emitted, so one bad
- * token skips the whole rule instead of shipping a half-rendered block.
+ * token skips the whole rule instead of shipping a half-rendered block. Once the body alone is
+ * over the limit the block cannot fit, so rendering stops: repeated includes must not grow a
+ * small template into an unbounded string.
  */
 function renderTemplate(template: string, input: SessionContextInput): Rendered {
   const sources: string[] = [];
   const values: string[] = [];
+  const size = new RenderedSize();
+  const tooLarge = (): Rendered => ({ ok: false, reason: `does not fit the ${SESSION_CONTEXT_LIMIT_BYTES}-byte limit`, sources });
+  let literalStart = 0;
   for (const match of template.matchAll(TOKEN)) {
+    size.add(template.slice(literalStart, match.index));
+    literalStart = match.index + match[0].length;
     const token = match[1]!;
     if (token.startsWith('file:')) {
       const path = token.slice('file:'.length).trim();
       sources.push(path);
       const file = readIncludedFile(input.cwd, path);
       if (!file.ok) return { ok: false, reason: `file ${path}: ${file.reason}`, sources };
+      size.add(file.text);
+      if (size.over) return tooLarge();
       values.push(file.text);
       continue;
     }
@@ -253,6 +457,7 @@ function renderTemplate(template: string, input: SessionContextInput): Rendered 
     }
     const value = input.variables[token as SessionContextVariable];
     if (value === undefined) return { ok: false, reason: `variable {{${token}}} is not available for this launch`, sources };
+    size.add(value);
     values.push(value);
   }
   let index = 0;

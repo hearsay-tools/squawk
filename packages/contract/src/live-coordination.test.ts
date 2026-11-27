@@ -15,14 +15,18 @@ describe('recurring read cadence', () => {
 })
 
 describe('protocol version (hearsay-tools/cezarion#2729)', () => {
-  it('is 3 with a matching worker name, and a version-2 worker message does not parse', () => {
+  it('is 4 with a matching worker name and rejects older worker messages', () => {
     expect(LIVE_WORKER_NAME).toBe(`cezar-live-v${LIVE_PROTOCOL}`)
-    expect(ownerOutputSchema.safeParse({ type: 'hello', version: 2 }).success).toBe(false)
-    expect(ownerOutputSchema.safeParse({ type: 'hello', version: 3 }).success).toBe(true)
-    expect(ownerInputSchema.safeParse({ version: 2, documentId: 'tab', epoch: 1, type: 'sync', entries: [] }).success).toBe(false)
+    expect(ownerOutputSchema.safeParse({ type: 'hello', version: 3 }).success).toBe(false)
+    expect(ownerOutputSchema.safeParse({ type: 'hello', version: 4 }).success).toBe(true)
+    expect(ownerInputSchema.safeParse({ version: 3, documentId: 'tab', epoch: 1, type: 'sync', entries: [] }).success).toBe(false)
+    expect(LIVE_PROTOCOL).toBe(4)
+    const ack = { version: 4, documentId: 'tab', epoch: 1, type: 'ack-snapshot', id: 'run' }
+    expect(ownerInputSchema.parse(ack)).toEqual(ack)
+    expect(ownerInputSchema.safeParse({ ...ack, version: 3 }).success).toBe(false)
     // A document that lost the workspace ready asks for it on its sync.
-    expect(ownerInputSchema.safeParse({ version: 3, documentId: 'tab', epoch: 1, type: 'sync', entries: [], workspaceReady: true }).success).toBe(true)
-    expect(ownerInputSchema.safeParse({ version: 3, documentId: 'tab', epoch: 1, type: 'sync', entries: [], workspaceReady: false }).success).toBe(false)
+    expect(ownerInputSchema.safeParse({ version: 4, documentId: 'tab', epoch: 1, type: 'sync', entries: [], workspaceReady: true }).success).toBe(true)
+    expect(ownerInputSchema.safeParse({ version: 4, documentId: 'tab', epoch: 1, type: 'sync', entries: [], workspaceReady: false }).success).toBe(false)
   })
 })
 

@@ -7,14 +7,17 @@ import { traverse } from '@babel/types';
 import { afterEach, expect, it, vi } from 'vitest';
 import { BUILT_IN_RUNNER_IDS } from './core/built-in-runner-ids.testkit.ts';
 import { bundledRunnersDir } from './plugin/bundled-runners.ts';
+import { bundledFeaturesDir } from './plugin/bundled-features.ts';
 
 const srcRoot = fileURLToPath(new URL('.', import.meta.url));
 
 /** Registry definition modules may call seal. Production boot may not, except boot.ts. */
 const SEAL_ALLOWLIST = new Set([
   'boot.ts',
+  'built-in-launch-parts.ts',
   'built-in-run-slots.ts',
   'core/cli-registry.ts',
+  'core/launch-registry.ts',
   'core/runner-registry.ts',
   'runs/lifecycle-registry.ts',
   'runs/removal-slots.ts',
@@ -33,7 +36,7 @@ function productionSources(dir = ''): string[] {
   });
 }
 
-it('seals all eight registries and runs beforeSeal only on the first full boot', async () => {
+it('seals all nine registries and runs beforeSeal only on the first full boot', async () => {
   vi.resetModules();
   const boot = await import('./boot.ts');
   const order: string[] = [];
@@ -45,11 +48,12 @@ it('seals all eight registries and runs beforeSeal only on the first full boot',
   const tools = await import('./ci-wait/tool-registry.ts');
   const waits = await import('./workflows/run/wait-kind-registry.ts');
   const lifecycle = await import('./runs/lifecycle-registry.ts');
+  const launch = await import('./core/launch-registry.ts');
   const sealed = () => ({
     cli: cli.cliCommandsSealed(), runners: runners.runnersSealed(), slots: slots.runSlotsSealed(),
     workers: workers.workerExecutionsSealed(), steps: steps.stepKindsSealed(),
     tools: tools.agentToolsSealed(), waits: waits.waitKindsSealed(),
-    lifecycle: lifecycle.runLifecycleListenersSealed(),
+    lifecycle: lifecycle.runLifecycleListenersSealed(), launch: launch.launchPartsSealed(),
   });
   expect(Object.values(sealed()).some(Boolean)).toBe(false);
   await boot.bootRuntime({ beforeSeal: () => {
@@ -59,8 +63,9 @@ it('seals all eight registries and runs beforeSeal only on the first full boot',
   } });
   expect(order).toEqual(['hook']);
   expect(sealed()).toEqual({
-    cli: true, runners: true, slots: true, workers: true, steps: true, tools: true, waits: true, lifecycle: true,
+    cli: true, runners: true, slots: true, workers: true, steps: true, tools: true, waits: true, lifecycle: true, launch: true,
   });
+  expect(launch.registeredLaunchParts().map(part => part.id)).toEqual(['automations', 'webhooks', 'artifacts', 'jobs']);
   await boot.bootRuntime({ beforeSeal: () => { order.push('again'); } });
   expect(order).toEqual(['hook']);
 });
@@ -71,7 +76,9 @@ it('seals only the CLI command table on a cold boot', async () => {
   const cli = await import('./core/cli-registry.ts');
   boot.bootColdCli();
   expect(cli.cliCommandsSealed()).toBe(true);
-  expect(cli.knownCliCommand('job')?.name).toBe('job');
+  expect(cli.knownCliCommand('message')?.name).toBe('message');
+  // `job` belongs to the bundled jobs feature, which only a runtime boot loads.
+  expect(cli.knownCliCommand('job')).toBeUndefined();
   const runners = await import('./core/runner-registry.ts');
   const slots = await import('./runs/removal-slots.ts');
   const workers = await import('./runs/worker-executions-registry.ts');
@@ -79,11 +86,12 @@ it('seals only the CLI command table on a cold boot', async () => {
   const tools = await import('./ci-wait/tool-registry.ts');
   const waits = await import('./workflows/run/wait-kind-registry.ts');
   const lifecycle = await import('./runs/lifecycle-registry.ts');
+  const launch = await import('./core/launch-registry.ts');
   expect([
     runners.runnersSealed(), slots.runSlotsSealed(), workers.workerExecutionsSealed(),
     steps.stepKindsSealed(), tools.agentToolsSealed(), waits.waitKindsSealed(),
-    lifecycle.runLifecycleListenersSealed(),
-  ]).toEqual([false, false, false, false, false, false, false]);
+    lifecycle.runLifecycleListenersSealed(), launch.launchPartsSealed(),
+  ]).toEqual([false, false, false, false, false, false, false, false]);
   boot.bootColdCli();
   expect(runners.runnersSealed()).toBe(false);
 });
@@ -106,7 +114,9 @@ it('boots the other registries after the CLI command table is already sealed', a
   registerCliCommand(command);
   sealCliCommands();
   const boot = await import('./boot.ts');
-  await boot.bootRuntime();
+  // A bundled feature that adds a command cannot join a table sealed before boot: load none.
+  const features = mkdtempSync(join(tmpdir(), 'hsq-no-features-'));
+  try { await boot.bootRuntime({ bundledFeaturesDir: features }); } finally { rmSync(features, { recursive: true, force: true }); }
   const { cliCommand } = await import('./core/cli-registry.ts');
   const { runnersSealed } = await import('./core/runner-registry.ts');
   expect(cliCommand('fixture')).toBe(command);
@@ -141,6 +151,7 @@ it('installs the resolve hook, loads the bundled runners, then host plugins, the
     return {
       ...loader,
       loadBundledRunners: async (...args: Parameters<typeof loader.loadBundledRunners>) => { order.push('runners'); return loader.loadBundledRunners(...args); },
+      loadBundledFeatures: async (...args: Parameters<typeof loader.loadBundledFeatures>) => { order.push('features'); return loader.loadBundledFeatures(...args); },
       loadPluginFolder: async (...args: Parameters<typeof loader.loadPluginFolder>) => { order.push('plugins'); return loader.loadPluginFolder(...args); },
     };
   });
@@ -155,12 +166,12 @@ it('installs the resolve hook, loads the bundled runners, then host plugins, the
       expect(cli.cliCommandsSealed()).toBe(false);
     } });
     // The loader asks for the hook again before the first plugin of each folder; the real install is idempotent.
-    expect(order).toEqual(['hook', 'runners', 'hook', 'plugins', 'hook', 'beforeSeal']);
+    expect(order).toEqual(['hook', 'runners', 'hook', 'features', 'hook', 'plugins', 'hook', 'beforeSeal']);
     expect(cli.cliCommand('extra')?.name).toBe('extra');
     expect(lifecycle.registeredRunLifecycleListeners()).toHaveLength(1);
     const report = (await import('./plugin/loader.ts')).pluginLoadReport();
-    expect(report.folders).toEqual([bundledRunnersDir(), dir]);
-    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([...BUILT_IN_RUNNER_IDS.map(id => [id, 'bundled']), ['extra', 'host']]);
+    expect(report.folders).toEqual([bundledRunnersDir(), bundledFeaturesDir(), dir]);
+    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([...BUILT_IN_RUNNER_IDS.map(id => [id, 'bundled']), ['jobs', 'bundled'], ['extra', 'host']]);
     expect(report.failed).toEqual([]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -174,7 +185,9 @@ it('loads no host plugin without a plugin folder and never installs the hook on 
   const boot = await import('./boot.ts');
   boot.bootColdCli();
   expect(install).not.toHaveBeenCalled();
-  await boot.bootRuntime();
+  // The cold boot sealed the command table, so no bundled feature that adds a command may load.
+  const features = mkdtempSync(join(tmpdir(), 'hsq-no-features-'));
+  try { await boot.bootRuntime({ bundledFeaturesDir: features }); } finally { rmSync(features, { recursive: true, force: true }); }
   // Once by boot and once by the bundled runner load.
   expect(install).toHaveBeenCalledTimes(2);
   expect((await import('./plugin/loader.ts')).pluginLoadReport().folders).toEqual([bundledRunnersDir()]);
@@ -190,10 +203,35 @@ it('does not load host plugins twice when a failed hook is retried', async () =>
     await expect(boot.bootRuntime({ pluginsDir: dir, beforeSeal: () => { throw new Error('hook failed'); } })).rejects.toThrow('hook failed');
     await boot.bootRuntime({ pluginsDir: dir });
     const report = (await import('./plugin/loader.ts')).pluginLoadReport();
-    expect(report.folders).toEqual([bundledRunnersDir(), dir]);
-    expect(report.loaded.map(plugin => plugin.name)).toEqual([...BUILT_IN_RUNNER_IDS, 'extra']);
+    expect(report.folders).toEqual([bundledRunnersDir(), bundledFeaturesDir(), dir]);
+    expect(report.loaded.map(plugin => plugin.name)).toEqual([...BUILT_IN_RUNNER_IDS, 'jobs', 'extra']);
     expect(report.failed).toEqual([]);
     expect((await import('./core/cli-registry.ts')).cliCommand('extra')?.name).toBe('extra');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it('runs a host plugin launch part without an order after the built-in launch parts', async () => {
+  vi.resetModules();
+  const dir = mkdtempSync(join(tmpdir(), 'hsq-boot-launch-'));
+  mkdirSync(join(dir, 'greeting'));
+  writeFileSync(join(dir, 'greeting', 'index.mjs'), `export default function setup(api) {
+  api.registerLaunchPart({ id: 'greeting', contribute: ({ env }) => ({ env: { GREETING: 'hi' }, prompt: 'artifacts env seen: ' + (env.HSQ_ARTIFACTS_DIR !== undefined) }) });
+}
+`);
+  try {
+    const boot = await import('./boot.ts');
+    await boot.bootRuntime({ pluginsDir: dir });
+    const launch = await import('./core/launch-registry.ts');
+    expect(launch.registeredLaunchParts().map(part => part.id)).toEqual(['automations', 'webhooks', 'artifacts', 'jobs', 'greeting']);
+    const report = (await import('./plugin/loader.ts')).pluginLoadReport();
+    expect(report.loaded.find(plugin => plugin.name === 'greeting')?.contributions.launchParts).toEqual(['greeting']);
+    const { Home } = await import('./home/home.ts');
+    const resolved = await launch.resolveLaunchParts({ runId: 'boot-run', dataDir: dir, repoRoot: dir,
+      home: Home.sandbox(join(dir, 'home')), cockpit: undefined, env: {} });
+    expect(resolved.env.GREETING).toBe('hi');
+    expect(resolved.prompts.at(-1)).toBe('artifacts env seen: true');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -260,11 +298,82 @@ it('boots with no bundled runner when bundledRunnersDir is empty and reuses that
     const runners = await import('./core/runner-registry.ts');
     expect(runners.registeredRunners().map(runner => [runner.id, runner.display.displayName])).toEqual([['claude', 'Host Claude']]);
     const report = (await import('./plugin/loader.ts')).pluginLoadReport();
-    expect(report.folders).toEqual([emptyBundled, hostDir]);
-    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([['claude', 'host']]);
+    expect(report.folders).toEqual([emptyBundled, bundledFeaturesDir(), hostDir]);
+    expect(report.loaded.map(plugin => [plugin.name, plugin.source])).toEqual([['jobs', 'bundled'], ['claude', 'host']]);
     expect(report.failed).toEqual([]);
   } finally {
     rmSync(emptyBundled, { recursive: true, force: true });
     rmSync(hostDir, { recursive: true, force: true });
   }
+});
+
+it('loads the feature override before host plugins and reuses it after a failed hook', async () => {
+  vi.resetModules();
+  const features = pluginsDir();
+  const host = mkdtempSync(join(tmpdir(), 'hsq-feature-host-'));
+  mkdirSync(join(host, 'host'));
+  writeFileSync(join(host, 'host', 'index.mjs'), `export default api => {
+    api.registerCliCommand({ name: 'host-extra', usage: [], parseMode: 'subcommand', homeMode: 'none', runtimeMode: 'none', load: async () => async () => 0 });
+  };`);
+  try {
+    const boot = await import('./boot.ts');
+    await expect(boot.bootRuntime({ bundledFeaturesDir: features, pluginsDir: host, beforeSeal: async () => {
+      const cli = await import('./core/cli-registry.ts');
+      const report = (await import('./plugin/loader.ts')).pluginLoadReport();
+      expect(report.loaded.slice(-2).map(plugin => plugin.contributions.cliCommands)).toEqual([['extra'], ['host-extra']]);
+      expect(cli.cliCommandsSealed()).toBe(false);
+      throw new Error('retry feature boot');
+    } })).rejects.toThrow('retry feature boot');
+    await boot.bootRuntime({ bundledFeaturesDir: features, pluginsDir: host });
+    const report = (await import('./plugin/loader.ts')).pluginLoadReport();
+    expect(report.folders).toEqual([bundledRunnersDir(), features, host]);
+    expect(report.loaded.slice(-2).map(({ name, source }) => [name, source])).toEqual([['extra', 'bundled'], ['host', 'host']]);
+  } finally {
+    rmSync(features, { recursive: true, force: true });
+    rmSync(host, { recursive: true, force: true });
+  }
+});
+
+it('loads the shipped jobs feature as a bundled plugin with its command, removal slot and launch part', async () => {
+  vi.resetModules();
+  const boot = await import('./boot.ts');
+  await boot.bootRuntime();
+  const jobs = (await import('./plugin/loader.ts')).pluginLoadReport().loaded.find(plugin => plugin.name === 'jobs');
+  expect(jobs?.source).toBe('bundled');
+  expect(jobs?.path).toBe(join(bundledFeaturesDir(), 'jobs'));
+  expect(jobs?.contributions).toMatchObject({ cliCommands: ['job'], removalSlots: 1, launchParts: ['jobs'] });
+  expect((await import('./core/cli-registry.ts')).cliCommand('job')?.name).toBe('job');
+});
+
+it('boots without the jobs feature when the features folder is empty', async () => {
+  vi.resetModules();
+  const features = mkdtempSync(join(tmpdir(), 'hsq-no-features-'));
+  try {
+    const boot = await import('./boot.ts');
+    await boot.bootRuntime({ bundledFeaturesDir: features });
+    const report = (await import('./plugin/loader.ts')).pluginLoadReport();
+    expect(report.loaded.map(plugin => plugin.name)).not.toContain('jobs');
+    expect(report.failed).toEqual([]);
+    expect((await import('./core/cli-registry.ts')).hasCliCommand('job')).toBe(false);
+    expect((await import('./core/launch-registry.ts')).registeredLaunchParts().map(part => part.id)).toEqual(['automations', 'webhooks', 'artifacts']);
+  } finally {
+    rmSync(features, { recursive: true, force: true });
+  }
+});
+
+it('retains a bundled feature failure on retry and never loads host plugins or seals', async () => {
+  vi.resetModules();
+  const failure = new Error('Bundled feature "broken" failed to load: broken');
+  const load = vi.fn(async () => { throw failure; });
+  const host = vi.fn();
+  vi.doMock('./plugin/loader.ts', async original => ({
+    ...await original<typeof import('./plugin/loader.ts')>(), loadBundledFeatures: load, loadPluginFolder: host,
+  }));
+  const boot = await import('./boot.ts');
+  await expect(boot.bootRuntime({ bundledFeaturesDir: '/features', pluginsDir: '/host' })).rejects.toBe(failure);
+  await expect(boot.bootRuntime()).rejects.toBe(failure);
+  expect(load).toHaveBeenCalledExactlyOnceWith('/features');
+  expect(host).not.toHaveBeenCalled();
+  expect((await import('./core/cli-registry.ts')).cliCommandsSealed()).toBe(false);
+  expect((await import('./core/runner-registry.ts')).runnersSealed()).toBe(false);
 });

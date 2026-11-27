@@ -147,11 +147,13 @@ function fileText(path: string): string {
   return existsSync(path) ? readFileSync(path, 'utf8') : '';
 }
 
-function wireSince(argsFile: string, stdinFile: string, marked: { args: number; stdin: number }): string {
+type WireMark = { args: number; stdin: number };
+
+function wireSince(argsFile: string, stdinFile: string, marked: WireMark): string {
   return `${fileText(argsFile).slice(marked.args)}${fileText(stdinFile).slice(marked.stdin)}`;
 }
 
-function markWire(argsFile: string, stdinFile: string): { args: number; stdin: number } {
+function markWire(argsFile: string, stdinFile: string): WireMark {
   return { args: fileText(argsFile).length, stdin: fileText(stdinFile).length };
 }
 
@@ -212,24 +214,86 @@ async function idleClose(manager: RunManager, runId: string): Promise<void> {
   expect(closed()).toHaveLength(before + 1);
 }
 
+/** What a run-aware wait reads; the fixture's getters follow a restart to the new store and manager. */
+interface RunWatch {
+  readonly manager: RunManager;
+  readonly store: RunStore;
+  readonly runId: string;
+  readonly wireSince: (marked: WireMark) => string;
+}
+
+const SETTLED_RUN: ReadonlySet<string> = new Set(['review', 'done', 'failed', 'cancelled']);
+const DESCRIBED_RUN_EVENTS = 40;
+const DESCRIBED_WIRE_CHARS = 4_000;
+
+function clip(text: string, max: number): string {
+  return text.length > max ? `…${text.slice(text.length - max)}` : text;
+}
+
+/** The run's state, its status history, its last events and the wire since `marked`, for a failure message. */
+function describeRun(fixture: RunWatch, statuses: readonly string[], marked: WireMark | undefined): string {
+  const run = fixture.store.getRun(fixture.runId);
+  if (!run) return `run ${fixture.runId}: not in the store`;
+  const steps = run.steps.map(step => `  ${step.id} ${step.status}${step.sessionId ? ` session=${step.sessionId}` : ''}${step.backend ? ` backend=${step.backend}` : ''}`);
+  const events = fixture.store.eventLog.readEvents(fixture.runId);
+  const from = Math.max(0, events.length - DESCRIBED_RUN_EVENTS);
+  return [
+    `run ${run.id}: status=${run.status} active=${fixture.manager.isActive(run.id)} currentStep=${run.currentStepId ?? '-'}${run.error ? ` error=${run.error}` : ''}`,
+    `statuses during the wait: ${statuses.join(' -> ') || '(no write)'}`,
+    'steps:', ...steps,
+    `events${from > 0 ? ` (last ${DESCRIBED_RUN_EVENTS} of ${events.length})` : ''}:`,
+    ...events.slice(from).map(event => `  ${clip(JSON.stringify(event), 400)}`),
+    ...(marked ? ['wire since the mark:', clip(fixture.wireSince(marked), DESCRIBED_WIRE_CHARS)] : []),
+  ].join('\n');
+}
+
+/**
+ * Wait until `cond` holds for the fixture's run. A run that settles, or that sits `waiting` after its
+ * live session ended, fails the wait at once: nothing in these cells starts it again. The bound stays
+ * a hang guard. Either failure carries the run's state, its events and the wire since `marked`.
+ */
+async function untilRun(fixture: RunWatch, cond: () => boolean, marked?: WireMark, ms = 10_000): Promise<void> {
+  const statuses: string[] = [];
+  const stopWrites = onRunWrite(fixture.store.lifecycle, run => {
+    if (run.id === fixture.runId && statuses.at(-1) !== run.status) statuses.push(run.status);
+  });
+  const start = Date.now();
+  let wasActive = false;
+  try {
+    // bound: `ms` is a hang guard only; the run settling or its session ending is the earlier signal.
+    while (!cond()) {
+      const status = fixture.store.getRun(fixture.runId)?.status ?? 'missing';
+      const active = fixture.manager.isActive(fixture.runId);
+      const ended = SETTLED_RUN.has(status) || status === 'missing'
+        ? `the run is ${status}`
+        : wasActive && !active && status === 'waiting' ? 'the run\'s session ended while it waited' : undefined;
+      if (ended) throw new Error(`${ended} before ${cond.toString()}\n${describeRun(fixture, statuses, marked)}`);
+      wasActive ||= active;
+      const elapsed = Date.now() - start;
+      if (elapsed > ms) throw new Error(`waitFor timed out after ${elapsed}ms: ${cond.toString()}\n${describeRun(fixture, statuses, marked)}`);
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+  } finally {
+    stopWrites();
+  }
+}
+
+const PROMPT_MARKERS = ['--append-system-prompt', 'turn/start', 'session/prompt', 'prompt_async', '--output-format'];
+
+/** Wait until the continued run parks on its live session with its prompt on the wire since `marked`. */
+async function untilParkedWithPrompt(fixture: RunWatch, marked: WireMark, markers: readonly string[] = PROMPT_MARKERS): Promise<void> {
+  await untilRun(fixture, () => fixture.store.getRun(fixture.runId)?.status === 'waiting' && fixture.manager.isActive(fixture.runId), marked);
+  await untilRun(fixture, () => markers.some(marker => fixture.wireSince(marked).includes(marker)), marked);
+}
+
 /** Idle-close leaves the run `waiting`, so a second wait-for-waiting is a race. */
 async function continueAndPark(
-  fixture: {
-    manager: RunManager;
-    store: RunStore;
-    runId: string;
-    argsFile: string;
-    stdinFile: string;
-    markWire: () => { args: number; stdin: number };
-    wireSince: (marked: { args: number; stdin: number }) => string;
-  },
+  fixture: RunWatch,
   opts: { text: string; runner?: string },
-  marked: { args: number; stdin: number },
+  marked: WireMark,
 ): Promise<string> {
   expect(fixture.manager.continueRun(fixture.runId, opts).ok).toBe(true);
-  await waitFor(() => fixture.manager.isActive(fixture.runId) || fixture.store.getRun(fixture.runId)?.status === 'running');
-  await waitFor(() => fixture.store.getRun(fixture.runId)?.status === 'waiting' && fixture.manager.isActive(fixture.runId));
-  await waitFor(() => fixture.wireSince(marked).includes('--append-system-prompt') || fixture.wireSince(marked).includes('turn/start') || fixture.wireSince(marked).includes('session/prompt') || fixture.wireSince(marked).includes('prompt_async') || fixture.wireSince(marked).includes('--output-format'));
+  await untilParkedWithPrompt(fixture, marked);
   return fixture.wireSince(marked);
 }
 
@@ -243,8 +307,8 @@ async function withSkillResumeRun(
     argsFile: string;
     stdinFile: string;
     snapshotWire: () => string;
-    markWire: () => { args: number; stdin: number };
-    wireSince: (marked: { args: number; stdin: number }) => string;
+    markWire: () => WireMark;
+    wireSince: (marked: WireMark) => string;
     restart: () => Promise<void>;
   }) => Promise<void>,
 ): Promise<void> {
@@ -287,10 +351,11 @@ async function withSkillResumeRun(
       worktree: false,
       systemPrompt: EXTRA_PROMPT,
     });
-    await waitFor(() => store!.getRun(started.id)?.status === 'waiting', 30_000);
+    const since = (marked: WireMark) => wireSince(argsFile, stdinFile, marked);
+    const launch: RunWatch = { store, manager, runId: started.id, wireSince: since };
+    await untilRun(launch, () => launch.store.getRun(launch.runId)?.status === 'waiting', undefined, 30_000);
     const snapshotWire = () => readRecording(argsFile, stdinFile);
     const mark = () => markWire(argsFile, stdinFile);
-    const since = (marked: { args: number; stdin: number }) => wireSince(argsFile, stdinFile, marked);
     const restart = async () => {
       store!.persistence.flush();
       const dataDir = join(repoRoot, '.ai/cezar');
@@ -377,15 +442,13 @@ const ENGINE_CELLS: SkillResumeEngineCells = {
       expect(persisted?.continuationMessage).toBeDefined();
       expect(['running', 'queued']).toContain(persisted?.status);
       await fixture.restart();
-      await waitFor(() => fixture.manager.isActive(fixture.runId) || ['queued', 'running', 'waiting'].includes(fixture.store.getRun(fixture.runId)?.status ?? ''));
-      await waitFor(() => fixture.store.getRun(fixture.runId)?.status === 'waiting' && fixture.manager.isActive(fixture.runId));
-      await waitFor(() => fixture.wireSince(marked).includes('--append-system-prompt') || fixture.wireSince(marked).includes('turn/start') || fixture.wireSince(marked).includes('session/prompt') || fixture.wireSince(marked).includes('prompt_async') || fixture.wireSince(marked).includes('--output-format'));
+      await untilParkedWithPrompt(fixture, marked);
       assertContinuationSkill(backend, fixture.repoRoot, launchPrompt, fixture.wireSince(marked));
     });
   },
   recordedSession: backend => async () => {
     await withSkillResumeRun(backend, async (fixture) => {
-      await waitFor(() => Boolean(fixture.store.getRun(fixture.runId)?.steps?.some((step) => Boolean(step.sessionId))));
+      await untilRun(fixture, () => Boolean(fixture.store.getRun(fixture.runId)?.steps?.some((step) => Boolean(step.sessionId))));
       const sessionId = recordedSessionId(fixture.store, fixture.runId);
       await idleClose(fixture.manager, fixture.runId);
       const continuedMark = fixture.markWire();
@@ -397,9 +460,7 @@ const ENGINE_CELLS: SkillResumeEngineCells = {
       const recoverMark = fixture.markWire();
       expect(fixture.manager.continueRun(fixture.runId, { text: promptFor(backend, 'baseline') }).ok).toBe(true);
       await fixture.restart();
-      await waitFor(() => fixture.manager.isActive(fixture.runId) || ['queued', 'running', 'waiting'].includes(fixture.store.getRun(fixture.runId)?.status ?? ''));
-      await waitFor(() => fixture.store.getRun(fixture.runId)?.status === 'waiting' && fixture.manager.isActive(fixture.runId));
-      await waitFor(() => fixture.wireSince(recoverMark).includes('--append-system-prompt') || fixture.wireSince(recoverMark).includes('turn/start') || fixture.wireSince(recoverMark).includes('session/prompt') || fixture.wireSince(recoverMark).includes('prompt_async') || fixture.wireSince(recoverMark).includes('session/load') || fixture.wireSince(recoverMark).includes('thread/resume') || fixture.wireSince(recoverMark).includes('--output-format'));
+      await untilParkedWithPrompt(fixture, recoverMark, [...PROMPT_MARKERS, 'session/load', 'thread/resume']);
       assertReusedRecordedSession(backend, fixture.wireSince(recoverMark), sessionId, fileText(fixture.argsFile).slice(recoverMark.args));
       expect(recordedSessionId(fixture.store, fixture.runId)).toBe(sessionId);
     });
@@ -421,7 +482,7 @@ const ENGINE_CELLS: SkillResumeEngineCells = {
         event.type === 'session' && event.stepId === 'continue-1')).toBe(false);
       const marked = fixture.markWire();
       await fixture.restart();
-      await waitFor(() => fixture.wireSince(marked).includes('--append-system-prompt') || fixture.wireSince(marked).includes('turn/start') || fixture.wireSince(marked).includes('session/prompt') || fixture.wireSince(marked).includes('prompt_async') || fixture.wireSince(marked).includes('--output-format'));
+      await untilRun(fixture, () => PROMPT_MARKERS.some(marker => fixture.wireSince(marked).includes(marker)), marked);
       assertReusedRecordedSession(backend, fixture.wireSince(marked), sessionId, fileText(fixture.argsFile).slice(marked.args));
       expect(fixture.store.getRun(fixture.runId)?.status).not.toBe('failed');
     });
@@ -432,7 +493,7 @@ const ENGINE_CELLS: SkillResumeEngineCells = {
       fixture.manager.setSkillCatalog(fixedSkillCatalog());
       const marked = fixture.markWire();
       expect(fixture.manager.continueRun(fixture.runId, { text: promptFor(backend, 'baseline') }).ok).toBe(true);
-      await waitFor(() => fixture.store.getRun(fixture.runId)?.status === 'failed');
+      await untilRun(fixture, () => fixture.store.getRun(fixture.runId)?.status === 'failed', marked);
       expect(fixture.store.getRun(fixture.runId)?.error).toContain(`${backend} account "default"`);
       expect(hasNativeTrigger(backend, fixture.wireSince(marked))).toBe(false);
     });

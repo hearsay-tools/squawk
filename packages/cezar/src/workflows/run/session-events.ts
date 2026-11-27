@@ -1,4 +1,3 @@
-import { productEnv } from '../../core/product-env.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { nudgeAwaitsAcknowledgement, retireNudge } from './turn-nudges.ts';
 import { randomUUID } from 'node:crypto';
@@ -7,14 +6,13 @@ import type { RunRecord } from '../../runs/store.ts';
 import type { RunPatchInput } from '../../runs/ports.ts';
 import { AgentTempDirError } from '../../runs/agent-tmpdir.ts';
 import { ToolsUnavailableError } from '../../ci-wait/errors.ts';
-import { artifactInstructions } from '../../artifacts/lifecycle.ts';
-import { jobInstructions } from '../../jobs/command.ts';
+import type { ResolvedLaunchParts } from '../../core/launch-registry.ts';
 import { handoffInstructions } from '../../handoff.ts';
 import type { SessionContext } from '../../session-context.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
 import type { RunExitId, ExitCall } from '../../runs/run-exits.ts';
 import { openWaitsFooter } from '../waits.ts';
-import { composeSystemPrompt, withResumeContext } from './prompts.ts';
+import { agentDirectories, composeSystemPrompt, withResumeContext } from './prompts.ts';
 import { isDisposedDelegatedRun } from './run-guards.ts';
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 import { clearIdleTimer, clearHeldHumanInputTimer, clearUnreadInputTimer } from './input-timers.ts';
@@ -26,6 +24,7 @@ import type { HumanWaits } from './human-waits.ts';
 import * as inputReceipts from './input-receipts.ts';
 
 import type { AgentEvent, AgentSession } from '../../core/agent-runner.ts';
+import { topLevelModelWork } from '../../core/managed-session.ts';
 import { UiEventSink } from '../../runs/ui-event-sink.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { ExecutionEmit, LaunchCiTools, LaunchDelegation, RunModuleContext, SessionTurn } from './types.ts';
@@ -82,7 +81,7 @@ export function createSessionEventHandler(context: RunModuleContext, host: Sessi
 
 export interface LaunchPreambleHost {
   provisionSession(runId: string, state: ActiveRun): LaunchDelegation;
-  agentWebhooksPart(): Promise<string | undefined>;
+  launchParts(runId: string, env: Readonly<Record<string, string>>): Promise<ResolvedLaunchParts>;
   provisionCiSession(runId: string, state: ActiveRun): Promise<LaunchCiTools>;
   launchStale(runId: string, state: ActiveRun, delegation: LaunchDelegation, ciTools: LaunchCiTools): boolean;
 }
@@ -90,11 +89,11 @@ export interface LaunchPreambleHost {
 /** A launch's provisioning. `toolsError` (hearsay-tools/cezarion#2397): the lifecycle tools could
  *  not start, so this launch spawns nothing; its delegation is already revoked and the caller
  *  settles the run with the message. */
-export async function launchPreamble(host: LaunchPreambleHost, runId: string, state: ActiveRun):
-  Promise<{ delegation: LaunchDelegation; webhooksPart: string | undefined; ciTools: LaunchCiTools; stale: boolean; toolsError?: string }> {
+export async function launchPreamble(host: LaunchPreambleHost, runId: string, state: ActiveRun, profileEnv: Readonly<Record<string, string>>):
+  Promise<{ delegation: LaunchDelegation; launchParts: ResolvedLaunchParts; ciTools: LaunchCiTools; stale: boolean; toolsError?: string }> {
   const delegation = host.provisionSession(runId, state);
   // Read before the cancellation checks below, which also cover this await (hearsay-tools/cezarion#1576).
-  const webhooksPart = await host.agentWebhooksPart();
+  const launchParts = await host.launchParts(runId, profileEnv);
   let ciTools: LaunchCiTools;
   let toolsError: string | undefined;
   try {
@@ -104,10 +103,10 @@ export async function launchPreamble(host: LaunchPreambleHost, runId: string, st
     toolsError = error.message;
   }
   const stale = host.launchStale(runId, state, delegation, ciTools);
-  if (stale || toolsError === undefined) return { delegation, webhooksPart, ciTools, stale };
+  if (stale || toolsError === undefined) return { delegation, launchParts, ciTools, stale };
   delegation?.revoke();
   if (state.liveSession.revokeDelegation === delegation?.revoke) state.liveSession.clearDelegationRevoker();
-  return { delegation: undefined, webhooksPart, ciTools: undefined, stale: false, toolsError };
+  return { delegation: undefined, launchParts, ciTools: undefined, stale: false, toolsError };
 }
 
 
@@ -121,7 +120,6 @@ export interface SessionHelperHost {
   executionBlockedByRootFinish(run: RunRecord): boolean;
   agentEnvForStep(runId: string, backend: string, options: { recordedProfileId?: string | undefined; stepId?: string | undefined; phase?: 'step-open' | 'continue' }): Promise<StepProfile>;
   sessionContextFor(runId: string, state: ActiveRun, stepId: string, openingPrompt: string): SessionContext;
-  automationsPart(): string | undefined;
   flushAgentInputs(runId: string): boolean;
   resumeParkedRun(runId: string, state: ActiveRun): void;
   noteNoWaitNudgeContent(runId: string, state: ActiveRun, emitting: AgentSession | undefined, event: { type: string; item?: { kind?: string; parentItemId?: string }; late?: true }): void;
@@ -220,14 +218,12 @@ export function launchOpening(context: RunModuleContext, host: SessionHelperHost
 
 /**
  * The system prompt after the skill playbook (hearsay-tools/cezarion#1632): the run's extra
- * prompt, the delegation instructions, the automations and project webhooks parts, the artifact
- * contract, the long-command part, then the handoff contract.
+ * prompt, the delegation instructions, the launch parts in their order, then the handoff contract.
  */
 export function launchSystemTail(context: RunModuleContext, host: SessionHelperHost, launch: {
   extraSystemPrompt: string | undefined;
   delegation: LaunchDelegation;
-  webhooksPart: string | undefined;
-  env: StepProfile['env'];
+  launchParts: ResolvedLaunchParts;
   ciTools: LaunchCiTools;
   handoffInjected: boolean;
   /** The session's runner: one that reports its native subagents is taught to end its turn while they run. */
@@ -236,12 +232,23 @@ export function launchSystemTail(context: RunModuleContext, host: SessionHelperH
   return composeSystemPrompt(
     launch.extraSystemPrompt,
     launch.delegation?.instructions,
-    host.automationsPart(),
-    launch.webhooksPart,
-    artifactInstructions(productEnv('ARTIFACTS_DIR', launch.env)),
-    jobInstructions(),
+    ...launch.launchParts.prompts,
     handoffInstructions({ handoffInjected: launch.handoffInjected, nativeSubagents: reportsNativeSubagents(launch.runner) }),
   );
+}
+
+/** The merged session env and its granted directories, shared by step launch and Continue. */
+export function launchSessionEnvironment(
+  runsDir: string,
+  launch: {
+    profileEnv: StepProfile['env'];
+    launchParts: ResolvedLaunchParts;
+    delegation: LaunchDelegation;
+    ciTools: LaunchCiTools;
+  },
+): { env: Record<string, string>; additionalDirectories: string[] } {
+  const env = { ...launch.profileEnv, ...launch.launchParts.env, ...launch.delegation?.env, ...launch.ciTools?.env };
+  return { env, additionalDirectories: agentDirectories(runsDir, env) };
 }
 
 /** Some adapters return assistant text only in their final result. Preserve that
@@ -275,6 +282,9 @@ export function makeUiSink(context: RunModuleContext, host: SessionHelperHost, r
   });
 }
 
+/** Each run's open top-level v2 items: their deltas show the model working. */
+const openModelItems = new WeakMap<ActiveRun, Set<string>>();
+
 /** Native backend asks arrive before turn-end. Persist and park immediately
  * so the cockpit shows attention and the run releases its workspace slot. */
 export function handleRunnerUiEvent(context: RunModuleContext, host: SessionHelperHost, runId: string, state: ActiveRun, sink: UiEventSink, event: UiEvent, emitting: AgentSession | undefined): void {
@@ -285,6 +295,7 @@ export function handleRunnerUiEvent(context: RunModuleContext, host: SessionHelp
   host.trackSubagentEvent(runId, state, event);
   host.noteNoWaitNudgeContent(runId, state, emitting, event);
   host.noteNudgeActivity(runId, state, emitting, event);
+  noteModelWork(state, event);
   if (isRunnerActivity(event)) {
     // Activity answers the nudge. A refused one's bound was the idle timer. One still owed its
     // acknowledgement stays until it arrives (hearsay-tools/squawk#2443).
@@ -317,6 +328,15 @@ export function handleRunnerUiEvent(context: RunModuleContext, host: SessionHelp
     if (!state.inputState.writingInput) host.supersedeOnRunnerResume(runId);
     host.resumeParkedRun(runId, state);
   }
+}
+
+/** Streamed v2 model work is real content, as v1 text is: the harness is working. */
+function noteModelWork(state: ActiveRun, event: UiEvent): void {
+  let open = openModelItems.get(state);
+  if (!open) { open = new Set(); openModelItems.set(state, open); }
+  if (!topLevelModelWork(open, event)) return;
+  clearUnreadInputTimer(state);
+  clearHeldHumanInputTimer(state);
 }
 
 export function handlePermissionRequested(context: RunModuleContext, host: SessionHelperHost, runId: string, state: ActiveRun, requestId: string): void {

@@ -1,6 +1,6 @@
 import { LIVE_BYTE_LIMIT, LIVE_RUN_LIMIT } from '@open-mercato/cezar-api-client/contract/live-limits'
 import type { LiveRunDemand } from '@open-mercato/cezar-api-client'
-import { LEASE_MS, LIVE_CHANNEL_REFUSED, LIVE_CONNECT_ATTEMPTS, LIVE_PROTOCOL, ownerInputSchema, runKey, type LiveDemand, type LiveFrame, type OwnerOutput } from './live-protocol'
+import { LEASE_MS, LIVE_CHANNEL_REFUSED, LIVE_CONNECT_ATTEMPTS, LIVE_PROTOCOL, ownerInputSchema, runKey, type LiveDemand, type LiveFrame, type OwnerInput, type OwnerOutput } from './live-protocol'
 
 export interface LivePort {
   onmessage: ((event: { data: unknown }) => void) | null
@@ -19,9 +19,20 @@ interface Entry {
   demand: LiveDemand
   sent: number
   ack: number
+  unackedSnapshots: number[]
   unacked: Array<{ seq: number; bytes: number }>
   bytes: number
   paused: boolean
+}
+/** Snapshot acks release bytes only; event acks also move the replay cursor. */
+function acknowledge(entry: Entry, message: Extract<OwnerInput, { type: 'ack' | 'ack-snapshot' }>): void {
+  if (message.type === 'ack' && message.seq <= entry.sent && message.seq > entry.ack) {
+    entry.ack = message.seq
+    entry.unacked = entry.unacked.filter(value => { if (value.seq > message.seq) return true; entry.bytes -= value.bytes; return false })
+  }
+  if (message.type === 'ack-snapshot') {
+    entry.bytes = Math.max(0, entry.bytes - (entry.unackedSnapshots.shift() ?? 0))
+  }
 }
 interface DocumentPort {
   port: LivePort; id: string; epoch: number; seenAt: number; entries: Map<string, Entry>
@@ -127,18 +138,18 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
   }
   const reset = (doc: DocumentPort, entry: Entry, reason: string) => {
     entry.paused = true
-    entry.unacked = []; entry.bytes = 0
+    entry.unacked = []; entry.unackedSnapshots = []; entry.bytes = 0
     send(doc, { type: 'reset', version: LIVE_PROTOCOL, epoch: doc.epoch, id: entry.id, reason })
     schedule()
   }
   const deliver = (doc: DocumentPort, entry: Entry, frame: LiveFrame) => {
-    if ('type' in frame && frame.type === 'event') {
-      if (frame.event.seq <= entry.sent) return
+    if ('type' in frame && (frame.type === 'event' || frame.type === 'snapshot')) {
+      if (frame.type === 'event' && frame.event.seq <= entry.sent) return
       const bytes = new TextEncoder().encode(JSON.stringify(frame)).length
       if (entry.bytes + bytes > LIVE_BYTE_LIMIT) { reset(doc, entry, 'subscriber fell behind — reload history'); return }
-      entry.sent = frame.event.seq
       entry.bytes += bytes
-      entry.unacked.push({ seq: entry.sent, bytes })
+      if (frame.type === 'snapshot') entry.unackedSnapshots.push(bytes)
+      else { entry.sent = frame.event.seq; entry.unacked.push({ seq: entry.sent, bytes }) }
     }
     send(doc, { type: 'frame', version: LIVE_PROTOCOL, epoch: doc.epoch, id: entry.id, frame })
   }
@@ -310,7 +321,7 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
   }
   const newEntry = (item: { id: string; demand: LiveDemand }): Entry => {
     const afterSeq = item.demand.kind === 'run' ? item.demand.afterSeq : 0
-    return { ...item, sent: afterSeq, ack: afterSeq, unacked: [], bytes: 0, paused: false }
+    return { ...item, sent: afterSeq, ack: afterSeq, unacked: [], unackedSnapshots: [], bytes: 0, paused: false }
   }
   /**
    * What a late subscriber is owed at once: the latest topic value, or the workspace `ready` (the
@@ -364,10 +375,7 @@ export function createLiveOwner(deps: LiveOwnerDeps) {
       } else if (message.epoch === doc.epoch) {
         const entry = doc.entries.get(message.id)
         if (!entry) return
-        if (message.type === 'ack' && message.seq <= entry.sent && message.seq > entry.ack) {
-          entry.ack = message.seq
-          entry.unacked = entry.unacked.filter(value => { if (value.seq > message.seq) return true; entry.bytes -= value.bytes; return false })
-        }
+        if (message.type === 'ack' || message.type === 'ack-snapshot') acknowledge(entry, message)
         if (message.type === 'refresh' && entry.demand.kind === 'read') {
           const job = reads.get(entry.demand.path)
           if (job) refreshRead(entry.demand.path, job)

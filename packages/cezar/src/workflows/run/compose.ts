@@ -229,7 +229,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   function launchPreambleHost(): import('./session-events.ts').LaunchPreambleHost {
     return {
       provisionSession: (...args) => launchContext.provisionSession(modules.launchSettingsHost, ...args),
-      agentWebhooksPart: () => launchContext.agentWebhooksPart(context, host.cockpit),
+      launchParts: (runId, env) => launchContext.launchParts(context, host.cockpit, runId, env),
       provisionCiSession: (...args) => provisionCiSession(context, modules.ciSessionHost, ...args),
       launchStale: (...args) => sessionEvents.launchStale(context, modules.sessionHelperHost, ...args),
     };
@@ -327,7 +327,6 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     executionBlockedByRootFinish: run => host.executionBlockedByRootFinish(run),
     agentEnvForStep: (...args) => host.agentEnvForStep(...args),
     sessionContextFor: (...args) => launchContext.sessionContextFor(context, ...args),
-    automationsPart: () => launchContext.automationsPart(host.cockpit),
     flushAgentInputs: id => modules.inputDelivery.flushAgentInputs(id),
     resumeParkedRun: (...args) => modules.inputDelivery.resumeParkedRun(...args),
     noteNoWaitNudgeContent: (...args) => modules.turnNudges.noteNoWaitNudgeContent(...args),

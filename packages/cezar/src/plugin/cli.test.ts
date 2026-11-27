@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PluginLoadReport } from './loader.ts';
 
-const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: 0, runLifecycleListeners: 0 };
+const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: 0, runLifecycleListeners: 0, launchParts: [] };
 const report: PluginLoadReport = {
   folders: ['/squawk/dist/runners/', '/cfg/plugins'],
-  loaded: [{ name: 'claude', source: 'bundled', path: '/squawk/dist/runners/claude', contributions: { ...none, runners: ['claude'] } }, { name: 'greeter', source: 'host', path: '/cfg/plugins/greeter', contributions: { ...none, cliCommands: ['greet'], runners: ['echo'], removalSlots: 1 } }],
+  loaded: [{ name: 'claude', source: 'bundled', path: '/squawk/dist/runners/claude', contributions: { ...none, runners: ['claude'] } }, { name: 'greeter', source: 'host', path: '/cfg/plugins/greeter', contributions: { ...none, cliCommands: ['greet'], runners: ['echo'], removalSlots: 1, launchParts: ['greeting', 'motd'] } }],
   failed: [{ name: 'broken', source: 'host', path: '/cfg/plugins/broken', reason: 'missing-entry', error: 'missing index.mjs or index.js' }],
 };
 
@@ -30,6 +30,7 @@ describe('hsq plugins', () => {
       '    commands: greet',
       '    runners: echo',
       '    removal slots: 1',
+      '    launch parts: greeting, motd',
       '',
       'Skipped (1):',
       '  broken  host  /cfg/plugins/broken',

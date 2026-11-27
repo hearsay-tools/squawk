@@ -1033,7 +1033,7 @@ it.each(['/p/shop/settings/agent-defaults', '/settings/global/appearance'])('sho
   expect(within(group).getByRole('link', { name: 'Agent defaults' }).getAttribute('href')).toBe(`/p/${project}/settings/agent-defaults`)
   // The project group leads with General, the project index.
   expect(within(group).getByRole('link', { name: 'General' }).getAttribute('href')).toBe(`/p/${project}/settings`)
-  expect([...group.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['General', 'Sidebar', 'Agent defaults', 'Agent config', 'Worktrees', 'Prompt templates'])
+  expect([...group.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['General', 'Sidebar', 'Agent defaults', 'Agent config', 'Session context', 'Worktrees', 'Prompt templates'])
   const global = screen.getByRole('navigation', { name: 'Global · every project' })
   expect(within(global).getByRole('link', { name: 'Appearance' }).getAttribute('href')).toBe('/settings/global/appearance')
   expect(within(global).getByRole('link', { name: 'Agents' }).getAttribute('href')).toBe('/settings/global/agents')

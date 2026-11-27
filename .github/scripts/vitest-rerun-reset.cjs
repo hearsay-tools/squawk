@@ -4,7 +4,8 @@
 // Runs before a failed merge-group shard runs again (ci.yml). It writes the test files that
 // failed in the first run to a list, one repository-relative path per line, and deletes
 // Vitest's results cache. Files over the duration cap (vitest-file-duration.mjs) passed their
-// tests, so they come from the cap's own list, which the reset also deletes. Vitest's sequencer runs cached failures first and orders the other
+// tests, and files whose worker died have no result, so the cache marks neither failed: they
+// come from the cap's own list, which the reset also deletes. Vitest's sequencer runs cached failures first and orders the other
 // files by cached duration, so only with the cache gone does the rerun keep the first order.
 const fs = require('node:fs');
 const path = require('node:path');

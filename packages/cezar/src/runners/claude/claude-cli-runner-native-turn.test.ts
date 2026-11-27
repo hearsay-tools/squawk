@@ -80,7 +80,7 @@ function pipeSession() {
   };
   const starts = () => ui.filter(event => event.type === 'turn.started').map(event => (event as { turnId: string }).turnId);
   const finish = async () => { session.interrupt(); close(); await session.result; };
-  return { session, v1, ui, written, frames, starts, finish };
+  return { session, v1, ui, written, frames, starts, finish, close };
 }
 
 const init = { type: 'system', subtype: 'init', session_id: 'native-turn', model: 'claude-test' };
@@ -219,4 +219,53 @@ describe('Claude native parent turns on the mock wire (hearsay-tools/cezarion#15
     expect(completed[0]).toMatchObject({ item: { background: true } });
     expect(ui.indexOf(completed[0]!)).toBeGreaterThan(ui.findIndex(event => event.type === 'turn.completed'));
   }, 60_000);
+});
+
+describe('Claude streaming turn announcement', () => {
+  it.each(['native', 'queued'])('announces %s turns before partial item events and keeps v1 text completion-only', async mode => {
+    const f = pipeSession();
+    try {
+      // bound: wait for the opening stdin write before sending output.
+      await vi.waitFor(() => expect(f.written).toHaveLength(1), { timeout: 10_000 });
+      await f.frames(init);
+      if (mode === 'queued') expect(f.session.sendMessage([{ type: 'text', text: 'next' }])).toBe(true);
+      await f.frames(parentText('opening'), result('opening'));
+      const offset = f.ui.length;
+      const v1Before = f.v1.filter(e => e.type === 'text').length;
+      const partial = (event: unknown) => ({ type: 'stream_event', parent_tool_use_id: null, event });
+      await f.frames(partial({ type: 'message_start', message: { id: 'message-stream' } }), partial({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }), partial({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'hello' } }));
+      expect(f.ui.slice(offset, offset + 3).map(e => e.type)).toEqual(['turn.started', 'item.started', 'item.delta']);
+      expect(f.v1.filter(e => e.type === 'text')).toHaveLength(v1Before);
+      await f.frames({ ...parentText('hello'), message: { id: 'message-stream', role: 'assistant', content: [{ type: 'text', text: 'hello' }] } }, partial({ type: 'content_block_stop', index: 0 }), result('hello'));
+      expect(f.starts()).toEqual(['turn_1', 'turn_2']);
+      expect(f.v1.filter(e => e.type === 'text')).toHaveLength(v1Before + 1);
+    } finally { await f.finish(); }
+  });
+});
+
+
+describe('Claude partial-message completion on stdout close', () => {
+  it.each(['stop', 'eof'])('saves completed text and thinking snapshots after %s without a result', async mode => {
+    const f = pipeSession();
+    try {
+      // bound: wait for the opening stdin write before sending output.
+      await vi.waitFor(() => expect(f.written).toHaveLength(1), { timeout: 10_000 });
+      const partial = (event: unknown) => ({ type: 'stream_event', event, parent_tool_use_id: null });
+      await f.frames(init,
+        partial({ type: 'message_start', message: { id: 'unfinished' } }),
+        partial({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }),
+        partial({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'visible text' } }),
+        partial({ type: 'content_block_start', index: 1, content_block: { type: 'thinking', thinking: '' } }),
+        partial({ type: 'content_block_delta', index: 1, delta: { type: 'thinking_delta', thinking: 'visible reasoning' } }));
+      if (mode === 'stop') f.session.interrupt();
+      f.close();
+      await f.session.result;
+      const snapshots = f.ui.filter(e => e.type === 'item.completed' && (e.item.kind === 'message' || e.item.kind === 'reasoning'));
+      expect(snapshots).toEqual([
+        { type: 'item.completed', item: { kind: 'message', id: 'item_1', role: 'assistant', text: 'visible text' } },
+        { type: 'item.completed', item: { kind: 'reasoning', id: 'item_2', text: 'visible reasoning' } },
+      ]);
+      expect(f.v1.filter(e => e.type === 'text')).toEqual([]);
+    } finally { await f.finish(); }
+  });
 });

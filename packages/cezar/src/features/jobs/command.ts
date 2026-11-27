@@ -1,10 +1,10 @@
 import { fileURLToPath } from 'node:url';
-import { shellQuote } from '../core/shell-env.ts';
+import { shellQuote } from '../../core/shell-env.ts';
 
 /** This program's own entry as argv, as `artifactInstructions` builds it: from source in a checkout. */
 export function ownCommand(): string[] {
   const source = import.meta.url.endsWith('.ts');
-  const entry = fileURLToPath(new URL(source ? '../index.ts' : '../index.js', import.meta.url));
+  const entry = fileURLToPath(new URL(source ? '../../index.ts' : '../../index.js', import.meta.url));
   return [process.execPath, ...(source ? ['--import', import.meta.resolve('tsx')] : []), entry];
 }
 

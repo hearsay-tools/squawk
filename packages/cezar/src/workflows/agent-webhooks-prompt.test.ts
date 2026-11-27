@@ -5,8 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { registerProject } from '../workspace/projects.ts';
-import { agentWebhooksPart } from './run/launch-context.ts';
-import { unused } from './unused.testkit.ts';
+import { webhooksLaunchPart } from '../built-in-launch-parts.ts';
 
 const HEADING = '## Project webhooks';
 const COCKPIT_ORIGIN = 'http://127.0.0.1:5555';
@@ -14,7 +13,7 @@ const COCKPIT_ORIGIN = 'http://127.0.0.1:5555';
 /**
  * The "Project webhooks" part (hearsay-tools/cezarion#1576): an addressed manager lists the
  * webhooks its project exposes to agents; nothing exposed, or no cockpit to send through,
- * composes nothing. Both session construction sites take this part through the shared
+ * composes nothing. Both session construction sites take this launch part through the shared
  * `launchSystemTail`; launch-system-prompt.test.ts pins the whole prompt at both sites.
  */
 describe('agent webhooks prompt part (#1576)', () => {
@@ -41,8 +40,8 @@ describe('agent webhooks prompt part (#1576)', () => {
     }, testHome());
 
   /** The part a session launch composes, for a manager with this cockpit address. */
-  const part = (cockpit: { origin: string; projectId: string } | undefined) =>
-    agentWebhooksPart(unused<Parameters<typeof agentWebhooksPart>[0]>('launch context', { repoRoot, home: testHome() }), cockpit);
+  const part = async (cockpit: { origin: string; projectId: string } | undefined) =>
+    (await webhooksLaunchPart.contribute({ runId: 'webhooks-run', dataDir: repoRoot, repoRoot, home: testHome(), cockpit, env: {} }))?.prompt;
 
   it('lists the exposed webhooks by name and description, with the send command', async () => {
     await setWebhooks([

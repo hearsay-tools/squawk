@@ -4,7 +4,7 @@ import { installPluginResolveHook } from './plugin/resolve-hook.ts';
 import type { Home } from './home/home.ts';
 
 /**
- * Cold CLI (`--help`, `--version`, and commands whose `runtimeMode` is false) seals the CLI
+ * Cold CLI (`--version`, and commands whose `runtimeMode` is false) seals the CLI
  * command table only. It never loads a runner, a store, or a plugin.
  */
 export function bootColdCli(): void {
@@ -36,6 +36,10 @@ export interface BootRuntimeOptions {
    * plugins only.
    */
   bundledRunnersDir?: string | undefined;
+  /** Test-only override for bundled features. Absent: reads this copy's features folder.
+   * An absent or empty folder loads no feature.
+   */
+  bundledFeaturesDir?: string | undefined;
   /** Runs once, after registration and before the first full seal. A later boot skips it. */
   beforeSeal?: () => void | Promise<void>;
 }
@@ -43,13 +47,15 @@ export interface BootRuntimeOptions {
 let runtimeBoot: Promise<void> | undefined;
 /** One load per process: a retry after a failed hook reuses it, and a failed bundled runner fails every retry. */
 let bundledRunnersLoad: Promise<unknown> | undefined;
+/** Reuse successful registrations and retain shipped-feature failures across retries. */
+let bundledFeaturesLoad: Promise<unknown> | undefined;
 /** A retry after a failed hook keeps what the plugins committed and does not load them twice. */
 let hostPluginsLoaded = false;
 
 /**
  * Register every built-in extension table, load the bundled runners and then the host plugins
  * through the plugin loader, run the optional hook, then seal
- * all eight registries in this one place. A second call returns the same boot and does not load
+ * all nine registries in this one place. A second call returns the same boot and does not load
  * plugins or run the hook again.
  */
 export function bootRuntime(options?: BootRuntimeOptions): Promise<void> {
@@ -61,12 +67,13 @@ export function bootRuntime(options?: BootRuntimeOptions): Promise<void> {
   return runtimeBoot;
 }
 
-async function sealRuntime({ pluginsDir, bundledRunnersDir, beforeSeal }: BootRuntimeOptions): Promise<void> {
+async function sealRuntime({ pluginsDir, bundledRunnersDir, bundledFeaturesDir, beforeSeal }: BootRuntimeOptions): Promise<void> {
   // Built-in runners and host plugins import `@hearsay-tools/squawk/plugin`; map it before either loads.
   installPluginResolveHook();
   // A test may seal a custom command table before dispatch asks for a full boot.
   if (!cliCommandsSealed()) registerBuiltInCliCommands();
   const { registerBuiltInRunSlots, sealBuiltInRunSlots } = await import('./built-in-run-slots.ts');
+  const { registerBuiltInLaunchParts, sealBuiltInLaunchParts } = await import('./built-in-launch-parts.ts');
   const { registerBuiltInStepKinds, sealBuiltInStepKinds } = await import('./workflows/step-kind-registry.ts');
   const { registerBuiltInTools, sealBuiltInTools } = await import('./built-in-tools.ts');
   const { registerBuiltInWaitKinds, sealBuiltInWaitKinds } = await import('./built-in-wait-kinds.ts');
@@ -74,12 +81,14 @@ async function sealRuntime({ pluginsDir, bundledRunnersDir, beforeSeal }: BootRu
   const { sealRunners } = await import('./core/runner-registry.ts');
   const loader = await import('./plugin/loader.ts');
   registerBuiltInRunSlots();
+  registerBuiltInLaunchParts();
   registerBuiltInStepKinds();
   registerBuiltInTools();
   registerBuiltInWaitKinds();
   await (bundledRunnersLoad ??= bundledRunnersDir === undefined
     ? loader.loadBundledRunners()
     : loader.loadBundledRunners(bundledRunnersDir, { allowEmpty: true }));
+  await (bundledFeaturesLoad ??= loader.loadBundledFeatures(bundledFeaturesDir));
   if (pluginsDir !== undefined && !hostPluginsLoaded) {
     hostPluginsLoaded = true;
     await loader.loadPluginFolder({ dir: pluginsDir, source: 'host' });
@@ -88,6 +97,7 @@ async function sealRuntime({ pluginsDir, bundledRunnersDir, beforeSeal }: BootRu
   sealBuiltInCliCommands();
   sealRunners();
   sealBuiltInRunSlots();
+  sealBuiltInLaunchParts();
   sealBuiltInStepKinds();
   sealBuiltInTools();
   sealBuiltInWaitKinds();
