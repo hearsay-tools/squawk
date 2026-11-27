@@ -199,6 +199,7 @@ const WAIT_FIELD_RULES: Record<string, string> = {
   pr: 'must be an HTTPS GitHub pull request URL (kind "pr")',
   until: 'must be "checks", "merge" or "merge_or_blocked" (kind "pr")',
   wake_on_conflict: 'must be true or false (kind "pr")',
+  checks: 'must be "required" or "all" (kind "pr")',
   timeout_seconds: 'must be an integer between 1 and 7200 (kind "pr", "process", "worker", "request" or "peer")',
   worker_ids: 'must be 1 to 32 unique worker ids you own (kind "worker")',
   request_ids: 'must be 1 to 32 unique ids of requests you sent (kind "request")',
@@ -210,7 +211,7 @@ const WAIT_FIELD_RULES: Record<string, string> = {
   exit_file: 'must be a path of 1 to 4096 characters (kind "process")',
   wait_id: 'must be a wait_id that cezar_wait answered',
 };
-const WAIT_FIELDS = 'kind "pr" takes pr, until, wake_on_conflict and timeout_seconds; kind "worker" takes worker_ids, mode and timeout_seconds; kind "request" takes request_ids, mode and timeout_seconds; kind "peer" takes peer_ids and timeout_seconds; kind "timer" takes seconds and note; kind "process" takes pid, exit_file, timeout_seconds and note';
+const WAIT_FIELDS = 'kind "pr" takes pr, until, wake_on_conflict, checks and timeout_seconds; kind "worker" takes worker_ids, mode and timeout_seconds; kind "request" takes request_ids, mode and timeout_seconds; kind "peer" takes peer_ids and timeout_seconds; kind "timer" takes seconds and note; kind "process" takes pid, exit_file, timeout_seconds and note';
 
 export function waitInvalidInput(error?: z.ZodError): string {
   const issue = error?.issues[0];

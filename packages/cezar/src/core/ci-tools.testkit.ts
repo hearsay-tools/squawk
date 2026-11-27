@@ -30,8 +30,8 @@ describe('wait tool definitions', () => {
     // The Anthropic tool API refuses a top-level union; the kinds validate on the server.
     for (const key of ['oneOf', 'anyOf', 'allOf']) expect(schema).not.toHaveProperty(key);
     // hearsay-tools/cezarion#1425: kind "pr" replaced kind "ci" and takes a target and a conflict switch.
-    expect(schema.properties).toMatchObject({ kind: { enum: ['pr', 'worker', 'request', 'peer', 'timer', 'process'] }, until: { enum: ['checks', 'merge', 'merge_or_blocked'], default: 'checks' }, wake_on_conflict: { type: 'boolean', default: true } });
-    expect(Object.keys(schema.properties ?? {}).sort()).toEqual(['exit_file', 'head_sha', 'kind', 'mode', 'note', 'operation_id', 'peer_ids', 'pid', 'pr', 'request_ids', 'seconds', 'timeout_seconds', 'until', 'wake_on_conflict', 'worker_ids']);
+    expect(schema.properties).toMatchObject({ kind: { enum: ['pr', 'worker', 'request', 'peer', 'timer', 'process'] }, until: { enum: ['checks', 'merge', 'merge_or_blocked'], default: 'checks' }, wake_on_conflict: { type: 'boolean', default: true }, checks: { enum: ['required', 'all'], default: 'required' } });
+    expect(Object.keys(schema.properties ?? {}).sort()).toEqual(['checks', 'exit_file', 'head_sha', 'kind', 'mode', 'note', 'operation_id', 'peer_ids', 'pid', 'pr', 'request_ids', 'seconds', 'timeout_seconds', 'until', 'wake_on_conflict', 'worker_ids']);
     expect((schema.properties as Record<string, { description: string }>).wake_on_conflict!.description).toContain('your work depends on another PR merging');
     expect((schema.properties as Record<string, { description: string }>).until!.description).toContain('"merge"');
     expect(waitToolDefinition.description).toContain('kind "pr"');
@@ -268,7 +268,7 @@ describe('U0 wait tools on every native wire', () => {
           expect(JSON.parse(json)).toEqual({ ok: true, wait_id: humanId, open_waits: humanOpen });
           expect(hint).toBe(`Asked. Squawk shows the context and question card to the user. End your turn; the user's answer wakes you.`);
         } else if (tool === 'cezar_wait') {
-          expect(calls).toEqual([['wait', { ...args, operation_id: expect.any(String), timeout_seconds: 1800, until: 'checks', wake_on_conflict: true }, 'cezar_wait']]);
+          expect(calls).toEqual([['wait', { ...args, operation_id: expect.any(String), timeout_seconds: 1800, until: 'checks', wake_on_conflict: true, checks: 'required' }, 'cezar_wait']]);
           expect(JSON.parse(json)).toEqual({ ok: true, wait_id: wait.id, kind: WAIT_KIND.pr, deadline: wait.deadline, open_waits: openWaits });
           expect(hint).toBe('Registered. End your turn to wait; any open wait wakes you when it resolves.');
         } else if (tool === 'cezar_done') {

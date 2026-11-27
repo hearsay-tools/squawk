@@ -10,7 +10,7 @@ import { normalizePrUrl } from '../ci-wait/pr-wait-kind.ts';
 // the ci-wait*.test.ts files and the U-cells in the waits-parity-<part>-cells.testkit.ts modules.
 const ci = (over: Partial<PrWaitEntry> = {}): PrWaitEntry => ({
   id: '11111111-1111-4111-8111-111111111111', kind: WAIT_KIND.pr, source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_wait, generation: 'gen', turnId: 'turn-1',
-  timeoutSeconds: 1800, until: 'checks' as const, wakeOnConflict: true, prUrl: 'https://github.com/Acme/Repo/pull/12', repository: 'Acme/Repo', prNumber: 12, headSha: 'a'.repeat(40),
+  timeoutSeconds: 1800, until: 'checks' as const, wakeOnConflict: true, checks: 'required' as const, prUrl: 'https://github.com/Acme/Repo/pull/12', repository: 'Acme/Repo', prNumber: 12, headSha: 'a'.repeat(40),
   registeredAt: '2026-10-17T10:00:00.000Z', deadline: '2026-10-17T10:30:00.000Z', phase: WAIT_PHASE.open, ...over,
 });
 const timer = (over: Partial<TimerWaitEntry> = {}): TimerWaitEntry => ({
@@ -51,8 +51,10 @@ describe('wait list helpers (hearsay-tools/cezarion#1233)', () => {
   });
 
   // hearsay-tools/cezarion#1425: the target and the conflict switch are part of a PR wait's identity.
-  it('identical PR registration also matches the target and the conflict switch', () => {
+  it('identical PR registration also matches the target, the conflict switch and the checks scope', () => {
     const waits = [ci()];
+    expect(identicalWait(waits, { kind: WAIT_KIND.pr, pr: ci().prUrl, checks: 'all' }, 'turn-1')).toBeUndefined();
+    expect(identicalWait([ci({ checks: 'all' })], { kind: WAIT_KIND.pr, pr: ci().prUrl, checks: 'all' }, 'turn-1')).toBeDefined();
     expect(identicalWait(waits, { kind: WAIT_KIND.pr, pr: ci().prUrl, until: 'merge' }, 'turn-1')).toBeUndefined();
     expect(identicalWait(waits, { kind: WAIT_KIND.pr, pr: ci().prUrl, wake_on_conflict: false }, 'turn-1')).toBeUndefined();
     expect(identicalWait(waits, { kind: WAIT_KIND.pr, pr: ci().prUrl, until: 'checks', wake_on_conflict: true }, 'turn-1')).toBe(waits[0]);

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { askContextSchema, askRequestSchema } from './ask-schema.ts';
-import { ciPrIdentitySchema, ciWaitErrorCodeSchema, ciWaitResultSchema, prWaitUntilSchema } from './ci-wait.ts';
+import { ciPrIdentitySchema, ciWaitErrorCodeSchema, ciWaitResultSchema, prWaitChecksSchema, prWaitUntilSchema } from './ci-wait.ts';
 import { listsWorkers, peerWaitResultSchema, refinePeerWaitResult, workerIdsSchema } from './delegation.ts';
 import { workerOutcomeSchema, workerWaitModeSchema } from './worker-outcome.ts';
 import type { PeerWaitView, WorkerCompletionWait, WorkerWait } from './delegation.ts';
@@ -119,6 +119,8 @@ export const prWaitEntrySchema = z.object({
   timeoutSeconds: z.number().int().min(1).max(7200),
   until: prWaitUntilSchema,
   wakeOnConflict: z.boolean(),
+  /** Absent on waits stored before hearsay-tools/squawk#4392: they waited on every check. */
+  checks: prWaitChecksSchema.optional(),
   /** The caller named a head GitHub did not show yet at registration (hearsay-tools/squawk#3972). */
   callerHead: z.literal(true).optional(),
   result: ciWaitResultSchema.optional(),

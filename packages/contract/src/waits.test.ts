@@ -729,10 +729,10 @@ describe('PR waits', () => {
   const pr = 'https://github.com/o/r/pull/1';
   const openPr = (over: Record<string, unknown> = {}) => ({ ...openCi(), kind: WAIT_KIND.pr, until: 'checks' as const, wakeOnConflict: true, ...over });
 
-  it('defaults a pr request to the checks target, conflicts waking, 1800 seconds', () => {
-    expect(squawkWaitRequestSchema.parse({ kind: WAIT_KIND.pr, pr })).toEqual({ kind: WAIT_KIND.pr, pr, until: 'checks', wake_on_conflict: true, timeout_seconds: 1800 });
-    expect(squawkWaitRequestSchema.parse({ kind: WAIT_KIND.pr, pr, until: 'merge', wake_on_conflict: false, timeout_seconds: 7200 }))
-      .toEqual({ kind: WAIT_KIND.pr, pr, until: 'merge', wake_on_conflict: false, timeout_seconds: 7200 });
+  it('defaults a pr request to the checks target, conflicts waking, the required checks, 1800 seconds', () => {
+    expect(squawkWaitRequestSchema.parse({ kind: WAIT_KIND.pr, pr })).toEqual({ kind: WAIT_KIND.pr, pr, until: 'checks', wake_on_conflict: true, checks: 'required', timeout_seconds: 1800 });
+    expect(squawkWaitRequestSchema.parse({ kind: WAIT_KIND.pr, pr, until: 'merge', wake_on_conflict: false, checks: 'all', timeout_seconds: 7200 }))
+      .toEqual({ kind: WAIT_KIND.pr, pr, until: 'merge', wake_on_conflict: false, checks: 'all', timeout_seconds: 7200 });
   });
 
   it('refuses an unknown target and merge waits past 7200 seconds', () => {

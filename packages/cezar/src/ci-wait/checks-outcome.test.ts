@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CiPrIdentity, CiWait } from '@open-mercato/cezar-contract';
 import { CiGithubError, GithubCiClient, type GithubCheck, type GithubChecksObservation, type GithubWorkflowRuns } from './github.ts';
 import { CI_DISCOVERY_MS, CI_PROBE_MS, CiWatcherSupervisor } from './supervisor.ts';
@@ -183,4 +183,71 @@ it('once GitHub has shown the pushed head, a later head is head_changed at once'
 it('without a caller head, a different head is head_changed on the first read', async () => {
   const github = new Github(); github.heads = ['b'.repeat(40)];
   expect(await start(github).result).toMatchObject({outcome: 'head_changed', observedHeadSha: 'b'.repeat(40)});
+});
+
+describe('the checks scope (hearsay-tools/squawk#4392)', () => {
+  const required = {checks: 'required' as const};
+  const status = (name: string, bucket: GithubCheck['bucket'], over: Partial<GithubCheck> = {}) =>
+    check(name, bucket, {state: {pass: 'SUCCESS', fail: 'FAILURE', cancel: 'ERROR', skipping: 'SKIPPED', pending: 'PENDING'}[bucket], ...over});
+
+  it('settles on the required checks while a status that is not required stays pending, and names it', async () => {
+    const github = new Github(); github.rows = [check('build', 'pass', {required: true}), status('pre-pr-review', 'pending')];
+    expect(await start(github, required).result).toMatchObject({outcome: 'passed', totalChecks: 2,
+      diagnostic: 'Not waited on, because they are not required: pre-pr-review (PENDING).'});
+  });
+
+  it('settles while a check run that is not required still runs, and ignores its active workflow', async () => {
+    const github = new Github(); github.rows = [check('build', 'pass', {required: true}), check('benchmark', 'pending')];
+    github.runs = {active: true, failures: []};
+    expect(await start(github, required).result).toMatchObject({outcome: 'passed',
+      diagnostic: 'Not waited on, because they are not required: benchmark (IN_PROGRESS).'});
+  });
+
+  it('takes the outcome from the required checks and names a failure that is not required', async () => {
+    const github = new Github(); github.rows = [check('lint', 'fail'), check('build', 'pass', {required: true})];
+    github.runs = {active: false, failures: [{id: 5, workflow: 'Lint', conclusion: 'failure'}]};
+    expect(await start(github, required).result).toMatchObject({outcome: 'passed',
+      diagnostic: 'Not waited on, because they are not required: lint (FAILURE).'});
+  });
+
+  it('still reports a workflow that created no job', async () => {
+    const github = new Github(); github.rows = [check('build', 'pass', {required: true})];
+    github.runs = {active: false, failures: [{id: 9, workflow: 'CI', conclusion: 'startup_failure'}]};
+    expect(await start(github, required).result).toMatchObject({outcome: 'startup_failure'});
+  });
+
+  it.each([
+    ['a required pending status', [check('build', 'pass', {required: true}), status('deploy', 'pending', {required: true})], required],
+    ['a required pending check run', [check('build', 'pending', {required: true}), status('pre-pr-review', 'pass')], required],
+    ['a pending status that is not required, with checks "all"', [check('build', 'pass', {required: true}), status('pre-pr-review', 'pending')], {checks: 'all' as const}],
+    ['a pending check run that is not required, with checks "all"', [check('build', 'pass', {required: true}), check('benchmark', 'pending')], {checks: 'all' as const}],
+  ] as const)('keeps the wait open for %s', async (_name, rows, over) => {
+    vi.useFakeTimers();
+    const github = new Github(); github.rows = [...rows];
+    const {result, state} = start(github, over);
+    await vi.advanceTimersByTimeAsync(CI_PROBE_MS);
+    expect(state.settled).toBe(false);
+    github.rows = rows.map(row => ({...row, bucket: 'pass' as const, state: 'SUCCESS'}));
+    await vi.advanceTimersByTimeAsync(CI_PROBE_MS);
+    expect(await result).toMatchObject({outcome: 'passed'});
+  });
+
+  it('waits on every check when none is required, and says so', async () => {
+    vi.useFakeTimers();
+    const github = new Github(); github.rows = [status('ci/jenkins', 'pending')];
+    const {result, state} = start(github, required);
+    await vi.advanceTimersByTimeAsync(CI_PROBE_MS);
+    expect(state.settled).toBe(false);
+    github.rows = [status('ci/jenkins', 'pass')];
+    await vi.advanceTimersByTimeAsync(CI_PROBE_MS);
+    expect(await result).toMatchObject({outcome: 'passed', diagnostic: 'No check is required on this PR, so this wait covered every check.'});
+  });
+
+  it('keeps a long list of checks that are not required within the diagnostic limit', async () => {
+    const github = new Github();
+    github.rows = [check('build', 'pass', {required: true}), ...Array.from({length: 30}, (_, i) => status(`${'s'.repeat(240)}${i}`, 'pending'))];
+    const observed = await start(github, required).result;
+    expect(observed.diagnostic).toMatch(/^Not waited on, because they are not required: .* more\.$/);
+    expect(Buffer.byteLength(observed.diagnostic!)).toBeLessThanOrEqual(4096);
+  });
 });

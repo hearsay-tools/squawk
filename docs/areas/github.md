@@ -95,6 +95,19 @@ and its consumers.
 | Done, completed action | Continue, manual Archive, or Unarchive | User | Does not rearm on unrelated writes or restart |
 | Archived | Unarchive or Continue | User | No automatic exit; history and work remain recoverable |
 
+## Checks scope in PR waits
+
+A checks wait takes `checks: "required"` (default) or `"all"`
+(hearsay-tools/squawk#4392). `required` waits on the rows whose `isRequired`
+flag is set for this PR and takes the outcome from them. It ignores other rows,
+both check runs and commit statuses, and an active workflow run. A
+`startup_failure` still ends it. The result's diagnostic names each row outside
+the scope that is not passed or skipped. With no required row, `required` covers
+every row and says so in the diagnostic. `all` waits on every row and every
+workflow run, as before. A wait stored without the field reads as `all`. The
+rule uses GitHub's own flag, never a check name, so it needs no setup in any
+repository.
+
 ## Queued checks in PR waits
 
 A checks wait wakes with `stuck` when it has observed a check as QUEUED for at

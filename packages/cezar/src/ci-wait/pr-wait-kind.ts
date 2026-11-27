@@ -30,7 +30,7 @@ export function prWaitEntry(identity: CiPrIdentity, parsed: PrRequest, via: Wait
   const callerHead = parsed.head_sha !== undefined && parsed.head_sha.toLowerCase() !== identity.headSha.toLowerCase();
   const wait: PrWaitEntry = { ...identity, ...(callerHead ? { headSha: parsed.head_sha!.toLowerCase(), callerHead: true as const } : {}),
         id: randomUUID(), kind: 'pr', source: 'agent', via, generation, turnId,
-        timeoutSeconds: parsed.timeout_seconds, until: parsed.until, wakeOnConflict: parsed.wake_on_conflict, registeredAt: new Date(now).toISOString(),
+        timeoutSeconds: parsed.timeout_seconds, until: parsed.until, wakeOnConflict: parsed.wake_on_conflict, checks: parsed.checks, registeredAt: new Date(now).toISOString(),
         deadline: new Date(now + parsed.timeout_seconds * 1000).toISOString(), phase: 'open' };
   return wait;
 }
@@ -48,6 +48,7 @@ export const PR_WAIT_ROW: BuiltInWaitKindRow<'pr'> = {
   inputId: waitInputId,
   entry: prWaitEntry,
   duplicate: (wait, request) => request.kind === 'pr' && wait.kind === 'pr' && normalizePrUrl(wait.prUrl) === normalizePrUrl(request.pr) && wait.until === (request.until ?? 'checks') && wait.wakeOnConflict === (request.wake_on_conflict ?? true)
+    && (wait.checks ?? 'all') === (request.checks ?? 'required')
     && (request.head_sha === undefined || request.head_sha.toLowerCase() === wait.headSha.toLowerCase()),
   canonicalize: request => { if (request.kind === 'pr') request.pr = normalizePrUrl(request.pr); },
   repeatTimeout: wait => 'timeoutSeconds' in wait ? wait.timeoutSeconds : undefined,
@@ -60,7 +61,7 @@ export const PR_WAIT_ROW: BuiltInWaitKindRow<'pr'> = {
   chargesWake: false, refusesSpentBudget: false, holdsSession: false, cancellable: true, timersDisabled: false,
   failedResult: wait => !PR_SUCCESS.has((wait as PrWaitEntry).result?.outcome ?? 'deadline'),
   deadline: 'required', keepsSlot: true, cancels: ENDS_WAITS, resolves: [
-    { trigger: 'checks settle, stay queued for 15 observed minutes, or the head changes; a merge wait: merged, closed or a conflict; merge_or_blocked also resolves when no merge remains pending', firedBy: 'watcher' },
+    { trigger: 'the checks in scope settle, stay queued for 15 observed minutes, or the head changes; a merge wait: merged, closed or a conflict; merge_or_blocked also resolves when no merge remains pending', firedBy: 'watcher' },
     { trigger: 'the deadline (1 to 7,200 s, default 1,800) or a fatal gh error', firedBy: 'watcher' },
   ],
 };
@@ -88,14 +89,14 @@ const ciWatch: WaitLifecycle = {
 
 /**
  * Open a CI wait (hearsay-tools/cezarion#1233). The model supplies only the PR and deadline. An
- * identical registration (the same PR, target and conflict switch) returns the open wait it
+ * identical registration (the same PR, target, conflict switch and checks scope) returns the open wait it
  * repeats, also one that registered under another spelling while the lookup was in flight.
  */
 async function registerPrWait(pr: PrRequest, context: WaitRequestContext): Promise<Wait> {
   const turnId = context.turnId();
   const repeated = context.repeatOrRefuseFull(turnId);
   if (repeated) return repeated;
-  const key = `${context.runId}\n${normalizePrUrl(pr.pr)}\n${pr.until}\n${pr.wake_on_conflict}`;
+  const key = `${context.runId}\n${normalizePrUrl(pr.pr)}\n${pr.until}\n${pr.wake_on_conflict}\n${pr.checks}`;
   return context.inFlight(key, pr.timeout_seconds, async signal => {
     const assertLookupCurrent = () => {
       context.assertCanRegister();
