@@ -25,7 +25,15 @@ with `wake_budget_spent`, and a run with nothing else to wait on waits for you. 
 budget is kept on the task, so a cockpit restart keeps it; a message from you or a
 Continue starts it again.
 
-A CI wait stays pending while any GitHub Actions workflow run on its captured
+A checks wait waits on the checks GitHub requires for the PR (`checks:
+"required"`, the default), as branch protection or rulesets mark them. A check
+that is not required, a check run or a commit status, neither keeps the wait open
+nor decides its outcome; the result's `diagnostic` names each one still pending or
+failed. A PR with no required check has every check in scope, and the result says
+so. `checks: "all"` waits on every check (hearsay-tools/squawk#4392).
+
+A CI wait stays pending while any check in scope is pending. With every check in
+scope, it also stays pending while any GitHub Actions workflow run on its captured
 head commit is incomplete, even when a rerun temporarily hides that run's checks.
 It checks again every 30 seconds within the original deadline. Once those runs
 complete, it reads the checks again to decide the result. A result describes what

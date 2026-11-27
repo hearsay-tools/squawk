@@ -161,7 +161,7 @@ describe('private CI controller', () => {
       const [json, hint] = text!.split('\n');
       expect(squawkWaitAnswerSchema.parse(JSON.parse(json!))).toEqual(registered.answer);
       expect(hint).toBe('Registered. End your turn to wait; any open wait wakes you when it resolves.');
-      expect(register).toHaveBeenLastCalledWith({ kind: WAIT_KIND.pr, pr: wait.prUrl, until: 'checks', wake_on_conflict: true, timeout_seconds: 1800, operation_id: expect.any(String) }, 'cezar_wait', expect.any(AbortSignal));
+      expect(register).toHaveBeenLastCalledWith({ kind: WAIT_KIND.pr, pr: wait.prUrl, until: 'checks', wake_on_conflict: true, checks: 'required', timeout_seconds: 1800, operation_id: expect.any(String) }, 'cezar_wait', expect.any(AbortSignal));
       const closed = await client.callTool({ name: 'cezar_cancel_wait', arguments: { wait_id: wait.id } });
       expect(closed.isError).not.toBe(true);
       expect(squawkCancelWaitAnswerSchema.parse(JSON.parse((closed.content as Array<{ text: string }>)[0]!.text.split('\n')[0]!))).toEqual(cancelled);
@@ -185,7 +185,7 @@ describe('private wait routes', () => {
     const opened = await raw(session.env, JSON.stringify({ kind: WAIT_KIND.pr, pr: wait.prUrl }), undefined, 'wait');
     expect(opened.status).toBe(200);
     expect(squawkWaitAnswerSchema.parse(JSON.parse(opened.body))).toEqual(registered.answer);
-    expect(register).toHaveBeenLastCalledWith({ kind: WAIT_KIND.pr, pr: wait.prUrl, until: 'checks', wake_on_conflict: true, timeout_seconds: 1800 }, 'cezar_wait', expect.any(AbortSignal));
+    expect(register).toHaveBeenLastCalledWith({ kind: WAIT_KIND.pr, pr: wait.prUrl, until: 'checks', wake_on_conflict: true, checks: 'required', timeout_seconds: 1800 }, 'cezar_wait', expect.any(AbortSignal));
     await expect(callSquawkWait({ kind: WAIT_KIND.timer, seconds: 600, note: 'deploy' }, session.env)).resolves.toEqual(registered.answer);
     expect(register).toHaveBeenLastCalledWith({ kind: WAIT_KIND.timer, seconds: 600, note: 'deploy', operation_id: expect.any(String) }, 'cezar_wait', expect.any(AbortSignal));
     const closed = await raw(session.env, JSON.stringify({ wait_id: wait.id }), undefined, 'cancel-wait');

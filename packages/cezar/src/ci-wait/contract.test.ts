@@ -23,7 +23,8 @@ describe('CI wait contract', () => {
     expect(ciWaitResultSchema.safeParse({ ...blocked, mergeBlock: { ...mergeBlock, event: { ...mergeBlock.event, reason: 'x'.repeat(257) } } }).success).toBe(false);
   });
   it('defaults timeout and rejects model-supplied authority and malformed PR URLs', () => {
-    expect(ciWaitRequestSchema.parse({ pr: 'https://github.com/org/repo/pull/12' })).toEqual({ pr: 'https://github.com/org/repo/pull/12', until: 'checks', wake_on_conflict: true, timeout_seconds: 1800 });
+    expect(ciWaitRequestSchema.parse({ pr: 'https://github.com/org/repo/pull/12' })).toEqual({ pr: 'https://github.com/org/repo/pull/12', until: 'checks', wake_on_conflict: true, checks: 'required', timeout_seconds: 1800 });
+    expect(ciWaitRequestSchema.safeParse({ pr: 'https://github.com/org/repo/pull/12', checks: 'some' }).success).toBe(false);
     for (const pr of ['http://github.com/a/b/pull/1', 'https://user@github.com/a/b/pull/1', 'https://github.com:443/a/b/pull/1', 'https://github.com/a/b/pull/0', 'https://github.com/a/b/pull/1?q=x', 'https://github.com/a/b/pull/1#x', 'https://github.com/a/b/pull/1/', 'https://github.com/a/b/pull/9007199254740993']) {
       expect(ciWaitRequestSchema.safeParse({ pr }).success, pr).toBe(false);
     }
@@ -64,7 +65,10 @@ it('returns a bounded wire receipt without persisted authority or delivery state
     expect(ciWaitReceiptSchema.safeParse({ ...receipt, ...privateState }).success).toBe(false);
   }
   const { waitId, ...identity } = receipt;
-  expect(ciWaitSchema.safeParse({ ...identity, id: waitId, generation: 'session-generation', turnId: 'originating-turn', timeoutSeconds: 1800 }).success).toBe(true);
+  const stored = ciWaitSchema.safeParse({ ...identity, id: waitId, generation: 'session-generation', turnId: 'originating-turn', timeoutSeconds: 1800 });
+  expect(stored.success).toBe(true);
+  // A wait stored before hearsay-tools/squawk#4392 has no scope; the supervisor reads it as "all".
+  expect(stored.data?.checks).toBeUndefined();
 });
 
 it.each([

@@ -40,6 +40,15 @@
       "type": "boolean",
       "description": "kind \"pr\": Default true for \"checks\" and \"merge\". Set false when your work depends on another PR merging and you want to ignore its conflicts. \"merge_or_blocked\" always reports conflicts, regardless of this setting. With \"checks\", a conflicting PR may have no checks, ending as no_checks or deadline."
     },
+    "checks": {
+      "default": "required",
+      "type": "string",
+      "enum": [
+        "required",
+        "all"
+      ],
+      "description": "kind \"pr\" with until \"checks\": \"required\" (default) waits on the checks GitHub requires for this PR (branch protection or rulesets) and takes the outcome from them; with no required check on the PR it waits on every check, and the result says so. \"all\" waits on every check. The result names each check outside the scope that is still pending or failed."
+    },
     "head_sha": {
       "type": "string",
       "pattern": "^[0-9a-f]{40}$",

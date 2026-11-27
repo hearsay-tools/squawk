@@ -60,14 +60,45 @@ function runsOutcome(runs: GithubWorkflowRuns): { outcome: 'startup_failure' | '
  * UTF-8 bytes, so the diagnostic beside them stays under the result's 4096-byte limit.
  */
 function staleDiagnostic(checks: GithubCheck[], budget: number): string | undefined {
-  const stale = checks.filter(c => c.stale).map(c => clean(c.name, 256));
-  if (!stale.length) return undefined;
-  let text = 'Stale check records (a conclusion, but a status other than completed): ';
-  for (const [index, name] of stale.entries()) {
-    if (Buffer.byteLength(text + name) > budget) return `${text}; ${stale.length - index} more.`;
-    text += (index ? '; ' : '') + name;
+  return nameList('Stale check records (a conclusion, but a status other than completed): ', checks.filter(c => c.stale).map(c => clean(c.name, 256)), budget);
+}
+/** `prefix` and `items` joined by "; " within `budget` UTF-8 bytes, or undefined with no item. */
+function nameList(prefix: string, items: string[], budget: number): string | undefined {
+  if (!items.length) return undefined;
+  let text = prefix;
+  for (const [index, item] of items.entries()) {
+    if (Buffer.byteLength(text + item) > budget) return `${text}; ${items.length - index} more.`;
+    text += (index ? '; ' : '') + item;
   }
   return text + '.';
+}
+/**
+ * The checks a checks wait waits on (hearsay-tools/squawk#4392). `narrowed` is true when the wait
+ * covers only the required checks and leaves others out; `required` on a PR with no required check
+ * covers every check, as `all` does.
+ */
+function checksScope(wait: CiWait, rows: GithubCheck[]): { scoped: GithubCheck[]; narrowed: boolean } {
+  const narrowed = wait.checks === 'required' && rows.some(c => c.required);
+  return { scoped: narrowed ? rows.filter(c => c.required) : rows, narrowed };
+}
+/**
+ * `text` with the scope diagnostic after it, as a result's `diagnostic`. 4000 leaves room for the
+ * "N more." tail and the joining space under 4096 bytes; the scope note is left out when `text`
+ * leaves too little room for it.
+ */
+function scopeNoted(wait: CiWait, rows: GithubCheck[], narrowed: boolean, text: string): { diagnostic?: string } {
+  const room = 4000 - Buffer.byteLength(text);
+  const scope = room >= 256 ? scopeDiagnostic(wait, rows, narrowed, room) : undefined;
+  const joined = [text, scope].filter(Boolean).join(' ');
+  return joined ? { diagnostic: joined } : {};
+}
+/** What the result says about the scope: the checks it left out that are not done, or the fallback. */
+function scopeDiagnostic(wait: CiWait, rows: GithubCheck[], narrowed: boolean, budget: number): string | undefined {
+  if (wait.checks !== 'required') return undefined;
+  if (!narrowed) return 'No check is required on this PR, so this wait covered every check.';
+  const open = rows.filter(c => !c.required && c.bucket !== 'pass' && c.bucket !== 'skipping')
+    .map(c => `${clean(c.name, 256)} (${clean(c.state, 256)})`);
+  return nameList('Not waited on, because they are not required: ', open, budget);
 }
 type ObservationExtra = Partial<Pick<CiWaitResult, 'observedHeadSha' | 'diagnostic' | 'mergeable' | 'mergeStateStatus' | 'mergedAt' | 'mergeCommitSha' | 'mergeBlock'>>;
 /** The queue removed the PR because it merged; GitHub can still read the PR as `OPEN` for a moment. */
@@ -264,19 +295,22 @@ export class CiWatcherSupervisor {
       this.progress.publish(wait.id, rows);
       const conflicting = conflict();
       if (conflicting) return conflicting;
-      queued.observe(rows);
+      const { scoped, narrowed } = checksScope(wait, rows);
+      const noted = (text = '') => scopeNoted(wait, rows, narrowed, text);
+      queued.observe(scoped);
       const diagnostic = queued.diagnostic();
-      if (diagnostic) return observe('stuck', {diagnostic});
-      if (deciding(rows).some(c => c.bucket === 'fail')) return observe('failed');
+      if (diagnostic) return observe('stuck', noted(diagnostic));
+      if (deciding(rows).some(c => c.bucket === 'fail')) return observe('failed', noted());
       workflowActive = false;
-      if (rows.some(c => c.bucket === 'pending')) return undefined;
+      if (scoped.some(c => c.bucket === 'pending')) return undefined;
       const runs = await this.github.workflowRuns(wait, signal);
       signal.throwIfAborted();
-      workflowActive = runs.active;
+      // A narrowed wait ignores a running workflow and a failed run: its settled required checks decide.
+      workflowActive = runs.active && !narrowed;
       if (workflowActive) return undefined;
       const forced = runsOutcome(runs);
-      if (forced && (forced.outcome === 'startup_failure' || rows.length)) return observe(forced.outcome, { diagnostic: forced.diagnostic });
-      return rows.length ? observe(settledOutcome(rows)) : undefined;
+      if (forced && (forced.outcome === 'startup_failure' || (rows.length && !narrowed))) return observe(forced.outcome, noted(forced.diagnostic));
+      return rows.length ? observe(settledOutcome(scoped), noted()) : undefined;
     };
     try {
       release = await this.slots.acquire(signal);

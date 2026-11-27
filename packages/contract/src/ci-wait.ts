@@ -14,11 +14,19 @@ export const ciPrUrlSchema = z.string().max(2048).regex(prPattern).refine(value 
 /** What a PR wait waits for (hearsay-tools/cezarion#1425): its checks' outcome, or its merge. */
 export const prWaitUntilSchema = z.enum(['checks', 'merge', 'merge_or_blocked']);
 export type PrWaitUntil = z.infer<typeof prWaitUntilSchema>;
+/**
+ * Which checks a checks wait waits on (hearsay-tools/squawk#4392): the checks GitHub requires for
+ * this PR, or every check. With no required check on the PR, `required` covers every check.
+ */
+export const prWaitChecksSchema = z.enum(['required', 'all']);
+export type PrWaitChecks = z.infer<typeof prWaitChecksSchema>;
 export const ciWaitRequestSchema = z.object({
   pr: ciPrUrlSchema,
   until: prWaitUntilSchema.default('checks'),
   /** False keeps a conflicting PR from ending the wait: for a PR the agent does not own. */
   wake_on_conflict: z.boolean().default(true),
+  /** `until: "checks"` only: wait on the required checks (default) or on every check. */
+  checks: prWaitChecksSchema.default('required'),
   timeout_seconds: z.number().int().min(1).max(7200).default(1800),
   /** The commit the caller just pushed: the wait watches it while GitHub still shows the previous head. */
   head_sha: z.string().regex(/^[0-9a-f]{40}$/i).optional(),
@@ -81,6 +89,8 @@ export const ciWaitSchema = ciPrIdentitySchema.extend({
   // Legacy `ciWait` rows predate the target (hearsay-tools/cezarion#1425): they waited for checks.
   until: prWaitUntilSchema.default('checks'),
   wakeOnConflict: z.boolean().default(true),
+  /** Absent on waits stored before hearsay-tools/squawk#4392: they waited on every check. */
+  checks: prWaitChecksSchema.optional(),
   /** The caller named a head GitHub did not show yet at registration (hearsay-tools/squawk#3972). */
   callerHead: z.literal(true).optional(),
   registeredAt: z.iso.datetime(),
