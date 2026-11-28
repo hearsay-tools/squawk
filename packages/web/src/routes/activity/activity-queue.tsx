@@ -115,7 +115,7 @@ const PREVIEW_TONE: Record<DecisionKind, string> = {
 }
 
 function DecisionTitleLink({ href, title, global }: { href: string; title: string; global: boolean }) {
-  const cls = 'hover:underline focus-visible:outline-2 focus-visible:outline-ring max-md:inline-flex max-md:min-h-11 max-md:items-center pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center'
+  const cls = 'hover:underline focus-visible:outline-2 focus-visible:outline-ring max-md:inline-flex max-md:min-h-11 max-md:min-w-11 max-md:items-center pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:items-center'
   return global ? <RouterLink to={href} className={cls}>{title}</RouterLink> : <Link to={href} className={cls}>{title}</Link>
 }
 
