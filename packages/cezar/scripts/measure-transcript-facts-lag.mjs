@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
-import { timingSnapshot, timingDelta, blockingBudget, prepareOpenTiming, startThreadWatch, attachWaitsOverBudget } from './transcript-facts-timing.mjs';
+import { timingSnapshot, timingDelta, blockingBudget, prepareOpenTiming } from './transcript-facts-timing.mjs';
 import { seedColdHistories, verifyFacts } from './transcript-facts-fixture.mjs';
 
 const runtime = { url: process.argv[2] ? pathToFileURL(process.argv[2] + '/') : new URL('../src/', import.meta.url), ext: process.argv[3] ?? (process.argv[2] ? 'js' : 'ts') };
@@ -20,15 +20,10 @@ const timedOpen = await prepareOpenTiming(runtime);
 let openTiming;
 let store;
 let timer;
-let threadWatch;
-const BUDGET_MS = 20;
 try {
   const fixtures = await seedColdHistories(dir, runtime);
   // Fixture allocation/collection belongs to setup, not the measured warm path.
   global.gc?.();
-  // Watch every tick: any one over the budget names what the main thread waited in.
-  threadWatch = await startThreadWatch();
-  threadWatch?.watch(true);
   const periodMs = 20;
   const ticks = [];
   let previous = timingSnapshot();
@@ -46,9 +41,6 @@ try {
   const end = performance.now();
   while (!ticks.some(tick => tick.at > end)) await delay(periodMs);
   clearInterval(timer);
-  threadWatch?.watch(false);
-  attachWaitsOverBudget(ticks, (await threadWatch?.stop()) ?? [], BUDGET_MS, tick => [tick.at - tick.elapsedMs, tick.at]);
-  threadWatch = undefined;
   const overlapping = ticks.filter(tick => tick.at >= start && tick.at <= end);
   // Keep first-open and repeated-open costs separate. Reopening must not rescan clean history.
   const reopenTimings = Array.from({ length: 3 }, () => {
@@ -78,10 +70,9 @@ try {
   assert.ok(overlapping.length > 0, 'must sample during cold warm-up');
   assert.ok(result.durationMs > 0);
   // Exclude loop idle time (the planned timer sleep) and run-queue delay, but retain synchronous blocking.
-  assert.ok(result.maxBlockingMs < BUDGET_MS, `max interval blocking ${result.maxBlockingMs.toFixed(3)}ms must be <${BUDGET_MS}ms`);
+  assert.ok(result.maxBlockingMs < 20, `max interval blocking ${result.maxBlockingMs.toFixed(3)}ms must be <20ms`);
 } finally {
   clearInterval(timer);
-  await threadWatch?.stop();
   store?.close();
   rmSync(dir, { recursive: true, force: true });
 }

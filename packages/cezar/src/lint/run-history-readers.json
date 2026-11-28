@@ -22,11 +22,6 @@
       "reason": "loads the transcript facts sidecar"
     },
     {
-      "file": "packages/cezar/src/runs/transcript-facts-worker.ts",
-      "kind": "historyPaths",
-      "reason": "commits the transcript facts sidecar off the main thread"
-    },
-    {
       "file": "packages/cezar/src/runs/run-archive.ts",
       "kind": "historyPaths",
       "reason": "checks archive eligibility"

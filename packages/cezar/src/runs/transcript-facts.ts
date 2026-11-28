@@ -31,7 +31,7 @@ export class TranscriptFactsIndex {
       dataDir,
       (id, loaded, sidecar) => this.accept(id, loaded, sidecar),
       (id) => this.peek(id) ? this.entries.get(id) : undefined,
-      !readOnly,
+      readOnly ? undefined : (id) => historyPaths(dataDir, id).facts,
     );
   }
 

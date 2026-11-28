@@ -1,6 +1,5 @@
 /** Worker owns reads/decode/fold, and commits the sidecar a load rebuilt unless the index revoked it. */
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
-import { historyPaths } from './history-file.ts';
 import { loadTranscriptFacts, type FactsLoadResult } from './transcript-facts-load.ts';
 import { commitSidecar, RESULT_SLOT, type SidecarCommit } from './transcript-facts-sidecar.ts';
 
@@ -9,8 +8,8 @@ export interface FactsJobMessage {
   runId: string;
   port: MessagePort;
   signal: SharedArrayBuffer;
-  /** Commit the sidecar of a load that needs one. False for read-only indexes. */
-  write: boolean;
+  /** Where to commit the sidecar of a load that needs one. Absent for read-only indexes. */
+  sidecar?: string | undefined;
 }
 export type FactsJobReply = { result: FactsLoadResult | undefined; sidecar?: SidecarCommit } | { error: string };
 
@@ -19,13 +18,13 @@ export type FactsJobReply = { result: FactsLoadResult | undefined; sidecar?: Sid
 const lifecycle = new Int32Array(workerData.lifecycle);
 Atomics.store(lifecycle, 0, 1);
 if (Atomics.load(lifecycle, 1) === 1) parentPort!.close();
-else parentPort!.on('message', ({ dataDir, runId, port, signal, write }: FactsJobMessage) => {
+else parentPort!.on('message', ({ dataDir, runId, port, signal, sidecar }: FactsJobMessage) => {
   const slots = new Int32Array(signal);
   let reply: FactsJobReply;
   try {
     const result = loadTranscriptFacts(dataDir, runId);
-    reply = { result, ...(write && result?.needsWrite
-      ? { sidecar: commitSidecar(historyPaths(dataDir, runId).facts, JSON.stringify(result.facts), slots) } : {}) };
+    reply = { result, ...(sidecar && result?.needsWrite
+      ? { sidecar: commitSidecar(sidecar, JSON.stringify(result.facts), slots) } : {}) };
   } catch (error) {
     reply = { error: String(error) };
   }

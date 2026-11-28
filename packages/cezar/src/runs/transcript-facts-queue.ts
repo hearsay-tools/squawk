@@ -37,8 +37,8 @@ export class TranscriptFactsQueue<T> {
     private readonly dataDir: string,
     private readonly accept: (runId: string, loaded: FactsLoadResult | undefined, sidecar?: SidecarCommit) => T | typeof REFRESH_FACTS,
     private readonly cached?: (runId: string) => T | undefined,
-    /** Let the worker commit the sidecar of a load that needs one. */
-    private readonly writeSidecars = false,
+    /** Where the worker commits the sidecar of a load that needs one; absent: it commits none. */
+    private readonly sidecarPath?: (runId: string) => string,
   ) {}
 
   has(runId: string): boolean { return this.jobs.has(runId); }
@@ -185,7 +185,7 @@ export class TranscriptFactsQueue<T> {
       port1.once('message', (reply: FactsJobReply) => this.complete(job, reply));
       job.timer = setTimeout(() => this.fail(new Error(`Transcript facts worker timed out for ${job.runId}`)), JOB_TIMEOUT_MS);
       const message: FactsJobMessage = { dataDir: this.dataDir, runId: job.runId, port: port2,
-        signal: job.signal.buffer as SharedArrayBuffer, write: this.writeSidecars };
+        signal: job.signal.buffer as SharedArrayBuffer, sidecar: this.sidecarPath?.(job.runId) };
       try { this.worker.postMessage(message, [port2]); } catch (error) { port2.close(); throw error; }
     } catch (error) { this.fail(error instanceof Error ? error : new Error(String(error))); }
   }

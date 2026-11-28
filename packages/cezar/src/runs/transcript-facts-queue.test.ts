@@ -273,7 +273,7 @@ it.each(['forget', 'stop'] as const)('%s revokes a held real result; a removal l
 it('a commit revoked before the worker renames leaves no sidecar or temp file', async () => {
   seed('a');
   const accepted: unknown[] = [];
-  const queue = new TranscriptFactsQueue(dir, (_id, _loaded, sidecar) => { accepted.push(sidecar); return 'done'; }, undefined, true);
+  const queue = new TranscriptFactsQueue(dir, (_id, _loaded, sidecar) => { accepted.push(sidecar); return 'done'; }, undefined, (id) => historyPaths(dir, id).facts);
   const original = Worker.prototype.postMessage;
   vi.spyOn(Worker.prototype, 'postMessage').mockImplementationOnce(function (this: Worker, message: FactsJobMessage, transfer) {
     // The worker has not started this job: the index writes the run itself.
