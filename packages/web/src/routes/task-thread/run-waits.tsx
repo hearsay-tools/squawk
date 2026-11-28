@@ -1,5 +1,6 @@
 import type { ApiRun, Wait } from '@open-mercato/cezar-api-client'
 
+import { shortSha } from '@/components/data-primitives'
 import { isHttpUrl } from '@/lib/utils'
 import type { TaskReference } from '@/lib/tasks-table'
 
@@ -128,7 +129,7 @@ function ciWaitLabel(run: ApiRun, wait: CiWait, settled: boolean) {
     startup_failure: 'CI workflow never started — inspect the PR workflows',
     deadline: merge ? 'Merge wait timed out — merge not confirmed' : 'CI wait timed out — inspect the PR checks',
     error: merge ? 'Merge wait unavailable — inspect access and the PR' : 'CI wait unavailable — inspect access and the PR checks',
-    head_changed: `CI head changed — ${result?.headSha.slice(0, 7)} → ${result?.observedHeadSha?.slice(0, 7) ?? 'unknown'}`,
+    head_changed: `CI head changed — ${result?.headSha ? shortSha(result.headSha) : 'unknown'} → ${result?.observedHeadSha ? shortSha(result.observedHeadSha) : 'unknown'}`,
     merged: 'PR merged',
     closed: 'PR closed without merge — inspect the PR',
     blocked: 'Initiated merge blocked — inspect the PR; not merged',

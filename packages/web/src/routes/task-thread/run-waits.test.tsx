@@ -232,7 +232,7 @@ describe('RunWaitDetails', () => {
     ['deadline', 'CI wait timed out — inspect the PR checks'],
     ['error', 'CI wait unavailable — inspect access and the PR checks'],
     ['stuck', 'CI checks stuck in queue — inspect the PR checks'],
-    ['head_changed', 'CI head changed — 1234567 → fedcba9'],
+    ['head_changed', 'CI head changed — 12345678 → fedcba98'],
   ] as const)('shows the last settled CI observation when nothing is open (%s)', (outcome, label) => {
     renderWaits(run('done', { lastWaits: [ciEntry({ phase: WAIT_PHASE.delivered, result: observed(outcome) })] }))
     expect(screen.getByText(label)).not.toBeNull()
@@ -411,7 +411,7 @@ describe('RunWaitDetails', () => {
     renderWaits(run('done', { lastWaits: [ciEntry({ phase: WAIT_PHASE.delivered, prUrl: 'javascript:void(0)',
       result: { ...observed('head_changed')!, observedHeadSha: undefined },
     })] }))
-    expect(screen.getByText('CI head changed — 1234567 → unknown')).toBeTruthy()
+    expect(screen.getByText('CI head changed — 12345678 → unknown')).toBeTruthy()
     expect(screen.getByText('owner/repo#474')).toBeTruthy()
     expect(screen.queryByRole('link')).toBeNull()
   })

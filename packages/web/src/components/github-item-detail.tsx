@@ -13,6 +13,7 @@ import type {
   GithubTimelineEvent,
   GithubTimelineEventKind,
 } from '@open-mercato/cezar-api-client'
+import { RelativeTime, Sha } from '@/components/data-primitives'
 import { Diff, type DiffFileChange } from '@/components/diff'
 import { ChangeCounts } from '@/components/diff/change-counts'
 import { GithubMergeBox } from '@/components/github-merge-box'
@@ -20,7 +21,6 @@ import { TabLink } from '@/components/tab-link'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/toaster'
-import { shortAge } from '@/lib/format'
 import { cn, isHttpUrl } from '@/lib/utils'
 
 import { Markdown } from '@/routes/task-thread/markdown'
@@ -104,7 +104,7 @@ function GithubItemMeta({
     // One metadata voice with the list rows: sans at text-xs; only SHAs and code stay mono.
     <p data-slot="gh-meta" className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
       <span className="tabular-nums">#{item.number}</span>·<span>{kindWord}</span>·<span>opened by {item.author}</span>·
-      <time dateTime={item.createdAt} title={fullDateTime(item.createdAt)}>{shortAge(item.createdAt)}</time>
+      <RelativeTime iso={item.createdAt} title={fullDateTime(item.createdAt)} />
       {commentCount ? (
         <>
           ·<CommentCount count={commentCount} />
@@ -364,7 +364,7 @@ function GithubPrChanges({ item }: { item: GithubItem }) {
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <strong>{data.files.length} changed files</strong>
         <ChangeCounts adds={data.additions} dels={data.deletions} />
-        <span className="font-mono text-muted-foreground" title={data.headSha}>head {data.headSha.slice(0, 8)}</span>
+        <Sha sha={data.headSha} variant="inline" prefix="head " className="text-muted-foreground" />
         <Button type="button" variant="outline" size="sm" className="ml-auto min-h-11" onClick={() => void refresh()}>Refresh</Button>
       </div>
       {data.truncated ? <p role="status" className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">{data.reason ?? 'This response is incomplete.'} {fallback ? <a href={fallback} target="_blank" rel="noopener noreferrer" className="underline">Open all files on GitHub</a> : null}</p> : null}
@@ -602,7 +602,7 @@ function CommitGroup({ commits, colors }: { commits: GithubTimelineEvent[]; colo
         <span aria-hidden="true">{EVENT_GLYPH.committed}</span>
         <span className="font-sans font-medium text-foreground">{actor}</span>
         <span>added {commits.length} commits</span>
-        <span className="shrink-0">{shortAge(commits[commits.length - 1]!.createdAt)}</span>
+        <RelativeTime iso={commits[commits.length - 1]!.createdAt} className="shrink-0" />
       </button>
     </li>
   )
@@ -645,7 +645,7 @@ function EventRow({ event, colors }: { event: GithubTimelineEvent; colors: Recor
       </span>
       <span className="font-sans font-medium text-foreground">{event.actor}</span>
       <EventPhrase event={event} colors={colors} />
-      <span className="shrink-0">{shortAge(event.createdAt)}</span>
+      <RelativeTime iso={event.createdAt} className="shrink-0" />
       {event.url ? (
         <a
           href={event.url}
@@ -665,7 +665,7 @@ function CommittedPhrase({ event }: { event: GithubTimelineEvent }) {
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       <span className="shrink-0">committed</span>
-      {event.sha ? <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{event.sha.slice(0, 7)}</span> : null}
+      {event.sha ? <Sha sha={event.sha} variant="inline" className="shrink-0 text-[11px] text-muted-foreground" /> : null}
       {event.message ? (
         <span className="truncate font-sans text-foreground">{event.message}</span>
       ) : null}
@@ -767,7 +767,7 @@ function ThreadEntry({ comment }: { comment: GithubComment }) {
       <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
         <Avatar url={comment.avatarUrl} login={comment.author} />
         <span className="font-sans font-medium text-foreground">{comment.author}</span>
-        <span>{shortAge(comment.createdAt)}</span>
+        <RelativeTime iso={comment.createdAt} />
         {chip ? (
           <span
             data-slot="gh-review-chip"

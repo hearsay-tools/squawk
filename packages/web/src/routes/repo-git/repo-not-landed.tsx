@@ -6,6 +6,7 @@ import { ApiError, createRunPr, deleteRepoBranches } from '@/api/client'
 import { queryKeys, useProjectRepoBase, useRepoBranches, useRuns } from '@/api/queries'
 import type { RepoBranchEntry } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
+import { Sha } from '@/components/data-primitives'
 import { PageShellEmptyState, PageShellSparseFooter } from '@/components/page-shell'
 import { Button } from '@/components/ui/button'
 import { ChangeCounts } from '@/components/diff/change-counts'
@@ -402,7 +403,7 @@ export function DeleteBranchDialog({ entry, onClose }: { entry: RepoBranchEntry 
               </p>
               <p data-slot="delete-branch-dropped">
                 {commits} will be dropped{entry?.diffStat ? ` (+${entry.diffStat.additions} −${entry.diffStat.deletions})` : ''}, the latest “{entry?.lastCommit.subject}”
-                {' '}(<span className="font-mono" title={entry?.lastCommit.sha}>{entry?.lastCommit.sha.slice(0, 8)}</span>).
+                {entry?.lastCommit.sha ? <> (<Sha sha={entry.lastCommit.sha} variant="inline" />)</> : null}.
               </p>
             </div>
           </AlertDialogDescription>

@@ -130,6 +130,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'bundled-feature-import': ['packages/cezar/src/server/feature-reach.ts', "import setup from '../features/jobs/index.ts';\n"],
   'test-unpinned-clock-date': ['packages/web/src/clock-violation.test.ts', "const at = '2026-10-27T00:00:00Z';\n"],
   'stubborn-test-child': ['packages/cezar/src/stubborn-violation.test.ts', "spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)\"]);\n"],
+  'use-data-primitives': ['packages/web/src/routes/primitive-violation.tsx', "export function Bad({ sha }: { sha: string }) { return <span>{sha.slice(0, 8)}</span> }\n"],
 };
 
 /** Each approved exception, by the rule it exercises. None may produce a finding. */

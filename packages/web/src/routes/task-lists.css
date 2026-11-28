@@ -1,181 +1,163 @@
-/* Revised project resource table (25), workspace cards (26). */
-[data-route="tasks"], [data-route="global-tasks"] { min-width: 0; }
-[data-slot="tasks-table"] [role="table"] { min-width: 1040px; }
-[data-slot="tasks-table"] .task-resource-grid > [role="row"] { background: var(--muted); }
-[data-slot="tasks-table"] [role="columnheader"] { height: 48px; }
-[data-slot="tasks-table"] [role="cell"] { height: 50px; }
-[data-slot="global-tasks-table"] { padding: 0; overflow: visible; border: 0; background: transparent; }
-[data-slot="global-task-row"] { display: grid; grid-template-columns: auto 1fr auto; gap: 8px 16px; padding: 22px; margin-block-end: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
-[data-slot="global-task-cells"] > div { height: auto; min-width: 0; max-width: none; padding: 0; border: 0; white-space: normal; }
-[data-slot="global-task-row"] [data-slot="global-task-title"] { grid-column: 1 / -1; }
-[data-slot="global-task-row"] [data-slot="global-task-title"] > span > a { font-size: 18px; white-space: normal; line-height: 1.5; }
-[data-slot="global-task-row"] [data-slot="global-task-actions"] { grid-column: 1 / -1; text-align: start; margin-block-start: 4px; }
-[data-slot="global-task-row"] [data-slot="global-task-actions"] > span { flex-wrap: wrap; gap: 8px; }
-[data-slot="global-task-row"] [data-action] { width: auto; min-height: 40px; padding-block: 8px; padding-inline: 12px; gap: 6px; border: 1px solid var(--border); color: var(--foreground); font-size: 12px; }
-[data-slot="global-tasks-filters"] { gap: 20px; }
-[data-slot="global-tasks-filters"] button { min-height: 40px; }
-@media (max-width: 767px) {
-  [data-slot="global-task-row"] { padding: 12px; margin-block-end: 12px; }
-  [data-slot="global-task-row"] [data-slot="global-task-workflow"] { display: block; }
-  [data-slot="global-task-row"] [data-action] { min-height: 44px; }
-  [data-slot="task-card"] { overflow-wrap: anywhere; }
+/* Shared task list layouts: unified <TaskTable /> + optional Project Tasks resource table. */
+[data-route="tasks"],
+[data-route="global-tasks"] {
+  min-width: 0;
 }
 
-/* Frame 5 is the ungrouped summary; frame 26 exposes grouped run-action cards. */
-[data-slot="global-summary-head"] { display: none; }
-@media (max-width: 767px) {
-  /* Keep summary column names in the accessibility tree on the stacked layout. */
-  [data-presentation="summary"] [data-slot="global-summary-head"] { display: block; position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* Optional Project Tasks detailed resource table. */
+[data-slot="tasks-table"] [role="table"] {
+  min-width: 1040px;
+}
+[data-slot="tasks-table"] .task-resource-grid > [role="row"] {
+  background: var(--muted);
+}
+[data-slot="tasks-table"] [role="columnheader"] {
+  height: 48px;
+}
+[data-slot="tasks-table"] [role="cell"] {
+  height: 50px;
 }
 @media (min-width: 768px) {
-  [data-presentation="summary"] [data-slot="global-tasks-table"] { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding-block: 4px; padding-inline: 16px; }
-  [data-presentation="summary"] [data-slot="global-summary-head"],
-  [data-presentation="summary"] [data-slot="global-task-row"] { display: grid; grid-template-columns: minmax(0, 1fr) 120px 90px 100px 70px; column-gap: 16px; }
-  [data-presentation="summary"] [data-slot="global-summary-head"] { padding-block: 8px; color: var(--muted-foreground); font-weight: 500; text-transform: uppercase; }
-  [data-presentation="summary"] [data-slot="global-task-row"] { position: relative; align-items: center; margin: 0; padding-block: 10px; padding-inline: 0; border: 0; border-block-start: 1px solid var(--border); border-radius: 0; }
-  /* An earlier group shows the column names, so the first row needs no rule above it. */
-  [data-presentation="summary"] [data-head="false"] [data-first="true"] > [data-slot="global-task-row"] { border-block-start: 0; }
-  /* No row on the page has a pull request or an issue: the title takes that column's width. */
-  [data-presentation="summary"] [data-reference-column="false"] :is([data-slot="global-summary-head"], [data-slot="global-task-row"]) { grid-template-columns: minmax(0, 1fr) 120px 90px 70px; }
-  [data-presentation="summary"] [data-reference-column="false"] [data-slot="global-task-age"] { grid-column: 4; }
-  [data-presentation="summary"] [data-slot="global-task-row"] [data-slot="global-task-title"] { grid-column: 1; grid-row: 1; }
-  [data-presentation="summary"] [data-slot="global-task-title"] > span > a { font-size: 13px; line-height: 18px; }
-  [data-presentation="summary"] [data-slot="global-task-workflow"] { grid-column: 2; grid-row: 1; }
-  [data-presentation="summary"] [data-slot="global-task-diff"] { grid-column: 3; grid-row: 1; white-space: pre-wrap; }
-  [data-presentation="summary"] [data-slot="global-task-references"] { grid-column: 4; grid-row: 1; }
-  [data-presentation="summary"] [data-slot="global-task-age"] { grid-column: 5; grid-row: 1; text-align: start; }
-  [data-presentation="summary"] [data-slot="global-task-actions"] { margin: 0; }
-  [data-presentation="summary"] [data-slot="global-task-actions"] > span { gap: 8px; }
+  [data-slot="tasks-table"] [role="table"] {
+    min-width: 1240px;
+  }
+  [data-slot="tasks-table"] col[data-column-id="workflow"][data-expanded="true"] {
+    width: 120px !important;
+  }
+  [data-slot="tasks-table"] col[data-column-id="memory"][data-expanded="true"] {
+    width: 120px !important;
+  }
+}
+.task-resource-grid {
+  min-inline-size: 1240px;
+}
+.task-resource-row {
+  display: grid;
+  grid-template-columns: var(--task-columns);
+  align-items: center;
+}
+.task-resource-row > [role="cell"] {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+  max-inline-size: none;
+}
+.task-resource-row > [role="cell"].text-right {
+  justify-content: end;
+}
+.task-resource-row > [role="columnheader"] {
+  display: flex;
+  align-items: center;
+}
+[data-last="true"] .task-resource-row > [role="cell"] {
+  border-block-end: 0;
 }
 
-/* The Filters toggle discloses the whole facet panel: closed, the toolbar is two rows. */
-[data-filter-details="false"] [data-slot="global-tasks-filters"] { display: none; }
-/* A group's heading row already carries a 44px touch box, so its list starts close below it. */
-:is([data-route="tasks"], [data-route="global-tasks"]) [data-slot="task-status-group"] { row-gap: 6px; }
-[data-slot="global-tasks-filters"] > div:first-child { gap: 10px; }
-[data-slot="global-tasks-filters"] button { border-radius: 8px; }
-[data-slot="global-task-diff"] { display: none; }
-@media (min-width: 768px) {
-  [data-presentation="summary"] [data-slot="global-task-diff"] { display: block; }
-  [data-slot="tasks-table"] [role="table"] { min-width: 1240px; }
-  [data-slot="tasks-table"] col[data-column-id="workflow"][data-expanded="true"] { width: 120px !important; }
-  [data-slot="tasks-table"] col[data-column-id="memory"][data-expanded="true"] { width: 120px !important; }
+/* Global Tasks filter bar disclosure. */
+[data-filter-details="false"] [data-slot="global-tasks-filters"] {
+  display: none;
+}
+[data-slot="global-tasks-filters"] {
+  gap: 16px;
+}
+[data-slot="global-tasks-filters"] > div:first-child {
+  gap: 10px;
+}
+[data-slot="global-tasks-filters"] button {
+  min-height: 40px;
+  border-radius: 8px;
 }
 
-/* No done-pill override (#617): a done run's pill is the same dot + label as every other
-   status, a green filled dot, never a teal chip with the dot hidden. */
-
-@media (max-width: 767px) {
-  /* Phones: three tight rows per card, so three or four tasks sit above the fold at 390×844.
-     The pin and the status pill keep the 44px touch box from accessibility.css, but negative
-     block margins take part of it out of the row height. The whole pin box stays inside its
-     card: the list item clips its paint (content-visibility), so a box that crossed the card's
-     edge would lose taps there. Its top meets the card's top edge, its right edge the card's
-     right edge, and its bottom meets the status row, which is painted later and would take the
-     taps on any overlap. That meeting point needs a 6px row gap at every density. */
-  [data-slot="task-card"] { position: relative; padding-block: 12px 8px; row-gap: 6px; }
-  [data-slot="task-card"] [data-slot="pin-toggle"] { margin-block: -12px -6px; margin-inline: auto 0; }
-  [data-slot="task-card"] [data-slot="mobile-resources-toggle"] { display: inline-flex; align-items: center; margin-block: -12px; border-radius: 4px; padding: 0; }
-  [data-slot="mobile-task-meta"] { font-family: inherit; font-size: 12px; font-weight: 400; }
-}
-/* Grouped runs use a single metadata line, followed by the complete action row (26A). */
-[data-presentation="cards"] [data-slot="global-task-row"] { grid-template-columns: auto auto auto minmax(0, 1fr); gap: 12px; }
-[data-presentation="cards"] [data-slot="global-task-row"] [data-slot="global-task-title"] { display: contents; }
-[data-presentation="cards"] [data-slot="global-task-title"] > span { grid-column: 1 / -1; grid-row: 1; }
-[data-presentation="cards"] [data-slot="global-task-title"] > div { grid-column: 1; grid-row: 2; margin-block-start: 0; }
-[data-presentation="cards"] [data-slot="global-task-workflow"] { grid-column: 2; grid-row: 2; align-self: center; }
-[data-presentation="cards"] [data-slot="global-task-references"] { grid-column: 3; grid-row: 2; align-self: center; }
-[data-presentation="cards"] [data-slot="global-task-age"] { grid-column: 4; grid-row: 2; align-self: center; text-align: start; }
-[data-presentation="cards"] [data-slot="global-task-actions"] { grid-column: 1 / -1; grid-row: 3; margin: 0; }
-[data-presentation="cards"] [data-slot="global-task-title"] [data-slot="pill"] { padding: 0; background: transparent; color: var(--muted-foreground); font-size: 12px; font-weight: 400; text-transform: capitalize; }
-[data-presentation="cards"] [data-slot="global-task-actions"] [data-slot="button"] { font-weight: 400; }
-@media (max-width: 767px) {
-  [data-presentation="cards"] [data-slot="global-task-row"] { grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; }
-  [data-presentation="cards"] [data-slot="global-task-references"] { grid-column: 1; grid-row: 3; }
-  [data-presentation="cards"] [data-slot="global-task-age"] { grid-column: 2; grid-row: 3; }
-  [data-presentation="cards"] [data-slot="global-task-actions"] { grid-row: 4; }
+/* Status group spacing. */
+:is([data-route="tasks"], [data-route="global-tasks"]) [data-slot="task-status-group"] {
+  row-gap: 6px;
 }
 
-[data-slot="tasks-summary"] [data-slot="diff-stat"], [data-slot="mobile-task-meta"] [data-slot="diff-stat"], [data-slot="global-task-diff"] [data-slot="diff-stat"] { font-family: inherit; font-weight: 400; white-space: nowrap; }
-/* One outlined secondary button for both sweeps, never a ghost beside an outlined sibling. */
-[data-slot="tasks-toolbar"] :is([data-slot="archive-finished"], [data-slot="mark-all-read"]) { min-height: 44px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--foreground); }
-@media (min-width: 768px) {
-  [data-slot="tasks-toolbar"] :is([data-slot="archive-finished"], [data-slot="mark-all-read"]) { min-height: 36px; }
+/* Other projects panel on Global Tasks. */
+[data-slot="other-projects"] a {
+  border: 1px solid var(--border);
+  min-height: 44px;
+  color: var(--foreground);
+}
+[data-slot="other-projects"] > div > div {
+  border: 0;
 }
 
-@media (max-width: 767px) {
-  [data-presentation="summary"] [data-slot="global-tasks-table"] { border: 1px solid var(--border); border-radius: 12px; padding-block: 4px; padding-inline: 16px; background: var(--card); }
-  [data-presentation="summary"] [data-slot="global-task-row"] { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 12px; margin: 0; padding-block: 12px; padding-inline: 0; border: 0; border-block-start: 1px solid var(--border); border-radius: 0; }
-  [data-presentation="summary"] [data-slot="global-task-title"] { grid-column: 1 / -1; }
-  [data-presentation="summary"] [data-slot="global-task-title"] > span > a { line-height: 1.5; }
-  [data-presentation="summary"] [data-slot="global-task-workflow"] { grid-column: 1; grid-row: 2; }
-  [data-presentation="summary"] [data-slot="global-task-diff"] { display: block; grid-column: 2; grid-row: 2; }
-  [data-presentation="summary"] [data-slot="global-task-age"] { grid-column: 3; grid-row: 2; }
-  [data-presentation="summary"] [data-slot="global-task-references"] { grid-column: 1 / -1; grid-row: 3; }
-  [data-route="global-tasks"][data-presentation="summary"] > header > div:has(input) { align-items: start; flex-direction: column; }
-  [data-slot="other-projects"] a { border: 1px solid var(--border); min-height: 44px; color: var(--foreground); }
+/* Unified <TaskTable /> rules (table, compact, and card densities). */
+[data-task-table="true"] [data-slot="diff-stat"] {
+  font-family: inherit;
+  font-weight: 400;
+  white-space: nowrap;
 }
-
-[data-slot="tasks-toolbar"] [data-slot="button"] { font-size: 12px; font-weight: 500; }
-@media (max-width: 767px) {
-  [data-slot="tasks-toolbar"] { align-items: start; }
-  [data-slot="task-card"] [data-slot="mobile-task-title-row"] > a { font-size: 13px; line-height: 1.4; }
-  /* Phones: a tighter header, so three or four task cards sit above the fold. */
-  :is([data-route="tasks"], [data-route="global-tasks"]) > header { gap: 8px; }
-  :is([data-route="tasks"], [data-route="global-tasks"]) { row-gap: 8px; }
-}
-
-[data-slot="other-projects"] a { border: 1px solid var(--border); min-height: 44px; color: var(--foreground); }
-[data-slot="other-projects"] > div > div { border: 0; }
-@media (max-width: 767px) {
-  [data-route="global-tasks"][data-presentation="summary"] > header > div:has(input) > div { width: 100%; }
-}
-
-@media (min-width: 768px) {
-  [data-route="tasks"][data-presentation="resources"] > header { flex-direction: row; flex-wrap: wrap; gap: 12px; align-items: center; }
-  [data-route="tasks"][data-presentation="resources"] > header > div:first-child { width: 100%; }
-  [data-route="tasks"][data-presentation="resources"] > header > div:nth-child(2) { border: 0; gap: 8px; }
-  [data-route="tasks"][data-presentation="resources"] > header > div:nth-child(2) > button { min-height: 40px; border: 1px solid var(--border); border-radius: 8px; padding-block: 10px; padding-inline: 14px; background: var(--card); }
-  [data-route="tasks"][data-presentation="resources"] [data-slot="tasks-toolbar"] { flex: 1; }
-}
-
-@media (max-width: 767px) {
-  /* Phones: search and the Task actions menu share one row. The menu already holds both sweeps
-     (hearsay-tools/cezarion#1616), so the outlined Archive finished button stays desktop-only. */
-  [data-route="tasks"] [data-slot="tasks-toolbar"] { flex-wrap: nowrap; align-items: center; gap: 8px; }
-  [data-route="tasks"] [data-slot="tasks-toolbar"] > div:has(input) { flex: 1; width: auto; min-width: 0; }
-  [data-route="tasks"] [data-slot="tasks-toolbar"] [data-slot="archive-finished"] { display: none; }
+[data-last="true"] > [data-task-row="true"] {
+  border-block-end: 0;
 }
 
 /* A status dot inside a muted pill reads dim on the dark theme; lift it there only. */
-:root:not(.light) :is([data-slot="tasks-summary"], [data-slot="task-card"], [data-route="global-tasks"]) [data-slot="pill"] [data-slot="status-dot"] { filter: brightness(1.2) saturate(1.15); }
-
-/* Summary references use the design's plain status label. The shared chip still
-   owns navigation, live status, its accessible name and the conflict-action panel. */
-:is([data-slot="tasks-summary"], [data-slot="task-card"], [data-route="global-tasks"][data-presentation="summary"]) [data-slot="pr-chip"]:is([data-status="merged"], [data-conflicting="true"]) { height: auto; border: 0; border-radius: 0; background: transparent; padding: 0; gap: 0; font-family: inherit; font-size: 12px; font-weight: 400; white-space: nowrap; }
-:is([data-slot="tasks-summary"], [data-slot="task-card"], [data-route="global-tasks"][data-presentation="summary"]) [data-slot="pr-chip"][data-status="merged"] { color: var(--merged-text); }
-:is([data-slot="tasks-summary"], [data-slot="task-card"], [data-route="global-tasks"][data-presentation="summary"]) [data-slot="pr-chip"][data-conflicting="true"] { color: var(--conflict); }
-:is([data-slot="tasks-summary"], [data-slot="task-card"], [data-route="global-tasks"][data-presentation="summary"]) [data-slot="pr-chip"]:is([data-status="merged"], [data-conflicting="true"]) > svg { display: none; }
-:is([data-slot="tasks-summary"], [data-slot="task-card"], [data-route="global-tasks"][data-presentation="summary"]) [data-slot="pr-chip"]:is([data-status="merged"], [data-conflicting="true"])[data-status="merged"]::after { content: ' · Merged'; white-space: pre; }
-:is([data-slot="tasks-summary"], [data-slot="task-card"], [data-route="global-tasks"][data-presentation="summary"]) [data-slot="pr-chip"]:is([data-status="merged"], [data-conflicting="true"])[data-conflicting="true"]::after { content: ' · Conflicts'; white-space: pre; }
-
-/* Virtualizer wrappers are implementation details; flags describe logical run positions. */
-.task-list-flat-item { content-visibility: auto; contain-intrinsic-block-size: auto 63px; }
-/* content-visibility clips each flat item's paint, hit testing included. On a device without
-   hover the summary row's pin is a 44px box centred on the 18px title line, so it reaches 13px
-   above that line: the title cell's top padding grows to 13px (and the bottom one shrinks to
-   7px) so the box stays inside the row. The row keeps its height. */
-@media (hover: none) {
-  [data-slot="task-summary-row"] > [role="cell"]:first-child { padding-block: 13px 7px; }
+:root:not(.light) [data-task-table="true"] [data-slot="pill"] [data-slot="status-dot"] {
+  filter: brightness(1.2) saturate(1.15);
 }
-.task-summary-grid { display: grid; grid-template-columns: minmax(0, 1fr) 136px 106px 116px 70px; align-items: center; }
-[data-reference-column="false"] > [role="table"] .task-summary-grid { grid-template-columns: minmax(0, 1fr) 136px 106px 70px; }
-[data-slot="task-summary-row"] { border-block-end: 1px solid var(--border); }
-[data-last="true"] [data-slot="task-summary-row"] { border-block-end: 0; }
-.task-resource-grid { min-inline-size: 1240px; }
-.task-resource-row { display: grid; grid-template-columns: var(--task-columns); align-items: center; }
-.task-resource-row > [role="cell"] { display: flex; align-items: center; min-inline-size: 0; max-inline-size: none; }
-.task-resource-row > [role="cell"].text-right { justify-content: end; }
-.task-resource-row > [role="columnheader"] { display: flex; align-items: center; }
-[data-last="true"] .task-resource-row > [role="cell"] { border-block-end: 0; }
-[data-last="true"] > [data-slot="task-card"] { border-block-end: 0; }
+
+/* Summary and card references use plain status labels; the shared chip owns navigation and conflicts. */
+[data-task-table="true"] [data-slot="pr-chip"]:is([data-status="merged"], [data-conflicting="true"]) {
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  gap: 0;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+[data-task-table="true"] [data-slot="pr-chip"][data-status="merged"] {
+  color: var(--merged-text);
+}
+[data-task-table="true"] [data-slot="pr-chip"][data-conflicting="true"] {
+  color: var(--conflict);
+}
+[data-task-table="true"] [data-slot="pr-chip"]:is([data-status="merged"], [data-conflicting="true"]) > svg {
+  display: none;
+}
+[data-task-table="true"] [data-slot="pr-chip"]:is([data-status="merged"], [data-conflicting="true"])[data-status="merged"]::after {
+  content: ' · Merged';
+  white-space: pre;
+}
+[data-task-table="true"] [data-slot="pr-chip"]:is([data-status="merged"], [data-conflicting="true"])[data-conflicting="true"]::after {
+  content: ' · Conflicts';
+  white-space: pre;
+}
+
+/* Virtualizer wrappers: flat items use content-visibility for smooth large-list scrolling. */
+.task-list-flat-item {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 74px;
+}
+
+@media (hover: none) {
+  [data-task-table="true"] [data-task-row="true"] > [role="cell"]:first-child {
+    padding-block: 13px 7px;
+  }
+}
+
+@media (max-width: 767px) {
+  [data-density="card"] [data-task-row="true"] {
+    position: relative;
+    overflow-wrap: anywhere;
+    padding-block: 12px 10px;
+    row-gap: 6px;
+  }
+  [data-density="card"] [data-task-row="true"] [data-slot="pin-toggle"] {
+    margin-block: -10px -6px;
+    margin-inline: auto 0;
+  }
+  [data-slot="mobile-task-meta"] {
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 400;
+  }
+  :is([data-route="tasks"], [data-route="global-tasks"]) {
+    row-gap: 8px;
+  }
+}

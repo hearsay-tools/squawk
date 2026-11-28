@@ -1,8 +1,8 @@
 import type { GithubData } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
+import { RelativeTime } from '@/components/data-primitives'
 import { ArrowLeftIcon, CircleDotIcon, GitPullRequestIcon, RefreshCwIcon } from '@/components/design-icons'
 import { PageShellActionButton, type PageShellHeaderProps } from '@/components/page-shell'
-import { shortAge } from '@/lib/format'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 import type { GithubView } from './github'
@@ -30,7 +30,7 @@ export function githubHeaderProps({ view, activeFilter, isDesktop, rawFilterPara
       <span className="block min-w-0 truncate">
         <span data-slot="gh-repo">{gh.repo}</span>
         <span data-slot="gh-synced" title={gh.syncedAt ? new Date(gh.syncedAt).toLocaleString() : undefined}>
-          {' '}· {gh.syncedAt ? `Synced ${shortAge(gh.syncedAt)}` : 'Not synced yet'}
+          {' '}· {gh.syncedAt ? <RelativeTime iso={gh.syncedAt} prefix="Synced " /> : 'Not synced yet'}
         </span>
       </span>
     ) : undefined,
