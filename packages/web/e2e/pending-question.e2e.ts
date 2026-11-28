@@ -294,4 +294,45 @@ describe('reopening and reduced motion', () => {
     browser.waitForValue(`document.activeElement === document.querySelector(${JSON.stringify(FIRST_CHIP)}) && ${inViewport(FIRST_CHIP)}`,
       (value): value is true => value === true, { failure: 'the reduced-motion jump did not land on the first chip' })
   })
+
+  it('keeps the Other answer textarea and Send button usable when a 280px mobile keyboard opens at 360×640', () => {
+    openTask(360, 640)
+    browser.evaluate(`document.documentElement.style.setProperty('--kb', '280px')`)
+    try {
+      browser.waitForFunction(`document.querySelector('[data-route="task-thread"]')?.dataset.compactViewport === 'true'`)
+      const otherBtn = `[...document.querySelectorAll('${PINNED} [data-slot="ask-question"] button')].find((el) => el.textContent?.trim() === 'Other')`
+      browser.evaluate(`(() => { const btn = ${otherBtn}; btn.scrollIntoView({ block: 'center', behavior: 'instant' }); btn.click(); })()`)
+      browser.waitForFunction(`document.querySelector('${PINNED} textarea') !== null`)
+      browser.evaluate(`document.querySelector('${PINNED} textarea')?.scrollIntoView({ block: 'nearest', behavior: 'instant' })`)
+      const state = waitForSettledSample<{
+        textareaHeight: number
+        textareaHit: boolean
+        sendInView: boolean
+        sendHit: boolean
+        sendHeight: number
+      }>(browser, `(() => {
+        const textarea = document.querySelector('${PINNED} textarea')
+        const send = [...document.querySelectorAll('${PINNED} [data-slot="ask-footer"] button')].find((el) => el.textContent?.includes('Send answer'))
+        if (!textarea || !send) return null
+        const tb = textarea.getBoundingClientRect()
+        const sb = send.getBoundingClientRect()
+        const tHit = document.elementFromPoint(tb.x + tb.width / 2, tb.y + tb.height / 2)
+        const hit = document.elementFromPoint(sb.x + sb.width / 2, sb.y + sb.height / 2)
+        return {
+          textareaHeight: Math.round(tb.height),
+          textareaHit: !!tHit && (tHit === textarea || textarea.contains(tHit)),
+          sendInView: sb.top >= 0 && sb.bottom <= 640 - 280 + 1,
+          sendHit: !!hit && (hit === send || send.contains(hit)),
+          sendHeight: Math.round(sb.height),
+        }
+      })()`)
+      expect(state.textareaHeight).toBeGreaterThanOrEqual(40)
+      expect(state.textareaHit).toBe(true)
+      expect(state.sendInView).toBe(true)
+      expect(state.sendHit).toBe(true)
+      expect(state.sendHeight).toBeGreaterThanOrEqual(44)
+    } finally {
+      browser.evaluate(`document.documentElement.style.setProperty('--kb', '0px')`)
+    }
+  })
 })

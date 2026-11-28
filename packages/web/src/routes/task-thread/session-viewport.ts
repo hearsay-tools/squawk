@@ -8,14 +8,17 @@ export function useSessionViewport() {
   const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const root = ref.current
-    const main = root?.closest<HTMLElement>('[data-slot="main"]')
-    const header = root?.querySelector<HTMLElement>('[data-slot="run-header"]')
-    const footer = root?.querySelector<HTMLElement>('[data-slot="thread-dock"]')
+    if (!root) return
+    const main = root.closest<HTMLElement>('[data-slot="main"]')
+    const header = root.querySelector<HTMLElement>('[data-slot="run-header"]')
+    const footer = root.querySelector<HTMLElement>('[data-slot="thread-dock"]')
     if (!main || !header || !footer) return
 
     const update = () => {
       const tabs = header.querySelector<HTMLElement>('[data-slot="run-tabs"]')
       const box = header.getBoundingClientRect()
+      if (main.clientHeight > 0 && main.clientHeight < 420) root.dataset.compactViewport = 'true'
+      else delete root.dataset.compactViewport
       header.style.setProperty('--run-header-lead', `${tabs ? Math.max(0, tabs.getBoundingClientRect().top - box.top) : 0}px`)
       main.style.setProperty('--thread-viewport-height', `${main.clientHeight}px`)
       main.style.setProperty('--thread-header-height', `${dockedHeaderHeight(header)}px`)
@@ -28,6 +31,7 @@ export function useSessionViewport() {
     observer.observe(main)
     return () => {
       observer.disconnect()
+      delete root.dataset.compactViewport
       header.style.removeProperty('--run-header-lead')
       main.style.removeProperty('--thread-header-height')
       main.style.removeProperty('--thread-footer-height')

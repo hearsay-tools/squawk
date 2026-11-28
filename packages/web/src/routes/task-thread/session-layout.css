@@ -155,8 +155,9 @@
 [data-route='task-thread'] [data-slot='thread-dock'] [data-slot='ask-card'] {
   display: flex;
   flex-direction: column;
+  flex: 0 1 auto;
   min-block-size: 0;
-  max-block-size: var(--thread-footer-limit);
+  max-block-size: calc(var(--thread-footer-limit) - 24px);
   overflow: clip;
 }
 [data-route='task-thread'] [data-slot='ask-body'] {
@@ -188,6 +189,25 @@
   .session-composer [data-slot='composer-toolbar'] { padding-block: 0 8px; }
   [data-route='task-thread'] [data-slot='thread-footer-content'] {
     --thread-footer-limit: min(50dvh, calc(var(--thread-viewport-height, 100dvh) - var(--thread-header-height, 0px) - 180px));
+  }
+  /* When the mobile soft keyboard (--kb) or a short landscape viewport shrinks main below 420px,
+   * yield secondary header/status rows and the transcript reserve so answer textareas and submit
+   * buttons remain visible and clickable without clipping (hearsay-tools/squawk#4374). */
+  [data-route='task-thread'][data-compact-viewport='true'] [data-slot='run-activity-trigger-mobile'],
+  [data-route='task-thread'][data-compact-viewport='true'] [data-slot='paused-hint'],
+  [data-route='task-thread'][data-compact-viewport='true'] [data-slot='ask-hint'] {
+    display: none;
+  }
+  [data-route='task-thread'][data-compact-viewport='true'] [data-slot='ask-header'],
+  [data-route='task-thread'][data-compact-viewport='true'] [data-slot='ask-footer'] {
+    padding-block: 4px;
+  }
+  [data-route='task-thread'][data-compact-viewport='true'] [data-slot='thread-footer-content'] {
+    --thread-footer-limit: calc(var(--thread-viewport-height, 100dvh) - var(--thread-header-height, 0px) - 12px);
+  }
+  [data-route='task-thread'][data-compact-viewport='true'] [data-slot='thread-dock'] [data-slot='ask-card'],
+  [data-route='task-thread'][data-compact-viewport='true'] [data-slot='thread-footer-content'] [data-slot='composer'] {
+    max-block-size: var(--thread-footer-limit);
   }
 }
 
