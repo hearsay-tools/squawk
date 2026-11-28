@@ -120,7 +120,7 @@ function QuickReplyFallback({
         className="bg-background text-base md:text-[13px]"
       />
       {delivery.reason ? <p className="text-xs text-muted-foreground">{delivery.reason}</p> : null}
-      {delivery.error ? <p role="alert" className="text-xs text-danger">{delivery.error}</p> : null}
+      {delivery.error ? <p role="alert" className="text-xs text-semantic-red">{delivery.error}</p> : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
@@ -238,7 +238,7 @@ function FailedDrawerBody({
             className="bg-card text-base md:text-[13px]"
           />
           {delivery.reason ? <p className="text-xs text-muted-foreground">{delivery.reason}</p> : null}
-          {delivery.error ? <p role="alert" className="text-xs text-danger">{delivery.error}</p> : null}
+          {delivery.error ? <p role="alert" className="text-xs text-semantic-red">{delivery.error}</p> : null}
         </div>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
@@ -324,7 +324,7 @@ function DrawerContentBody({
   }
   if (runQuery.isError || !runQuery.data) {
     return (
-      <div role="alert" className="flex flex-col gap-2 text-xs text-danger">
+      <div role="alert" className="flex flex-col gap-2 text-xs text-semantic-red">
         <p>Could not load task details: {runQuery.error?.message ?? 'task unavailable'}.</p>
         <Button type="button" size="sm" variant="outline" className="min-h-11 self-start" onClick={() => void runQuery.refetch()}>
           Retry
@@ -387,7 +387,7 @@ export function ActivityTriageDrawer({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={cn('text-xs font-semibold', TONE_INK[record.tone])}>{record.stateLabel}</span>
-                  <span className="inline-flex items-center rounded-md border border-border bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  <span className="inline-flex items-center rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
                     {record.projectName}
                   </span>
                   {record.ageSince ? (

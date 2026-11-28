@@ -141,13 +141,13 @@ describe('TasksOverview — the table', () => {
       ],
     })
     const pillOf = (id: string) => tableRow(id)?.querySelector('[data-slot="pill"]')
-    expect(pillOf('w')?.textContent).toBe('needs you')
-    expect(pillOf('v')?.textContent).toBe('needs review')
-    expect(pillOf('d')?.textContent).toBe('done')
-    expect(pillOf('f')?.textContent).toBe('failed')
+    expect(pillOf('w')?.textContent).toBe('Needs you')
+    expect(pillOf('v')?.textContent).toBe('Needs review')
+    expect(pillOf('d')?.textContent).toBe('Done')
+    expect(pillOf('f')?.textContent).toBe('Failed')
   })
 
-  it('shows a usage-limit hold as "usage limit" with its time, not as a failure', () => {
+  it('shows a usage-limit hold as "Usage limit" with its time, not as a failure', () => {
     // The record is `waiting` with an appointment (hearsay-tools/cezarion#1236): neutral, still,
     // and carrying the instant the way a queued row carries its position.
     renderOverview({
@@ -157,13 +157,13 @@ describe('TasksOverview — the table', () => {
       ],
     })
     const pillOf = (id: string) => tableRow(id)?.querySelector('[data-slot="pill"]')
-    expect(pillOf('sched')?.textContent).toContain('usage limit')
+    expect(pillOf('sched')?.textContent).toContain('Usage limit')
     // The time itself, locale-formatted — assert it is there rather than its spelling.
     expect(pillOf('sched')?.textContent).toMatch(/\d{1,2}[:.]\d{2}/)
     // The status key's usage-limit mark (#617): a ring.
     expect(pillOf('sched')?.querySelector('[data-slot="status-dot"]')?.getAttribute('data-shape')).toBe('ring')
     // …and an ordinary failure is untouched.
-    expect(pillOf('broke')?.textContent).toBe('failed')
+    expect(pillOf('broke')?.textContent).toBe('Failed')
   })
 
   it('shows a queued issue reference before the agent starts', () => {
@@ -207,7 +207,7 @@ describe('TasksOverview — the table', () => {
 
     // Status | Task | Workflow | Branch | ± | PR | IN/OUT | Cost | CPU | Mem | Started
     expect(cellsOf('full')).toEqual([
-      'needs review',
+      'Needs review',
       'Structured changes endpoint',
       'feat',
       'cez/8f31ab02',
@@ -222,7 +222,7 @@ describe('TasksOverview — the table', () => {
     // No branch, no PR, no diff recorded, no cost yet — dashes, not zeros (a pre-R2 record has
     // no diffStat, and `+0 −0` would claim a measurement that never happened). Started falls
     // back to createdAt.
-    expect(cellsOf('bare')).toEqual(['needs you', 'Bare minimum', 'default', '—', '—', '—', '— / —', '—', '—', '—', '26m'])
+    expect(cellsOf('bare')).toEqual(['Needs you', 'Bare minimum', 'default', '—', '—', '—', '— / —', '—', '—', '—', '26m'])
     const diff = tableRow('full')?.querySelector('[data-slot="diff-stat"]')
     expect(diff?.getAttribute('title')).toBe('+128 −14 across 6 files')
     // Nothing was narrowed here, so nothing claims it was (#751).
@@ -267,7 +267,7 @@ describe('TasksOverview — the table', () => {
     )
     expect(headers).toEqual(['Status', 'Task', 'Workflow', 'Branch', '±', 'Ref', 'CPU', 'Mem', 'Started'])
     expect(cellsOf('hidden')).toEqual([
-      'done',
+      'Done',
       'Hidden metrics',
       'default',
       '—',
@@ -918,7 +918,7 @@ describe('TasksOverview — mobile cards and FAB', () => {
       ],
     })
     const c = card('c1') as HTMLElement
-    expect(c.querySelector('[data-slot="pill"]')?.textContent).toBe('needs review')
+    expect(c.querySelector('[data-slot="pill"]')?.textContent).toBe('Needs review')
     // The card names the run by the summary too — every surface reads through runTitle.
     expect(within(c).getByRole('link', { name: 'Structured changes endpoint' }).getAttribute('href')).toBe(
       '/tasks/c1'

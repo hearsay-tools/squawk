@@ -175,7 +175,7 @@ export function CloneProjectDialog({
           <div className="flex min-w-0 items-center gap-1">
             <p
               data-slot="clone-target"
-              className="min-w-0 flex-1 truncate font-mono text-[11px] text-soft-foreground"
+              className="min-w-0 flex-1 truncate font-mono text-xs text-soft-foreground"
               title={target}
             >
               {target}
@@ -210,7 +210,7 @@ export function CloneProjectDialog({
         {/* One line, replaced in place: `git clone` emits a counter update every few hundred ms,
             and a growing log would scroll a dialog that is otherwise a form. */}
         {checkout.isPending ? (
-          <p data-slot="clone-progress" className="truncate font-mono text-[11px] text-muted-foreground">
+          <p data-slot="clone-progress" className="truncate font-mono text-xs text-muted-foreground">
             {progress ?? 'Starting the clone…'}
           </p>
         ) : null}

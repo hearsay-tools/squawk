@@ -92,7 +92,7 @@ it('recognizes fully opaque card-2 background modifiers', () => {
   expect(scan(`<div className="bg-card-2"><p className="bg-background/100 text-danger text-xs">separate</p></div>`)).toEqual([])
 })
 it('lets documented safe foregrounds override inherited unsafe ink', () => {
-  expect(scan(`<div className="bg-card-2 text-danger"><span className="text-supporting-foreground">safe</span><span className="text-link-foreground">safe</span></div>`)).toEqual([])
+  expect(scan(`<div className="bg-card-2 text-danger"><span className="text-supporting-foreground">safe</span><span className="text-link-foreground">safe</span><span className="text-semantic-red">safe</span><span className="text-semantic-green">safe</span></div>`)).toEqual([])
 })
 it('does not count safely styled JSX branches as text in their wrapper', () => {
   expect(scan(`<div className="bg-card-2 text-danger">{ok === true && <span className="text-muted-foreground">safe</span>}{ok ? <span className="text-foreground">safe</span> : null}</div>`)).toEqual([])

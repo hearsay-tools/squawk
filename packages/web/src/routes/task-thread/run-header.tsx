@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { toast } from '@/components/ui/toaster'
 import { deriveAttention } from '@/lib/attention'
+import { ARCHIVED_STATUS } from '@/lib/status-semantics'
 import { queuePositions, runTitle } from '@/lib/task-groups'
 import { taskItemTabs, type TaskItemTab } from '@/lib/tasks-table'
 import { cn } from '@/lib/utils'
@@ -182,6 +183,15 @@ function WorkerParentLink({ run, compact = false }: { run: ApiRun; compact?: boo
  *  Archive control beside its reason instead. Phones keep it in the kebab. */
 function headerArchiveButton(run: ApiRun, flags: ReturnType<typeof runActionFlags>) {
   return !run.archiveBlocker && flags.archive ? <ArchiveButton run={run} /> : null
+}
+
+function ArchivedPill({ archived, className }: { archived?: boolean | undefined; className?: string | undefined }) {
+  if (!archived) return null
+  return (
+    <Pill data-slot="run-archived-pill" dot={ARCHIVED_STATUS.tone} shape={ARCHIVED_STATUS.shape} className={className}>
+      {ARCHIVED_STATUS.label}
+    </Pill>
+  )
 }
 
 /** The auto-archive provenance line: shown only when the run is archived right now by the
@@ -379,7 +389,12 @@ export function RunHeader({
           <MobileRunBarPortal slot={barSlot}>
             <MobileRunTitle
               run={run}
-              status={<Pill data-slot="mobile-run-status" dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="max-w-full self-start truncate px-2 py-px text-[11px] leading-4">{statusLine.label}</Pill>}
+              status={
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <Pill data-slot="mobile-run-status" dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="max-w-full self-start truncate px-2 py-px text-xs leading-4">{statusLine.label}</Pill>
+                  <ArchivedPill archived={run.archived} className="px-2 py-px text-xs leading-4" />
+                </span>
+              }
             />
             <WorkerParentLink run={run} compact />
             {actionsKebab}
@@ -394,6 +409,7 @@ export function RunHeader({
             <Pill dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="max-md:hidden">
               {statusLineText(statusLine)}
             </Pill>
+            <ArchivedPill archived={run.archived} className="max-md:hidden" />
             <span className="ml-auto flex shrink-0 items-center gap-1 md:gap-2.5">
               {isDesktop ? archiveButton : null}
               {previewToggle}

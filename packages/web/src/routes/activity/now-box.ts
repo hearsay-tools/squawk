@@ -46,7 +46,7 @@ export interface NowContext {
 export const THINKING_AFTER_MS = 10_000
 
 const LIVE = new Set(['queued', 'running', 'waiting'])
-const SETTLED_VERB: Record<string, string> = { review: 'In review', failed: 'Failed', done: 'Done', cancelled: 'Cancelled' }
+const SETTLED_VERB: Record<string, string> = { review: 'Needs review', failed: 'Failed', done: 'Done', cancelled: 'Cancelled' }
 const SETTLED_ICON: Record<string, NowIcon> = { review: 'review', failed: 'failed', done: 'done', cancelled: 'cancelled' }
 
 export const isLiveStatus = (status: string) => LIVE.has(status)
@@ -85,7 +85,7 @@ function needsYou(run: ActivityRun, wait: Extract<ActivityWait, { kind: 'human' 
 
 /** The record holds only `hasPendingPermission`, never the tool it asks about. */
 function permission(run: ActivityRun): NowBox {
-  return { verb: 'Needs you', tone: toneOf(run), icon: 'user', main: 'Permission', action: 'open' }
+  return { verb: 'Needs permission', tone: toneOf(run), icon: 'user', main: 'Approval required', action: 'open' }
 }
 
 function workers(run: ActivityRun, wait: Extract<ActivityWait, { kind: 'workers' }>, ctx: NowContext): NowBox {
@@ -162,7 +162,7 @@ function parked(run: ActivityRun, wait: ActivityWait, ctx: NowContext): NowBox |
     case 'pr': return pullRequest(run, wait)
     case 'process': return { verb: 'Waiting for command', tone, icon: 'command', since: wait.since, main: wait.detail.note ?? `Process ${wait.detail.pid}`, detail: `Running ${counter(since(wait.since, ctx.now))} · deadline ${clockOf(wait.deadline)}` }
     case 'plugin': return { verb: 'Waiting', tone, icon: 'timer', since: wait.since, main: wait.detail.summary, ...defined('detail', deadlineDetail(wait.deadline)) }
-    case 'timer': return { verb: 'Waiting for timer', tone, icon: 'timer', since: wait.since, main: wait.detail.note ?? 'Timer', detail: `Wakes ${clockOf(wait.detail.wakeAt)} · in ${counter(-since(wait.detail.wakeAt, ctx.now))}` }
+    case 'timer': return { verb: 'Monitoring', tone, icon: 'timer', since: wait.since, main: wait.detail.note ?? 'Timer', detail: `Wakes ${clockOf(wait.detail.wakeAt)} · in ${counter(-since(wait.detail.wakeAt, ctx.now))}` }
     case 'usage-limit': return paused(run, wait.detail.resumeAt, ctx)
     case 'human': return undefined
   }
@@ -171,7 +171,7 @@ function parked(run: ActivityRun, wait: ActivityWait, ctx: NowContext): NowBox |
 function paused(run: ActivityRun, resumeAt: string, ctx: NowContext): NowBox {
   const at = Date.parse(resumeAt)
   const detail = Number.isNaN(at) ? `Resumes ${resumeAt}` : `Resumes ${clockOf(resumeAt)} · in ${counter(at - ctx.now)}`
-  return { verb: 'Paused', tone: toneOf(run), icon: 'pause', main: 'Usage limit', detail }
+  return { verb: 'Usage limit', tone: toneOf(run), icon: 'pause', main: 'Paused until reset', detail }
 }
 
 function queued(run: ActivityRun, ctx: NowContext): NowBox {
@@ -195,7 +195,7 @@ function liveNow(run: ActivityRun, ctx: NowContext): NowBox {
     case 'running': return doing(run, ctx)
     case 'needs-permission': return permission(run)
     case 'needs-you': return needsYou(run, wait?.kind === 'human' ? wait : undefined)
-    case 'usage-limit': return wait?.kind === 'usage-limit' ? paused(run, wait.detail.resumeAt, ctx) : { verb: 'Paused', tone: toneOf(run), icon: 'pause', main: 'Usage limit' }
+    case 'usage-limit': return wait?.kind === 'usage-limit' ? paused(run, wait.detail.resumeAt, ctx) : { verb: 'Usage limit', tone: toneOf(run), icon: 'pause', main: 'Paused until reset' }
     case 'queued':
     case 'waiting-for-capacity': return queued(run, ctx)
     default: return (wait && parked(run, wait, ctx)) ?? queued(run, ctx)

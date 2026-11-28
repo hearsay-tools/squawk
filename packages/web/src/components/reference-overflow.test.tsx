@@ -42,6 +42,21 @@ describe('shared reference overflow', () => {
       vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
     }
   })
+  it('keeps a single inline reference when it exactly fits without reserving a phantom trailing gap', async () => {
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const slot = this.getAttribute('data-slot')
+      const left = slot === 'reference-list' ? 70 : 0
+      const width = slot === 'fit-line' ? 120 : 50
+      return { left, right: left + width, width, top: 0, bottom: 16, height: 16, x: left, y: 0, toJSON() {} }
+    })
+    try {
+      const { container } = render(<MemoryRouter><span data-slot="fit-line">
+        <ReferenceList references={references.slice(0, 1)} maxVisible={2} taskTitle="Split work" runId="run" plain compact fitContainer />
+      </span></MemoryRouter>)
+      await waitFor(() => expect(container.querySelectorAll('[data-slot="pr-chip"]')).toHaveLength(1))
+      expect(container.querySelector('[data-slot="reference-overflow"]')).toBeNull()
+    } finally { rect.mockRestore() }
+  })
   it('gives inline references priority over the droppable age', async () => {
     const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
       const slot = this.getAttribute('data-slot')

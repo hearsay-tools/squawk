@@ -255,7 +255,7 @@ export function ActivityMarginArcs({
             key={`label:${edge.kind}:${edge.id}`}
             style={{ left: arc.laneX, top: arc.labelY }}
             className={cn(
-              'absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-message-peer-accent/60 bg-card px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-message-peer-accent tabular-nums shadow-xs transition-opacity',
+              'absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-message-peer-accent/60 bg-card px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap text-message-peer-accent tabular-nums shadow-xs transition-opacity',
               edge.kind === 'wait' && 'border-dashed',
               dimmed && 'opacity-25',
             )}

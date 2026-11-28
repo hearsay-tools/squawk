@@ -45,6 +45,7 @@ import {
   TaskControlStrip,
   TaskViewTabs,
   headingTone,
+  setParam,
   tasksOverviewDensity,
   tasksOverviewHeader,
   tasksOverviewRootProps,
@@ -62,6 +63,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { deriveAttention } from '@/lib/attention'
+import { runStatusPresentation } from '@/lib/status-semantics'
 import { isReadDoneItem, isUnread, unreadDoneCount, unreadMarkerTone } from '@/lib/read-state'
 import {
   isColumnExpanded,
@@ -89,7 +91,7 @@ import {
   type TaskStatusGroup,
 } from '@/lib/task-origin'
 import { useAutomationsAvailable } from '@/lib/capabilities'
-import { useSearchParamsWriter, type SearchParamsUpdate } from '@/lib/use-search-params-writer'
+import { useSearchParamsWriter } from '@/lib/use-search-params-writer'
 import { useTaskListFoldsFromUrl } from '@/lib/use-task-list-folds'
 import {
   filterRuns,
@@ -548,7 +550,6 @@ function TasksEmptyState({
     </div>
   )
 }
-
 type GroupedTask = { run: RunSummary; queuePosition: number | null }
 
 function GroupedTasks({
@@ -618,7 +619,7 @@ function GroupedTasks({
 
   if (desktop && detailedTable) {
     return (
-      <div data-slot="tasks-table" className="overflow-x-auto rounded-lg border border-border bg-card">
+      <div data-slot="tasks-table" className="overflow-x-auto rounded-lg border border-card-edge bg-card shadow-card">
         <TooltipProvider>
           <div
             role="table"
@@ -694,7 +695,7 @@ function Th({
       data-column-id={columnId}
       data-folded={folded || undefined}
       className={cn(
-        'h-[38px] border-b border-border px-2.5 text-left text-[11px] font-semibold tracking-[0.05em] whitespace-nowrap text-supporting-foreground uppercase first:pl-4 last:pr-4',
+        'h-[38px] border-b border-border px-2.5 text-left text-xs font-semibold tracking-[0.05em] whitespace-nowrap text-supporting-foreground uppercase first:pl-4 last:pr-4',
         right && 'text-right',
         folded && 'px-0 first:pl-0 last:pr-0',
       )}
@@ -842,7 +843,7 @@ const TableRow = React.memo(function TableRow({
               data-column-id="cpu-memory"
               aria-colspan={2}
               style={{ gridColumn: 'span 2' }}
-              className={cn(TD_BASE, 'text-right font-mono text-[11px] text-supporting-foreground')}
+              className={cn(TD_BASE, 'text-right font-mono text-xs text-supporting-foreground')}
             >
               #{queuePosition} in queue
             </div>
@@ -895,7 +896,7 @@ function DetailedTaskCell({
           <span
             data-slot="task-automation-badge"
             data-origin="automation"
-            className="inline-flex max-w-[180px] items-center gap-1 truncate rounded-full border border-info/30 bg-info/10 px-2 py-px text-[11px] font-medium text-info"
+            className="inline-flex max-w-[180px] items-center gap-1 truncate rounded-full border border-info/30 bg-info/10 px-2 py-px text-xs font-medium text-semantic-info"
           >
             <ZapIcon className="size-2.5 shrink-0" aria-hidden="true" />
             <span className="truncate">{autoLabel}</span>
@@ -907,23 +908,26 @@ function DetailedTaskCell({
 }
 
 function DetailedStatusCell({
+  run,
   attention,
   scheduled,
 }: {
+  run: RunSummary
   attention: ReturnType<typeof deriveAttention>
   scheduled: ReturnType<typeof scheduledResume>
 }) {
+  const status = runStatusPresentation(run, attention)
   return (
     <div role="cell" data-column-id="status" className={cn(TD_BASE, 'overflow-hidden')}>
       <Pill
-        dot={attention.tone}
-        shape={attention.shape}
-        pulse={attention.pulse}
-        title={scheduled?.title ?? attention.label}
+        dot={status.tone}
+        shape={status.shape}
+        pulse={status.pulse}
+        title={scheduled?.title ?? status.label}
         className="w-full max-w-full overflow-hidden"
       >
         <span className="min-w-0 truncate">
-          {attention.label}
+          {status.label}
           {scheduled ? (
             <>
               {' '}
@@ -967,7 +971,7 @@ function TaskTableCell({
 
   switch (column.id) {
     case 'status':
-      return <DetailedStatusCell attention={attention} scheduled={scheduled} />
+      return <DetailedStatusCell run={run} attention={attention} scheduled={scheduled} />
     case 'task':
       return (
         <DetailedTaskCell
@@ -1113,7 +1117,7 @@ function UsageTd({ column, cell }: { column: 'cpu' | 'memory'; cell: UsageCell }
         TD_BASE,
         'overflow-hidden text-right font-mono tabular-nums',
         cell.kind === 'live' && 'bg-accent-strong/5 text-xs font-medium text-foreground',
-        cell.kind === 'peak' && 'text-[11px] text-supporting-foreground',
+        cell.kind === 'peak' && 'text-xs text-supporting-foreground',
         cell.kind === 'none' && 'text-xs text-soft-foreground',
       )}
     >
@@ -1227,14 +1231,6 @@ export function TasksOverviewRoute() {
       />
     </ReferenceStatusProvider>
   )
-}
-
-function setParam(key: string, value: string | null): SearchParamsUpdate {
-  return (current) => {
-    if (value === null) current.delete(key)
-    else current.set(key, value)
-    return current
-  }
 }
 
 function useTasksUrlState() {

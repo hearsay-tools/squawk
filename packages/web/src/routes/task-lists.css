@@ -115,7 +115,7 @@
   color: var(--merged-text);
 }
 [data-task-table="true"] [data-slot="pr-chip"][data-conflicting="true"] {
-  color: var(--conflict);
+  color: var(--semantic-text-conflict);
 }
 [data-task-table="true"] [data-slot="pr-chip"]:is([data-status="merged"], [data-conflicting="true"]) > svg {
   display: none;

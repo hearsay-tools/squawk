@@ -2,6 +2,7 @@ import type { RunSummary } from '@open-mercato/cezar-api-client'
 import { resolveWaitingOn } from '@open-mercato/cezar-api-client/contract/waits'
 import type { Attention, AttentionRung } from '@/lib/attention'
 import { checkTimeText, resumeLabel, shortAge } from '@/lib/format'
+import { canonicalRungLabel } from '@/lib/status-semantics'
 import { refPrefixMatches, runTitle, splitRefPrefix } from '@/lib/task-groups'
 import { taskReference, taskReferences, type TaskReference } from '@/lib/tasks-table'
 
@@ -39,27 +40,25 @@ const STATE_WORD: Record<AttentionRung, 'none' | 'label' | 'queue-position' | 'r
  *  say, with the queue position (`queued #2`), the resume (`usage limit, resumes in 12m`), the
  *  timer's next check or the command's deadline where the rung has one. */
 export function metaStateWord(attention: Attention, queuePosition: number | null, run: RunSummary, now: number): string | undefined {
-  const { label } = attention
+  const label = canonicalRungLabel(attention.rung, attention.label, run.autoResumeReason)
   switch (STATE_WORD[attention.rung]) {
     case 'none':
       return undefined
     case 'queue-position':
-      return queuePosition !== null ? `queued #${queuePosition}` : label
+      return queuePosition !== null ? `Queued #${queuePosition}` : label
     case 'resume': {
-      // When, not just that (hearsay-tools/cezarion#617 01b): `usage limit, resumes in 12m`, or `usage limit` once due.
+      // When, not just that (hearsay-tools/cezarion#617 01b): `Usage limit, resumes in 12m`, or `Usage limit` once due.
       const resume = resumeLabel(run.autoResumeAt, now)
-      // The same hold, for a provider error retried with back-off (hearsay-tools/squawk#3337).
-      const reason = run.autoResumeReason === 'provider-error' ? 'provider error' : label
-      return resume === 'scheduled' ? reason : `${reason}, ${resume}`
+      return resume === 'scheduled' ? label : `${label}, ${resume}`
     }
     case 'next-check': {
-      // The same detail for a timer: `monitoring, next check 15:05` (phase 4b, hearsay-tools/cezarion#1236).
+      // The same detail for a timer: `Monitoring, next check 15:05` (phase 4b, hearsay-tools/cezarion#1236).
       const waitingOn = resolveWaitingOn(run)
       const at = waitingOn?.kind === 'timer' ? new Date(waitingOn.at) : undefined
       return at && Number.isFinite(at.getTime()) ? `${label}, next check ${checkTimeText(at, new Date(now))}` : label
     }
     case 'until': {
-      // And for a process wait: `waiting for a command, until 15:40` (hearsay-tools/cezarion#1446).
+      // And for a process wait: `Waiting for command, until 15:40` (hearsay-tools/cezarion#1446).
       const waitingOn = resolveWaitingOn(run)
       const until = waitingOn?.kind === 'process' ? new Date(waitingOn.deadline) : undefined
       return until && Number.isFinite(until.getTime()) ? `${label}, until ${checkTimeText(until, new Date(now))}` : label

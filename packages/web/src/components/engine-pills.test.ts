@@ -445,7 +445,7 @@ describe('a runner whose default account is signed out (hearsay-tools/squawk#411
       expect(found).not.toBeNull()
       return found!
     })
-    expect(link.textContent).toContain('Not signed in')
+    expect(link.textContent).toContain('Not connected')
     expect(link.textContent).toContain('Sign in in Settings')
     expect(link.getAttribute('href')).toContain('#')
     // A link, never a choice: claude is not a runner row.

@@ -186,8 +186,8 @@ export function SettingsIndexRoute() {
           {/* The index is a PAGE, not a menu: the folder, the registry facts, the concurrency
               ceiling and Remove. */}
           <ProjectGeneral />
-          <section className="rounded-lg border border-border bg-card p-5"><ArchiveOnMergeField /></section>
-          <h2 className="settings-other-title mt-6 rounded-t-lg border border-b-0 border-border bg-card px-5 pt-5 text-base font-semibold md:hidden">Other project settings</h2>
+          <section className="rounded-lg border border-card-edge bg-card p-5 shadow-card"><ArchiveOnMergeField /></section>
+          <h2 className="settings-other-title mt-6 rounded-t-lg border border-b-0 border-card-edge bg-card px-5 pt-5 text-base font-semibold shadow-card md:hidden">Other project settings</h2>
           <ul
             data-slot="settings-index"
             className="mt-7 flex w-full flex-col gap-5 md:hidden"
@@ -197,14 +197,14 @@ export function SettingsIndexRoute() {
                 <ScopedLink
                   to={settingsSectionPath('project', section.id)}
                   data-section={section.id}
-                  className="flex items-center gap-3.5 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-card-2"
+                  className="flex items-center gap-3.5 rounded-lg border border-card-edge bg-card p-4 shadow-card transition-colors hover:bg-card-2"
                 >
                   <span className="flex size-9 shrink-0 items-center justify-center text-accent-text">
                     <section.icon aria-hidden="true" className="size-4" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-medium text-foreground">{section.title}</span>
-                    <span className="block text-xs text-soft-foreground">{section.description}</span>
+                    <span className="block text-xs text-muted-foreground">{section.description}</span>
                   </span>
                   <ChevronRightIcon aria-hidden="true" className="size-4 shrink-0 text-soft-foreground" />
                 </ScopedLink>

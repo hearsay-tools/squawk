@@ -31,7 +31,7 @@ const STATE_TABLE: Row[] = [
   ['needs you: the wake budget is spent', waiting('needs-you', { kind: ACTIVITY_WAIT_KIND.human, since: iso(-60_000), detail: { reason: 'budget', queuedMessages: 2 } }),
     { verb: 'Needs you', main: 'Automatic wakes used up · 2 messages queued', action: 'open' }],
   ['needs permission', run({ rung: 'needs-permission', tool: { title: 'Bash rm -rf dist', toolKind: 'execute', status: TOOL_STATUS.pending, startedAt: iso(-2_000) } }),
-    { verb: 'Needs you', main: 'Permission', action: 'open' }],
+    { verb: 'Needs permission', main: 'Approval required', action: 'open' }],
   ['waiting on workers, outcomes only, one entry', waiting('waiting-on-workers', { kind: ACTIVITY_WAIT_KIND.workers, since: iso(-640_000), deadline: iso(1_080_000), detail: { owed: 2, total: 3, settled: 1, mode: 'any', recipientRunIds: [] } }),
     { verb: 'Waiting for workers', main: 'Any of 3 · 1 settled', bar: 1 / 3, detail: `Deadline ${clockOf(iso(1_080_000))}` }],
   ['waiting on workers, several entries', waiting('waiting-on-workers', { kind: ACTIVITY_WAIT_KIND.workers, since: iso(-640_000), detail: { owed: 4, total: 5, settled: 1, recipientRunIds: [] } }),
@@ -61,11 +61,11 @@ const STATE_TABLE: Row[] = [
   ['monitoring a plugin without a deadline', waiting('monitoring', { kind: ACTIVITY_WAIT_KIND.plugin, since: iso(-1_000), detail: { pluginKind: 'unregistered-deploy', summary: 'Waiting for deployment' } }),
     { verb: 'Waiting', main: 'Waiting for deployment' }],
   ['monitoring a timer', waiting('monitoring', { kind: ACTIVITY_WAIT_KIND.timer, since: iso(-1_500_000), deadline: iso(1_672_000), detail: { wakeAt: iso(1_672_000), note: 'Re-check npm advisories' } }),
-    { verb: 'Waiting for timer', main: 'Re-check npm advisories', detail: `Wakes ${clockOf(iso(1_672_000))} · in 27:52` }],
+    { verb: 'Monitoring', main: 'Re-check npm advisories', detail: `Wakes ${clockOf(iso(1_672_000))} · in 27:52` }],
   ['waiting for a peer', waiting('waiting-on-workers', { kind: ACTIVITY_WAIT_KIND.peers, since: iso(-30_000), deadline: iso(600_000), detail: { peerRunIds: ['peer-b'] } }),
     { verb: 'Waiting for a peer', main: 'For Fixing flaky shard' }],
   ['paused on a usage limit', waiting('usage-limit', { kind: ACTIVITY_WAIT_KIND['usage-limit'], detail: { resumeAt: iso(480_000) } }),
-    { verb: 'Paused', main: 'Usage limit', detail: `Resumes ${clockOf(iso(480_000))} · in 8:00` }],
+    { verb: 'Usage limit', main: 'Paused until reset', detail: `Resumes ${clockOf(iso(480_000))} · in 8:00` }],
   ['queued', run({ status: RUN_STATUS.queued, rung: 'queued', startedAt: iso(-180_000) }), { verb: 'Queued', main: 'Waiting for a free slot', detail: 'Waiting 3m' }],
   ['waiting for capacity', run({ status: RUN_STATUS.waiting, rung: 'waiting-for-capacity' }), { verb: 'Queued', main: 'Waiting for a free slot' }],
 ]
@@ -107,7 +107,7 @@ describe('rootNow: a truncated check list', () => {
 
 describe('rootNow: a root that is not active work but has live workers (D8)', () => {
   it.each([
-    ['review', 'needs-review', 'In review'],
+    ['review', 'needs-review', 'Needs review'],
     ['failed', 'failed', 'Failed'],
     ['done', 'done', 'Done'],
     ['cancelled', 'cancelled', 'Cancelled'],
@@ -131,7 +131,7 @@ describe('workerLine', () => {
   it.each([
     ['done, not collected', worker({ status: RUN_STATUS.done, rung: 'done' }), { verb: 'Done', main: 'Ready to collect', tone: 'success' }],
     ['done, collected', worker({ status: RUN_STATUS.done, rung: 'done', collected: true }), { verb: 'Done', main: 'Collected' }],
-    ['review', worker({ status: RUN_STATUS.review, rung: 'needs-review' }), { verb: 'In review', main: 'Waiting for the parent’s review', tone: 'info' }],
+    ['review', worker({ status: RUN_STATUS.review, rung: 'needs-review' }), { verb: 'Needs review', main: 'Waiting for the parent’s review', tone: 'info' }],
     ['failed, with its error line', worker({ status: RUN_STATUS.failed, rung: 'failed', error: 'npm test exited 1' }), { verb: 'Failed', main: 'npm test exited 1', tone: 'danger' }],
     ['cancelled', worker({ status: RUN_STATUS.cancelled, rung: 'cancelled' }), { verb: 'Cancelled', main: 'Cancelled', tone: 'neutral' }],
   ] as const)('a settled worker: %s', (_name, input, expected) => {

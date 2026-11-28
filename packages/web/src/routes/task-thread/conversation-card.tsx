@@ -98,7 +98,7 @@ function WorkerConversationBatchCard({
     >
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <p className={cn('m-0 flex min-w-0 flex-wrap items-center gap-x-2 text-[11px] leading-[1.2] font-semibold tracking-[0.6px] uppercase', surface.accent)}>
+          <p className={cn('m-0 flex min-w-0 flex-wrap items-center gap-x-2 text-xs leading-[1.2] font-semibold tracking-[0.6px] uppercase', surface.accent)}>
             <span>{headingPrefix}</span>
             {counterpartIds.map((id, index) => (
               <span key={id} className="inline-flex min-w-0 items-center gap-x-2 normal-case tracking-normal">
@@ -110,16 +110,16 @@ function WorkerConversationBatchCard({
             ))}
           </p>
           {peer ? (
-            <span data-slot="conversation-relationship" className="rounded-full border border-message-peer-border px-2 py-0.5 text-[11px] font-semibold tracking-[0.05em] text-foreground uppercase">
+            <span data-slot="conversation-relationship" className="rounded-full border border-message-peer-border px-2 py-0.5 text-xs font-semibold tracking-[0.05em] text-foreground uppercase">
               Peer
             </span>
           ) : null}
-          <span data-slot="conversation-kind" className="rounded-full bg-background/60 px-2 py-0.5 text-[11px] font-semibold tracking-[0.05em] text-foreground uppercase">
+          <span data-slot="conversation-kind" className="rounded-full bg-background/60 px-2 py-0.5 text-xs font-semibold tracking-[0.05em] text-foreground uppercase">
             {conversationKindLabel(batch.kind)}
           </span>
           {batch.messages.length === 1 && soleMessage ? <SoleMessageStatus message={soleMessage} /> : null}
         </div>
-        <SentTime at={sentAt} className="flex shrink-0 items-center justify-self-end gap-1 whitespace-nowrap text-[11px] text-soft-foreground">
+        <SentTime at={sentAt} className="flex shrink-0 items-center justify-self-end gap-1 whitespace-nowrap text-xs text-soft-foreground">
           {batch.messages.length > 1 ? 'First sent' : null}
         </SentTime>
       </div>
@@ -262,7 +262,7 @@ function ConversationInspectDetails({ batch, heading }: { batch: WorkerConversat
         Details
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <dl className="grid min-w-0 gap-1 break-all px-2 pb-1 font-mono text-[11px] text-muted-foreground">
+        <dl className="grid min-w-0 gap-1 break-all px-2 pb-1 font-mono text-xs text-muted-foreground">
           <div className="sr-only">{heading}</div>
           {batch.messages.flatMap((message) => inspectRows(message)).map((row, index) => (
             <div key={`${row.label}:${row.value}:${index}`}>

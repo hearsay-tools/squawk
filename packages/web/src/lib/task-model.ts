@@ -14,6 +14,7 @@ import { compactTokens } from '@/lib/format'
 import type { GlobalTask } from '@/lib/global-tasks'
 import { scopeTo } from '@/lib/project-router'
 import { canBeUnread, isReadDoneItem, isUnread, unreadMarkerTone } from '@/lib/read-state'
+import { runStatusPresentation, type StatusPresentation } from '@/lib/status-semantics'
 import { isOwnedWorker, runTitle } from '@/lib/task-groups'
 import {
   formatCost,
@@ -47,6 +48,7 @@ export interface TaskRowModel {
   canToggleRead: boolean
   unreadTone: AttentionTone
   attention: Attention
+  status: StatusPresentation
   urgent: boolean
   scheduled?: { label: string; title: string } | undefined
   pinned: boolean
@@ -169,6 +171,7 @@ export function projectRunToTaskModel({
   showCost = true,
 }: ProjectTaskModelOptions): TaskRowModel {
   const attention = deriveAttention(run)
+  const status = runStatusPresentation(run, attention)
   const scheduled = scheduledResume(run, now === undefined ? undefined : new Date(now))
   const usage = formatUsageSummary(run, run.usage, { showTokens, showCost })
   const automationId = run.automationId
@@ -185,6 +188,7 @@ export function projectRunToTaskModel({
     canToggleRead: canBeUnread(run),
     unreadTone: unreadMarkerTone(run),
     attention,
+    status,
     urgent: needsYou(run),
     scheduled,
     pinned: Boolean(run.pinned),

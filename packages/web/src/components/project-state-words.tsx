@@ -11,10 +11,10 @@ import { cn } from '@/lib/utils'
  * `--signal-word-*` tokens in `styles/index.css` for the measured ratios.
  */
 export const SIGNAL_WORD_CLASS: Record<SignalTone, string> = {
-  amber: 'text-signal-word-amber',
-  red: 'text-signal-word-red',
-  violet: 'text-status-running',
-  green: 'text-success',
+  amber: 'text-semantic-amber',
+  red: 'text-semantic-red',
+  violet: 'text-semantic-violet',
+  green: 'text-semantic-green',
 }
 
 export function ProjectStateWords({

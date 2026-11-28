@@ -38,12 +38,13 @@ export const DESIGN_RULES: Rule[] = [
   },
   {
     name: 'no-amber-text',
-    why: 'amber ink goes through --pending-strong, the per-theme readable token; --pending itself is a dot & spinner FILL and fails contrast as text on the light theme (token sheet rule)',
+    why: 'amber ink goes through --pending-strong or --semantic-text-amber, the per-theme readable tokens; --pending itself is a dot & spinner FILL and fails contrast as text on the light theme (token sheet rule)',
     // `text-pending-strong` is excluded by the lookahead — it is the sanctioned spelling, and it
     // is a different token, not a loophole: `--pending` is amber-400 in both themes, while
     // `--pending-strong` darkens to amber-700 on light. Everything else amber stays banned.
     pattern: /\btext-(?:pending(?!-strong)|amber(?:-\d+)?)\b/g,
     applies: styleSources,
+    allowed: (rel) => rel === 'src/styles/index.css',
   },
   {
     name: 'no-color-named-or-ambiguous-brand-utilities',
@@ -112,6 +113,37 @@ export const DESIGN_RULES: Rule[] = [
     name: 'no-100vh',
     why: 'viewport height is 100dvh/h-dvh — 100vh ignores mobile browser chrome (iOS rule)',
     pattern: /\b(?:(?:h|min-h|max-h)-screen|100vh)\b/g,
+    applies: styleSources,
+  },
+  {
+    name: 'no-micro-font-size',
+    why: 'cockpit text enforces a >= 12px (text-xs) readability floor (hearsay-tools/squawk#4379)',
+    pattern: /\btext-\[(?:[0-9]|1[01])(?:\.\d+)?px\]|font-size\s*:\s*(?:[0-9]|1[01])(?:\.\d+)?px\b/g,
+    applies: styleSources,
+  },
+  {
+    name: 'no-undefined-warning-token',
+    why: '--warning is not a palette token; use pending/semantic-amber or conflict/semantic-conflict (hearsay-tools/squawk#4379)',
+    pattern: /\b(?:bg|border|text|ring)-warning(?:\/(?:\[[^\]]+\]|[\w.-]+))?\b/g,
+    applies: styleSources,
+  },
+  {
+    name: 'no-raw-tailwind-palette-ink',
+    why: 'text colors go through the semantic tokens in src/styles/index.css, never raw Tailwind palette shades (hearsay-tools/squawk#4379)',
+    pattern: /\btext-(?:red|green|emerald|blue|sky|indigo|purple|slate|gray|zinc|neutral|stone|yellow|orange)-\d{2,3}\b/g,
+    applies: styleSources,
+    allowed: (rel) => rel === 'src/styles/index.css' || rel === 'src/lib/report-libraries.ts',
+  },
+  {
+    name: 'no-text-opacity-modifier',
+    why: 'use the closed four-role text scale (foreground, muted-foreground, soft-foreground, disabled-foreground) instead of text alpha modifiers (hearsay-tools/squawk#4379)',
+    pattern: /\btext-(?:foreground|muted-foreground|soft-foreground|supporting-foreground|disabled-foreground)\/(?:\[[^\]]+\]|\d+)\b/g,
+    applies: styleSources,
+  },
+  {
+    name: 'no-dead-shadow-scale',
+    why: 'index.css wipes Tailwind stock shadows; use shadow-xs, shadow-sm, shadow-md, shadow-card, or shadow-modal (hearsay-tools/squawk#4379)',
+    pattern: /\bshadow-(?:lg|xl|2xl)\b/g,
     applies: styleSources,
   },
 ]

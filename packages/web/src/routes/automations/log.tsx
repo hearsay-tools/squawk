@@ -23,7 +23,7 @@ const TONE: Record<AutomationLogResult, StatusDotTone> = {
   manual: 'success',
   'catch-up': 'success',
   skipped: 'neutral',
-  missed: 'neutral',
+  missed: 'pending',
   'no-match': 'neutral',
   preview: 'neutral',
   baseline: 'neutral',
@@ -85,7 +85,7 @@ function LogRows({ records, all, timeZone, onRetried, readOnly = false }: { reco
   return (
     <ol className="grid gap-3" aria-label="Automation execution log">
       {records.map((record) => (
-        <li key={record.seq} className="min-w-0 rounded-xl border bg-card p-4">
+        <li key={record.seq} className="min-w-0 rounded-xl border border-card-edge bg-card p-4 shadow-card">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Pill dot={TONE[record.result]}>{RESULT_LABEL[record.result]}</Pill>
             <time className="text-xs text-muted-foreground" dateTime={record.ts} title={record.ts}>{logTime(record.ts, timeZone, now)}</time>

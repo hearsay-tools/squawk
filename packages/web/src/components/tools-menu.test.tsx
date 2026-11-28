@@ -215,8 +215,8 @@ describe('ToolsMenu', () => {
 
     const row = rowsIn(menu).find((el) => el.dataset.tool === 'codex') as HTMLElement
     expect(row.dataset.available).toBe('false')
-    expect(row.querySelector('[data-slot="status-dot"]')?.getAttribute('data-tone')).toBe('danger')
-    expect(row.querySelector('[data-slot="tool-version"]')?.textContent).toBe('not found')
+    expect(row.querySelector('[data-slot="status-dot"]')?.getAttribute('data-tone')).toBe('neutral')
+    expect(row.querySelector('[data-slot="tool-version"]')?.textContent).toBe('Not installed')
     // The degradation doctrine: the server's human-written hint, word for word.
     expect(row.querySelector('[data-slot="tool-hint"]')?.textContent).toBe(
       'optional: install the Codex CLI (npm i -g @openai/codex) and log in to use the Codex runner'
@@ -224,6 +224,26 @@ describe('ToolsMenu', () => {
     expect(row.querySelector('[data-slot="tool-setup"]')).not.toBeNull()
     // The whole row is the link into global Settings → Agents.
     expect(row.closest('a')?.getAttribute('href') ?? row.getAttribute('href')).toBe('/settings/global/agents#agent-codex')
+  })
+
+  it('uses danger only for a missing required tool and renders dry-run mode neutrally', async () => {
+    renderMenu({
+      ...HEALTH,
+      checks: [
+        { name: 'claude', available: true, version: 'mock (HSQ_DRY_RUN=1)' },
+        { name: 'git', available: false, hint: 'install git' },
+      ],
+    })
+    const menu = await openMenu()
+
+    const claude = rowsIn(menu).find((el) => el.dataset.tool === 'claude') as HTMLElement
+    expect(claude.querySelector('[data-slot="status-dot"]')?.getAttribute('data-tone')).toBe('neutral')
+    expect(claude.querySelector('[data-slot="status-dot"]')?.getAttribute('data-shape')).toBe('ring')
+    expect(claude.querySelector('[data-slot="tool-dry-run"]')?.textContent).toBe('Dry run')
+
+    const git = rowsIn(menu).find((el) => el.dataset.tool === 'git') as HTMLElement
+    expect(git.querySelector('[data-slot="status-dot"]')?.getAttribute('data-tone')).toBe('danger')
+    expect(git.querySelector('[data-slot="tool-version"]')?.textContent).toBe('Not installed')
   })
 
   it("navigates to the runner's card on global Settings → Agents from the Set up row and closes the menu", async () => {

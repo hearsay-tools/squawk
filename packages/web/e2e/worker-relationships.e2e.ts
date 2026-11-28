@@ -274,21 +274,21 @@ it('shows unavailable parent with retry, successful empty state, worker wait and
   expect(browser.evaluate(`[...document.querySelectorAll('${parentRegion} a')].some(a => a.getAttribute('aria-label')?.includes('${absentId}'))`)).toBe(true)
   open(emptyId); browser.waitForFunction(`document.querySelector('${region}').textContent.includes('No workers')`)
   // A full record carries its worker ids, so the count is said (#617).
-  open(waitingId); expect(browser.text(region)).toContain('Waiting on 1 worker')
+  open(waitingId); expect(browser.text(region)).toContain('Waiting for 1 worker')
   expect(browser.count('[data-slot="ask-card"]')).toBe(0)
   // The real server derives attention from the seeded human wait.
   // Visit both lists before the ask detail so its history cannot prime attention.
   browser.goto(`${base}/p/${project}/`)
   const projectAsk = `[data-slot="task-row"][data-run-id="${askId}"]`
-  browser.waitForFunction(`document.querySelector('${projectAsk} [aria-label="needs you"]') !== null`)
-  expect(browser.count(`${projectAsk} [aria-label="needs you"]`)).toBe(1)
-  // Since #817 list rows carry the awaited worker ids, so a parked root reads "waiting on N
+  browser.waitForFunction(`document.querySelector('${projectAsk} [aria-label="Needs you"]') !== null`)
+  expect(browser.count(`${projectAsk} [aria-label="Needs you"]`)).toBe(1)
+  // Since #817 list rows carry the awaited worker ids, so a parked root reads "Waiting for N
   // worker(s)": match the whole family, not only the uncounted spelling.
-  expect(browser.count(`${projectAsk} [aria-label^="waiting on"]`)).toBe(0)
+  expect(browser.count(`${projectAsk} [aria-label^="Waiting for"]`)).toBe(0)
   browser.goto(`${base}/tasks`)
   const globalAsk = `[data-slot="global-task-row"][data-run-id="${askId}"]`
-  browser.waitForFunction(`document.querySelector('${globalAsk}')?.textContent.includes('needs you')`)
-  expect(browser.text(globalAsk)).not.toMatch(/waiting on (\d+ )?workers?/)
+  browser.waitForFunction(`document.querySelector('${globalAsk}')?.textContent.includes('Needs you')`)
+  expect(browser.text(globalAsk)).not.toMatch(/Waiting for (\d+ )?workers?/i)
   observations.push({ pendingHumanAsk: 'project and global lists need you before detail history loads' })
   open(askId)
   browser.waitForFunction(`document.body.textContent.includes('Which implementation should I use?')`)
@@ -351,12 +351,12 @@ it('global Tasks and cross-project palette keep parked-root status without listi
   browser.goto(`${base}/tasks`)
   browser.waitForFunction(`document.querySelector('[data-slot="global-task-row"][data-run-id="${waitingId}"]') !== null`)
   // The index row is the run summary since #817, which carries the awaited worker ids: counted.
-  expect(browser.text(`[data-slot="global-task-row"][data-run-id="${waitingId}"]`)).toContain('waiting on 1 worker')
+  expect(browser.text(`[data-slot="global-task-row"][data-run-id="${waitingId}"]`)).toContain('Waiting for 1 worker')
   expect(browser.text('body')).not.toContain('Worker')
   browser.press('Control+k')
   browser.fill('[cmdk-input]', 'Waiting root fixture')
   browser.waitForFunction(`document.querySelector('[cmdk-list]')?.textContent.includes('Waiting root fixture')`)
-  expect(browser.count('[cmdk-list] [aria-label="waiting on 1 worker"]')).toBe(1)
+  expect(browser.count('[cmdk-list] [aria-label="Waiting for 1 worker"]')).toBe(1)
   browser.fill('[cmdk-input]', 'Owned worker 1')
   const workerSearch = browser.waitForValue(`(() => {
     const input = document.querySelector('[cmdk-input]')
@@ -381,7 +381,7 @@ it('keeps request waits consistent in threads, global tasks and the palette at p
     browser.waitForFunction(`document.querySelector('[data-slot="appearance-theme"]') !== null`)
     // Completed registry chrome can move theme radios; the helper settles before clicking.
     clickAppearanceControl(browser, 'theme', theme)
-    for (const [id, label] of [[requestParentId, 'Waiting on worker replies'], [requestWorkerId, 'Waiting on parent reply']] as const) {
+    for (const [id, label] of [[requestParentId, 'Waiting for worker replies'], [requestWorkerId, 'Waiting for parent reply']] as const) {
       open(id)
       browser.waitForFunction(`document.querySelector('[data-slot="paused-hint"]') !== null`)
       expect(browser.text('[data-slot="paused-hint"]')).toContain(label)
@@ -400,8 +400,8 @@ it('keeps request waits consistent in threads, global tasks and the palette at p
   const parentRow = `[data-slot="global-task-row"][data-run-id="${requestParentId}"]`
   const workerRow = `[data-slot="global-task-row"][data-run-id="${requestWorkerId}"]`
   browser.waitForFunction(`document.querySelector('${parentRow}') !== null`)
-  expect(browser.text(parentRow)).toContain('waiting on worker replies')
-  expect(browser.text(parentRow)).not.toContain('needs you')
+  expect(browser.text(parentRow)).toContain('Waiting for worker replies')
+  expect(browser.text(parentRow)).not.toContain('Needs you')
   expect(browser.evaluate(`document.querySelector('${workerRow}')`)).toBeNull()
   browser.press('Control+k')
   browser.fill('[cmdk-input]', 'Worker awaiting parent reply')
@@ -412,7 +412,7 @@ it('keeps request waits consistent in threads, global tasks and the palette at p
     if (!list) return null
     return {
       workerPresent: list.querySelector('[data-slot="palette-task"][data-run-id="${requestWorkerId}"]') !== null,
-      waitingOnParent: list.querySelectorAll('[aria-label="waiting on parent reply"]').length,
+      waitingOnParent: list.querySelectorAll('[aria-label="Waiting for parent reply"]').length,
     }
   })()`) as { workerPresent: boolean; waitingOnParent: number }
   expect(workerWait.workerPresent).toBe(false)

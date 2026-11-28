@@ -94,7 +94,7 @@ export function HandoffAction({ run }: { run: ApiRun }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" data-slot="notifying-menu" className="w-[240px] max-w-[calc(100vw-2rem)] p-2">
             {reachable ? (
-              <DropdownMenuLabel data-slot="notifying-targets" className="flex flex-col gap-0.5 px-2 py-1.5 text-[11px] font-normal text-muted-foreground">
+              <DropdownMenuLabel data-slot="notifying-targets" className="flex flex-col gap-0.5 px-2 py-1.5 text-xs font-normal text-muted-foreground">
                 {targets.map((target) => (
                   <span key={target.id} data-webhook-target={target.id} className="truncate" title={webhookLabel(target.url)}>
                     {target.name}

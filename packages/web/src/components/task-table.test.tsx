@@ -76,6 +76,8 @@ describe('TaskTable', () => {
     )
 
     expect(container.textContent).not.toContain('Direct task')
+    expect(screen.getByText('Needs you')).toBeTruthy()
+    expect(screen.getByText('Needs review')).toBeTruthy()
     expect(screen.getByText('Use popover or inline Usage column?')).toBeTruthy()
     expect(screen.getByText('3 checks passed')).toBeTruthy()
     expect(screen.getByText('security-scan')).toBeTruthy()

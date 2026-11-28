@@ -147,7 +147,7 @@ const APPROVED: Record<string, string> = {
   'packages/cezar/scripts/mock-scenario-approved.mjs': "import { play } from './mock-scenario.mjs';\nconst x = 'mock:backend-resume';\n",
   'packages/web/src/wait-approved.test.tsx': 'await sleep(5); // bound: a negative window\n',
   'packages/cezar/src/wait-approved.test.ts': 'await sleep(5); // bound: a negative window\n',
-  'packages/web/src/routes/unknown-project.tsx': '<div className="bg-card-2"><span className="font-mono text-[11px] font-normal text-soft-foreground">old</span></div>',
+  'packages/web/src/routes/unknown-project.tsx': '<div className="bg-card-2"><span className="font-mono text-xs font-normal text-semantic-red">safe</span></div>',
 
   'packages/web/src/styles/index.ts': 'export const value = "h-dvh";',
   'packages/web/src/design-guardian.test.ts': 'confirm();',

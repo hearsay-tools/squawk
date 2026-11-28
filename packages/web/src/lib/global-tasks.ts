@@ -5,6 +5,7 @@ import { matchesRunSearch, type RunSearchExtras } from '@open-mercato/cezar-api-
 import { shownReferenceNumbers } from '@/lib/tasks-table'
 
 import { isOwnedWorker, runTitle } from '@/lib/task-groups'
+import { rawRunStatusLabel } from '@/lib/status-semantics'
 import { availableOrigin, matchesOrigin, parseOrigin, type TaskOrigin } from '@/lib/task-origin'
 
 /**
@@ -323,7 +324,7 @@ export function groupGlobalTasks(tasks: readonly GlobalTask[], groupBy: GroupBy)
     if (groupBy === 'project') {
       push(task.run.projectId, task.projectName, task)
     } else if (groupBy === 'status') {
-      push(task.run.status, task.run.status, task)
+      push(task.run.status, rawRunStatusLabel(task.run.status), task)
     } else if (groupBy === 'workflow') {
       push(task.run.workflow, task.run.workflow, task)
     } else if (task.tags.length === 0) {

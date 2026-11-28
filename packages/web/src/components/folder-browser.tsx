@@ -69,7 +69,7 @@ export function FolderBrowser({
       {/* The breadcrumb is the server's realpath'd answer, not the spelling we asked for. */}
       <p
         data-slot="fs-breadcrumb"
-        className="truncate font-mono text-[11px] text-soft-foreground"
+        className="truncate font-mono text-xs text-soft-foreground"
         title={listing.data?.path ?? undefined}
       >
         {listing.data?.path ?? (listing.isError ? '' : 'Loading…')}
@@ -134,7 +134,7 @@ export function FolderBrowser({
       )}
 
       {listing.data?.truncated ? (
-        <p data-slot="fs-truncated" className="text-[11px] text-muted-foreground">
+        <p data-slot="fs-truncated" className="text-xs text-muted-foreground">
           Too many folders to list — only the first ones are shown.
         </p>
       ) : null}

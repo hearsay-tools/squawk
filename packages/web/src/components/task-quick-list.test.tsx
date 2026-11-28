@@ -205,7 +205,7 @@ describe('status section folding (#811)', () => {
     renderList({ runs, rowLimit: 1 })
     const toggle = screen.getByRole('button', { name: 'Needs you 2' })
     fireEvent.click(toggle)
-    expect(within(toggle).getByRole('img', { name: 'needs you' })).toBeTruthy()
+    expect(within(toggle).getByRole('img', { name: 'Needs you' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Finished 1' })).toBeTruthy()
     cleanup()
     renderList({ runs: [...runs, run({ id: 'new', status: RUN_STATUS.review })], rowLimit: 1 })
@@ -264,7 +264,7 @@ describe('status section folding (#811)', () => {
     const folded = screen.getByRole('button', { name: 'Finished 2' })
     expect(folded.getAttribute('aria-expanded')).toBe('false')
     expect(document.activeElement).toBe(folded)
-    expect(within(folded).getByRole('img', { name: 'failed' })).toBeTruthy()
+    expect(within(folded).getByRole('img', { name: 'Failed' })).toBeTruthy()
     expect(within(folded).getByRole('img', { name: 'unread' })).toBeTruthy()
     expect(row('move')).toBeNull()
     fireEvent.click(folded)
@@ -300,7 +300,7 @@ describe('TaskQuickList', () => {
 
     const headers = [...document.querySelectorAll('[data-slot="quick-list-bucket"] h2')].map((h) => h.textContent)
     expect(headers).toEqual(['Needs you 1', 'Finished 2', 'Working 1'])
-    expect(rowsIn('Needs you')).toEqual(['Structured changes endpointneeds review · 1m'])
+    expect(rowsIn('Needs you')).toEqual(['Structured changes endpointNeeds review · 1m'])
     expect(rowsIn('Working')).toEqual(['Normalize agent-event protocol1m'])
     expect(rowsIn('Finished')).toEqual(['Kept1m', 'README parallel-agents tagline1m'])
   })
@@ -455,7 +455,7 @@ describe('TaskQuickList', () => {
 
       // Exactly one dot per row — the design system's "a single 7px dot per row" rule.
       expect(document.querySelectorAll('[data-run-id="w"] [data-slot="status-dot"]')).toHaveLength(1)
-      expect(dotOf('w')?.getAttribute('aria-label')).toBe('needs you')
+      expect(dotOf('w')?.getAttribute('aria-label')).toBe('Needs you')
     })
 
     it('pulses the transitioning rows only', () => {
@@ -647,9 +647,9 @@ describe('TaskQuickList', () => {
           run({ id: 'q2', title: 'Second', status: RUN_STATUS.queued, createdAt: ago(60_000) }),
         ],
       })
-      // The position rides in the state word (`queued #2`), in place of an age.
-      expect(metadataText(row('q1'))).toBe('Firstqueued #1')
-      expect(metadataText(row('q2'))).toBe('Secondqueued #2')
+      // The position rides in the state word (`Queued #2`), in place of an age.
+      expect(metadataText(row('q1'))).toBe('FirstQueued #1')
+      expect(metadataText(row('q2'))).toBe('SecondQueued #2')
     })
 
     it('keeps the queue position even when the row has a reference chip', () => {
@@ -667,7 +667,7 @@ describe('TaskQuickList', () => {
           }),
         ],
       })
-      expect(metadataText(row('qref'))).toBe('queued on an issuequeued #1 · #788')
+      expect(metadataText(row('qref'))).toBe('queued on an issueQueued #1 · #788')
     })
 
     it('keeps the age beside the reference on the meta line — there is room for both now (#617)', () => {
@@ -1233,8 +1233,8 @@ describe('the calmer row (#617)', () => {
     const dot = dotOf('p') as HTMLElement
     expect(dot.getAttribute('data-shape')).toBe('workers')
     expect(dot.getAttribute('data-tone')).toBe('running')
-    expect(dot.getAttribute('aria-label')).toBe('waiting on 2 workers')
-    expect(row('p')?.querySelector('[data-slot="task-row-meta"]')?.textContent).toBe('waiting on 2 workers · 1m')
+    expect(dot.getAttribute('aria-label')).toBe('Waiting for 2 workers')
+    expect(row('p')?.querySelector('[data-slot="task-row-meta"]')?.textContent).toBe('Waiting for 2 workers · 1m')
   })
 
   it('paints the monitoring ring and the queued ring apart from running and cancelled', () => {
@@ -1246,7 +1246,7 @@ describe('the calmer row (#617)', () => {
     expect(dotOf('m')?.getAttribute('data-shape')).toBe('ring')
     expect(dotOf('q')?.getAttribute('data-shape')).toBe('ring')
     expect(dotOf('c')?.getAttribute('data-shape')).toBe('filled')
-    expect(row('m')?.querySelector('[data-slot="task-row-state"]')?.textContent).toMatch(/^monitoring, next check /)
+    expect(row('m')?.querySelector('[data-slot="task-row-state"]')?.textContent).toMatch(/^Monitoring, next check /)
   })
 
   it('makes references keyboard-reachable links on the meta line', () => {
@@ -1291,14 +1291,14 @@ describe('meta-line state words (#617, the issue\'s list exactly)', () => {
       run({ id: 'wk', status: RUN_STATUS.waiting, delegation: workers, waits: [workerWait({ workerIds: ['00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002'] })] } as Partial<RunRecord>),
       run({ id: 'rep', status: RUN_STATUS.waiting, delegation: workers, waits: [workerWait({ workerIds: [], requestIds: ['00000000-0000-4000-8000-000000000009'] })] } as Partial<RunRecord>),
     ] })
-    expect(stateOf('mon')).toMatch(/^monitoring, next check /)
+    expect(stateOf('mon')).toMatch(/^Monitoring, next check /)
     expect(stateOf('run')).toBeNull()
-    expect(stateOf('rev')).toBe('needs review')
-    expect(stateOf('fail')).toBe('failed')
-    expect(stateOf('sched')).toBe('usage limit')
-    expect(stateOf('q')).toBe('queued #1')
-    expect(stateOf('wk')).toBe('waiting on 2 workers')
-    expect(stateOf('rep')).toBe('waiting on worker replies')
+    expect(stateOf('rev')).toBe('Needs review')
+    expect(stateOf('fail')).toBe('Failed')
+    expect(stateOf('sched')).toBe('Usage limit')
+    expect(stateOf('q')).toBe('Queued #1')
+    expect(stateOf('wk')).toBe('Waiting for 2 workers')
+    expect(stateOf('rep')).toBe('Waiting for worker replies')
   })
 })
 
@@ -1334,10 +1334,10 @@ describe('references on a device that cannot hover (#617 01b)', () => {
 
 it('says when a usage-limited run resumes, in the meta line (#617 01b)', () => {
   renderList({ runs: [run({ id: 's', status: RUN_STATUS.waiting, autoResumeAt: new Date(NOW + 12 * 60_000).toISOString() })] })
-  expect(row('s')?.querySelector('[data-slot="task-row-state"]')?.textContent).toBe('usage limit, resumes in 12m')
+  expect(row('s')?.querySelector('[data-slot="task-row-state"]')?.textContent).toBe('Usage limit, resumes in 12m')
 })
 
-// Phase 4b (hearsay-tools/cezarion#1236): the label stays `monitoring`; the meta line says when.
+// Phase 4b (hearsay-tools/cezarion#1236): the label stays `Monitoring`; the meta line says when.
 it('says when a timer park checks next, in the meta line', () => {
   const at = new Date(NOW + 5 * 60_000).toISOString()
   renderList({ runs: [run({ id: 'm', status: RUN_STATUS.waiting, waits: [{ kind: WAIT_KIND.timer, id: '00000000-0000-4000-8000-0000000000d1', source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_wait,
@@ -1345,7 +1345,7 @@ it('says when a timer park checks next, in the meta line', () => {
   const time = new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }).format(new Date(at))
   const sameDay = new Date(at).toDateString() === new Date(NOW).toDateString()
   const text = sameDay ? time : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(at))
-  expect(row('m')?.querySelector('[data-slot="task-row-state"]')?.textContent).toBe(`monitoring, next check ${text}`)
+  expect(row('m')?.querySelector('[data-slot="task-row-state"]')?.textContent).toBe(`Monitoring, next check ${text}`)
 })
 
 // hearsay-tools/cezarion#1446: a process wait says when it gives up, in the meta line.
@@ -1356,7 +1356,7 @@ it('says until when a process wait waits, in the meta line', () => {
   const time = new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }).format(new Date(at))
   const sameDay = new Date(at).toDateString() === new Date(NOW).toDateString()
   const text = sameDay ? time : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(at))
-  expect(row('p')?.querySelector('[data-slot="task-row-state"]')?.textContent).toBe(`waiting for a command, until ${text}`)
+  expect(row('p')?.querySelector('[data-slot="task-row-state"]')?.textContent).toBe(`Waiting for command, until ${text}`)
 })
 
 function stubMedia({ noHover, desktop }: { noHover: boolean; desktop: boolean }) {

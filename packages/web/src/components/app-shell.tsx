@@ -286,7 +286,7 @@ function DesktopBreadcrumb({ breadcrumb, repo, label }: {
       <FolderIcon aria-hidden="true" className="size-4 shrink-0" />
       {project ? <><span className="truncate font-medium text-foreground">{project}</span><span aria-hidden="true">/</span></> : null}
       <span className="min-w-0 truncate">{breadcrumb?.page ?? label ?? 'Squawk'}</span>
-      {branch ? <span className="ml-auto flex shrink-0 items-center gap-2 text-[11px]">{/* The one teal left beside the sidebar, deliberately (#617 01c): the header's ShieldCheck
+      {branch ? <span className="ml-auto flex shrink-0 items-center gap-2 text-xs">{/* The one teal left beside the sidebar, deliberately (#617 01c): the header's ShieldCheck
           sits outside the sidebar list and waits for the brand accent's own review. */}<ShieldCheckIcon aria-hidden="true" className="size-4 text-accent-text" />{branch}</span> : null}
     </header>
   )
@@ -607,7 +607,7 @@ function SidebarContent({
       className={'@container/sidebar flex min-h-0 flex-1 flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]'}
     >
       <div data-slot="sidebar-header" className="shrink-0">
-        {projectHeader ?? (repo ? <div className="px-[14px] pt-[14px] pb-2.5"><div className="truncate text-sm font-semibold">{repo.name}</div><div className="truncate font-mono text-[10.5px] text-soft-foreground">{repo.branch}</div></div> : null)}
+        {projectHeader ?? (repo ? <div className="px-[14px] pt-[14px] pb-2.5"><div className="truncate text-sm font-semibold">{repo.name}</div><div className="truncate font-mono text-xs text-soft-foreground">{repo.branch}</div></div> : null)}
       </div>
 
       {/* The board's Actions frame: 12px sides, 8px between Search and New task, both 32px. */}
@@ -691,7 +691,7 @@ function CommandPaletteHint() {
       <span className="truncate">Search…</span>
       <kbd
         aria-hidden="true"
-        className="ml-auto shrink-0 font-sans text-[11px] font-normal text-soft-foreground"
+        className="ml-auto shrink-0 font-sans text-xs font-normal text-soft-foreground"
       >
         {commandShortcutHint('k')}
       </kbd>
@@ -712,7 +712,7 @@ function VersionChip({ version, latestVersion }: { version: string; latestVersio
       data-slot="version-chip"
       data-update-available={updateAvailable ? 'true' : undefined}
       title={updateAvailable ? `v${version} — update available: v${latestVersion}` : `v${version}`}
-      className="flex min-w-0 items-center gap-1 font-mono text-[11px] text-soft-foreground"
+      className="flex min-w-0 items-center gap-1 font-mono text-xs text-soft-foreground"
     >
       {updateAvailable ? <StatusDot tone="pending" className="size-[5px] shrink-0" /> : null}
       <span className="truncate">v{version}</span>
@@ -763,12 +763,12 @@ function MobileTopBar({ title, pushed, repo, elsewhere, onTrigger }: {
             <button type="button" data-slot="mobile-project-picker" aria-label={`Switch project: ${repo.name}`}
               onClick={(event) => onTrigger(event.currentTarget)}
               className="flex h-[44px] min-w-0 flex-1 items-center justify-start gap-[10px] rounded-md text-left focus-visible:outline-2 focus-visible:outline-ring">
-              <span aria-hidden="true" className="flex size-[28px] shrink-0 items-center justify-center rounded-[8px] border border-soft-foreground bg-sidebar-row-selected text-[11px] leading-none font-semibold text-foreground">
+              <span aria-hidden="true" className="flex size-[28px] shrink-0 items-center justify-center rounded-[8px] border border-soft-foreground bg-sidebar-row-selected text-xs leading-none font-semibold text-foreground">
                 {projectInitials(repo.name)}
               </span>
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-[15px] leading-tight font-semibold text-foreground">{repo.name}</span>
-                {repo.branch ? <span className="truncate font-mono text-[10.5px] leading-tight text-soft-foreground">{repo.branch}</span> : null}
+                {repo.branch ? <span className="truncate font-mono text-xs leading-tight text-soft-foreground">{repo.branch}</span> : null}
               </span>
               <ChevronDownIcon aria-hidden="true" className="size-3.5 shrink-0 text-soft-foreground" />
             </button>

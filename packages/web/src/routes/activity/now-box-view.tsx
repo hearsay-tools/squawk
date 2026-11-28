@@ -10,7 +10,7 @@ import type { NowBox } from './now-box'
 const BUCKET_FILL: Record<ActivityCheckBucket, string> = {
   pass: 'bg-success',
   fail: 'bg-danger',
-  pending: 'bg-info',
+  pending: 'bg-pending',
   skipping: 'border border-soft-foreground',
   cancel: 'border border-soft-foreground',
 }
@@ -42,7 +42,7 @@ export function CheckSegments({
         />
       ))}
       {overflow ? (
-        <span data-slot="activity-checks-overflow" data-bucket={overflow.bucket} className="ml-1 flex shrink-0 items-center gap-1 text-[10px] leading-none text-muted-foreground tabular-nums">
+        <span data-slot="activity-checks-overflow" data-bucket={overflow.bucket} className="ml-1 flex shrink-0 items-center gap-1 text-xs leading-none text-muted-foreground tabular-nums">
           <i className={cn('h-[5px] w-2 rounded-[2px]', BUCKET_FILL[overflow.bucket])} />+{overflow.count}
         </span>
       ) : null}
@@ -96,7 +96,7 @@ export function NowBoxView({ box, now, dense, motion = {} }: { box: NowBox; now:
       {box.checkSummary ? <span data-slot="activity-checks-summary" className="sr-only">{box.checkSummary}</span> : null}
       {box.bar !== undefined ? <Bar value={box.bar} ink={ink} /> : null}
       {box.detail && !dense ? (
-        <span data-slot="activity-detail" className="col-start-2 text-[11.5px] text-muted-foreground tabular-nums">
+        <span data-slot="activity-detail" className="col-start-2 text-xs text-muted-foreground tabular-nums">
           {box.detail}
         </span>
       ) : null}

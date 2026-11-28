@@ -74,7 +74,7 @@ export function ConversationMessage({ role, children, className, ts, headerActio
         className,
       )}
     >
-      <p className={cn('m-0 flex w-full min-w-0 items-start gap-2 text-[11px] leading-[1.2] font-semibold tracking-[0.6px] uppercase', surface.accent)}>
+      <p className={cn('m-0 flex w-full min-w-0 items-start gap-2 text-xs leading-[1.2] font-semibold tracking-[0.6px] uppercase', surface.accent)}>
         <span className="inline-flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 normal-case tracking-normal">
           <span className="inline-flex min-w-0 items-center gap-2 uppercase tracking-[0.6px]">
             <MessageSquareIcon aria-hidden="true" className="size-4 shrink-0" />{surface.label}
@@ -563,7 +563,7 @@ function ToolOutput({ text, streaming }: { text: string; streaming: boolean }) {
           type="button"
           data-slot="tool-output-toggle"
           onClick={() => setExpanded((value) => !value)}
-          className="block w-full border-t border-border/50 px-4 py-1.5 text-left text-[11px] font-medium text-soft-foreground hover:text-foreground"
+          className="block w-full border-t border-border/50 px-4 py-1.5 text-left text-xs font-medium text-soft-foreground hover:text-foreground"
         >
           {expanded ? 'Show less' : `Show all ${lines} lines`}
         </button>
@@ -582,7 +582,7 @@ export function InlineDiffPreview({ diffs }: { diffs: FileDiff[] }) {
     <>
       {diffs.map((diff, index) => (
         <div key={`${diff.path}:${index}`} data-slot="diff-preview" className="min-w-0">
-          <div className="border-b border-border/50 px-4 py-1.5 font-mono text-[11px] wrap-anywhere text-muted-foreground">
+          <div className="border-b border-border/50 px-4 py-1.5 font-mono text-xs wrap-anywhere text-muted-foreground">
             {diff.path}
           </div>
           <pre className="overflow-x-auto py-2 font-mono text-xs leading-[1.7] whitespace-pre">
@@ -678,7 +678,7 @@ function ToolCardBadges({ item, busy }: { item: UiToolItem; busy: boolean }) {
         <span
           data-slot="tool-exit"
           className={cn(
-            'rounded-full px-2 py-px font-mono text-[11px] font-semibold',
+            'rounded-full px-2 py-px font-mono text-xs font-semibold',
             item.exitCode === 0 ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger',
           )}
         >
@@ -851,7 +851,7 @@ export function HookCard({ item, cacheKey }: { item: UiHookItem; cacheKey?: stri
         <span className="ml-auto flex shrink-0 items-center gap-2 pl-2">
           {failed ? <span className="text-xs text-muted-foreground">{item.status}</span> : hasContext ? <span className="text-xs text-soft-foreground">context</span> : null}
           {failed && typeof item.exitCode === 'number' && item.exitCode !== 0 ? (
-            <span data-slot="hook-exit" className="rounded-full bg-danger/10 px-2 py-px font-mono text-[11px] font-semibold text-danger">
+            <span data-slot="hook-exit" className="rounded-full bg-danger/10 px-2 py-px font-mono text-xs font-semibold text-danger">
               {item.exitCode}
             </span>
           ) : null}
@@ -874,7 +874,7 @@ export function HookCard({ item, cacheKey }: { item: UiHookItem; cacheKey?: stri
             </pre>
           ))}
           {item.source !== undefined ? (
-            <p data-slot="hook-source" className="px-3 pb-2 font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{item.source}</p>
+            <p data-slot="hook-source" className="px-3 pb-2 font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">{item.source}</p>
           ) : null}
           {hasRaw ? (
             <Collapsible className="border-t border-border">

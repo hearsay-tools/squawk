@@ -37,10 +37,10 @@ export function ReviewPanel({ run, projectId, onResolved }: { run: ApiRun; proje
     <section data-slot="review-panel" aria-label="Review the changes" className="flex flex-col gap-2.5">
       <div
         data-slot="review-banner"
-        className="flex flex-col gap-2 rounded-md border border-accent-strong/30 bg-accent-strong/10 px-3.5 py-2"
+        className="flex flex-col gap-2 rounded-md border border-info/35 bg-info/10 px-3.5 py-2"
       >
         <div className="flex min-w-0 items-start gap-2.5">
-          <EyeIcon className="size-4 shrink-0 text-accent-icon" aria-hidden="true" />
+          <EyeIcon className="size-4 shrink-0 text-semantic-info" aria-hidden="true" />
           <p className="min-w-0 break-words text-[13px] leading-relaxed">
             <span className="font-semibold">Review the changes before anything lands.</span>{' '}
             <span className="block text-muted-foreground">
@@ -259,7 +259,7 @@ function ManualMergeLine({ command }: { command: string }) {
           .then(() => toast('Command copied to clipboard.'))
           .catch(() => toast(`Run manually: ${command}`))
       }}
-      className="flex w-full min-w-0 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left font-mono text-[11px] text-soft-foreground hover:bg-muted hover:text-foreground"
+      className="flex w-full min-w-0 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left font-mono text-xs text-soft-foreground hover:bg-muted hover:text-foreground"
     >
       <CopyIcon className="size-3 shrink-0" aria-hidden="true" />
       <span className="truncate">manual path: {command}</span>

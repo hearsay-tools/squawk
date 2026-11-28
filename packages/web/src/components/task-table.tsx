@@ -95,10 +95,10 @@ function titleTextClass(unread: boolean, readDone: boolean, clamp: boolean): str
 }
 
 const PREVIEW_BADGE: Record<RunStatePreview['kind'], { label: string; tone: string }> = {
-  ask: { label: 'Ask', tone: 'text-pending-strong' },
-  permission: { label: 'Permission', tone: 'text-pending-strong' },
+  ask: { label: 'Ask', tone: 'text-semantic-amber' },
+  permission: { label: 'Permission', tone: 'text-semantic-amber' },
   review: { label: 'Review', tone: 'text-accent-text' },
-  error: { label: 'Error', tone: 'text-danger' },
+  error: { label: 'Error', tone: 'text-semantic-red' },
 }
 
 /** Concise 1-line urgent or error preview rendered beneath the row metadata. */
@@ -112,7 +112,7 @@ export function TaskStatePreview({ preview }: { preview: RunStatePreview | undef
       title={preview.text}
       className="mt-1 flex min-w-0 items-baseline gap-1.5 text-xs leading-[1.35] text-muted-foreground"
     >
-      <span className={cn('shrink-0 text-[11px] font-semibold', badge.tone)}>{badge.label}</span>
+      <span className={cn('shrink-0 text-xs font-semibold', badge.tone)}>{badge.label}</span>
       <span className="min-w-0 truncate">{preview.text}</span>
     </p>
   )
@@ -124,7 +124,7 @@ function AutomationBadge({ badge }: { badge: NonNullable<TaskRowModel['automatio
       data-slot="task-automation-badge"
       data-origin="automation"
       title={`Automation ${badge.id}`}
-      className="inline-flex max-w-[180px] shrink-0 items-center gap-1 truncate rounded-full border border-info/30 bg-info/10 px-2 py-px text-[11px] font-medium text-info"
+      className="inline-flex max-w-[180px] shrink-0 items-center gap-1 truncate rounded-full border border-info/30 bg-info/10 px-2 py-px text-xs font-medium text-semantic-info"
     >
       <ZapIcon className="size-2.5 shrink-0" aria-hidden="true" />
       <span className="truncate">{badge.label}</span>
@@ -133,7 +133,7 @@ function AutomationBadge({ badge }: { badge: NonNullable<TaskRowModel['automatio
 }
 
 function ProjectBadge({ name, href }: { name: string; href?: string | undefined }) {
-  const cls = 'inline-flex h-[18px] max-w-[140px] shrink-0 items-center truncate rounded-md border border-border bg-muted px-1.5 font-mono text-[11px] leading-none font-medium text-foreground'
+  const cls = 'inline-flex h-[18px] max-w-[140px] shrink-0 items-center truncate rounded-md border border-border bg-muted px-1.5 font-mono text-xs leading-none font-medium text-foreground'
   if (!href) {
     return (
       <span data-slot="task-project" className={cls} title={name}>
@@ -312,17 +312,17 @@ function RowMetaLine({ model, showProject, showAutomationOnMeta, trailing }: {
   showAutomationOnMeta: boolean
   trailing?: React.ReactNode
 }) {
-  const { attention, scheduled, queuePosition, runnerModel, tags } = model
+  const { status, scheduled, queuePosition, runnerModel, tags } = model
   return (
     <div data-slot="task-meta-line" className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
       <Pill
-        dot={attention.tone}
-        shape={attention.shape}
-        pulse={attention.pulse}
-        title={scheduled?.title ?? attention.label}
+        dot={status.tone}
+        shape={status.shape}
+        pulse={status.pulse}
+        title={scheduled?.title ?? status.label}
         className="shrink-0 py-0.5"
       >
-        {attention.label}
+        {status.label}
         {scheduled ? <span className="tabular-nums"> {scheduled.label}</span> : null}
       </Pill>
       {showProject && model.projectName ? <ProjectBadge name={model.projectName} href={model.projectHref} /> : null}
@@ -340,7 +340,7 @@ function RowMetaLine({ model, showProject, showAutomationOnMeta, trailing }: {
         </>
       ) : null}
       {tags.map((tag) => (
-        <span key={tag} data-slot="task-tag" className="rounded bg-muted px-1.5 py-px text-[11px] text-soft-foreground">
+        <span key={tag} data-slot="task-tag" className="rounded bg-muted px-1.5 py-px text-xs text-soft-foreground">
           {tag}
         </span>
       ))}
@@ -483,7 +483,7 @@ function TableCell({
             showAutomationOnMeta={false}
             trailing={
               !hasUsageColumn ? (
-                <RowTelemetryControl {...ctx} className="ml-auto h-6 px-1.5 text-[11px]" />
+                <RowTelemetryControl {...ctx} className="ml-auto h-6 px-1.5 text-xs" />
               ) : null
             }
           />
@@ -728,7 +728,7 @@ export function TaskTable({
           data-slot="task-cards"
           data-task-table="true"
           data-density="card"
-          className="flex flex-col rounded-lg border border-border bg-card px-3"
+          className="flex flex-col rounded-lg border border-card-edge bg-card px-3 shadow-card"
         >
           <TaskListItems itemSize={123} items={items} itemKey={(item) => item.key}>
             {(item) => (
@@ -768,7 +768,7 @@ export function TaskTable({
         <div
           role="table"
           aria-rowcount={items.length + 1}
-          className="rounded-lg border border-border bg-card px-4"
+          className="rounded-lg border border-card-edge bg-card px-4 shadow-card"
         >
           <div
             role="row"
@@ -783,7 +783,7 @@ export function TaskTable({
                 key={column.id}
                 data-column-id={column.id}
                 className={cn(
-                  'flex h-8 items-center border-b border-border text-[11px] font-medium tracking-[0.04em] text-muted-foreground uppercase',
+                  'flex h-8 items-center border-b border-border text-xs font-medium tracking-[0.04em] text-muted-foreground uppercase',
                   column.align === 'right' && 'justify-end text-right',
                 )}
               >

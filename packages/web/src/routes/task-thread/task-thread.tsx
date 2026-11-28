@@ -1,5 +1,6 @@
 import './session-layout.css'
 import { deriveAttention } from '@/lib/attention'
+import { runStatusPresentation } from '@/lib/status-semantics'
 import { MessageSquareTextIcon, SearchXIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useParams } from 'react-router'
@@ -561,7 +562,7 @@ function ThreadTranscript({
           data-state={footer.state}
           className={cn(
             'mt-auto flex items-center gap-2 border-t border-border pt-3 text-xs',
-            footer.tone === 'danger' ? 'text-danger' : 'text-soft-foreground',
+            footer.tone === 'danger' ? 'text-semantic-red' : 'text-soft-foreground',
           )}
         >
           {footer.label}
@@ -675,7 +676,7 @@ function ThreadFooterDock({
               attention.bucket === 'permission' ? 'Choose an approval option above to continue'
               // oxlint-disable-next-line cez/attention-bucket-compare-outside-owner -- the composer distinguishes a waiting reply
               : attention.bucket === 'waiting' ? 'The agent is paused, waiting for your reply'
-                : `${attention.label.charAt(0).toUpperCase()}${attention.label.slice(1)} — you can send a message to resume`}
+                : `${runStatusPresentation(run, attention).label} — you can send a message to resume`}
           </div>
         ) : null}
 
@@ -824,7 +825,7 @@ function HistoryBoundary({
   }
   if (!hasOlder && !error) {
     return (
-      <div data-slot="history-start" className="flex items-center gap-3 text-[11px] text-soft-foreground">
+      <div data-slot="history-start" className="flex items-center gap-3 text-xs text-soft-foreground">
         <span aria-hidden className="h-px flex-1 bg-border" />
         Start of session
         <span aria-hidden className="h-px flex-1 bg-border" />

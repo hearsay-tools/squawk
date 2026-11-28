@@ -414,7 +414,7 @@ export function WbAside({
         </div>
         <pre
           data-slot="wb-yaml"
-          className="mt-2 max-h-96 overflow-auto rounded-lg border border-border bg-background p-3 font-mono text-[11px] leading-relaxed whitespace-pre text-muted-foreground"
+          className="mt-2 max-h-96 overflow-auto rounded-lg border border-border bg-background p-3 font-mono text-xs leading-relaxed whitespace-pre text-muted-foreground"
         >
           {yaml}
         </pre>
@@ -658,7 +658,7 @@ function StepCardHeading({
         <span
           data-slot="wb-step-badge"
           className={cn(
-            'shrink-0 rounded-full border px-2 py-px font-mono text-[11px]',
+            'shrink-0 rounded-full border px-2 py-px font-mono text-xs',
             badge === 'unknown' && 'border-danger/35 text-danger',
           )}
         >
@@ -771,7 +771,7 @@ export function StepCardBody({
           {description}
         </div>
       ) : null}
-      <p data-slot="wb-step-kind" className="mt-1.5 text-[11.5px] text-link-foreground">
+      <p data-slot="wb-step-kind" className="mt-1.5 text-xs text-link-foreground">
         {stepKindLabel(step)}
       </p>
       {!overlay ? (

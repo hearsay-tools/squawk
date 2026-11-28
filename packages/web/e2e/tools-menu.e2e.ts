@@ -97,12 +97,16 @@ describe('tools menu', () => {
       name: row.dataset.tool,
       available: row.dataset.available,
       version: row.querySelector('[data-slot="tool-version"]')?.textContent ?? null,
+      dryRun: row.querySelector('[data-slot="tool-dry-run"]')?.textContent ?? null,
+      dryRunTitle: row.querySelector('[data-slot="tool-dry-run"]')?.getAttribute('title') ?? null,
       hint: row.querySelector('[data-slot="tool-hint"]')?.textContent ?? null,
       setupHref: (row.closest('a') ?? row.querySelector('a'))?.getAttribute('href') ?? null,
     }))`) as Array<{
       name: string
       available: string
       version: string | null
+      dryRun: string | null
+      dryRunTitle: string | null
       hint: string | null
       setupHref: string | null
     }>
@@ -114,12 +118,15 @@ describe('tools menu', () => {
       const row = rows.find((r) => r.name === check.name)
       expect(row?.available).toBe(String(check.available))
       if (check.available) {
-        // The server's version string, verbatim (the shared env runs CEZ_DRY_RUN, so claude's
-        // may legitimately be "mock (CEZ_DRY_RUN=1)" — the point is fidelity, not the value).
-        expect(row?.version).toBe(check.version ?? 'not found')
+        if (check.version && /\b(?:CEZ|HSQ)_DRY_RUN\b/.test(check.version)) {
+          expect(row?.dryRun).toBe('Dry run')
+          expect(row?.dryRunTitle).toBe(check.version)
+        } else {
+          expect(row?.version).toBe(check.version ?? 'Installed')
+        }
         expect(row?.setupHref).toBeNull()
       } else {
-        expect(row?.version).toBe('not found')
+        expect(row?.version).toBe('Not installed')
         if (check.hint) expect(row?.hint).toBe(check.hint)
         expect(row?.setupHref).toBe(`/settings/global/agents#agent-${check.name}`)
       }

@@ -101,21 +101,31 @@
    * (11.0:1); red, violet and green take dark ink on the dark theme (4.76 / 6.59 / 10.05:1). */
   --signal-ink-amber: oklch(0.20502324 0.02337733 265.468208);
   --signal-ink: oklch(0.20502324 0.02337733 265.468208);
-  /* The project signal as WORDS (#711): the state line under a project's name on the expanded
-   * rail and the mobile drawer. 11px text needs 4.5:1 on the default, hover and selected rows
-   * alike; `--danger` as text drops to 3.69:1 on the selected row, so red and amber have their
-   * own inks. Red retains at least 4.5:1 on the lifted selected surface. */
-  --signal-word-amber: oklch(0.84292398 0.15105370 88.300494);
-  --signal-word-red: oklch(0.72 0.16614792 22.216224);
+  /* Dedicated high-contrast small-size semantic text tokens, distinct from badge/dot fills.
+   * Every semantic text token passes WCAG AA (>= 4.5:1) on all cockpit surfaces (base, card,
+   * card-2, sidebar hover and selected rows) in both dark and light themes. */
+  --semantic-text-red: oklch(0.73 0.165 22.2);
+  --semantic-text-amber: oklch(0.84292398 0.15105370 88.300494);
+  --semantic-text-violet: oklch(0.73 0.155 293.5);
+  --semantic-text-green: oklch(0.79939674 0.11933177 158.659529);
+  --semantic-text-info: oklch(0.77792681 0.11495880 254.588347);
+  --semantic-text-conflict: oklch(0.80938607 0.12463754 54.328544);
+  --signal-word-amber: var(--semantic-text-amber);
+  --signal-word-red: var(--semantic-text-red);
 
-  /* H1b: lifted neutral surfaces and softer ink. Elevation comes from surface steps, not shadows. */
+  /* Closed four-role text scale (primary, secondary, muted, disabled) and neutral surface steps.
+   * Elevation in dark mode comes from surface steps (`--shadow-card: none`). Muted text passes
+   * >= 4.5:1 on every surface including selected rows. */
   --surface-base: oklch(0.215 0.004 260);
   --surface-raised: oklch(0.25 0.005 260);
   --surface-muted: oklch(0.30 0.006 260);
   --border-subtle: oklch(0.32 0.006 260);
+  --border-card: var(--border-subtle);
+  --shadow-card: none;
   --text-primary: oklch(0.90 0.004 260);
-  --text-secondary: oklch(0.73 0.008 260);
-  --text-muted: oklch(0.67 0.012 260);
+  --text-secondary: oklch(0.75 0.008 260);
+  --text-muted: oklch(0.70 0.010 260);
+  --text-disabled: oklch(0.56 0.008 260);
   --accent-text: oklch(0.80 0.095 182);
   --accent-icon: oklch(0.74 0.105 182 / 0.75);
   --task-brand-bg: var(--surface-base);
@@ -149,6 +159,7 @@
   --muted: var(--surface-muted);
   --muted-foreground: var(--text-secondary);
   --soft-foreground: var(--text-muted);
+  --disabled-foreground: var(--text-disabled);
   --link-foreground: var(--accent-text);
   --supporting-foreground: var(--text-secondary);
   --border: var(--border-subtle);
@@ -231,37 +242,48 @@
 .light {
   color-scheme: light;
 
-  --surface-base: oklch(0.98415186 0.00341267 247.857544);
+  /* Light-theme surface step and elevation: cool slate canvas (`--surface-base`) under crisp
+   * white raised cards (`--surface-raised`) with explicit card border (`--border-card`) and
+   * restrained hairline elevation (`--shadow-card`). */
+  --surface-base: oklch(0.962 0.005 258);
   --surface-raised: oklch(0.99999999 0.00000000 none);
-  --surface-muted: oklch(0.95504219 0.00702862 268.546890);
-  --border-subtle: oklch(0.92222748 0.01259503 271.278649);
+  --surface-muted: oklch(0.942 0.008 265);
+  --border-subtle: oklch(0.885 0.012 264);
+  --border-card: oklch(0.845 0.015 264);
+  --shadow-card: 0 1px 2px 0 oklch(0.20 0.02 264 / 0.06), 0 1px 3px 0 oklch(0.20 0.02 264 / 0.04);
   --text-primary: oklch(0.20768191 0.03982432 265.754874);
-  --text-secondary: oklch(0.44737478 0.03073402 261.031628);
-  --text-muted: oklch(0.54402337 0.03357110 264.243724);
+  --text-secondary: oklch(0.43 0.031 261);
+  --text-muted: oklch(0.485 0.032 264);
+  --text-disabled: oklch(0.60 0.022 264);
   --accent-strong: oklch(0.51093777 0.08605545 186.391359);
   --accent-strong-foreground: oklch(0.99999999 0.00000000 none);
-  --accent-text: oklch(0.51093777 0.08605545 186.391359);
+  --accent-text: oklch(0.495 0.088 186.391359);
   --accent-icon: oklch(0.51093777 0.08605545 186.391359 / 0.800000);
-  --task-brand-bg: oklch(0.98415186 0.00341267 247.857544);
+  --task-brand-bg: var(--surface-base);
   --task-brand-selected: oklch(0.95265067 0.04979580 180.801231);
   --composer-border: oklch(0.59096443 0.07421795 185.944644);
   --merged-strong: oklch(0.54133709 0.24658592 293.008968);
   --merged-text: oklch(0.49066650 0.24123171 292.580939);
   --running: oklch(0.54133709 0.24658592 293.008968);
   --status-running: oklch(0.54133709 0.24658592 293.008968);
-  --sidebar-row-hover: oklch(0.97023721 0.00413366 271.369521);
-  --sidebar-row-selected: oklch(0.94554043 0.00868545 264.521119);
+  --sidebar-row-hover: oklch(0.955 0.006 265);
+  --sidebar-row-selected: oklch(0.928 0.010 264);
   /* amber-400 ink on white is ~1.6:1, so the light count darkens its number (6.0:1 on the tint). */
   --inbox-count: oklch(0.84292398 0.15105370 88.300494 / 0.250980);
-  --inbox-count-foreground: oklch(0.47068846 0.09873444 76.333331);
+  --inbox-count-foreground: var(--semantic-text-amber);
   /* Rail pill numbers on the light theme: dark ink on amber only, white on the darker red, violet
    * and green fills (4.83 / 5.70 / 5.79:1). */
   --signal-ink-amber: oklch(0.20502324 0.02337733 265.468208);
   --signal-ink: oklch(0.99999999 0.00000000 none);
-  /* State words on light (#711): `--pending-strong` is 4.29:1 and `--danger` 4.12:1 on the selected
-   * row, so both darken. Amber 6.6 / 6.4 / 5.9:1, red 6.2 / 5.9 / 5.5:1 (default / hover / selected). */
-  --signal-word-amber: oklch(0.47068846 0.09873444 76.333331);
-  --signal-word-red: oklch(0.50541985 0.19049342 27.518103);
+  /* Small-size semantic text tokens on light: every token passes >= 4.5:1 across all surfaces. */
+  --semantic-text-red: oklch(0.50541985 0.19049342 27.518103);
+  --semantic-text-amber: oklch(0.47068846 0.09873444 76.333331);
+  --semantic-text-violet: var(--merged-text);
+  --semantic-text-green: oklch(0.48 0.112 156.349587);
+  --semantic-text-info: oklch(0.49 0.140 254.131270);
+  --semantic-text-conflict: oklch(0.52 0.155 43.743846);
+  --signal-word-amber: var(--semantic-text-amber);
+  --signal-word-red: var(--semantic-text-red);
 
   --message-user-bg: oklch(0.98221526 0.02320863 90.746621);
   --message-user-border: oklch(0.83507807 0.10393238 95.902991);
@@ -282,18 +304,18 @@
   --control-border: var(--text-muted);
 
   /* blue-700, not blue-300 — the same per-theme darkening the syntax blue already makes. */
-  --info: oklch(0.50845536 0.13625116 254.131270);
+  --info: var(--semantic-text-info);
 
-  /* amber-700, not amber-400: the dot keeps `--pending` in both themes, but amber ink on white
-   * has to come down this far to stay readable (~4.8:1 against oklch(0.99999999 0.00000000 none)). */
-  --pending-strong: oklch(0.54699162 0.11646208 73.076281);
+  /* Amber ink routes through --semantic-text-amber so small amber text passes >= 4.5:1 on every
+   * light surface including card-2 and selected rows. */
+  --pending-strong: var(--semantic-text-amber);
 
   /* orange-700, for the same reason the amber above darkens: orange-400 as ink on white is ~2:1.
    * Far enough from `--pending-strong` (amber-700) to stay a different colour, not a shade. */
-  --conflict: oklch(0.54067021 0.15312160 43.743846);
+  --conflict: var(--semantic-text-conflict);
 
-  --success: oklch(0.49560660 0.10996954 156.349587);
-  --danger: oklch(0.57709882 0.21515673 27.325049);
+  --success: var(--semantic-text-green);
+  --danger: oklch(0.545 0.205 27.325049);
 
   --shadow-modal: 0 16px 48px 0 oklch(0.00000000 0.00000000 none / 0.120000);
 
@@ -307,7 +329,7 @@
   --syn-fn: oklch(0.48819831 0.21716546 264.376304);
   --syn-com: oklch(0.43 0.025 260);
   --syn-num: oklch(0.50541985 0.19049342 27.518103);
-  --syn-punc: oklch(0.55101910 0.02336090 264.363742);
+  --syn-punc: oklch(0.485 0.024 264.363742);
   --syn-var: oklch(0.21008449 0.03176261 264.664526);
 }
 
@@ -381,9 +403,11 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-soft-foreground: var(--soft-foreground);
+  --color-disabled-foreground: var(--disabled-foreground);
   --color-link-foreground: var(--link-foreground);
   --color-supporting-foreground: var(--supporting-foreground);
   --color-border: var(--border);
+  --color-card-edge: var(--border-card);
   --color-control-border: var(--control-border);
   --color-input: var(--input);
   --color-contrast: var(--contrast);
@@ -407,6 +431,12 @@
   --color-signal-ink-amber: var(--signal-ink-amber);
   --color-signal-word-amber: var(--signal-word-amber);
   --color-signal-word-red: var(--signal-word-red);
+  --color-semantic-red: var(--semantic-text-red);
+  --color-semantic-amber: var(--semantic-text-amber);
+  --color-semantic-violet: var(--semantic-text-violet);
+  --color-semantic-green: var(--semantic-text-green);
+  --color-semantic-info: var(--semantic-text-info);
+  --color-semantic-conflict: var(--semantic-text-conflict);
   --color-ring: var(--ring);
 
   --color-danger: var(--danger);
@@ -509,6 +539,10 @@
   }
 }
 
+@utility shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
 /* ---------- project rail unfolding (#711) ----------
  * The expanded rail's names and state words fade in only once the 160ms width transition has
  * settled, so a name never shows mid-animation. A utility so it takes variants: it is applied
@@ -595,7 +629,7 @@
   background: var(--muted);
   padding-block: 1.5px;
   padding-inline: 5px;
-  font-size: 0.9em;
+  font-size: max(12px, 0.9em);
 }
 .thread-markdown [data-streamdown='link'] {
   color: var(--link-foreground);
