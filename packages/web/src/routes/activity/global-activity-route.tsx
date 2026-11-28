@@ -133,7 +133,7 @@ export function GlobalActivityRoute() {
           }
         />
       ) : null}
-      {activeProjects.length > 0 ? (
+      {activeProjects.length > 0 || feed.length > 0 ? (
         <ActivitySupervisionView
           projects={activeProjects}
           now={now}

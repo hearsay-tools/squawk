@@ -48,6 +48,35 @@ function combinedIndex(projects: readonly ActivityProject[]): Map<string, RunEnt
   return index
 }
 
+function collectProjectGhosts(
+  projects: readonly ActivityProject[],
+  motion: MotionState,
+): { requests: ActivityRequest[]; folding: ActivityRequest[]; waits: PeerWait[] } {
+  const requests: ActivityRequest[] = []
+  const folding: ActivityRequest[] = []
+  const waits: PeerWait[] = []
+  for (const project of projects) {
+    const projectGhosts = ghostsOf(project, motion)
+    requests.push(...projectGhosts.requests)
+    folding.push(...projectGhosts.folding)
+    waits.push(...waitGhosts(project.projectId, peerWaits(project.tasks), motion))
+  }
+  return { requests, folding, waits }
+}
+
+function restoreTriageFocus(
+  trigger: HTMLButtonElement | null,
+  stage: HTMLDivElement | null,
+  root: HTMLDivElement | null,
+): void {
+  if (trigger && trigger.isConnected) {
+    trigger.focus({ preventScroll: true })
+    return
+  }
+  const nextTrigger = stage?.querySelector<HTMLButtonElement>('[data-slot="activity-triage-trigger"]')
+  ;(nextTrigger ?? root)?.focus({ preventScroll: true })
+}
+
 export function ActivitySupervisionView({
   projects,
   now,
@@ -60,8 +89,10 @@ export function ActivitySupervisionView({
   paused = false,
   emptyMessage,
 }: ActivitySupervisionViewProps) {
+  const rootRef = React.useRef<HTMLDivElement | null>(null)
   const [stageEl, setStageEl] = React.useState<HTMLDivElement | null>(null)
-  const [selectedRef, setSelectedRef] = React.useState<{ projectId: string; runId: string; snapshot: DecisionRecord } | null>(null)
+  const selectionSeqRef = React.useRef(0)
+  const [selectedRef, setSelectedRef] = React.useState<{ token: number; projectId: string; runId: string; snapshot: DecisionRecord } | null>(null)
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const [hover, setHover] = React.useState<{ pointer?: string; focus?: string }>({})
   const [announcement, setAnnouncement] = React.useState<string | undefined>(undefined)
@@ -92,19 +123,7 @@ export function ActivitySupervisionView({
   const openRequests = React.useMemo(() => projects.flatMap((project) => project.requests), [projects])
   const openWaits = React.useMemo(() => projects.flatMap((project) => peerWaits(project.tasks)), [projects])
 
-  const ghosts = React.useMemo(() => {
-    const requests: ActivityRequest[] = []
-    const folding: ActivityRequest[] = []
-    const waits: PeerWait[] = []
-    for (const project of projects) {
-      const pWaits = peerWaits(project.tasks)
-      const g = ghostsOf(project, motion, pWaits)
-      requests.push(...g.requests)
-      folding.push(...g.folding)
-      waits.push(...waitGhosts(project.projectId, pWaits, motion))
-    }
-    return { requests, folding, waits }
-  }, [projects, motion])
+  const ghosts = React.useMemo(() => collectProjectGhosts(projects, motion), [projects, motion])
 
   const drawnRequests = React.useMemo(() => [...openRequests, ...ghosts.requests], [openRequests, ghosts.requests])
   const drawnWaits = React.useMemo(() => [...openWaits, ...ghosts.waits], [openWaits, ghosts.waits])
@@ -123,10 +142,10 @@ export function ActivitySupervisionView({
 
   const activeHover = hover.pointer ?? hover.focus
   const linkedIds = React.useMemo(() => {
-    if (!activeHover) return new Set<string>()
-    const projectId = visibleProjects.get(activeHover)
-    if (!projectId) return new Set<string>()
-    return peerConnectedIds(activeHover, requestsByProject.get(projectId) ?? [], waitsByProject.get(projectId) ?? [])
+    const projectId = activeHover ? visibleProjects.get(activeHover) : undefined
+    return projectId && activeHover
+      ? peerConnectedIds(activeHover, requestsByProject.get(projectId) ?? [], waitsByProject.get(projectId) ?? [])
+      : new Set<string>()
   }, [activeHover, requestsByProject, visibleProjects, waitsByProject])
 
   const onHover: OnHover = React.useCallback((source, runId) => {
@@ -150,28 +169,24 @@ export function ActivitySupervisionView({
 
   const handleTriage = React.useCallback((record: DecisionRecord, trigger: HTMLButtonElement | null) => {
     triggerRef.current = trigger
-    setSelectedRef({ projectId: record.projectId, runId: record.runId, snapshot: record })
+    setSelectedRef({ token: ++selectionSeqRef.current, projectId: record.projectId, runId: record.runId, snapshot: record })
   }, [])
 
-  const restoreFocus = React.useCallback(() => {
-    const button = triggerRef.current
-    if (button && button.isConnected) {
-      button.focus({ preventScroll: true })
-      return
-    }
-    // If the resolved item left the queue, focus the next remaining triage trigger without scrolling.
-    const nextTrigger = stageEl?.querySelector<HTMLButtonElement>('[data-slot="activity-triage-trigger"]')
-    nextTrigger?.focus({ preventScroll: true })
-  }, [stageEl])
+  const restoreFocus = React.useCallback(
+    () => restoreTriageFocus(triggerRef.current, stageEl, rootRef.current),
+    [stageEl],
+  )
 
   const handleClose = React.useCallback(() => setSelectedRef(null), [])
-  const handleResolved = React.useCallback(() => setSelectedRef(null), [])
+  const handleResolved = React.useCallback((_runId: string, token?: number) => {
+    setSelectedRef((previous) => (previous && (token === undefined || previous.token === token) ? null : previous))
+  }, [])
 
   const layoutKey = `${grouped}:${attention.map((i) => i.runId).join(',')}:${working.map((i) => i.runId).join(',')}:${edges.map((e) => e.id).join(',')}`
   const isEmpty = attention.length === 0 && working.length === 0
 
   return (
-    <div className="flex min-w-0 flex-col gap-5">
+    <div ref={rootRef} tabIndex={-1} className="flex min-w-0 flex-col gap-5 outline-none">
       <p data-slot="activity-announcement" role="status" aria-live="polite" className="sr-only">
         {announcement ?? ''}
       </p>
@@ -237,6 +252,7 @@ export function ActivitySupervisionView({
       />
       <ActivityTriageDrawer
         record={activeDecision}
+        selectionToken={selectedRef?.token}
         resolved={drawerResolvedExternally}
         now={now}
         onClose={handleClose}

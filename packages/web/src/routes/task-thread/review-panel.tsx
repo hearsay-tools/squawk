@@ -68,7 +68,7 @@ function ReviewActions({ run, projectId, onResolved }: { run: ApiRun; projectId?
   const [notesOpen, setNotesOpen] = useState(false)
   const [manual, setManual] = useState<string | null>(null)
   const finish = useFinishRun(run.id, { projectId, onSuccess: onResolved })
-  const continuation = useContinuationProvider(run)
+  const continuation = useContinuationProvider(run, null, projectId)
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
 
   // Legacy send-back semantics verbatim (web/app.js `data-action="send-back"`): the notes go

@@ -38,6 +38,9 @@ function mockApi() {
     if (path === '/api/v1/accounts') {
       return jsonResponse({ accounts: [] })
     }
+    if (path === '/api/v1/p/acme/config') {
+      return jsonResponse({ defaultRunner: 'claude' })
+    }
     if (path === `/api/v1/p/acme/runs/${ASK_RUN_ID}`) {
       return jsonResponse({
         id: ASK_RUN_ID, title: 'Webhook idempotency', task: 'Webhook', workflow: 'quick-task',

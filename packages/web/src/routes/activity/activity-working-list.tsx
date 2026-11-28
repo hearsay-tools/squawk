@@ -19,10 +19,27 @@ import {
 } from './activity-queue'
 import type { WorkingRecord } from './activity-queue-model'
 import { RunShape, TONE_INK } from './activity-tone'
-import { rootNow, type NowContext } from './now-box'
+import { rootNow, type NowBox, type NowContext } from './now-box'
 import { CheckSegments, Heartbeat } from './now-box-view'
 import { PeerLinks } from './peer-links'
 import type { OnHover } from './use-wait-highlight'
+
+const COMPACT_CHECK_LIMIT = 12
+const BUCKET_SEVERITY = { fail: 4, pending: 3, pass: 2, skipping: 1, cancel: 0 } as const
+
+function compactCheckOverflow(
+  checks: NonNullable<NowBox['checks']>,
+  existing: NowBox['overflow'],
+): NowBox['overflow'] {
+  const omitted = checks.slice(COMPACT_CHECK_LIMIT)
+  if (omitted.length === 0) return existing
+  let count = omitted.length + (existing?.count ?? 0)
+  let bucket = existing?.bucket ?? omitted[0]!.bucket
+  for (const check of omitted) {
+    if (BUCKET_SEVERITY[check.bucket] > BUCKET_SEVERITY[bucket]) bucket = check.bucket
+  }
+  return { count, bucket }
+}
 
 /**
  * Second-tier compact live rows for Live Activity (hearsay-tools/squawk#4376): replaces
@@ -115,9 +132,10 @@ function WorkingRow({
           </span>
           {box.checks && box.checks.length > 0 ? (
             <CheckSegments
-              checks={box.checks.slice(0, 12)}
+              checks={box.checks.slice(0, COMPACT_CHECK_LIMIT)}
+              overflow={compactCheckOverflow(box.checks, box.overflow)}
               passed={passed}
-              className="hidden w-16 shrink-0 items-center gap-[2px] sm:inline-flex"
+              className="hidden w-20 shrink-0 items-center gap-[2px] sm:inline-flex"
             />
           ) : null}
           {box.checkSummary ? <span data-slot="activity-checks-summary" className="sr-only">{box.checkSummary}</span> : null}

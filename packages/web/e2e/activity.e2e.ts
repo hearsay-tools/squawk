@@ -12,6 +12,7 @@ import { AgentBrowser, bootProjectId, squawkCli, fixtureServeEnv } from './agent
 import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './fixture-server'
 import { pollFor, waitForStatus } from './poll'
 import { seedRuns } from './seed-runs'
+import { settleVisual, waitForSettledSample } from './visual-ready'
 // fixture-server starts: 1
 
 /**
@@ -269,15 +270,21 @@ describe('activity view', () => {
     browser.waitForValue<boolean>(`(() => { document.documentElement.classList.remove('light'); return true; })()`)
 
     browser.setViewport(360, 640)
-    const mobile = browser.waitForValue<{ overflow: boolean; toggleHeight: number; arcsHidden: boolean }>(`(() => {
-      const toggle = document.querySelector('[data-slot="activity-group-toggle"]');
-      const arcs = document.querySelector('[data-slot="activity-margin-arcs"]');
-      return {
-        overflow: document.documentElement.scrollWidth > window.innerWidth,
-        toggleHeight: toggle ? Math.round(toggle.getBoundingClientRect().height) : 0,
-        arcsHidden: !arcs || getComputedStyle(arcs).display === 'none',
-      };
-    })()`)
+    settleVisual(browser, '[data-route="activity-global"]', { idle: true })
+    const mobile = waitForSettledSample<{ overflow: boolean; toggleHeight: number; arcsHidden: boolean }>(
+      browser,
+      `(() => {
+        const toggle = document.querySelector('[data-slot="activity-group-toggle"]');
+        const arcs = document.querySelector('[data-slot="activity-margin-arcs"]');
+        return {
+          overflow: document.documentElement.scrollWidth > window.innerWidth,
+          toggleHeight: toggle ? Math.round(toggle.getBoundingClientRect().height) : 0,
+          arcsHidden: !arcs || getComputedStyle(arcs).display === 'none',
+        };
+      })()`,
+      () => true,
+      '[data-route="activity-global"]',
+    )
     expect(mobile.overflow).toBe(false)
     expect(mobile.toggleHeight).toBeGreaterThanOrEqual(44)
     expect(mobile.arcsHidden).toBe(true)

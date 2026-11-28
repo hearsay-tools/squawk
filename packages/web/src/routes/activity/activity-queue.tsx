@@ -115,7 +115,7 @@ const PREVIEW_TONE: Record<DecisionKind, string> = {
 }
 
 function DecisionTitleLink({ href, title, global }: { href: string; title: string; global: boolean }) {
-  const cls = 'hover:underline focus-visible:outline-2 focus-visible:outline-ring'
+  const cls = 'hover:underline focus-visible:outline-2 focus-visible:outline-ring max-md:inline-flex max-md:min-h-11 max-md:items-center pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center'
   return global ? <RouterLink to={href} className={cls}>{title}</RouterLink> : <Link to={href} className={cls}>{title}</Link>
 }
 
@@ -223,7 +223,7 @@ function DecisionRow({
             </span>
           ) : null}
         </div>
-        <p data-slot="activity-main" className={cn('line-clamp-3 break-words text-[13px] leading-relaxed', PREVIEW_TONE[record.kind])}>
+        <p data-slot="activity-main" className={cn('break-words text-[13px] leading-relaxed', PREVIEW_TONE[record.kind])}>
           {record.blockingReason}
         </p>
         {meta || unblocks ? (

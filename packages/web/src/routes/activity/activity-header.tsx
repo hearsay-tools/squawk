@@ -50,7 +50,7 @@ export function GroupByProjectToggle({ grouped, onToggle }: { grouped: boolean; 
       aria-pressed={grouped}
       onClick={onToggle}
       className={cn(
-        'inline-flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11',
+        'inline-flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11 pointer-coarse:min-h-11',
         grouped
           ? 'border-accent-text/60 bg-accent-strong/10 text-foreground'
           : 'border-border bg-card text-muted-foreground hover:text-foreground',
@@ -72,7 +72,7 @@ export function ActivityLegendTrigger() {
           type="button"
           data-slot="activity-legend"
           aria-label="Activity legend"
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11 pointer-coarse:min-h-11"
         >
           <InfoIcon aria-hidden="true" className="size-3.5" />
           <span>Legend</span>

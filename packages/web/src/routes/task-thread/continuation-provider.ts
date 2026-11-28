@@ -79,9 +79,9 @@ function useProviderSources() {
 }
 
 /** One provider decision for every UI path that reopens an existing agent session. */
-export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null = null) {
+export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null = null, projectId?: string) {
   const { registered, providersPending, providersError, providersReady } = useProviderSources()
-  const config = useConfig()
+  const config = useConfig(projectId)
   const untouched = isStoppedBeforeStarting(run)
   // A task saved on a removed runner has no runner of its own: it starts on the project's default
   // runner, and the server needs that runner named (hearsay-tools/squawk#3715).

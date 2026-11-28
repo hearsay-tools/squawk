@@ -37,11 +37,13 @@ import { TONE_INK } from './activity-tone'
 
 export interface ActivityTriageDrawerProps {
   record: DecisionRecord | null
+  /** Monotonic token for the active drawer selection so late completions from a closed task cannot clear a newer selection. */
+  selectionToken?: number | undefined
   /** True when the open task left the Attention queue externally (answered elsewhere, cancelled, or resumed). */
   resolved?: boolean | undefined
   now: number
   onClose: () => void
-  onResolved: (runId: string) => void
+  onResolved: (runId: string, token?: number) => void
   onRestoreFocus?: () => void
 }
 
@@ -346,6 +348,7 @@ function DrawerContentBody({
 
 export function ActivityTriageDrawer({
   record,
+  selectionToken,
   resolved = false,
   now,
   onClose,
@@ -353,12 +356,11 @@ export function ActivityTriageDrawer({
   onRestoreFocus,
 }: ActivityTriageDrawerProps) {
   const queryClient = useQueryClient()
-  const handleResolved = () => {
-    if (!record) return
+  const makeOnResolved = (target: DecisionRecord, token: number | undefined) => () => {
     void queryClient.invalidateQueries({ queryKey: ['workspace', 'activity'] })
-    void queryClient.invalidateQueries({ queryKey: ['activity-triage', 'history-context', record.projectId, record.runId] })
-    void queryClient.invalidateQueries({ queryKey: [record.projectId, 'runs', 'detail', record.runId], exact: true })
-    onResolved(record.runId)
+    void queryClient.invalidateQueries({ queryKey: ['activity-triage', 'history-context', target.projectId, target.runId] })
+    void queryClient.invalidateQueries({ queryKey: [target.projectId, 'runs', 'detail', target.runId], exact: true })
+    onResolved(target.runId, token)
   }
 
   return (
@@ -423,7 +425,11 @@ export function ActivityTriageDrawer({
                   </Button>
                 </div>
               ) : (
-                <DrawerContentBody key={`${record.projectId}:${record.runId}:${record.kind}`} record={record} onResolved={handleResolved} />
+                <DrawerContentBody
+                  key={`${record.projectId}:${record.runId}:${record.kind}:${selectionToken ?? 0}`}
+                  record={record}
+                  onResolved={makeOnResolved(record, selectionToken)}
+                />
               )}
             </div>
           </>
