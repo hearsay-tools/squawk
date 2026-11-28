@@ -629,7 +629,7 @@
   background: var(--muted);
   padding-block: 1.5px;
   padding-inline: 5px;
-  font-size: 0.9em;
+  font-size: max(12px, 0.9em);
 }
 .thread-markdown [data-streamdown='link'] {
   color: var(--link-foreground);
