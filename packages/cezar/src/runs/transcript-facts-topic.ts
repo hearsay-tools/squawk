@@ -9,8 +9,8 @@ import type { TranscriptFactsPort } from './ports.ts';
 import { familyRootOf, isLiveRecord } from './run-row.ts';
 import { emptyFacts, TranscriptFactsIndex, type TranscriptFacts } from './transcript-facts.ts';
 
-/** Runs (and conversation roots, one family query each) the open-time facts warm-up enumerates
- *  per event-loop turn (hearsay-tools/cezarion#949), so each slice stays a few milliseconds. */
+/** Past this many runs, the open-time facts warm-up yields before and after its scans
+ *  (hearsay-tools/cezarion#949), so each slice stays a few milliseconds. */
 const WARM_IDS_PER_SLICE = 100;
 
 /** What the topic asks of the store; no import of `store.ts`. */
@@ -21,6 +21,8 @@ export interface TranscriptFactsState {
   isOpen(): boolean;
   readonly held: ReadonlyMap<string, RunRecord>;
   listFamilyRunIds(rootId: string): string[];
+  /** `listFamilyRunIds` of each root, with one SQLite read for all of them. */
+  listFamiliesRunIds(rootIds: readonly string[]): string[][];
   listConversationRootIds(): string[];
   listRunIds(): string[];
 }
@@ -79,19 +81,18 @@ export class RunTranscriptFacts implements TranscriptFactsPort {
       if (!this.state.isOpen()) return;
       const ids = new Set(this.recoveryFactIds());
       // hearsay-tools/cezarion#949: this microtask ends open()'s synchronous slice, and on a
-      // large history the JSON scan for conversation roots plus one family query per root cost
-      // as much again. Past one slice's worth of runs, yield before the scan and between root
-      // batches; a small store (every unit test) still registers in this one microtask.
+      // large history the JSON scan for conversation roots cost as much again. Past one slice's
+      // worth of runs, yield before the scan and after it; a small store (every unit test) still
+      // registers in this one microtask. All families come from one read: one query per root
+      // cost 700 statements in the cold-history probe (hearsay-tools/squawk#3355).
       const large = this.state.listRunIds().length > WARM_IDS_PER_SLICE;
       const turn = async (): Promise<boolean> => {
         await new Promise<void>(resolve => setImmediate(resolve));
         return this.state.isOpen();
       };
       if (large && !await turn()) return;
-      const roots = this.state.listConversationRootIds();
-      for (let i = 0; i < roots.length; i++) {
-        if (large && i > 0 && i % WARM_IDS_PER_SLICE === 0 && !await turn()) return;
-        for (const id of this.state.listFamilyRunIds(roots[i]!)) ids.add(id);
+      for (const family of this.state.listFamiliesRunIds(this.state.listConversationRootIds())) {
+        for (const id of family) ids.add(id);
       }
       if (large && !await turn()) return;
       // Re-list after the yields: a run deleted meanwhile must not be registered again.
