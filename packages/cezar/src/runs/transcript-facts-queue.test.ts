@@ -314,13 +314,15 @@ it('the worker commits a rebuilt sidecar that the main thread only records', asy
   seed('a');
   const write = vi.spyOn(fs, 'writeFileSync');
   syncBuiltinESMExports();
+  // Other code in this test process may write elsewhere; only writes under this data dir count.
+  const mainWrites = () => write.mock.calls.filter(([path]) => String(path).startsWith(dir));
   const reader = index();
   expect((await reader.ready('a'))?.projectionIds).toEqual(['a']);
-  expect(write).not.toHaveBeenCalled();
+  expect(mainWrites()).toEqual([]);
   expect(JSON.parse(readFileSync(historyPaths(dir, 'a').facts, 'utf8')).projectionIds).toEqual(['a']);
   expect(readdirSync(join(dir, 'runs')).sort()).toEqual(['a.facts.json', 'a.ndjson']);
   reader.flush();
-  expect(write).not.toHaveBeenCalled();
+  expect(mainWrites()).toEqual([]);
 });
 
 it('idle worker exits and a later cold demand lazily creates another', async () => {
