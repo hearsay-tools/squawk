@@ -17,7 +17,7 @@ import { WorktreesPanel } from './worktrees-panel'
  * the empty-reclaim toast follow the listing's own flags (`reclaimable`, `pastKeep`).
  */
 
-let requests: Array<{ method: string; url: string }> = []
+let requests: Array<{ method: string; url: string; body?: unknown }> = []
 
 function serve(data: WorktreesResponse, reclaim: { reclaimed: string[] } = { reclaimed: ['r1'] }) {
   requests = []
@@ -28,7 +28,8 @@ function serve(data: WorktreesResponse, reclaim: { reclaimed: string[] } = { rec
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
       const method = init?.method ?? 'GET'
-      requests.push({ method, url })
+      const body = typeof init?.body === 'string' && init.body ? JSON.parse(init.body) : undefined
+      requests.push({ method, url, body })
       if (url === '/api/v1/open-targets') return json({ targets: [{ id: 'finder', label: 'Files', icon: 'folder' }] })
       if (url.endsWith('/open-in') && method === 'POST') return json({ opened: true, path: '/tmp/worktree' })
       if (url === '/api/v1/worktrees' && method === 'GET') return json(data)
@@ -66,6 +67,7 @@ function worktree(partial: Partial<WorktreeInfo> & Pick<WorktreeInfo, 'runId' | 
     finishedAt: '2026-07-01T00:00:00Z',
     reclaimable: false,
     pastKeep: false,
+    reclaimBlocker: null,
     ...partial,
   }
 }
@@ -88,6 +90,7 @@ const sample: WorktreesResponse = {
       finishedAt: '2026-07-01T00:00:00Z',
       reclaimable: true,
       pastKeep: false,
+      reclaimBlocker: null,
     },
     {
       runId: 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb',
@@ -98,6 +101,7 @@ const sample: WorktreesResponse = {
       finishedAt: null,
       reclaimable: false,
       pastKeep: false,
+      reclaimBlocker: null,
     },
   ],
   totalBytes: null,
@@ -290,5 +294,116 @@ describe('Git → Cleanup: worktrees panel (#483)', () => {
     await waitFor(() => expect(document.querySelector('[data-slot="toast"]')).not.toBeNull())
     const message = document.querySelector('[data-slot="toast"]')?.textContent ?? ''
     expect(message).toBe(`Reclaimed 1 worktree (branch kept) · ${past.length - 1} kept: uncommitted work or in use`)
+  })
+
+  it('labels blocked past-keep worktrees instead of reclaimable, disables clean Reclaim now, and lets Discard & reclaim force-reclaim them', async () => {
+    const blocked: WorktreesResponse = {
+      worktrees: [
+        worktree({
+          runId: 'kept-clean-1111-4111-8111-111111111111',
+          title: 'recent clean task',
+          reclaimable: true,
+          pastKeep: false,
+          sizeBytes: 5 * 1024 * 1024,
+        }),
+        worktree({
+          runId: 'dirty-past-2222-4222-8222-222222222222',
+          title: 'dirty old task',
+          reclaimable: true,
+          pastKeep: true,
+          reclaimBlocker: { kind: 'dirty', uncommittedFiles: 3, detachedHead: false },
+          sizeBytes: 10 * 1024 * 1024,
+        }),
+        worktree({
+          runId: 'detached-3333-4333-8333-333333333333',
+          title: 'detached old task',
+          reclaimable: true,
+          pastKeep: true,
+          reclaimBlocker: { kind: 'detached-head' },
+          sizeBytes: 5 * 1024 * 1024,
+        }),
+        worktree({
+          runId: 'submodule-5555-4555-8555-555555555555',
+          title: 'submodule old task',
+          reclaimable: true,
+          pastKeep: true,
+          reclaimBlocker: { kind: 'submodules' },
+          sizeBytes: 3 * 1024 * 1024,
+        }),
+        worktree({
+          runId: 'broken-4444-4444-8444-444444444444',
+          title: 'broken old task',
+          reclaimable: true,
+          pastKeep: true,
+          reclaimBlocker: { kind: 'invalid' },
+          sizeBytes: 2 * 1024 * 1024,
+        }),
+      ],
+      totalBytes: 25 * 1024 * 1024,
+      keep: 1,
+    }
+    serve(blocked, {
+      reclaimed: [
+        'dirty-past-2222-4222-8222-222222222222',
+        'detached-3333-4333-8333-333333333333',
+        'submodule-5555-4555-8555-555555555555',
+        'broken-4444-4444-8444-444444444444',
+      ],
+    })
+    renderPanel()
+    await waitFor(() => expect(rows()).toHaveLength(5))
+    expect(states()).toEqual(['kept · newest 1', '3 uncommitted', 'detached HEAD', 'has submodules', 'broken worktree'])
+    expect(reclaimNow()?.disabled).toBe(true)
+    expect(reclaimNow()?.textContent).toBe('Reclaim now')
+
+    const discardBtn = document.querySelector<HTMLButtonElement>('[data-action="worktrees-discard-reclaim"]')
+    expect(discardBtn?.textContent).toBe('Discard & reclaim 20 MB')
+    fireEvent.click(discardBtn!)
+    const discardConfirm = await waitFor(() => {
+      const btn = document.querySelector<HTMLButtonElement>('[data-action="worktrees-discard-confirm"]')
+      expect(btn).not.toBeNull()
+      return btn!
+    })
+    fireEvent.click(discardConfirm)
+    await waitFor(() => expect(posts(/\/api\/v1\/worktrees\/reclaim$/)).toHaveLength(1))
+    expect(posts(/\/api\/v1\/worktrees\/reclaim$/)[0]?.body).toEqual({
+      discardWork: true,
+      runIds: [
+        'dirty-past-2222-4222-8222-222222222222',
+        'detached-3333-4333-8333-333333333333',
+        'submodule-5555-4555-8555-555555555555',
+        'broken-4444-4444-8444-444444444444',
+      ],
+    })
+  })
+
+  it('confirms per-row discard for a blocked worktree before sending discardWork: true', async () => {
+    const blockedOne: WorktreesResponse = {
+      worktrees: [
+        worktree({
+          runId: 'dirty-one-1111-4111-8111-111111111111',
+          title: 'dirty task',
+          reclaimable: true,
+          pastKeep: true,
+          reclaimBlocker: { kind: 'dirty', uncommittedFiles: 2, detachedHead: false },
+          sizeBytes: 8 * 1024 * 1024,
+        }),
+      ],
+      totalBytes: 8 * 1024 * 1024,
+      keep: 1,
+    }
+    serve(blockedOne)
+    renderPanel()
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    const rowBtn = document.querySelector<HTMLButtonElement>('[data-action="worktree-reclaim"]')!
+    expect(rowBtn.getAttribute('aria-label')).toBe('Discard changes and reclaim the worktree of dirty task (branch kept)')
+    fireEvent.click(rowBtn)
+    // Dialog opens and does not send until confirmed.
+    await waitFor(() => expect(document.querySelector('[data-action="worktree-discard-confirm"]')).not.toBeNull())
+    expect(posts(/\/worktrees\/dirty-one-1111-4111-8111-111111111111\/reclaim$/)).toHaveLength(0)
+
+    fireEvent.click(document.querySelector<HTMLButtonElement>('[data-action="worktree-discard-confirm"]')!)
+    await waitFor(() => expect(posts(/\/worktrees\/dirty-one-1111-4111-8111-111111111111\/reclaim$/)).toHaveLength(1))
+    expect(posts(/\/worktrees\/dirty-one-1111-4111-8111-111111111111\/reclaim$/)[0]?.body).toEqual({ discardWork: true })
   })
 })

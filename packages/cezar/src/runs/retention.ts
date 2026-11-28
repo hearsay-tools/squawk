@@ -169,6 +169,12 @@ export interface ReclaimOptions {
   /** The workspace preview host (#781): the default reclaimer releases the run's preview once the
    *  removal goes ahead. */
   previewHost?: { release(runId: string): Promise<void> } | undefined;
+  /** Discard uncommitted changes, detached-HEAD commits, or broken non-owned directories when
+   *  explicitly requested by the user. Never set by automatic retention; the branch is still kept. */
+  discardWork?: boolean | undefined;
+  /** Restrict bulk reclaim to these confirmed run ids (required when `discardWork` is true so a
+   *  task finishing between confirmation and submission cannot widen a destructive discard). */
+  runIds?: readonly string[] | undefined;
 }
 
 /**
@@ -206,11 +212,14 @@ export async function reclaimWorktrees(
   const reclaimed: string[] = [];
   // A real store lists every worker; a structural test store answers from the candidates.
   const workersOf = (store as RealStoreMembers).queries?.listWorkersOf?.bind(store.queries);
+  if (opts.discardWork && !opts.runIds) return [];
   const selected = selectReclaimableWorktrees(runs, keep, (parentId) => store.getRun(parentId), workersOf);
+  const allowedIds = opts.runIds ? new Set(opts.runIds) : undefined;
+  const scoped = allowedIds ? selected.filter((id) => allowedIds.has(id)) : selected;
   const readonly = (id: string) => Boolean(byId.get(id) && readOnlyWorktree(repoRoot, store, byId.get(id)!));
-  const skipped = selected.filter(readonly).length;
+  const skipped = scoped.filter(readonly).length;
   if (skipped) console.info(`[hsq] Worktree retention skipped ${skipped} read-only fallback item(s) under ${projectPaths(repoRoot).reads[1]}.`);
-  for (const id of selected.filter(id => !readonly(id))) {
+  for (const id of scoped.filter(id => !readonly(id))) {
     const run = byId.get(id);
     if (run && (await reclaimWorktree(repoRoot, store, run, opts))) reclaimed.push(id);
   }
@@ -242,7 +251,7 @@ export async function reclaimWorktree(
   const assertSafe = cleanupSafety(repoRoot, real, run);
   const remove = opts.remove ?? ((root, path) =>
     releaseThenRemoveWorktree({ previewHost: opts.previewHost }, run.id, root, path, undefined,
-      { reclaimOwnedDirectory: true, onlyClean: true, assertCurrent: assertSafe }));
+      { reclaimOwnedDirectory: true, onlyClean: !opts.discardWork, assertCurrent: assertSafe }));
   if (!run.worktreePath) return null;
   const release = opts.claim ? opts.claim(run) : () => undefined;
   if (!release) return null; // in use since it was selected

@@ -514,11 +514,11 @@ export async function getWorktrees(
 
 /** "Reclaim now": force the retention enforcer to reclaim over-limit finished worktrees
  *  (directory only — branch kept). Returns the reclaimed run ids. Always 200. */
-export async function reclaimWorktrees(): Promise<ReclaimWorktreesResponse> {
+export async function reclaimWorktrees(opts?: { discardWork: true; runIds: string[] }): Promise<ReclaimWorktreesResponse> {
   return unwrap(
     await cez.api.v1.p[':projectId'].worktrees.reclaim.$post({
       param: { projectId: queryScope() },
-      json: {},
+      json: opts ? { discardWork: true, runIds: opts.runIds } : {},
     }),
     '/worktrees/reclaim',
   )
@@ -526,10 +526,11 @@ export async function reclaimWorktrees(): Promise<ReclaimWorktreesResponse> {
 
 /** Cleanup's per-row Reclaim (issue 08 §B4): one finished run's worktree DIRECTORY, by
  *  retention's own rule. The branch is kept. 409 while the run is live or at review. */
-export async function reclaimRunWorktree(runId: string): Promise<ReclaimWorktreeResponse> {
+export async function reclaimRunWorktree(runId: string, opts?: { discardWork?: boolean }): Promise<ReclaimWorktreeResponse> {
   return unwrap(
     await cez.api.v1.p[':projectId'].worktrees[':runId'].reclaim.$post({
       param: { projectId: queryScope(), runId: encodeURIComponent(runId) },
+      json: opts?.discardWork ? { discardWork: true } : {},
     }),
     `/worktrees/${encodeURIComponent(runId)}/reclaim`,
   )
