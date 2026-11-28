@@ -323,6 +323,14 @@ describe('Git → Cleanup: worktrees panel (#483)', () => {
           sizeBytes: 5 * 1024 * 1024,
         }),
         worktree({
+          runId: 'submodule-5555-4555-8555-555555555555',
+          title: 'submodule old task',
+          reclaimable: true,
+          pastKeep: true,
+          reclaimBlocker: { kind: 'submodules' },
+          sizeBytes: 3 * 1024 * 1024,
+        }),
+        worktree({
           runId: 'broken-4444-4444-8444-444444444444',
           title: 'broken old task',
           reclaimable: true,
@@ -331,24 +339,25 @@ describe('Git → Cleanup: worktrees panel (#483)', () => {
           sizeBytes: 2 * 1024 * 1024,
         }),
       ],
-      totalBytes: 22 * 1024 * 1024,
+      totalBytes: 25 * 1024 * 1024,
       keep: 1,
     }
     serve(blocked, {
       reclaimed: [
         'dirty-past-2222-4222-8222-222222222222',
         'detached-3333-4333-8333-333333333333',
+        'submodule-5555-4555-8555-555555555555',
         'broken-4444-4444-8444-444444444444',
       ],
     })
     renderPanel()
-    await waitFor(() => expect(rows()).toHaveLength(4))
-    expect(states()).toEqual(['kept · newest 1', '3 uncommitted', 'detached HEAD', 'broken worktree'])
+    await waitFor(() => expect(rows()).toHaveLength(5))
+    expect(states()).toEqual(['kept · newest 1', '3 uncommitted', 'detached HEAD', 'has submodules', 'broken worktree'])
     expect(reclaimNow()?.disabled).toBe(true)
     expect(reclaimNow()?.textContent).toBe('Reclaim now')
 
     const discardBtn = document.querySelector<HTMLButtonElement>('[data-action="worktrees-discard-reclaim"]')
-    expect(discardBtn?.textContent).toBe('Discard & reclaim 17 MB')
+    expect(discardBtn?.textContent).toBe('Discard & reclaim 20 MB')
     fireEvent.click(discardBtn!)
     const discardConfirm = await waitFor(() => {
       const btn = document.querySelector<HTMLButtonElement>('[data-action="worktrees-discard-confirm"]')
@@ -357,7 +366,15 @@ describe('Git → Cleanup: worktrees panel (#483)', () => {
     })
     fireEvent.click(discardConfirm)
     await waitFor(() => expect(posts(/\/api\/v1\/worktrees\/reclaim$/)).toHaveLength(1))
-    expect(posts(/\/api\/v1\/worktrees\/reclaim$/)[0]?.body).toEqual({ discardWork: true })
+    expect(posts(/\/api\/v1\/worktrees\/reclaim$/)[0]?.body).toEqual({
+      discardWork: true,
+      runIds: [
+        'dirty-past-2222-4222-8222-222222222222',
+        'detached-3333-4333-8333-333333333333',
+        'submodule-5555-4555-8555-555555555555',
+        'broken-4444-4444-8444-444444444444',
+      ],
+    })
   })
 
   it('confirms per-row discard for a blocked worktree before sending discardWork: true', async () => {

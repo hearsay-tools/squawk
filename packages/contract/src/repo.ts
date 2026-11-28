@@ -317,6 +317,9 @@ export const worktreeReclaimBlockerSchema = z.discriminatedUnion('kind', [
     kind: z.literal('detached-head'),
   }),
   z.object({
+    kind: z.literal('submodules'),
+  }),
+  z.object({
     kind: z.literal('invalid'),
   }),
 ]);

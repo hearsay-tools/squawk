@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import type { Capabilities } from '@open-mercato/cezar-contract';
 import { commitQuerySchema } from '@open-mercato/cezar-contract/query-requests';
 import { deleteBranchesInputSchema, repoPullInputSchema } from '@open-mercato/cezar-contract/repo';
-import { reclaimBodySchema, reclaimRunParamsSchema, repoBranchSchema } from '@open-mercato/cezar-contract/repo-requests';
+import { reclaimBodySchema, reclaimRunParamsSchema, reclaimWorktreeBodySchema, repoBranchSchema } from '@open-mercato/cezar-contract/repo-requests';
 import { openProjectInSchema } from '@open-mercato/cezar-contract/workspace';
 import { loadConfig, resolveWorktreeRetention } from '../config.ts';
 import type { Home } from '../home/home.ts';
@@ -107,11 +107,11 @@ export function createWorktreesRoutes(deps: WorktreesRouteDeps) {
 
     .post('/worktrees/reclaim', jsonZodValidator(() => reclaimBodySchema, { absent: ({}), message: 'invalid body' }), async (c) => {
       const { root: repoRoot, store, manager } = c.get('project');
-      const { discardWork } = c.req.valid('json');
+      const body = c.req.valid('json');
       const reclaimed = await reclaimWorktrees(repoRoot, store, await resolveWorktreeRetention(repoRoot, deps.home), {
         claim: (run) => manager.claimWorktreeReclaim(run.id),
         previewHost: deps.previewHost,
-        discardWork,
+        ...(body.discardWork ? { discardWork: true, runIds: body.runIds } : {}),
       });
       if (reclaimed.length > 0) {
         forgetRepoBranches(repoRoot);
@@ -123,7 +123,7 @@ export function createWorktreesRoutes(deps: WorktreesRouteDeps) {
     .post(
       '/worktrees/:runId/reclaim',
       paramZodValidator(reclaimRunParamsSchema),
-      jsonZodValidator(() => reclaimBodySchema, { absent: ({}), message: 'invalid body' }),
+      jsonZodValidator(() => reclaimWorktreeBodySchema, { absent: ({}), message: 'invalid body' }),
       async (c) => {
         const { root: repoRoot, store } = c.get('project');
         const { discardWork } = c.req.valid('json');

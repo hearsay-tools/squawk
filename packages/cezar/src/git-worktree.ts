@@ -455,11 +455,27 @@ async function isWorktreeRoot(
   return top.ok && canonicalPath(top.stdout.trim()) === canonicalPath(worktreePath);
 }
 
+/** True when the worktree's index contains an initialized submodule (populated gitlink dir),
+ *  which causes Git's unforced `worktree remove` to refuse even a clean checkout. */
+async function hasInitializedSubmodule(worktreePath: string): Promise<boolean> {
+  const listed = await git(worktreePath, ['--no-optional-locks', 'ls-files', '-s', '-z']);
+  if (!listed.ok) return false;
+  for (const entry of listed.stdout.split('\0')) {
+    if (!entry.startsWith('160000 ')) continue;
+    const tab = entry.indexOf('\t');
+    if (tab < 0) continue;
+    const contents = await readdir(join(worktreePath, entry.slice(tab + 1))).catch(() => [] as string[]);
+    if (contents.length > 0) return true;
+  }
+  return false;
+}
+
 /**
  * Inspect whether a finished worktree directory would be refused by a clean reclaim
  * (`removeCleanWorktree`): uncommitted files, a detached HEAD with no branch/remote ref holding
- * its commit, or an unregistered/broken directory (missing `.git`). Returns `null` when clean
- * and ref-backed (or when the directory no longer exists). Best-effort: never throws.
+ * its commit, initialized submodules, or an unregistered/broken directory (missing `.git`).
+ * Returns `null` when clean and ref-backed (or when the directory no longer exists).
+ * Best-effort: never throws.
  */
 export async function inspectWorktreeReclaimBlocker(
   repoRoot: string,
@@ -482,17 +498,19 @@ export async function inspectWorktreeReclaimBlocker(
   }
   if (uncommittedFiles > 0) return { kind: 'dirty', uncommittedFiles, detachedHead };
   if (detachedHead) return { kind: 'detached-head' };
+  if (await hasInitializedSubmodule(worktreePath)) return { kind: 'submodules' };
   return null;
 }
 
+/** Make directories writable so POSIX unlink can remove entries inside read-only fixtures.
+ *  Never chmod regular files: hard-linked files (such as pnpm node_modules) share their inode
+ *  mode with paths outside this worktree. */
 async function makeTreeWritable(dir: string): Promise<void> {
   await chmod(dir, 0o700).catch(() => undefined);
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => [] as Dirent[]);
   for (const entry of entries) {
     if (entry.isSymbolicLink()) continue;
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) await makeTreeWritable(full);
-    else await chmod(full, 0o600).catch(() => undefined);
+    if (entry.isDirectory()) await makeTreeWritable(join(dir, entry.name));
   }
 }
 

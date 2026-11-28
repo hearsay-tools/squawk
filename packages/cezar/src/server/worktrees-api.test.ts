@@ -5,7 +5,7 @@ import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, linkSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 
 vi.mock('node:fs/promises', async importOriginal => {
@@ -76,6 +76,7 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
         reclaimBlocker:
           | { kind: 'dirty'; uncommittedFiles: number; detachedHead: boolean }
           | { kind: 'detached-head' }
+          | { kind: 'submodules' }
           | { kind: 'invalid' }
           | null;
       }>;
@@ -369,13 +370,17 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
       await run('git', ['add', '-A'], { cwd: detachedPath });
       await run('git', [...GIT_ID, 'commit', '-q', '-m', 'detached work'], { cwd: detachedPath });
 
-      // Simulate an unregistered leftover directory with a read-only nested directory (missing .git).
+      // Simulate an unregistered leftover directory with a read-only nested directory (missing .git)
+      // containing a hard-linked executable from outside the worktree (must keep 0o755 on unlink).
       // Also make the parent repo dirty to prove blocker inspection does not walk up to repoRoot.
       writeFileSync(join(repoRoot, 'parent-untracked.txt'), 'main repo file\n');
+      const sharedExec = join(repoRoot, 'shared-bin.sh');
+      writeFileSync(sharedExec, '#!/bin/sh\necho ok\n');
+      chmodSync(sharedExec, 0o755);
       rmSync(join(brokenPath, '.git'), { force: true });
       const roDir = join(brokenPath, 'readonly-fixture');
       mkdirSync(roDir, { recursive: true });
-      writeFileSync(join(roDir, 'file.txt'), 'locked\n');
+      linkSync(sharedExec, join(roDir, 'shared-bin.sh'));
       chmodSync(roDir, 0o555);
 
       try {
@@ -386,7 +391,7 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
         expect(listed[keptId]!.reclaimBlocker).toBeNull();
         expect(listed[reviewId]!.reclaimBlocker).toBeNull();
 
-        // Single-row discardWork reclaims the broken/read-only directory and keeps its branch.
+        // Single-row discardWork reclaims the broken/read-only directory, keeps its branch, and preserves hard-linked inode mode.
         const brokenBranch = store.getRun(brokenId)!.branch!;
         const singleRes = await apiRequest(app, `/api/v1/worktrees/${brokenId}/reclaim`, {
           method: 'POST',
@@ -396,6 +401,7 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
         expect(singleRes.status).toBe(200);
         expect(existsSync(brokenPath)).toBe(false);
         expect(await branchExists(brokenBranch)).toBe(true);
+        expect(statSync(sharedExec).mode & 0o777).toBe(0o755);
 
         // discardWork still refuses live/review runs.
         const reviewRes = await apiRequest(app, `/api/v1/worktrees/${reviewId}/reclaim`, {
@@ -405,25 +411,75 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
         });
         expect(reviewRes.status).toBe(409);
 
-        // Bulk discardWork reclaims the remaining past-keep dirty + detached worktrees, sparing kept and review.
+        // Bulk discardWork without explicit runIds is rejected at validation (400).
+        const missingIdsRes = await apiRequest(app, '/api/v1/worktrees/reclaim', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ discardWork: true }),
+        });
+        expect(missingIdsRes.status).toBe(400);
+
+        // Make the kept worktree dirty, then finish a newer task between listing and submission so
+        // `keptId` also falls past keep=1; bulk discard must reclaim ONLY the confirmed runIds.
+        writeFileSync(join(store.getRun(keptId)!.worktreePath!, 'kept-dirty.txt'), 'do not discard\n');
+        const newerId = await seed(randomUUID(), 'done', '2026-07-10T00:00:00Z');
+
         const dirtyBranch = store.getRun(dirtyId)!.branch!;
         const detachedBranch = store.getRun(detachedId)!.branch!;
         const bulkRes = await apiRequest(app, '/api/v1/worktrees/reclaim', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ discardWork: true }),
+          body: JSON.stringify({ discardWork: true, runIds: [dirtyId, detachedId] }),
         });
         expect(bulkRes.status).toBe(200);
         const { reclaimed } = (await bulkRes.json()) as { reclaimed: string[] };
         expect(new Set(reclaimed)).toEqual(new Set([dirtyId, detachedId]));
         expect(existsSync(dirtyPath)).toBe(false);
         expect(existsSync(detachedPath)).toBe(false);
-        expect(existsSync(store.getRun(keptId)!.worktreePath!)).toBe(true);
+        expect(existsSync(join(store.getRun(keptId)!.worktreePath!, 'kept-dirty.txt'))).toBe(true);
+        expect(existsSync(store.getRun(newerId)!.worktreePath!)).toBe(true);
         expect(existsSync(store.getRun(reviewId)!.worktreePath!)).toBe(true);
         expect(await branchExists(dirtyBranch)).toBe(true);
         expect(await branchExists(detachedBranch)).toBe(true);
       } finally {
         if (existsSync(roDir)) chmodSync(roDir, 0o755);
+      }
+    });
+
+    it('detects a clean initialized submodule as a reclaim blocker and allows explicit discardWork reclaim', async () => {
+      const subRepo = await mkdtemp(join(repoRoot, '..', 'cez-submod-'));
+      try {
+        await run('git', ['init', '-b', 'main'], { cwd: subRepo });
+        writeFileSync(join(subRepo, 'sub.txt'), 'sub\n');
+        await run('git', ['add', '-A'], { cwd: subRepo });
+        await run('git', [...GIT_ID, 'commit', '-q', '-m', 'init sub'], { cwd: subRepo });
+
+        const id = await seed(randomUUID(), 'done', '2026-07-01T00:00:00Z');
+        const wtPath = store.getRun(id)!.worktreePath!;
+        const branch = store.getRun(id)!.branch!;
+        await run('git', ['-c', 'protocol.file.allow=always', 'submodule', 'add', subRepo, 'sub'], { cwd: wtPath });
+        await run('git', [...GIT_ID, 'commit', '-q', '-m', 'add submodule'], { cwd: wtPath });
+
+        const listed = Object.fromEntries((await getWorktrees()).worktrees.map((w) => [w.runId, w]));
+        expect(listed[id]!.reclaimBlocker).toEqual({ kind: 'submodules' });
+
+        // Clean reclaim fails with 409 naming submodules.
+        const cleanRes = await reclaimOne(id);
+        expect(cleanRes.status).toBe(409);
+        expect(((await cleanRes.json()) as { error: string }).error).toContain('submodules');
+        expect(existsSync(wtPath)).toBe(true);
+
+        // Explicit discardWork force-removes the submodule checkout while keeping the branch.
+        const forceRes = await apiRequest(app, `/api/v1/worktrees/${id}/reclaim`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ discardWork: true }),
+        });
+        expect(forceRes.status).toBe(200);
+        expect(existsSync(wtPath)).toBe(false);
+        expect(await branchExists(branch)).toBe(true);
+      } finally {
+        rmSync(subRepo, { recursive: true, force: true });
       }
     });
 

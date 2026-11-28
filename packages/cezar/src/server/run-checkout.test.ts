@@ -345,6 +345,7 @@ describe('reclaim failure detail after release', () => {
     { blocker: { kind: 'dirty' as const, uncommittedFiles: 1, detachedHead: false }, error: 'the worktree has 1 uncommitted file that exist nowhere else — commit or discard them first' },
     { blocker: { kind: 'dirty' as const, uncommittedFiles: 2, detachedHead: false }, error: 'the worktree has 2 uncommitted files that exist nowhere else — commit or discard them first' },
     { blocker: { kind: 'detached-head' as const }, error: 'the worktree is on a detached HEAD whose commit is on no branch — save it to a branch or discard it first' },
+    { blocker: { kind: 'submodules' as const }, error: 'the worktree contains initialized submodules — reclaim with discardWork to remove it' },
     { blocker: { kind: 'invalid' as const }, error: 'the directory is not a registered Git worktree — inspect or discard it first' },
   ])('reports $error after the caller releases', async ({ blocker, error }) => {
     const { host, release } = claimedHost(states[1]!);

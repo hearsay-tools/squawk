@@ -31,6 +31,7 @@ function sumSizeBytes(rows: readonly WorktreeInfo[]): number | null {
 function blockerLabel(blocker: WorktreeReclaimBlocker): string {
   if (blocker.kind === 'dirty') return `${blocker.uncommittedFiles} uncommitted`
   if (blocker.kind === 'detached-head') return 'detached HEAD'
+  if (blocker.kind === 'submodules') return 'has submodules'
   return 'broken worktree'
 }
 
@@ -40,16 +41,19 @@ function blockerDetail(blocker: WorktreeReclaimBlocker): string {
     return blocker.detachedHead ? `${files} and a detached HEAD on no branch` : files
   }
   if (blocker.kind === 'detached-head') return 'a detached HEAD whose commit is on no branch'
+  if (blocker.kind === 'submodules') return 'initialized submodules that Git will not remove without force'
   return 'an unregistered or broken Git worktree directory'
 }
 
 function blockedReasonsSummary(rows: readonly WorktreeInfo[]): string {
   const dirty = rows.some((row) => row.reclaimBlocker?.kind === 'dirty')
   const detached = rows.some((row) => row.reclaimBlocker?.kind === 'detached-head' || (row.reclaimBlocker?.kind === 'dirty' && row.reclaimBlocker.detachedHead))
+  const submodules = rows.some((row) => row.reclaimBlocker?.kind === 'submodules')
   const invalid = rows.some((row) => row.reclaimBlocker?.kind === 'invalid')
   const parts = [
     ...(dirty ? ['uncommitted work'] : []),
     ...(detached ? ['a detached HEAD'] : []),
+    ...(submodules ? ['initialized submodules'] : []),
     ...(invalid ? ['a broken checkout'] : []),
   ]
   if (parts.length <= 1) return parts[0] ?? 'uncommitted work'
@@ -131,37 +135,39 @@ function WorktreesBlockedBanner({
 }
 
 function WorktreesDialogs({
-  confirmMode,
-  onCloseConfirm,
+  confirmClean,
+  onCloseClean,
   cleanCount,
   cleanBytes,
-  allCount,
-  allBytes,
-  blockedCount,
   reclaimLabel,
-  discardLabel,
-  onConfirmBulk,
+  onConfirmClean,
+  discardBatch,
+  onCloseDiscardBatch,
+  onConfirmDiscardBatch,
   discardRow,
   onCloseRow,
   onConfirmRow,
 }: {
-  confirmMode: 'clean' | 'discard' | null
-  onCloseConfirm: () => void
+  confirmClean: boolean
+  onCloseClean: () => void
   cleanCount: number
   cleanBytes: number | null
-  allCount: number
-  allBytes: number | null
-  blockedCount: number
   reclaimLabel: string
-  discardLabel: string
-  onConfirmBulk: (discardWork: boolean) => void
+  onConfirmClean: () => void
+  discardBatch: readonly WorktreeInfo[] | null
+  onCloseDiscardBatch: () => void
+  onConfirmDiscardBatch: (rows: readonly WorktreeInfo[]) => void
   discardRow: WorktreeInfo | null
   onCloseRow: () => void
   onConfirmRow: (row: WorktreeInfo) => void
 }) {
+  const batchBytes = discardBatch ? sumSizeBytes(discardBatch) : null
+  const batchBlockedCount = discardBatch ? discardBatch.filter((row) => row.reclaimBlocker !== null).length : 0
+  const batchHasClean = discardBatch ? discardBatch.some((row) => !row.reclaimBlocker) : false
+  const batchLabel = discardBatch ? formatDiscardLabel(discardBatch.length, batchBytes, batchHasClean) : ''
   return (
     <>
-      <AlertDialog open={confirmMode === 'clean'} onOpenChange={(open) => { if (!open) onCloseConfirm() }}>
+      <AlertDialog open={confirmClean} onOpenChange={(open) => { if (!open) onCloseClean() }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Reclaim old worktrees?</AlertDialogTitle>
@@ -173,22 +179,26 @@ function WorktreesDialogs({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep them</AlertDialogCancel>
-            <AlertDialogAction data-action="worktrees-confirm" onClick={() => onConfirmBulk(false)}>
+            <AlertDialogAction data-action="worktrees-confirm" onClick={onConfirmClean}>
               {reclaimLabel}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={confirmMode === 'discard'} onOpenChange={(open) => { if (!open) onCloseConfirm() }}>
+      <AlertDialog open={discardBatch !== null} onOpenChange={(open) => { if (!open) onCloseDiscardBatch() }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Discard changes and reclaim worktrees?</AlertDialogTitle>
             <AlertDialogDescription>
-              {allCount} finished worktree{allCount === 1 ? '' : 's'} beyond the keep limit
-              {allBytes ? ` (${formatMem(allBytes)})` : ''} will be reclaimed now.{' '}
-              Uncommitted files and detached-HEAD commits in {blockedCount} blocked checkout{blockedCount === 1 ? '' : 's'} will be permanently discarded.
-              Each task’s branch is kept.
+              {discardBatch ? (
+                <>
+                  {discardBatch.length} finished worktree{discardBatch.length === 1 ? '' : 's'} beyond the keep limit
+                  {batchBytes ? ` (${formatMem(batchBytes)})` : ''} will be reclaimed now.{' '}
+                  Uncommitted files and detached-HEAD commits in {batchBlockedCount} blocked checkout{batchBlockedCount === 1 ? '' : 's'} will be permanently discarded.
+                  Each task’s branch is kept.
+                </>
+              ) : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -196,9 +206,12 @@ function WorktreesDialogs({
             <AlertDialogAction
               data-action="worktrees-discard-confirm"
               className="bg-danger text-danger-foreground hover:brightness-[0.96]"
-              onClick={() => onConfirmBulk(true)}
+              onClick={() => {
+                if (discardBatch) onConfirmDiscardBatch(discardBatch)
+                onCloseDiscardBatch()
+              }}
             >
-              {discardLabel}
+              {batchLabel}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -254,7 +267,8 @@ export function WorktreesPanel() {
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
   const queryClient = useQueryClient()
-  const [confirmMode, setConfirmMode] = useState<'clean' | 'discard' | null>(null)
+  const [confirmClean, setConfirmClean] = useState(false)
+  const [discardBatch, setDiscardBatch] = useState<readonly WorktreeInfo[] | null>(null)
   const [discardRow, setDiscardRow] = useState<WorktreeInfo | null>(null)
   const refresh = () =>
     Promise.all([
@@ -263,11 +277,11 @@ export function WorktreesPanel() {
     ])
 
   const reclaim = useMutation({
-    mutationFn: ({ discardWork }: { expected: number; discardWork: boolean }) =>
-      reclaimWorktrees(discardWork ? { discardWork: true } : undefined),
-    onSuccess: (result, { expected, discardWork }) => {
+    mutationFn: ({ runIds }: { expected: number; runIds?: string[] }) =>
+      reclaimWorktrees(runIds ? { discardWork: true, runIds } : undefined),
+    onSuccess: (result, { expected, runIds }) => {
       void refresh()
-      toast(formatReclaimToast(result.reclaimed.length, expected, discardWork))
+      toast(formatReclaimToast(result.reclaimed.length, expected, Boolean(runIds)))
     },
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
@@ -334,7 +348,7 @@ export function WorktreesPanel() {
           data-action="worktrees-reclaim-now"
           disabled={busy || !canReclaim}
           title={reclaimButtonTitle(canReclaim, blockedPastKeep.length)}
-          onClick={() => setConfirmMode('clean')}
+          onClick={() => setConfirmClean(true)}
           className="inline-flex h-[28px] shrink-0 items-center gap-[5px] self-start rounded-[6px] bg-muted px-[10px] text-[12px] font-medium text-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 disabled:hover:brightness-100 max-md:h-11 md:self-center"
         >
           <BrushIcon aria-hidden="true" className="size-[12px]" />
@@ -347,7 +361,7 @@ export function WorktreesPanel() {
           blocked={blockedPastKeep}
           discardLabel={discardLabel}
           disabled={busy}
-          onDiscard={() => setConfirmMode('discard')}
+          onDiscard={() => setDiscardBatch(allPastKeep)}
         />
       ) : null}
 
@@ -375,18 +389,19 @@ export function WorktreesPanel() {
       )}
 
       <WorktreesDialogs
-        confirmMode={confirmMode}
-        onCloseConfirm={() => setConfirmMode(null)}
+        confirmClean={confirmClean}
+        onCloseClean={() => setConfirmClean(false)}
         cleanCount={cleanPastKeep.length}
         cleanBytes={cleanBytes}
-        allCount={allPastKeep.length}
-        allBytes={allBytes}
-        blockedCount={blockedPastKeep.length}
         reclaimLabel={reclaimLabel}
-        discardLabel={discardLabel}
-        onConfirmBulk={(discardWork) => {
-          reclaim.mutate({ expected: discardWork ? allPastKeep.length : cleanPastKeep.length, discardWork })
-          setConfirmMode(null)
+        onConfirmClean={() => {
+          reclaim.mutate({ expected: cleanPastKeep.length })
+          setConfirmClean(false)
+        }}
+        discardBatch={discardBatch}
+        onCloseDiscardBatch={() => setDiscardBatch(null)}
+        onConfirmDiscardBatch={(batch) => {
+          reclaim.mutate({ expected: batch.length, runIds: batch.map((row) => row.runId) })
         }}
         discardRow={discardRow}
         onCloseRow={() => setDiscardRow(null)}

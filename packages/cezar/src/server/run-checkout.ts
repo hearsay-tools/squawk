@@ -209,6 +209,9 @@ export async function reclaimCheckoutError(repoRoot: string, run: RunRecord): Pr
   if (blocker?.kind === 'detached-head') {
     return 'the worktree is on a detached HEAD whose commit is on no branch — save it to a branch or discard it first';
   }
+  if (blocker?.kind === 'submodules') {
+    return 'the worktree contains initialized submodules — reclaim with discardWork to remove it';
+  }
   if (blocker?.kind === 'invalid') {
     return 'the directory is not a registered Git worktree — inspect or discard it first';
   }
