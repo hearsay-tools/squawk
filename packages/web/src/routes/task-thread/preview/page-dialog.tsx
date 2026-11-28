@@ -41,7 +41,7 @@ export function PageDialog({
         role="alertdialog"
         aria-modal="true"
         aria-label={`${dialog.origin} says`}
-        className="w-full max-w-[380px] rounded-xl border border-border bg-card p-4 shadow-lg"
+        className="w-full max-w-[380px] rounded-xl border border-card-edge bg-card p-4 shadow-modal"
       >
         <p className="mb-3 truncate font-mono text-xs text-muted-foreground">{`${dialog.origin} says`}</p>
         <p className="mb-4 text-sm break-words whitespace-pre-wrap text-foreground">{dialog.message || (leaving ? 'Changes you made may not be saved.' : '')}</p>

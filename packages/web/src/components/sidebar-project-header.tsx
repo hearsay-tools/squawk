@@ -54,13 +54,13 @@ export function SidebarProjectHeader({ onNavigate }: { onNavigate?: (() => void)
 
   return (
     <div data-slot="project-header" className="flex min-w-0 items-center gap-2.5 px-[14px] pt-[14px] pb-2.5">
-      <span ref={markRef} aria-hidden="true" data-slot="project-header-mark" className="flex size-7 shrink-0 items-center justify-center rounded-[7px] border border-soft-foreground bg-sidebar-row-selected text-[11px] leading-none font-semibold text-foreground">
+      <span ref={markRef} aria-hidden="true" data-slot="project-header-mark" className="flex size-7 shrink-0 items-center justify-center rounded-[7px] border border-soft-foreground bg-sidebar-row-selected text-xs leading-none font-semibold text-foreground">
         {name ? projectInitials(name) : '…'}
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-px">
         <div data-slot="project-header-name" className="truncate text-[14px] font-semibold text-foreground" title={identity}>{identity}</div>
         {/* Keep the end (especially the branch) visible without reversing the actual text. */}
-        <div data-slot="project-header-detail" dir="rtl" className="truncate text-left font-mono text-[10.5px] text-soft-foreground" title={detail || undefined}>
+        <div data-slot="project-header-detail" dir="rtl" className="truncate text-left font-mono text-xs text-soft-foreground" title={detail || undefined}>
           <bdi dir="ltr">{detail || (registry.isPending ? 'Loading…' : 'Branch unavailable')}</bdi>
         </div>
       </div>
@@ -184,7 +184,7 @@ export function ProjectMenu({ projectId, onNavigate, triggerRef, triggerClassNam
       <DropdownMenuContent align={align} {...defined({ alignOffset, side })} sideOffset={4} className={menuClass}>
         <DropdownMenuItem className={itemClass} disabled={markAllReadDisabled({ marking, runs, unread, projectId })} onSelect={() => { void markAllRead() }}>
           <CheckCheckIcon aria-hidden="true" /> Mark all read
-          <span className="ml-auto text-[11.5px] text-soft-foreground">{markAllReadLabel({ marking, runs, unread })}</span>
+          <span className="ml-auto text-xs text-soft-foreground">{markAllReadLabel({ marking, runs, unread })}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator className="mx-0" />
         {local && <>

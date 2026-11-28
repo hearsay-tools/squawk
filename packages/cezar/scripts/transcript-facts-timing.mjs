@@ -165,6 +165,16 @@ export function summarizeWaits(seen) {
   return counts;
 }
 
+/** Name the waits of every sample whose blocking reached the budget, not only the first one.
+ * `window(sample)` gives the sample's [from, to) on the performance.now() clock. */
+export function attachWaitsOverBudget(samples, seen, budgetMs, window) {
+  for (const sample of samples) {
+    if (sample.blockingMs < budgetMs) continue;
+    const [from, to] = window(sample);
+    sample.waits = summarizeWaits(seen.filter(entry => entry.at >= from && entry.at < to));
+  }
+}
+
 /** Instrument only the synchronous open call. Imports and hook setup are outside its budget.
  * These diagnostic wrappers restore every method even when open throws. */
 export async function prepareOpenTiming(runtime) {

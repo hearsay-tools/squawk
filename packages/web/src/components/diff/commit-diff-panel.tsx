@@ -7,7 +7,7 @@ import type { RepoCommitPayload } from '@open-mercato/cezar-api-client'
 import { ApiError } from '@/api/client'
 import { CenteredState } from '@/components/centered-state'
 import { Diff, type DiffMode } from '@/components/diff'
-import { DiffStatLabel } from '@/components/diff-stat'
+import { DiffStat, Sha } from '@/components/data-primitives'
 import { Button } from '@/components/ui/button'
 import { Link } from '@/lib/project-router'
 import { useIsDesktop } from '@/lib/use-desktop'
@@ -72,11 +72,11 @@ export function CommitDiffPanel({ commit, sha, backTo, backLabel, slot, classNam
               <span aria-hidden="true">·</span>
               <span title={commit.data.when}>{gitAge(commit.data.when)}</span>
               <span aria-hidden="true">·</span>
-              <span className="font-mono select-all" title={commit.data.sha}>{commit.data.sha.slice(0, 8)}</span>
+              <Sha sha={commit.data.sha} variant="inline" />
               {/* The stat belongs to the commit, so it ends the commit's own line (as in the task's
                   Commits tab), not the back link's. */}
               <span aria-hidden="true">·</span>
-              <span data-slot="commit-stat"><DiffStatLabel stat={commit.data.stat} /></span>
+              <span data-slot="commit-stat"><DiffStat stat={commit.data.stat} /></span>
             </p>
           </div>
           {commit.data.files.length === 0 ? (

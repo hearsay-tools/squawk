@@ -1,31 +1,51 @@
-import { useTaskListExpansion } from '@/lib/use-task-list-expansion'
-import { taskListRowIndexes, taskResourceGrid } from '@/lib/task-list-render'
+import { taskResourceGrid } from '@/lib/task-list-render'
 import { TaskListItems, TaskListFocusBoundary } from '@/components/task-list-items'
-import { TaskTitleEditorProvider, useTaskTitleEditor } from '@/lib/task-title-editor'
-import { DESKTOP_MEDIA_QUERY, useIsDesktop } from '@/lib/use-desktop'
+import { TaskTitleEditorProvider } from '@/lib/task-title-editor'
+import { useIsDesktop } from '@/lib/use-desktop'
 import { useRunCacheWriter } from '@/api/use-run-cache-writer'
 import { projectAddress } from '@/api/run-address'
 import './task-lists.css'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCheckIcon, ChevronsLeftIcon, ChevronsRightIcon, Clock3Icon, CoinsIcon, DollarSignIcon, ListChecksIcon, LinkIcon, MemoryStickIcon, MoreHorizontalIcon, PencilIcon, SearchXIcon } from 'lucide-react'
-import { ArchiveIcon, CpuIcon, FileDiffIcon, GitBranchIcon, PlusIcon, SearchIcon, WorkflowIcon } from '@/components/design-icons'
+import {
+  ChevronsLeftIcon,
+  ChevronsRightIcon,
+  Clock3Icon,
+  CoinsIcon,
+  DollarSignIcon,
+  ListChecksIcon,
+  LinkIcon,
+  MemoryStickIcon,
+  SearchXIcon,
+  ZapIcon,
+} from 'lucide-react'
+import { ArchiveIcon, CpuIcon, FileDiffIcon, GitBranchIcon, PlusIcon, WorkflowIcon } from '@/components/design-icons'
 import * as React from 'react'
 import { Link, useNavigate } from '@/lib/project-router'
 import { archiveFinished, markAllRunsSeen, patchRun } from '@/api/client'
 import { useRunUsage } from '@/api/global-events'
-import { queryKeys, useAutomationNames, useHealth, usePinRun, useProjects, useProjectRepoBase, useReferenceProjectId, useRuns } from '@/api/queries'
-import type { RunSummary } from '@open-mercato/cezar-api-client'
+import {
+  queryKeys,
+  useAutomationNames,
+  useHealth,
+  usePinRun,
+  useProjects,
+  useProjectRepoBase,
+  useReferenceProjectId,
+  useRuns,
+} from '@/api/queries'
+import { useRunners } from '@/api/runners'
+import type { RunnersResponse, RunSummary } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
-import { DiffStatLabel } from '@/components/diff-stat'
+import { DiffStat, RelativeTime } from '@/components/data-primitives'
 import {
   BranchChip,
   Dash,
   ResultCount,
-  RunnerName,
-  ViewTab,
-  fullTime,
+  TaskBulkActions,
+  TaskControlStrip,
+  TaskViewTabs,
   headingTone,
-  taskTitleClass,
+  setParam,
   tasksOverviewDensity,
   tasksOverviewHeader,
   tasksOverviewRootProps,
@@ -34,36 +54,29 @@ import {
 } from './task-list-parts'
 import { TablePage } from '@/components/page-shell'
 import { DirectionalUsage, directionalUsageLabel } from '@/components/directional-usage'
-import { TitleEditInput } from '@/components/editable-title'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Pill } from '@/components/pill'
-import { PinToggle } from '@/components/pin-toggle'
 import { TaskReferenceChip } from '@/components/reference-conflict-action'
 import { ReferenceStatusProvider } from '@/components/reference-status'
-import { StatusDot } from '@/components/status-dot'
-import { StatusGroupSection, TaskOriginLine, TaskOriginRow, TaskPreview } from '@/components/task-status-groups'
+import { StatusGroupSection } from '@/components/task-status-groups'
+import { EditableRunTitle, TaskTable } from '@/components/task-table'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { toast } from '@/components/ui/toaster'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { deriveAttention } from '@/lib/attention'
-import { shortAge } from '@/lib/format'
+import { runStatusPresentation } from '@/lib/status-semantics'
 import { isReadDoneItem, isUnread, unreadDoneCount, unreadMarkerTone } from '@/lib/read-state'
 import {
   isColumnExpanded,
   normalizeExpandedColumns,
   taskColumnsForCapabilities,
+  unifiedTableColumns,
   type NormalizedExpandedColumns,
   type TaskColumnDefinition,
   type TaskColumnIcon,
   type TaskColumnId,
 } from '@/lib/task-columns'
 import { ARCHIVED_WINDOW, BUCKET_ORDER, listCounts, runTitle, withArchivedPages, type BucketLabel, type ListView } from '@/lib/task-groups'
+import { projectRunToTaskModel } from '@/lib/task-model'
 import {
   archivedTabCount,
   availableOrigin,
@@ -78,7 +91,7 @@ import {
   type TaskStatusGroup,
 } from '@/lib/task-origin'
 import { useAutomationsAvailable } from '@/lib/capabilities'
-import { useSearchParamsWriter, type SearchParamsUpdate } from '@/lib/use-search-params-writer'
+import { useSearchParamsWriter } from '@/lib/use-search-params-writer'
 import { useTaskListFoldsFromUrl } from '@/lib/use-task-list-folds'
 import {
   filterRuns,
@@ -94,7 +107,8 @@ import { usageMetricVisibility } from '@/lib/token-metrics'
 import { useTaskTableColumns } from '@/lib/use-task-table-columns'
 import { useNow } from '@/lib/use-now'
 import { cn } from '@/lib/utils'
-/** Archived runs older than the run list's window, a page at a time (#864). */
+
+/** Archived runs older than the run list's window (#864). */
 export type ArchivedPages = {
   runs: readonly RunSummary[]
   /** The search text these pages answer (`''` for the plain pages), or null while they are a
@@ -110,20 +124,17 @@ export type ArchivedPages = {
    *  while no unfiltered page has loaded. */
   plainHasMore?: boolean | undefined
 }
-/**
- * The Tasks overview — the table that IS the home at `/` (spec, "Task list & table", per PR
- * #392: the Tasks nav always lands here, there is no list/table presentation toggle). The
- * Active/Archived tabs in this header are this table's own, independent of the sidebar.
- *
- * Presentational: sorting, search, queue numbers, usage-cell decisions and the compare strip
- * all come from the pure modules (`lib/task-groups.ts`, `lib/tasks-table.ts`,
- * `lib/attention.ts`). What lives here is markup, the router, and the local search text.
- *
- * Below `md` the table becomes a stacked card list — same rows, same order,
- * same data, only the framing changes (mockup `tasks-home.html`, mobile section).
- */
+
 const noAutomationName = () => undefined
 
+/**
+ * The Project Tasks overview at `/p/:projectId/` (hearsay-tools/squawk#4377).
+ *
+ * Uses two-tier chrome inside `<TablePage>` (Tier 1: title, scope, Active/Archived tabs, bulk
+ * actions, New task CTA; Tier 2: search, origin filter, Columns popover, fold controls) and
+ * renders both desktop summary rows and mobile cards through the shared `<TaskTable />` component.
+ * The optional `Resource columns` detailed table remains available from the Columns popover.
+ */
 export function TasksOverview({
   runs,
   view,
@@ -140,6 +151,7 @@ export function TasksOverview({
   onToggleColumn = () => undefined,
   columnsPending = false,
   projectName,
+  runners,
   error,
   onRetry,
   archivedPages,
@@ -153,78 +165,58 @@ export function TasksOverview({
   foldScope = 'project',
   automationName = noAutomationName,
 }: {
-  /** Undefined while `/api/runs` has not answered: the header renders, the body stays empty —
-   *  an empty state before we know there are no runs would be a lie. */
   runs: RunSummary[] | undefined
   view: ListView
   onViewChange: (view: ListView) => void
   archivePending?: boolean
-  /** `automation` is the origin's flag (`originAutomationFlag`): the sweep takes only that origin. */
   onArchiveFinished: (automation?: boolean) => void
-  /** "Mark all read" (#unread-done-items) — stamps every unread finished run of the origin. */
   onMarkAllRead: (automation?: boolean) => void
-  /** Inline rename from the table's Task cell (spec step 15) — the route wires this to
-   *  `PATCH /api/runs/:id`, the same flow as the run header's pencil. */
   onRename: (id: string, title: string) => void
-  /** Pin/unpin one task (#935). Pinned rows sort to the top of the table — `sortRuns` does that
-   *  for every surface at once — so the row's own control is also the only thing on this page
-   *  that explains why one is up there. */
   onTogglePin?: ((run: RunSummary, pinned: boolean) => void) | undefined
-  /** Injected so the ages are not racing the clock in tests. */
   now?: number
-  /** Presentation capability; defaults visible for older health responses and direct renders. */
   showTokens?: boolean
   showCost?: boolean
-  /** The current registered project; omitted until the registry is available. */
   projectName?: string | undefined
-  /** Workspace-global desktop column choices; absent ids use registry defaults. */
+  runners?: RunnersResponse | undefined
   expandedColumns?: NormalizedExpandedColumns
   onToggleColumn?: (id: TaskColumnId) => void
-  /** Prevent a shallow write before the authoritative workspace state can preserve siblings. */
   columnsPending?: boolean
   error?: string | undefined
   onRetry?: (() => void) | undefined
-  /** Archived runs older than the list's window (#864), from `GET /run-summaries/archived`: for
-   *  the search text when there is one, otherwise the newest pages. */
   archivedPages?: ArchivedPages | undefined
-  /** Every archived task, when the server has counted them; until then a full window reads `200+`. */
   archivedTotal?: number | undefined
-  /** The search text as typed, so the route can ask the server for archived matches too. */
   onArchivedSearch?: (needle: string) => void
-  /** All / Direct tasks / Automations (hearsay-tools/cezarion#1616), held by the route in the URL.
-   *  Absent, the page keeps its own, starting at All. */
   origin?: TaskOrigin
   onOriginChange?: (origin: TaskOrigin) => void
-  /** `useAutomationsAvailable`: false drops the Automations origin and reads it as All. */
   automations: boolean
-  /** The search text in the URL, and the setter that writes the typed text back. */
   urlQuery?: string
   onQueryChange?: TasksQueryWriter
-  /** Which saved fold preferences this list reads: `project:<id>`. */
   foldScope?: string
-  /** An automation's display name, or undefined when it is unknown here. */
   automationName?: (automationId: string) => string | undefined
 }) {
   const [query, setQuery] = useUrlQuery(urlQuery, onQueryChange)
-  React.useEffect(() => { onArchivedSearch?.(query.trim()) }, [onArchivedSearch, query])
+  React.useEffect(() => {
+    onArchivedSearch?.(query.trim())
+  }, [onArchivedSearch, query])
   const [origin, setOrigin] = useOriginOrOwn(originProp, onOriginChange, automations)
   const [detailedTable, setDetailedTable] = React.useState(false)
   const desktop = useIsDesktop()
-  const { expandedRuns, toggleExpandedRun } = useTaskListExpansion()
-  const headerRef = React.useRef<HTMLDivElement>(null)
   const all = React.useMemo(() => runs ?? [], [runs])
-  const derived = React.useMemo(() => deriveProjectTaskGroups({ all, view, query, origin, archivedPages, archivedTotal, automationName }), [all, view, query, origin, archivedPages, archivedTotal, automationName])
+  const derived = React.useMemo(
+    () => deriveProjectTaskGroups({ all, view, query, origin, archivedPages, archivedTotal, automationName }),
+    [all, view, query, origin, archivedPages, archivedTotal, automationName],
+  )
   const { groups, needle } = derived
-  const columns = React.useMemo(() => taskColumnsForCapabilities({ tokens: showTokens, cost: showCost }), [showTokens, showCost])
+  const resourceColumns = React.useMemo(
+    () => taskColumnsForCapabilities({ tokens: showTokens, cost: showCost }),
+    [showTokens, showCost],
+  )
+  const unifiedColumns = React.useMemo(() => unifiedTableColumns(), [])
   // A search shows every group holding a match, folded or not, without saving that choice.
   const revealed = new Set<BucketLabel>(needle ? groups.map((group) => group.label) : [])
   const folds = useTaskListFoldsFromUrl(foldScope, view, revealed, () => setQuery(''))
-  // The archived view withholds the pin, the same call `runActionFlags` makes for the thread
-  // header (`pin: !run.archived`): `sortRuns` skips the pin comparator there and `bucketOf`
-  // answers `Archived` before it ever reads `run.pinned`, so the button would be an action with
-  // nowhere to show its result — and one that outlives the view, since un-archiving would then
-  // drop the task at the top of the active list by a click that looked like it did nothing.
   const pinToggle = view === 'archived' ? undefined : onTogglePin
+
   return (
     <TaskTitleEditorProvider runs={archivedPages ? [...all, ...archivedPages.runs] : all} onRename={onRename}>
       <TablePage
@@ -233,113 +225,101 @@ export function TasksOverview({
         headerSpacing="compact"
         rootProps={tasksOverviewRootProps(detailedTable)}
         bodyClassName="gap-3"
-        header={tasksOverviewHeader(projectName, detailedTable)}
+        header={tasksOverviewHeader({
+          projectName,
+          status: (
+            <TaskViewTabs
+              view={view}
+              onSelect={onViewChange}
+              activeCount={derived.activeCount}
+              archivedCount={derived.archivedCount}
+              trailing={
+                runs !== undefined && groups.length > 0 ? (
+                  <ResultCount count={derived.visibleCount} incomplete={derived.incomplete} needle={needle} />
+                ) : null
+              }
+            />
+          ),
+          secondaryActions: (
+            <TaskBulkActions
+              view={view}
+              unread={derived.unread}
+              finished={derived.finished}
+              archivePending={archivePending}
+              onMarkAllRead={() => onMarkAllRead(originAutomationFlag(origin))}
+              onArchiveFinished={() => onArchiveFinished(originAutomationFlag(origin))}
+            />
+          ),
+        })}
         sparseFooter={tasksOverviewSparseFooter(runs !== undefined, derived.visibleCount, view, needle)}
       >
         <TaskListFocusBoundary
           layout={`${desktop}:${detailedTable}`}
           revision={groups}
-          visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), [...expandedRuns].sort(), view, expandedColumns])}
+          visibilityRevision={JSON.stringify([BUCKET_ORDER.map(folds.isCollapsed), view, expandedColumns])}
           className="flex min-w-0 flex-1 flex-col gap-3"
         >
-      {/* One set of search/view controls across breakpoints keeps query and selection intact.
-          Mobile places search above the list filters. */}
-      <div ref={headerRef} className="flex shrink-0 flex-col gap-2.5">
-        <div className="flex gap-6 border-b border-border">
-          <ViewTab view="active" current={view} onSelect={onViewChange} count={derived.activeCount}>
-            Active
-          </ViewTab>
-          <ViewTab view="archived" current={view} onSelect={onViewChange} count={derived.archivedCount}>
-            Archived
-          </ViewTab>
-          {runs !== undefined && groups.length > 0 ? <ResultCount count={derived.visibleCount} incomplete={derived.incomplete} needle={needle} /> : null}
-        </div>
-        <div data-slot="tasks-toolbar" className="flex flex-wrap items-center gap-2.5">
-        <BulkActions
-          view={view}
-          unread={derived.unread}
-          finished={derived.finished}
-          archivePending={archivePending}
-          headerRef={headerRef}
-          onMarkAllRead={() => onMarkAllRead(originAutomationFlag(origin))}
-          onArchiveFinished={() => onArchiveFinished(originAutomationFlag(origin))}
-        />
-        <div className="relative order-first w-full md:w-auto md:min-w-64 md:flex-1">
-          <SearchIcon
-            className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-soft-foreground"
-            aria-hidden="true"
-          />
-          <input
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search tasks or automations…"
-            aria-label="Search tasks"
-            className="h-11 w-full rounded-md border border-input bg-card pr-3 pl-8 text-[13px] text-foreground outline-none placeholder:text-soft-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:h-9"
-          />
-        </div>
-        <ColumnsPopover
-          columns={columns}
-          expandedColumns={expandedColumns}
-          columnsPending={columnsPending}
-          onToggleColumn={onToggleColumn}
-          detailedTable={detailedTable}
-          onToggleDetailed={() => setDetailedTable((value) => !value)}
-        />
-        </div>
-        <TaskOriginRow origin={origin} counts={derived.originTotals} automations={automations} onChange={setOrigin} labels={groups.map((group) => group.label)} onSetAll={folds.setAll} />
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col">
-        {runs === undefined ? (
-          <TasksLoading error={error} onRetry={onRetry} />
-        ) : (
-          <ProjectTaskResults
-            view={view}
+          <TaskControlStrip
             query={query}
+            onQueryChange={setQuery}
+            searchPlaceholder="Search tasks or automations…"
+            searchLabel="Search tasks"
             origin={origin}
-            onShowAll={() => { setQuery(''); setOrigin('all') }}
-            groups={groups}
-            folds={folds}
-            grouped={{
-              desktop,
-              expandedRuns,
-              toggleExpandedRun,
-              detailedTable,
-              columns,
-              expandedColumns,
-              onToggleColumn,
-              columnsPending,
-              onRename,
-              onTogglePin: pinToggle,
-              now,
-              showTokens,
-              showCost,
-              automationName,
-            }}
+            originCounts={derived.originTotals}
+            automations={automations}
+            onOriginChange={setOrigin}
+            columns={detailedTable ? resourceColumns : unifiedColumns}
+            expandedColumns={expandedColumns}
+            columnsPending={columnsPending}
+            onToggleColumn={onToggleColumn}
+            detailedTable={detailedTable}
+            onToggleDetailed={() => setDetailedTable((value) => !value)}
+            groupLabels={groups.map((group) => group.label)}
+            onSetAllFolds={folds.setAll}
           />
-        )}
-        {view === 'archived' && archivedPages ? <ArchivedOlder pages={archivedPages} /> : null}
-      </div>
+          <div className="flex min-w-0 flex-1 flex-col">
+            {runs === undefined ? (
+              <TasksLoading error={error} onRetry={onRetry} />
+            ) : (
+              <ProjectTaskResults
+                view={view}
+                query={query}
+                origin={origin}
+                onShowAll={() => {
+                  setQuery('')
+                  setOrigin('all')
+                }}
+                groups={groups}
+                folds={folds}
+                grouped={{
+                  desktop,
+                  detailedTable,
+                  columns: resourceColumns,
+                  expandedColumns,
+                  onToggleColumn,
+                  columnsPending,
+                  onRename,
+                  onTogglePin: pinToggle,
+                  now,
+                  showTokens,
+                  showCost,
+                  runners,
+                  automationName,
+                }}
+              />
+            )}
+            {view === 'archived' && archivedPages ? <ArchivedOlder pages={archivedPages} /> : null}
+          </div>
         </TaskListFocusBoundary>
       </TablePage>
     </TaskTitleEditorProvider>
   )
 }
+
 /** Hands the search text to the page; the page calls `written` with each trimmed text its
  *  debounced write puts in the URL. */
 type TasksQueryWriter = (query: string, written: (query: string) => void) => void
-/**
- * The search box's text. It starts from the URL's, follows the URL when something else changes
- * it (a link, Back), and keeps what is being typed while the page's own debounced, trimmed write
- * catches up.
- *
- * `sent` holds the trimmed texts the page wrote to the URL since it last changed, oldest first;
- * the page reports each one through `written` when its debounced write changes the URL. The
- * router renders each write later, in a transition, so the URL can show an older one after the
- * box has moved on, even after it was cleared: that is the box's own echo, never a change from
- * outside (hearsay-tools/cezarion#1710). A text typed and erased inside one debounce is never
- * written, so a link to it is still followed.
- */
+
 function useUrlQuery(urlQuery: string, onQueryChange: TasksQueryWriter | undefined) {
   const [query, setQuery] = React.useState(urlQuery)
   const shown = React.useRef(urlQuery)
@@ -354,22 +334,31 @@ function useUrlQuery(urlQuery: string, onQueryChange: TasksQueryWriter | undefin
   }, [urlQuery])
   React.useEffect(() => {
     typed.current = query.trim()
-    onQueryChange?.(query, (written) => { sent.current.push(written) })
+    onQueryChange?.(query, (written) => {
+      sent.current.push(written)
+    })
   }, [onQueryChange, query])
   return [query, setQuery] as const
 }
-/** Use the caller's URL origin when present; otherwise keep page state, starting at All. An
- *  Automations origin reads as All while automations are off. */
-function useOriginOrOwn(origin: TaskOrigin | undefined, onChange: ((origin: TaskOrigin) => void) | undefined, automations: boolean) {
+
+function useOriginOrOwn(
+  origin: TaskOrigin | undefined,
+  onChange: ((origin: TaskOrigin) => void) | undefined,
+  automations: boolean,
+) {
   const [own, setOwn] = React.useState<TaskOrigin>('all')
   return [availableOrigin(origin ?? own, automations), onChange ?? setOwn] as const
 }
-/**
- * The list's derived state: what the filters leave in each status group, and the counts the
- * tabs, chips, caption and bulk actions show. Pure arithmetic over the props, kept out of the
- * markup.
- */
-function deriveProjectTaskGroups({ all, view, query, origin, archivedPages, archivedTotal, automationName }: {
+
+function deriveProjectTaskGroups({
+  all,
+  view,
+  query,
+  origin,
+  archivedPages,
+  archivedTotal,
+  automationName,
+}: {
   all: readonly RunSummary[]
   view: ListView
   query: string
@@ -379,26 +368,21 @@ function deriveProjectTaskGroups({ all, view, query, origin, archivedPages, arch
   automationName: (automationId: string) => string | undefined
 }) {
   const needle = query.trim()
-  const nameOf = (run: RunSummary) => (run.automationId === undefined ? '' : automationName(run.automationId) ?? run.automationId)
-  // Pages that answer this search already matched the server's rule, which also reads ids, URLs
-  // and PR/issue numbers, so the local filter (titles, branches, workflows) must not drop them
-  // again — neither an older paged row nor a list row the server matched. Pages answering other
-  // text (the plain pages, or a search still debouncing) widen nothing.
+  const nameOf = (run: RunSummary) =>
+    run.automationId === undefined ? '' : automationName(run.automationId) ?? run.automationId
   const answered = archivedPages?.query === needle
   const matched = new Set(answered ? archivedPages.runs.map((run) => run.id) : [])
   const paged = withArchivedPages(all, answered || needle === '' ? archivedPages?.runs ?? [] : []).slice(all.length)
   const listed = filterRuns(all, query, nameOf)
   const listedIds = new Set(listed.map((run) => run.id))
-  const serverMatched = filterRuns(all.filter((run) => matched.has(run.id) && !listedIds.has(run.id)), '')
-  // Origin narrows the list, its older archived pages and the server's archived matches alike.
+  const serverMatched = filterRuns(
+    all.filter((run) => matched.has(run.id) && !listedIds.has(run.id)),
+    '',
+  )
   const inOrigin = (run: RunSummary) => matchesOrigin(run, origin)
-  // Queue positions come from the full list inside `groupProjectRuns`, never the filtered one: a
-  // search must not renumber the queue the engine is actually going to drain.
   const groups = groupProjectRuns([...listed, ...serverMatched, ...filterRuns(paged, '')].filter(inOrigin), view, all)
   const withPages = withArchivedPages(all, archivedPages?.query === '' ? archivedPages.runs : [])
   const archivedFull = listCounts(all).archived >= ARCHIVED_WINDOW
-  // Bulk actions follow the origin, never the search or the folds: what they would touch is
-  // every finished (or unread) task the origin names.
   const scoped = all.filter(inOrigin)
   return {
     groups,
@@ -407,201 +391,83 @@ function deriveProjectTaskGroups({ all, view, query, origin, archivedPages, arch
     originTotals: originCounts(withPages, view),
     activeCount: originCounts(all, 'active')[origin],
     archivedCount: archivedTabCount(all, withPages, origin, archivedPages?.plainHasMore, archivedTotal),
-    // Older archived history the list has not loaded yet: the caption says "loaded", not a total.
     incomplete: view === 'archived' && archivedFull && archivedPages?.hasMore !== false,
     finished: finishedRunCount(scoped),
     unread: unreadDoneCount(scoped),
   }
 }
-/**
- * Mark all read and Archive finished, both scoped to the origin by the caller. Below `md` Mark
- * all read moves into the actions menu, after Archive finished.
- */
-function BulkActions({ view, unread, finished, archivePending, headerRef, onMarkAllRead, onArchiveFinished }: {
-  view: ListView
-  unread: number
-  finished: number
-  archivePending: boolean
-  /** Where focus returns once the menu's sweep removes its own trigger. */
-  headerRef: React.RefObject<HTMLElement | null>
-  onMarkAllRead: () => void
-  onArchiveFinished: () => void
-}) {
-  const archiveSelected = React.useRef(false)
-  const [actionsOpen, setActionsOpen] = React.useState(false)
-  const sweepable = finished > 0 || archivePending
-  // A CSS-hidden Radix menu would keep its modal focus trap after a desktop resize.
-  React.useEffect(() => {
-    const media = window.matchMedia?.(DESKTOP_MEDIA_QUERY)
-    if (!media) return
-    const closeOnDesktop = () => { if (media.matches) setActionsOpen(false) }
-    closeOnDesktop()
-    media.addEventListener('change', closeOnDesktop)
-    return () => media.removeEventListener('change', closeOnDesktop)
-  }, [])
-  return (
-    <>
-      {/* Count-gated, like the broom beside it: offered only while there is unread history to
-          clear (#unread-done-items). Archived runs are never unread, so this only ever lights
-          on the Active tab in practice — no need to also gate on `view`. */}
-      {unread > 0 ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          data-slot="mark-all-read"
-          className="hidden md:inline-flex"
-          onClick={onMarkAllRead}
-        >
-          <CheckCheckIcon className="size-3.5" aria-hidden="true" />
-          Mark all read{' '}
-          <span className="tabular-nums text-muted-foreground">{unread}</span>
-        </Button>
-      ) : null}
-      {/* Only when there is something to sweep, like the legacy header's count-gated broom. */}
-      {view === 'active' && finished > 0 ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          data-slot="archive-finished"
-          className="inline-flex"
-          disabled={archivePending}
-          aria-busy={archivePending}
-          onClick={onArchiveFinished}
-        >
-          <ArchiveIcon className="size-3.5" aria-hidden="true" />
-          Archive finished{' '}
-          <span className="tabular-nums text-muted-foreground">{finished}</span>
-        </Button>
-      ) : null}
-      {/* Below `md` both sweeps live here, so the first task stays above the fold
-          (hearsay-tools/cezarion#1616). */}
-      {view === 'active' && (sweepable || unread > 0) ? (
-        <DropdownMenu open={actionsOpen} onOpenChange={setActionsOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
-              aria-label="Task actions"
-              aria-busy={archivePending}
-            >
-              <MoreHorizontalIcon aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            className="md:hidden"
-            onCloseAutoFocus={(event) => {
-              // The successful mutation removes its trigger. Return to the stable filter,
-              // without focusing search and summoning the phone keyboard.
-              if (archiveSelected.current || window.matchMedia?.(DESKTOP_MEDIA_QUERY).matches) {
-                event.preventDefault()
-                archiveSelected.current = false
-                headerRef.current?.querySelector<HTMLButtonElement>('[data-view="active"]')?.focus()
-              }
-            }}
-          >
-            {sweepable ? (
-              <DropdownMenuItem
-                disabled={archivePending || finished === 0}
-                onSelect={() => {
-                  archiveSelected.current = true
-                  onArchiveFinished()
-                }}
-              >
-                <ArchiveIcon aria-hidden="true" />
-                {archivePending ? 'Archiving…' : `Archive finished (${finished})`}
-              </DropdownMenuItem>
-            ) : null}
-            {unread > 0 ? (
-              <DropdownMenuItem onSelect={onMarkAllRead}>
-                <CheckCheckIcon aria-hidden="true" />
-                {`Mark all read (${unread})`}
-              </DropdownMenuItem>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : null}
-    </>
-  )
-}
-function ColumnsPopover({ columns, expandedColumns, columnsPending, onToggleColumn, detailedTable, onToggleDetailed }: {
-  columns: ReturnType<typeof taskColumnsForCapabilities>
-  expandedColumns: NormalizedExpandedColumns
-  columnsPending: boolean
-  onToggleColumn: (id: TaskColumnId) => void
-  detailedTable: boolean
-  onToggleDetailed: () => void
-}) {
-  return (
-  <Popover><PopoverTrigger asChild><Button data-slot="task-columns-trigger" variant="outline" className="hidden h-9 md:inline-flex">Columns</Button></PopoverTrigger><PopoverContent align="end" className="w-72">
-    <h2 className="mb-2 text-base font-medium">Visible columns</h2><p className="mb-4 text-xs text-muted-foreground">Status and Task · Always visible</p>
-    <div className="grid grid-cols-2 gap-3">{columns.filter((column) => column.canFold).map((column) => <label key={column.id} className="flex items-center gap-2 text-xs"><input data-column-toggle={column.id} type="checkbox" checked={isColumnExpanded(column.id, expandedColumns)} disabled={columnsPending} onChange={() => onToggleColumn(column.id)} />{column.id === 'diff' ? 'Diff' : column.id === 'reference' ? 'Reference' : column.id === 'memory' ? 'Memory' : column.label}</label>)}</div>
-    <p className="mt-4 text-xs text-muted-foreground">Saved automatically. Tokens and cost appear only when supported.</p>
-    <Button variant="outline" className="mt-4" onClick={onToggleDetailed}>{detailedTable ? 'Summary view' : 'Resource columns'}</Button>
-  </PopoverContent></Popover>
-  )
-}
-/**
- * What the loaded list leaves on screen: the empty state for how it got empty, or the result
- * caption and each status group with its rows.
- */
-function ProjectTaskResults({ view, query, origin, onShowAll, groups, folds, grouped }: {
+
+function ProjectTaskResults({
+  view,
+  query,
+  origin,
+  onShowAll,
+  groups,
+  folds,
+  grouped,
+}: {
   view: ListView
   query: string
   origin: TaskOrigin
   onShowAll: () => void
   groups: TaskStatusGroup<RunSummary>[]
   folds: ReturnType<typeof useTaskListFoldsFromUrl>
-  /** Everything each group's rows take besides the group itself. */
   grouped: Omit<React.ComponentProps<typeof GroupedTasks>, 'group' | 'showHeader' | 'showReference'>
 }) {
-  if (groups.length === 0) return <TasksEmptyState view={view} query={query} origin={origin} onShowAll={onShowAll} />
-  // One column header for the page, on the first open group; the columns are the same in all.
+  if (groups.length === 0) {
+    return <TasksEmptyState view={view} query={query} origin={origin} onShowAll={onShowAll} />
+  }
   const open = groups.filter((group) => !folds.isCollapsed(group.label))
-  const showReference = open.some((group) => group.rows.flatMap(rowTasks).some((run) => taskReference(run) !== undefined))
+  const showReference = open.some((group) =>
+    group.rows.flatMap(rowTasks).some((run) => taskReference(run) !== undefined),
+  )
   return (
-    <>
-      <div className="flex flex-col gap-3">
-        {groups.map((group) => {
-          const members = groupMembers(group)
-          return (
-            <StatusGroupSection
-              key={group.label}
-              id={`tasks-group-${view}-${group.label.replaceAll(' ', '-')}`}
-              label={group.label}
-              count={members.length}
-              tone={headingTone(group.label, members)}
-              folded={folds.isFolded(group.label)}
-              collapsed={folds.isCollapsed(group.label)}
-              onToggle={() => folds.toggle(group.label)}
-            >
-              <GroupedTasks group={group} showHeader={group === open[0]} showReference={showReference} {...grouped} />
-            </StatusGroupSection>
-          )
-        })}
-      </div>
-      <p data-slot="tasks-resource-note" className="mt-4 pb-8 text-xs text-muted-foreground">Select a task’s status to show its tokens, cost, CPU and peak memory.</p>
-    </>
+    <div className="flex flex-col gap-3">
+      {groups.map((group) => {
+        const members = groupMembers(group)
+        return (
+          <StatusGroupSection
+            key={group.label}
+            id={`tasks-group-${view}-${group.label.replaceAll(' ', '-')}`}
+            label={group.label}
+            count={members.length}
+            tone={headingTone(group.label, members)}
+            folded={folds.isFolded(group.label)}
+            collapsed={folds.isCollapsed(group.label)}
+            onToggle={() => folds.toggle(group.label)}
+          >
+            <GroupedTasks group={group} showHeader={group === open[0]} showReference={showReference} {...grouped} />
+          </StatusGroupSection>
+        )
+      })}
+    </div>
   )
 }
+
 function TasksLoading({ error, onRetry }: { error?: string | undefined; onRetry?: (() => void) | undefined }) {
   return error ? (
-    <div role="alert" className="rounded-xl border border-border bg-card p-6"><h2 className="text-lg">Could not load tasks</h2><p className="mt-2 text-sm text-muted-foreground">{error}</p><Button variant="outline" className="mt-4" onClick={onRetry}>Retry</Button></div>
+    <div role="alert" className="rounded-xl border border-border bg-card p-6">
+      <h2 className="text-lg">Could not load tasks</h2>
+      <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+      <Button variant="outline" className="mt-4" onClick={onRetry}>
+        Retry
+      </Button>
+    </div>
   ) : (
-    <div role="status" aria-label="Loading tasks" className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">Loading tasks…</div>
+    <div role="status" aria-label="Loading tasks" className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
+      Loading tasks…
+    </div>
   )
 }
-/** Older archived history below the list: a retry after a failed page, or the next page. */
+
 function ArchivedOlder({ pages }: { pages: ArchivedPages }) {
   if (pages.failed) {
     return (
       <p role="alert" data-slot="archived-older-error" className="mt-3.5 flex items-center justify-center gap-2.5 text-[13px] text-muted-foreground">
         Could not load older archived tasks.
-        <Button variant="outline" className="min-h-11" onClick={pages.onLoadMore}>Retry</Button>
+        <Button variant="outline" className="min-h-11" onClick={pages.onLoadMore}>
+          Retry
+        </Button>
       </p>
     )
   }
@@ -618,13 +484,18 @@ function ArchivedOlder({ pages }: { pages: ArchivedPages }) {
     </Button>
   )
 }
-/**
- * What an empty list honestly means, given how it got empty — as a CenteredState, one variant
- * per cause. Only the no-tasks-at-all state is a hero moment and gets the twinkle backdrop
- * (spec: textures on hero/empty surfaces only); a missed search or an unswept archive is just
- * a fact, so those stay flat. `heading="h2"` because the page's h1 is the header's "Tasks".
- */
-function TasksEmptyState({ view, query, origin = 'all', onShowAll }: { view: ListView; query: string; origin?: TaskOrigin; onShowAll?: () => void }) {
+
+function TasksEmptyState({
+  view,
+  query,
+  origin = 'all',
+  onShowAll,
+}: {
+  view: ListView
+  query: string
+  origin?: TaskOrigin
+  onShowAll?: () => void
+}) {
   const needle = query.trim()
   const kind = needle || origin !== 'all' ? 'search-miss' : view === 'archived' ? 'archive' : 'no-tasks'
   return (
@@ -635,8 +506,20 @@ function TasksEmptyState({ view, query, origin = 'all', onShowAll }: { view: Lis
           icon={<SearchXIcon />}
           tone="neutral"
           title="No matching tasks"
-          subtitle={needle ? `No tasks match “${needle}”.` : origin === 'automations' ? 'No automation started a task here.' : 'No task here was started directly.'}
-          actions={onShowAll ? <Button variant="outline" className="min-h-11" data-action="clear-task-filters" onClick={onShowAll}>Show all tasks</Button> : undefined}
+          subtitle={
+            needle
+              ? `No tasks match “${needle}”.`
+              : origin === 'automations'
+                ? 'No automation started a task here.'
+                : 'No task here was started directly.'
+          }
+          actions={
+            onShowAll ? (
+              <Button variant="outline" className="min-h-11" data-action="clear-task-filters" onClick={onShowAll}>
+                Show all tasks
+              </Button>
+            ) : undefined
+          }
         />
       ) : kind === 'archive' ? (
         <CenteredState
@@ -667,82 +550,12 @@ function TasksEmptyState({ view, query, origin = 'all', onShowAll }: { view: Lis
     </div>
   )
 }
-type TaskRowCallbacks = {
-  onRename: (id: string, title: string) => void
-  onTogglePin?: ((run: RunSummary, pinned: boolean) => void) | undefined
-  now: number
-  showTokens: boolean
-  showCost: boolean
-  automationName: (automationId: string) => string | undefined
-}
-/** Frame 4: five scan columns, with resources disclosed per task. The optional detailed table
- * above still owns workspace column preferences, so switching presentation never rewrites them. */
-function SummaryTasksTable({ rows, showHeader, showReference, onRename, onTogglePin, now, showTokens, showCost, automationName, expandedRuns, toggleExpandedRun }: TaskExpansion & TaskRowCallbacks & {
-  rows: readonly GroupedTask[]
-  /** False keeps the column names for assistive technology only: an earlier group shows them. */
-  showHeader: boolean
-  /** False when no open group has a pull request or an issue to show. */
-  showReference: boolean
-}) {
-  const aria = taskListRowIndexes(rows.map(({ run }) => run.id), expandedRuns)
-  const labels = ['Task', 'Workflow', 'Changes', ...(showReference ? ['Pull request'] : []), 'Started']
-  return <div data-slot="tasks-summary" data-reference-column={showReference}><div className="rounded-lg border border-border bg-card px-4" role="table" aria-rowcount={aria.rowCount}>
-    <div role="row" aria-rowindex={1} data-slot="task-summary-head" className={cn('task-summary-grid', !showHeader && 'sr-only')}>{labels.map((label) => <div role="columnheader" key={label} className="flex h-8 items-center border-b border-border text-[11px] font-medium tracking-[0.04em] uppercase text-muted-foreground">{label}</div>)}</div>
-    <TaskListItems itemSize={SUMMARY_ROW_SIZE} items={rows} itemKey={({ run }) => run.id}>{({ run, queuePosition }, index) =>
-      <SummaryTaskRow showReference={showReference} run={run} queuePosition={queuePosition} rowIndex={aria.indexes[index]!} onRename={onRename} onTogglePin={onTogglePin} now={now} showTokens={showTokens} showCost={showCost} automationName={automationName} open={expandedRuns.has(run.id)} toggleExpandedRun={toggleExpandedRun} />
-    }</TaskListItems>
-  </div></div>
-}
-/** A summary row: 10px padding, the 18px title line, a 2px gap, the 22px meta line and the rule. */
-const SUMMARY_ROW_SIZE = 63
-const SummaryTaskRow = React.memo(function SummaryTaskRow({ run, queuePosition, rowIndex, showReference, onRename, onTogglePin, now, showTokens, showCost, automationName, open, toggleExpandedRun }: {
-  showReference: boolean; run: RunSummary; queuePosition: number | null; rowIndex: number; onRename: (id: string, title: string) => void
-  onTogglePin?: ((run: RunSummary, pinned: boolean) => void) | undefined; now: number; showTokens: boolean; showCost: boolean
-  automationName: (automationId: string) => string | undefined; open: boolean; toggleExpandedRun: (id: string) => void
-}) {
-        const attention = deriveAttention(run)
-        const scheduled = scheduledResume(run)
-        const reference = taskReference(run)
-        const detailId = `task-resources-${run.id}`
-        return <div role="rowgroup">
-          <div role="row" aria-rowindex={rowIndex} data-status={run.status} data-slot="task-summary-row" data-run-id={run.id} className="task-summary-grid group/row">
-            <div role="cell" className="min-w-0 py-2.5 pr-4">
-              <TitleCell run={run} to={`/tasks/${run.id}`} onRename={onRename} onTogglePin={onTogglePin} />
-              {/* One meta line: status, then where the task came from. */}
-              <div data-slot="task-meta-line" className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                <button type="button" data-task-control="resources" aria-label={`${open ? 'Hide' : 'Show'} resources for ${runTitle(run)}`} aria-expanded={open} aria-controls={detailId} aria-describedby={`summary-status-${run.id}`} onClick={() => toggleExpandedRun(run.id)} className="inline-flex min-h-[22px] shrink-0 items-center rounded-full p-0 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"><Pill id={`summary-status-${run.id}`} dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="py-0.5">{attention.label}{scheduled ? ` ${scheduled.label}` : ''}</Pill></button>
-                <span aria-hidden="true">·</span>
-                <RunOriginLine run={run} automationName={automationName} />
-                {run.status === 'queued' && queuePosition !== null ? <><span aria-hidden="true">·</span><span className="shrink-0">#{queuePosition} in queue</span></> : null}
-              </div>
-            </div>
-            <div role="cell" className="truncate pr-3 text-xs text-muted-foreground" title={workflowLabel(run)}>{workflowLabel(run)}</div>
-            <div role="cell" className="pr-2 text-xs">{run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}</div>
-            {showReference ? <div role="cell" className="pr-2">{reference ? <TaskReferenceChip run={run} reference={reference} compact /> : <Dash />}</div> : null}
-            <div role="cell" className="text-xs text-muted-foreground tabular-nums" title={fullTime(run.startedAt ?? run.createdAt)}>{shortAge(run.startedAt ?? run.createdAt, now)}</div>
-          </div>
-          {open ? <div role="row" aria-rowindex={rowIndex + 1} data-run-id={run.id}><div role="cell" aria-colspan={showReference ? 5 : 4} className="border-b border-border pb-4"><div id={detailId} className="flex flex-col gap-3">
-            <TaskPreview runId={run.id} status={attention.label} error={run.error} open={<Button asChild variant="outline" className="min-h-11"><Link data-task-control="open" to={`/tasks/${run.id}`}>Open task<span className="sr-only">: {runTitle(run)}</span></Link></Button>} />
-            <div className="rounded-md bg-muted/50 p-4"><TaskResourceDetails run={run} showTokens={showTokens} showCost={showCost} /></div>
-          </div></div></div> : null}
-        </div>
-})
-/** One row of a status group's tables. */
 type GroupedTask = { run: RunSummary; queuePosition: number | null }
-type TaskExpansion = {
-  expandedRuns: ReadonlySet<string>
-  toggleExpandedRun: (id: string) => void
-}
-/**
- * One status group's tasks in every presentation the page has: the summary table, the detailed
- * table with the saved column choices, and the phone cards.
- */
+
 function GroupedTasks({
   showHeader,
   showReference,
   desktop,
-  expandedRuns,
-  toggleExpandedRun,
   group,
   detailedTable,
   columns,
@@ -754,6 +567,7 @@ function GroupedTasks({
   now,
   showTokens,
   showCost,
+  runners,
   automationName,
 }: {
   showHeader: boolean
@@ -765,49 +579,105 @@ function GroupedTasks({
   expandedColumns: NormalizedExpandedColumns
   onToggleColumn: (id: TaskColumnId) => void
   columnsPending: boolean
-} & TaskExpansion & TaskRowCallbacks) {
-  const rows: GroupedTask[] = group.rows.flatMap((row) =>
-    rowTasks(row).map((run) => ({ run, queuePosition: run.status === 'queued' ? row.queuePosition : null })),
+  onRename: (id: string, title: string) => void
+  onTogglePin?: ((run: RunSummary, pinned: boolean) => void) | undefined
+  now: number
+  showTokens: boolean
+  showCost: boolean
+  runners?: RunnersResponse | undefined
+  automationName: (automationId: string) => string | undefined
+}) {
+  const rows: GroupedTask[] = React.useMemo(
+    () =>
+      group.rows.flatMap((row) =>
+        rowTasks(row).map((run) => ({ run, queuePosition: run.status === 'queued' ? row.queuePosition : null })),
+      ),
+    [group.rows],
   )
-  return (
-    <>
-      {desktop && !detailedTable ? <SummaryTasksTable showHeader={showHeader} showReference={showReference} expandedRuns={expandedRuns} toggleExpandedRun={toggleExpandedRun} rows={rows} onRename={onRename} onTogglePin={onTogglePin} now={now} showTokens={showTokens} showCost={showCost} automationName={automationName} /> : null}
-      {/* The detailed table retains every saved column preference. */}
-      {desktop && detailedTable ? <div
-        data-slot="tasks-table"
-        className="overflow-x-auto rounded-lg border border-border bg-card"
-      >
+  const models = React.useMemo(
+    () =>
+      rows.map(({ run, queuePosition }) =>
+        projectRunToTaskModel({
+          run,
+          queuePosition,
+          runners,
+          automationName,
+          now,
+          showTokens,
+          showCost,
+        }),
+      ),
+    [rows, runners, automationName, now, showTokens, showCost],
+  )
+
+  const handleTogglePin = React.useCallback(
+    (item: { run: RunSummary }, pinned: boolean) => {
+      onTogglePin?.(item.run, pinned)
+    },
+    [onTogglePin],
+  )
+
+  if (desktop && detailedTable) {
+    return (
+      <div data-slot="tasks-table" className="overflow-x-auto rounded-lg border border-card-edge bg-card shadow-card">
         <TooltipProvider>
-          <div role="table" aria-rowcount={rows.length + 1} className="task-resource-grid" style={taskResourceGrid(columns, expandedColumns) as React.CSSProperties}>
+          <div
+            role="table"
+            aria-rowcount={rows.length + 1}
+            className="task-resource-grid"
+            style={taskResourceGrid(columns, expandedColumns) as React.CSSProperties}
+          >
             <div role="row" aria-rowindex={1} className="task-resource-row">
-              {columns.map((column) => <TaskColumnHeader key={column.id} column={column} expanded={isColumnExpanded(column.id, expandedColumns)} onToggle={onToggleColumn} disabled={columnsPending} />)}
+              {columns.map((column) => (
+                <TaskColumnHeader
+                  key={column.id}
+                  column={column}
+                  expanded={isColumnExpanded(column.id, expandedColumns)}
+                  onToggle={onToggleColumn}
+                  disabled={columnsPending}
+                />
+              ))}
             </div>
-            <TaskListItems itemSize={50} items={rows} itemKey={({ run }) => run.id}>{({ run, queuePosition }, index) =>
-              <TableRow rowIndex={index + 2} run={run} queuePosition={queuePosition} onRename={onRename} onTogglePin={onTogglePin} now={now} columns={columns} expandedColumns={expandedColumns} automationName={automationName} />
-            }</TaskListItems>
+            <TaskListItems itemSize={50} items={rows} itemKey={({ run }) => run.id}>
+              {({ run, queuePosition }, index) => (
+                <TableRow
+                  rowIndex={index + 2}
+                  run={run}
+                  queuePosition={queuePosition}
+                  onRename={onRename}
+                  onTogglePin={onTogglePin}
+                  now={now}
+                  columns={columns}
+                  expandedColumns={expandedColumns}
+                  automationName={automationName}
+                />
+              )}
+            </TaskListItems>
           </div>
         </TooltipProvider>
-      </div> : null}
-      {/* Phones mount cards only, regardless of saved desktop columns. */}
-      {!desktop ? <div data-slot="task-cards" className="flex flex-col rounded-lg border border-border bg-card px-3">
-        <TaskListItems itemSize={90} items={rows} itemKey={({ run }) => run.id}>{({ run, queuePosition }) => (
-          <TaskCard key={run.id} resourcesOpen={expandedRuns.has(run.id)} onToggleResources={toggleExpandedRun} run={run} queuePosition={queuePosition} now={now} showTokens={showTokens} showCost={showCost} onTogglePin={onTogglePin} automationName={automationName} />
-        )}</TaskListItems>
-      </div> : null}
-    </>
+      </div>
+    )
+  }
+
+  return (
+    <TaskTable
+      items={models}
+      density={desktop ? 'table' : 'card'}
+      now={now}
+      showHeader={showHeader}
+      showProject={false}
+      showReferences={showReference}
+      expandedColumns={expandedColumns}
+      showTokens={showTokens}
+      showCost={showCost}
+      scopedLinks
+      liveUsageSource="stream"
+      allowRename={desktop}
+      onTogglePin={onTogglePin ? handleTogglePin : undefined}
+    />
   )
 }
-function TaskResourceDetails({ run, showTokens, showCost }: { run: RunSummary; showTokens: boolean; showCost: boolean }) {
-  const sample = useRunUsage(run.id)
-  const usage = usageCells(run, sample)
-  return <dl className="grid grid-cols-2 gap-4 text-xs md:grid-cols-4">
-    {showTokens ? <div><dt className="text-muted-foreground">Tokens in / out</dt><dd className="mt-1"><DirectionalUsage inputTokens={run.inputTokens} outputTokens={run.outputTokens} omitWhenUnknown={false} /></dd></div> : null}
-    {showCost ? <div><dt className="text-muted-foreground">Cost</dt><dd className="mt-1">{formatCost(run.costUsd) || '—'}</dd></div> : null}
-    <div><dt className="text-muted-foreground">CPU</dt><dd className="mt-1" title={usage.cpu.title}>{usage.cpu.text || '—'}</dd></div>
-    <div><dt className="text-muted-foreground">Memory</dt><dd className="mt-1" title={usage.mem.title}>{usage.mem.text || '—'}</dd></div>
-    {run.branch ? <div className="col-span-2"><dt className="text-muted-foreground">Branch</dt><dd className="mt-1 break-all">{run.branch}</dd></div> : null}
-  </dl>
-}
+
 function Th({
   children,
   right = false,
@@ -825,7 +695,7 @@ function Th({
       data-column-id={columnId}
       data-folded={folded || undefined}
       className={cn(
-        'h-[38px] border-b border-border px-2.5 text-left text-[11px] font-semibold tracking-[0.05em] whitespace-nowrap text-supporting-foreground uppercase first:pl-4 last:pr-4',
+        'h-[38px] border-b border-border px-2.5 text-left text-xs font-semibold tracking-[0.05em] whitespace-nowrap text-supporting-foreground uppercase first:pl-4 last:pr-4',
         right && 'text-right',
         folded && 'px-0 first:pl-0 last:pr-0',
       )}
@@ -884,7 +754,9 @@ function TaskColumnHeader({
             )}
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top">{column.label} · {action} column</TooltipContent>
+        <TooltipContent side="top">
+          {column.label} · {action} column
+        </TooltipContent>
       </Tooltip>
     </Th>
   )
@@ -918,14 +790,6 @@ function TaskColumnIconView({ icon }: { icon?: TaskColumnIcon | undefined }) {
 
 const TD_BASE = 'h-[88px] border-b border-border px-2.5 whitespace-nowrap first:pl-4 last:pr-4'
 
-/**
- * One run, one row.
- *
- * The whole row is a click target for `/tasks/:id` — but a click that lands on any anchor,
- * button or input inside it (the PR chip, the title's real link, the rename pencil and its
- * input) belongs to that control and is not hijacked. The title is a true `<Link>` so the
- * row's destination exists for keyboards and middle-clicks too.
- */
 const TableRow = React.memo(function TableRow({
   rowIndex,
   run,
@@ -955,7 +819,9 @@ const TableRow = React.memo(function TableRow({
   const reference = taskReference(run)
 
   return (
-    <div role="row" aria-rowindex={rowIndex}
+    <div
+      role="row"
+      aria-rowindex={rowIndex}
       data-slot="task-table-row"
       data-run-id={run.id}
       onClick={(event) => {
@@ -970,22 +836,19 @@ const TableRow = React.memo(function TableRow({
           const cpuExpanded = isColumnExpanded('cpu', expandedColumns)
           const memoryExpanded = isColumnExpanded('memory', expandedColumns)
           return queuePosition !== null && (cpuExpanded || memoryExpanded) ? (
-            <div role="cell"
+            <div
+              role="cell"
               key={column.id}
               data-slot="queue-note"
               data-column-id="cpu-memory"
-              aria-colspan={2} style={{ gridColumn: "span 2" }}
-              className={cn(TD_BASE, 'text-right font-mono text-[11px] text-supporting-foreground')}
+              aria-colspan={2}
+              style={{ gridColumn: 'span 2' }}
+              className={cn(TD_BASE, 'text-right font-mono text-xs text-supporting-foreground')}
             >
               #{queuePosition} in queue
             </div>
           ) : (
-            <UsageTds
-              key={column.id}
-              run={run}
-              cpuExpanded={cpuExpanded}
-              memoryExpanded={memoryExpanded}
-            />
+            <UsageTds key={column.id} run={run} cpuExpanded={cpuExpanded} memoryExpanded={memoryExpanded} />
           )
         }
         return (
@@ -1009,6 +872,73 @@ const TableRow = React.memo(function TableRow({
     </div>
   )
 })
+
+function DetailedTaskCell({
+  run,
+  to,
+  onRename,
+  onTogglePin,
+  automationName,
+}: {
+  run: RunSummary
+  to: string
+  onRename: (id: string, title: string) => void
+  onTogglePin?: ((run: RunSummary, pinned: boolean) => void) | undefined
+  automationName: (automationId: string) => string | undefined
+}) {
+  const autoLabel =
+    run.automationId !== undefined ? automationName(run.automationId) ?? run.automationId : undefined
+  return (
+    <div role="cell" data-column-id="task" className={cn(TD_BASE, 'min-w-[320px] max-w-0 whitespace-normal')}>
+      <TitleCell lines={2} run={run} to={to} onRename={onRename} onTogglePin={onTogglePin} />
+      {autoLabel ? (
+        <div className="mt-1">
+          <span
+            data-slot="task-automation-badge"
+            data-origin="automation"
+            className="inline-flex max-w-[180px] items-center gap-1 truncate rounded-full border border-info/30 bg-info/10 px-2 py-px text-xs font-medium text-semantic-info"
+          >
+            <ZapIcon className="size-2.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{autoLabel}</span>
+          </span>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function DetailedStatusCell({
+  run,
+  attention,
+  scheduled,
+}: {
+  run: RunSummary
+  attention: ReturnType<typeof deriveAttention>
+  scheduled: ReturnType<typeof scheduledResume>
+}) {
+  const status = runStatusPresentation(run, attention)
+  return (
+    <div role="cell" data-column-id="status" className={cn(TD_BASE, 'overflow-hidden')}>
+      <Pill
+        dot={status.tone}
+        shape={status.shape}
+        pulse={status.pulse}
+        title={scheduled?.title ?? status.label}
+        className="w-full max-w-full overflow-hidden"
+      >
+        <span className="min-w-0 truncate">
+          {status.label}
+          {scheduled ? (
+            <>
+              {' '}
+              <span className="tabular-nums">{scheduled.label}</span>
+            </>
+          ) : null}
+        </span>
+      </Pill>
+    </div>
+  )
+}
 
 function TaskTableCell({
   column,
@@ -1041,35 +971,16 @@ function TaskTableCell({
 
   switch (column.id) {
     case 'status':
-      return (
-        <div role="cell" data-column-id={column.id} className={cn(TD_BASE, 'overflow-hidden')}>
-          {/* A scheduled run wears its appointment in the pill, the way a queued one wears its
-              queue position — the row's whole answer to "what is this waiting for?". */}
-          <Pill
-            dot={attention.tone}
-            shape={attention.shape}
-            pulse={attention.pulse}
-            title={scheduled?.title ?? attention.label}
-            className="w-full max-w-full overflow-hidden"
-          >
-            <span className="min-w-0 truncate">
-              {attention.label}
-              {scheduled ? (
-                <>
-                  {' '}
-                  <span className="tabular-nums">{scheduled.label}</span>
-                </>
-              ) : null}
-            </span>
-          </Pill>
-        </div>
-      )
+      return <DetailedStatusCell run={run} attention={attention} scheduled={scheduled} />
     case 'task':
       return (
-        <div role="cell" data-column-id={column.id} className={cn(TD_BASE, 'min-w-[320px] max-w-0 whitespace-normal')}>
-          <TitleCell lines={2} run={run} to={to} onRename={onRename} onTogglePin={onTogglePin} />
-          <div className="mt-1"><RunOriginLine run={run} automationName={automationName} /></div>
-        </div>
+        <DetailedTaskCell
+          run={run}
+          to={to}
+          onRename={onRename}
+          onTogglePin={onTogglePin}
+          automationName={automationName}
+        />
       )
     case 'workflow':
       return (
@@ -1086,7 +997,7 @@ function TaskTableCell({
     case 'diff':
       return (
         <div role="cell" data-column-id={column.id} className={cn(TD_BASE, 'overflow-hidden')}>
-          {run.diffStat ? <DiffStatLabel stat={run.diffStat} compact className="block max-w-full" /> : <Dash />}
+          {run.diffStat ? <DiffStat stat={run.diffStat} compact className="block max-w-full" /> : <Dash />}
         </div>
       )
     case 'reference':
@@ -1094,10 +1005,12 @@ function TaskTableCell({
         <div role="cell" data-column-id={column.id} className={cn(TD_BASE, 'overflow-hidden')}>
           {reference ? (
             <TaskReferenceChip run={run} reference={reference} compact className="max-w-full overflow-hidden" />
-          ) : <Dash />}
+          ) : (
+            <Dash />
+          )}
         </div>
       )
-    case 'tokens':
+    case 'tokens': {
       const tokensLabel = directionalUsageLabel(run.inputTokens, run.outputTokens)
       return (
         <div role="cell" data-column-id={column.id} className={cn(TD_BASE, 'text-right text-xs text-muted-foreground')}>
@@ -1111,9 +1024,11 @@ function TaskTableCell({
           />
         </div>
       )
+    }
     case 'cost':
       return (
-        <div role="cell"
+        <div
+          role="cell"
           data-column-id={column.id}
           className={cn(TD_BASE, 'text-right font-mono text-xs text-muted-foreground tabular-nums')}
         >
@@ -1122,19 +1037,13 @@ function TaskTableCell({
       )
     case 'started':
       return (
-        <div role="cell" data-column-id={column.id} className={cn(TD_BASE, 'text-right text-xs text-supporting-foreground tabular-nums')} title={fullTime(run.startedAt ?? run.createdAt)}>
-          {shortAge(run.startedAt ?? run.createdAt, now)}
+        <div role="cell" data-column-id={column.id} className={cn(TD_BASE, 'text-right text-xs text-supporting-foreground')}>
+          <RelativeTime iso={run.startedAt ?? run.createdAt} now={now} />
         </div>
       )
     default:
-      // CPU and Memory render as one pair (`UsageTds`), never as a cell of their own.
       return null
   }
-}
-
-/** A project row's origin line: Direct task, or the automation's name or recorded id. */
-function RunOriginLine({ run, automationName }: { run: RunSummary; automationName: (automationId: string) => string | undefined }) {
-  return <TaskOriginLine automationId={run.automationId} automationName={run.automationId === undefined ? undefined : automationName(run.automationId)} />
 }
 
 function FoldedTd({ column }: { column: TaskColumnId }) {
@@ -1149,90 +1058,34 @@ function FoldedTd({ column }: { column: TaskColumnId }) {
   )
 }
 
-/**
- * The Task cell: the title as a real link, with the mockup's hover pencil (`tasks-home.html`
- * `.task-title .pencil`) flipping it into the shared inline-rename input. Same machine as the
- * run header's title — one edit, one PATCH. The quick-list's rows stay read-only on purpose:
- * at 13px-in-a-260px-sidebar there is no room for an input worth typing into.
- */
-function TitleCell({ run, to, onTogglePin, lines = 1 }: {
+function TitleCell({
+  run,
+  to,
+  onTogglePin,
+  lines = 1,
+}: {
   run: RunSummary
   to: string
-  /** The summary row has one 18px line; the detailed table's 88px row has room for two. */
   lines?: 1 | 2
   onRename: (id: string, title: string) => void
   onTogglePin?: ((run: RunSummary, pinned: boolean) => void) | undefined
 }) {
-  const title = runTitle(run)
-  const editor = useTaskTitleEditor(run)
-  // Read/unread (#unread-done-items, "Option B"): promote an unread done item (bright + semibold)
-  // and dim a read one, matching the sidebar row exactly so the two surfaces read as one grammar.
-  const unread = isUnread(run)
-  const readDone = isReadDoneItem(run)
-
-  if (editor.editing) {
-    return <div className="flex flex-wrap items-center gap-2" data-slot="table-title-editor">
-      <TitleEditInput editor={editor} className="basis-full text-[13px] font-medium" />
-      <Button size="sm" aria-label="Save title" onMouseDown={(event) => event.preventDefault()} onClick={editor.commit}>Save</Button>
-      <Button size="sm" variant="outline" aria-label="Cancel rename" onMouseDown={(event) => event.preventDefault()} onClick={editor.cancel}>Cancel</Button>
-    </div>
-  }
-
   return (
-    // Summary: one 18px line on every device; a touch-sized pin overflows it, the row keeps its height.
-    <span className={cn('flex min-w-0 items-center gap-1.5', lines === 1 ? 'h-[18px]' : 'min-h-[18px]')}>
-      {run.delegation?.role === 'worker' ? <span className="shrink-0 text-xs text-muted-foreground">Worker</span> : null}
-      <Link data-task-control="title"
-        to={to}
-        title={title}
-        // No flex-1: the unread dot follows the title's last word, as on All tasks.
-        className={cn(taskTitleClass(unread, readDone, lines), 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground')}
-      >
-        {title}
-      </Link>
-      {/* The unread marker — the sidebar row's trailing dot, in the run's outcome colour (#617). */}
-      {unread ? (
-        <StatusDot
-          tone={unreadMarkerTone(run)}
-          role="img"
-          aria-label="unread"
-          title="Unread — not opened since it finished"
-          className="shrink-0"
-        />
-      ) : null}
-      <button
-        type="button"
-        data-slot="row-rename"
-        aria-label="Rename task"
-        onClick={editor.begin}
-        className="shrink-0 rounded-sm p-0.5 text-soft-foreground opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-      >
-        <PencilIcon className="size-3" aria-hidden="true" />
-      </button>
-      <span aria-hidden="true" className="flex-1" />
-      {/* The pin (#935), beside the pencil and revealed the same way — except when the row IS
-          pinned, where it stays lit: this table has no `Pinned` header, so the filled pin is the
-          whole explanation for why the row sorted to the top.
-
-          `no-hover:` covers the device this table still reaches without a pointer: it is hidden
-          below `md`, where the cards take over, but a tablet in landscape is ≥md and cannot
-          hover, so without it the pin would be invisible AND unreachable there. */}
-      {onTogglePin ? (
-        <PinToggle
-          pinned={Boolean(run.pinned)}
-          onToggle={(pinned) => onTogglePin(run, pinned)}
-          className="size-[19px] opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 no-hover:opacity-100 data-[pinned=true]:opacity-100"
-        />
-      ) : null}
-    </span>
+    <EditableRunTitle
+      run={run}
+      to={to}
+      title={runTitle(run)}
+      unread={isUnread(run)}
+      unreadTone={unreadMarkerTone(run)}
+      readDone={isReadDoneItem(run)}
+      isWorker={run.delegation?.role === 'worker'}
+      pinned={Boolean(run.pinned)}
+      onTogglePin={onTogglePin ? (pinned) => onTogglePin(run, pinned) : undefined}
+      lines={lines}
+    />
   )
 }
 
-/**
- * The live CPU/Mem pair, read from the global usage stream (`useRunUsage`, never `run.usage` —
- * the REST snapshot goes stale between refetches; the stream ticks every ~2s). Selected per run,
- * so a tick that says nothing about this run re-renders nothing.
- */
 function UsageTds({
   run,
   cpuExpanded,
@@ -1255,17 +1108,17 @@ function UsageTds({
 function UsageTd({ column, cell }: { column: 'cpu' | 'memory'; cell: UsageCell }) {
   const accessibleText = cell.text && cell.title ? `${cell.text}; ${cell.title}` : cell.text
   return (
-    <div role="cell"
+    <div
+      role="cell"
       data-usage={column === 'memory' ? 'mem' : column}
       data-column-id={column}
       data-usage-kind={cell.kind}
       className={cn(
         TD_BASE,
-        'overflow-hidden',
-        'text-right font-mono tabular-nums',
+        'overflow-hidden text-right font-mono tabular-nums',
         cell.kind === 'live' && 'bg-accent-strong/5 text-xs font-medium text-foreground',
-        cell.kind === 'peak' && 'text-[11px] text-supporting-foreground',
-        cell.kind === 'none' && 'text-xs text-soft-foreground'
+        cell.kind === 'peak' && 'text-xs text-supporting-foreground',
+        cell.kind === 'none' && 'text-xs text-soft-foreground',
       )}
     >
       <BoundedMetric text={cell.text || '—'} accessibleText={accessibleText || undefined} />
@@ -1285,125 +1138,9 @@ function BoundedMetric({ text, accessibleText }: { text: string; accessibleText?
   )
 }
 
-const TaskCard = React.memo(function TaskCard({
-  resourcesOpen,
-  onToggleResources,
-  run,
-  queuePosition,
-  now,
-  showTokens,
-  showCost,
-  onTogglePin,
-  automationName,
-}: {
-  resourcesOpen: boolean
-  onToggleResources: (id: string) => void
-  run: RunSummary
-  queuePosition: number | null
-  now: number
-  showTokens: boolean
-  showCost: boolean
-  onTogglePin?: ((run: RunSummary, pinned: boolean) => void) | undefined
-  automationName: (automationId: string) => string | undefined
-}) {
-  const navigate = useNavigate()
-  const attention = deriveAttention(run)
-  const scheduled = scheduledResume(run)
-  const to = `/tasks/${run.id}`
-  const reference = taskReference(run)
-  // Read/unread (#unread-done-items) — the same promote-unread / dim-read treatment as the row.
-  const unread = isUnread(run)
-  const readDone = isReadDoneItem(run)
-
-  return (
-    <div
-      data-slot="task-card"
-      data-status={run.status}
-      data-run-id={run.id}
-      onClick={(event) => {
-        // `button` as well as `a` since the card grew the pin (#935): a control inside the card
-        // owns its own click, exactly as the desktop row has always had it.
-        if ((event.target as Element).closest('a, button')) return
-        navigate(to)
-      }}
-      className="flex cursor-pointer flex-col gap-1.5 border-b border-border py-2.5"
-    >
-      {/* Three tight rows on a phone: the title, then status · workflow · origin, then runner,
-          reference, diff and age. The branch stays behind the resources toggle. */}
-      <div data-slot="mobile-task-title-row" className="flex items-start gap-2">
-        <Link data-task-control="title"
-          to={to}
-          className={cn(
-            'line-clamp-2 min-w-0 flex-1 rounded-sm text-[14px] leading-[1.35] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground',
-            unread ? 'font-semibold text-foreground' : readDone ? 'font-normal text-foreground' : 'font-medium'
-          )}
-        >
-          {run.delegation?.role === 'worker' ? <span className="mr-2 text-xs text-muted-foreground">Worker</span> : null}
-          {runTitle(run)}
-        </Link>
-        {/* The unread marker — trailing dot in the outcome colour, as on the desktop row (#617). */}
-        {unread ? (
-          <StatusDot
-            tone={unreadMarkerTone(run)}
-            role="img"
-            aria-label="unread"
-            title="Unread — not opened since it finished"
-            className="mt-1.5 shrink-0"
-          />
-        ) : null}
-        {/* Always visible here, not hover-revealed: a card has no hover to speak of on the
-            device it exists for, and it is the only place a pin can be set or seen on mobile. */}
-        {onTogglePin ? (
-          <PinToggle
-            pinned={Boolean(run.pinned)}
-            onToggle={(pinned) => onTogglePin(run, pinned)}
-            className="-mt-0.5"
-          />
-        ) : null}
-      </div>
-      <div data-slot="mobile-task-status-row" className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-        <button data-slot="mobile-resources-toggle" data-task-control="resources" type="button" aria-controls={`mobile-resources-${run.id}`} aria-describedby={`mobile-status-${run.id}`} aria-label={resourcesOpen ? 'Hide resources' : 'Show resources'} title={resourcesOpen ? 'Hide resources' : 'Show resources'} aria-expanded={resourcesOpen} onClick={() => onToggleResources(run.id)} className="shrink-0"><Pill id={`mobile-status-${run.id}`} dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="shrink-0" title={scheduled?.title}>
-          {attention.label}
-          {scheduled ? <span className="tabular-nums">{scheduled.label}</span> : null}
-        </Pill></button>
-        <span data-slot="mobile-task-workflow" className="min-w-0 truncate">{workflowLabel(run)}</span>
-        <span aria-hidden="true">·</span>
-        <span className="min-w-0 truncate"><RunOriginLine run={run} automationName={automationName} /></span>
-      </div>
-      <div data-slot="mobile-task-meta" className="flex min-w-0 items-center gap-3 text-xs text-muted-foreground">
-        <span data-slot="mobile-task-runner" className="min-w-0 flex-1 truncate">{run.runner ? <RunnerName runner={run.runner} /> : null}</span>
-        {reference ? <TaskReferenceChip run={run} reference={reference} /> : null}
-        {queuePosition !== null ? <span data-slot="queue-note">#{queuePosition} in queue</span> : run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}
-        <span className="tabular-nums" title={fullTime(run.startedAt ?? run.createdAt)}>{shortAge(run.startedAt ?? run.createdAt, now)}</span>
-      </div>
-      {resourcesOpen ? <>
-        <div className="mt-1.5"><TaskPreview runId={run.id} status={attention.label} error={run.error} open={<Button asChild variant="outline" className="min-h-11"><Link data-task-control="open" to={to}>Open task<span className="sr-only">: {runTitle(run)}</span></Link></Button>} /></div>
-        <MobileResources run={run} showTokens={showTokens} showCost={showCost} />
-      </> : null}
-    </div>
-  )
-})
-
-/** Subscribe to live resource samples only while this card's details are open. */
-function MobileResources({ run, showTokens, showCost }: { run: RunSummary; showTokens: boolean; showCost: boolean }) {
-  const sample = useRunUsage(run.id)
-  const resources = usageCells(run, sample)
-  return <dl id={`mobile-resources-${run.id}`} className="grid grid-cols-2 gap-3 rounded-md bg-muted p-3 text-xs">
-    {run.branch ? <div><dt>Branch</dt><dd>{run.branch}</dd></div> : null}
-    <div><dt>CPU</dt><dd>{resources.cpu.text || '—'}</dd></div><div><dt>Memory</dt><dd>{resources.mem.text || '—'}</dd></div>
-    {showTokens ? <div><dt>IN / OUT</dt><dd><DirectionalUsage inputTokens={run.inputTokens} outputTokens={run.outputTokens} /></dd></div> : null}
-    {showCost ? <div><dt>Cost</dt><dd>{formatCost(run.costUsd) || '—'}</dd></div> : null}
-  </dl>
-}
-
-/**
- * The overview wired to live data: `useRuns()` (kept fresh by the global SSE stream), a local
- * Active/Archived filter (independent of the sidebar quick-list), and the archive-finished
- * mutation. The invalidate on success is the authoritative half of the doctrine — the stream will
- * likely have patched each archived run already, but the endpoint's answer is the truth.
- */
 export function TasksOverviewRoute() {
   const runs = useRuns()
+  const runners = useRunners()
   const health = useHealth()
   const metricVisibility = usageMetricVisibility(health.data)
   const automations = useAutomationsAvailable()
@@ -1416,43 +1153,33 @@ export function TasksOverviewRoute() {
     onSuccess: () => writer.invalidateAfter('runs', () => projectAddress()),
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
-  // "Mark all read" (#unread-done-items): one call stamps every unread finished run; the
-  // invalidate is the authoritative half — each stamped run also rides the `run` SSE.
   const markAllRead = useMutation({
     mutationFn: (automation?: boolean) => markAllRunsSeen(automation),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
-  // The table's inline rename — `usePatchRun` is per-run, so the any-row variant carries the id
-  // in its variables. Same endpoint, same invalidation, same danger toast as the run header.
   const rename = useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) => patchRun(id, { title }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
-  // Pinning (#935) — this page is the scoped project's own table, so no explicit project id.
   const pin = usePinRun()
   const now = useNow(30_000)
   const taskTableColumns = useTaskTableColumns()
-  // Chip statuses are hydrated HERE rather than inside `TasksOverview`, which is a pure
-  // presentational component rendered directly (and without a query client) by its tests. The
-  // provider wraps it instead, so the chips deep in the table and the cards read their status
-  // from context and nothing in between has to relay it.
   const projectId = useReferenceProjectId()
-  // Same `retryOnMount: false` as the registry read below, for the same reason.
   const repoBase = useProjectRepoBase(undefined, { retryOnMount: false })
-  // The scope gate already owns registry loading. Retrying its failed query when this
-  // child mounts would make the gate unmount us, then mount/retry forever offline.
   const projects = useProjects({ retryOnMount: false })
   const projectName = projects.data?.projects?.find((project) => project.id === projectId)?.name
-  // Older archived pages count too: a task found only there still needs its automation's name.
-  const hasAutomationTasks = [...(runs.data ?? []), ...(archived.pages?.runs ?? [])].some((run) => run.automationId !== undefined)
+  const hasAutomationTasks = [...(runs.data ?? []), ...(archived.pages?.runs ?? [])].some(
+    (run) => run.automationId !== undefined,
+  )
   const automationNameIn = useAutomationNames([undefined], automations && hasAutomationTasks)
-  const automationName = React.useCallback((automationId: string) => automationNameIn(undefined, automationId), [automationNameIn])
+  const automationName = React.useCallback(
+    (automationId: string) => automationNameIn(undefined, automationId),
+    [automationNameIn],
+  )
   const referenceRequests = React.useMemo(
     () =>
-      // `taskReference`, singular: this table paints exactly one chip per row (the strongest
-      // reference), so asking about the others would be a request for something never shown.
       projectId === undefined
         ? []
         : (runs.data ?? []).flatMap((run) => {
@@ -1463,11 +1190,16 @@ export function TasksOverviewRoute() {
   )
 
   const onRename = React.useCallback((id: string, title: string) => rename.mutate({ id, title }), [rename.mutate])
-  const onTogglePin = React.useCallback((run: RunSummary, pinned: boolean) => pin.mutate({ id: run.id, pinned }), [pin.mutate])
+  const onTogglePin = React.useCallback(
+    (run: RunSummary, pinned: boolean) => pin.mutate({ id: run.id, pinned }),
+    [pin.mutate],
+  )
+
   return (
     <ReferenceStatusProvider projectId={projectId} repoBase={repoBase} requests={referenceRequests}>
       <TasksOverview
         runs={runs.data}
+        runners={runners.data}
         projectName={projectName}
         error={runs.error?.message}
         onRetry={() => void runs.refetch()}
@@ -1480,7 +1212,9 @@ export function TasksOverviewRoute() {
         onQueryChange={writeQuery}
         foldScope={`project:${projectId ?? 'default'}`}
         automationName={automationName}
-        onArchiveFinished={(automation) => { if (!archive.isPending) archive.mutate(automation) }}
+        onArchiveFinished={(automation) => {
+          if (!archive.isPending) archive.mutate(automation)
+        }}
         archivePending={archive.isPending}
         onMarkAllRead={(automation) => markAllRead.mutate(automation)}
         onRename={onRename}
@@ -1499,28 +1233,12 @@ export function TasksOverviewRoute() {
   )
 }
 
-/** How long the search box waits before writing `q` to the URL: one history write per word. */
-function setParam(key: string, value: string | null): SearchParamsUpdate {
-  return (current) => {
-    if (value === null) current.delete(key)
-    else current.set(key, value)
-    return current
-  }
-}
-
-/**
- * View, origin and search, kept in the URL (hearsay-tools/cezarion#1616) so a reload or a pasted
- * link restores the list. View and origin are also state: the router renders each navigation in
- * a transition, and a tab must switch on the click, not when that transition lands. The search
- * reaches the URL after a short pause in typing.
- */
 function useTasksUrlState() {
   const [searchParams, write] = useSearchParamsWriter()
   const urlView: ListView = searchParams.get('archived') === '1' ? 'archived' : 'active'
   const urlOrigin = parseOrigin(searchParams.get('origin'))
   const [view, setViewState] = React.useState(urlView)
   const [origin, setOriginState] = React.useState(urlOrigin)
-  // A URL changed from outside the page (a pasted link, a sidebar link) wins.
   React.useEffect(() => setViewState(urlView), [urlView])
   React.useEffect(() => setOriginState(urlOrigin), [urlOrigin])
   const urlQuery = searchParams.get('q') ?? ''
@@ -1529,16 +1247,23 @@ function useTasksUrlState() {
     const pending = timer
     return () => clearTimeout(pending.current)
   }, [])
-  const writeQuery = React.useCallback<TasksQueryWriter>((query, written) => {
-    clearTimeout(timer.current)
-    const trimmed = query.trim()
-    timer.current = setTimeout(() => write((current) => {
-      const previousQuery = current.get('q')
-      const next = setParam('q', trimmed === '' ? null : trimmed)(current)
-      if (next.get('q') !== previousQuery) written(trimmed)
-      return next
-    }), QUERY_DEBOUNCE_MS)
-  }, [write])
+  const writeQuery = React.useCallback<TasksQueryWriter>(
+    (query, written) => {
+      clearTimeout(timer.current)
+      const trimmed = query.trim()
+      timer.current = setTimeout(
+        () =>
+          write((current) => {
+            const previousQuery = current.get('q')
+            const next = setParam('q', trimmed === '' ? null : trimmed)(current)
+            if (next.get('q') !== previousQuery) written(trimmed)
+            return next
+          }),
+        QUERY_DEBOUNCE_MS,
+      )
+    },
+    [write],
+  )
   return {
     view,
     setView: (next: ListView) => {

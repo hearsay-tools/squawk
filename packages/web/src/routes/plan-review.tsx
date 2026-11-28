@@ -109,7 +109,7 @@ export function PlanReview({
       >
         <header data-slot="dialog-header" className="flex flex-col gap-1 px-5 pt-4 pb-3.5 text-left">
           <div className="flex items-start justify-between gap-3">
-            <h2 id={titleId} data-slot="dialog-title" className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+            <h2 id={titleId} data-slot="dialog-title" className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               Proposed chain
             </h2>
             <button
@@ -169,7 +169,7 @@ export function PlanReview({
                   aria-hidden="true"
                   className="size-3.5 shrink-0 cursor-grab text-soft-foreground"
                 />
-                <span className="w-5 shrink-0 font-mono text-[11px] text-soft-foreground tabular-nums">
+                <span className="w-5 shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
                   {String(index + 1).padStart(2, '0')}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -181,7 +181,7 @@ export function PlanReview({
                       <span
                         data-slot="plan-badge-skill"
                         title="skill"
-                        className="shrink-0 rounded-full bg-accent-strong/15 px-1.5 py-px font-mono text-[11px] font-medium text-accent-text"
+                        className="shrink-0 rounded-full bg-accent-strong/15 px-1.5 py-px font-mono text-xs font-medium text-accent-text"
                       >
                         {step.skill}
                       </span>
@@ -189,13 +189,13 @@ export function PlanReview({
                     {step.command ? (
                       <span
                         data-slot="plan-badge-check"
-                        className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[11px] font-medium text-muted-foreground"
+                        className="shrink-0 rounded-full bg-muted px-1.5 py-px text-xs font-medium text-muted-foreground"
                       >
                         check
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-3 whitespace-pre-wrap break-words font-mono text-[11px] text-muted-foreground">
+                  <p className="mt-3 whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
                     {stepHint(step)}
                   </p>
                 </div>
@@ -230,7 +230,7 @@ export function PlanReview({
                     size="icon-sm"
                     data-slot="plan-step-remove"
                     aria-label={`Remove step ${index + 1}`}
-                    className="size-7 text-muted-foreground hover:text-danger"
+                    className="size-7 text-muted-foreground hover:text-semantic-red"
                     onClick={() => onStepsChange(removeStep(plan.steps, index))}
                   >
                     Remove
@@ -343,7 +343,7 @@ function SaveAsChain({ steps, disabled }: { steps: WorkflowStepDef[]; disabled: 
               void save(false)
             }}
           >
-            <label htmlFor="plan-chain-name" className="mb-2 block text-[11px] text-muted-foreground">Chain name</label>
+            <label htmlFor="plan-chain-name" className="mb-2 block text-xs text-muted-foreground">Chain name</label>
             <Input
               id="plan-chain-name"
               value={name}

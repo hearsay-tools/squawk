@@ -244,6 +244,17 @@ describe('groupGlobalTasks', () => {
       'quick-task',
     ])
   })
+
+  it('labels a waiting status group as Waiting even when parked on workers', () => {
+    const parked = {
+      ...active[0]!,
+      run: { ...active[0]!.run, id: 'parked-w', status: RUN_STATUS.waiting, waitingOn: { kind: 'workers' as const, count: 2 } },
+    }
+    const groups = groupGlobalTasks([parked], 'status')
+    expect(groups.map((group) => ({ key: group.key, label: group.label }))).toEqual([
+      { key: RUN_STATUS.waiting, label: 'Waiting' },
+    ])
+  })
 })
 
 describe('facet counts', () => {

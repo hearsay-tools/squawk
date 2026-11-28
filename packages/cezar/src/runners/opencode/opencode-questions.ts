@@ -30,10 +30,16 @@ export function toSquawkQuestions(value: unknown): AskQuestion[] | null {
   return parseAskRequest({ questions })?.questions ?? null;
 }
 
+const ADDITIONAL_COMMENTS_MARKER = '\n\nAdditional comments:\n';
+
 export function questionAnswers(questions: AskQuestion[], text: string): string[][] {
+  const markerIndex = text.indexOf(ADDITIONAL_COMMENTS_MARKER);
+  const structuredText = markerIndex >= 0 ? text.slice(0, markerIndex) : text;
+  const comment = markerIndex >= 0 ? text.slice(markerIndex + ADDITIONAL_COMMENTS_MARKER.length).trim() : '';
   const answers = questions.map(() => [] as string[]);
   const matched = new Set<number>();
-  for (const line of text.split('\n')) {
+  let lastMatched = -1;
+  for (const line of structuredText.split(/\r?\n/)) {
     const trimmed = line.trim();
     const index = questions.findIndex(
       (question, questionIndex) =>
@@ -41,6 +47,7 @@ export function questionAnswers(questions: AskQuestion[], text: string): string[
     );
     if (index < 0) continue;
     matched.add(index);
+    lastMatched = index;
     answers[index] = trimmed
       .slice(questions[index]!.header.length + 1)
       .split(',')
@@ -48,6 +55,7 @@ export function questionAnswers(questions: AskQuestion[], text: string): string[
       .filter(Boolean);
   }
   if (matched.size === 0 && answers[0]) answers[0] = [text.trim()];
+  else if (comment && lastMatched >= 0) answers[lastMatched]!.push(`Additional comments:\n${comment}`);
   return answers;
 }
 

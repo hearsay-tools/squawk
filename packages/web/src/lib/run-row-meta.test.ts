@@ -55,18 +55,29 @@ describe('metaStateWord (#617: the states the dot alone cannot say)', () => {
     expect(metaStateWord(labelled(label), null, plain, NOW)).toBeUndefined()
   })
 
-  it.each(['failed', 'running', 'needs review', 'needs permission', 'waiting on 2 workers', 'waiting on worker replies', 'waiting on parent reply', 'waiting for CI', 'waiting for merge', 'waiting for capacity'])(
-    'says the attention label for %s',
-    (label) => {
-      expect(metaStateWord(labelled(label), null, plain, NOW)).toBe(label)
+  it.each([
+    ['failed', 'Failed'],
+    ['running', 'Running'],
+    ['needs review', 'Needs review'],
+    ['needs permission', 'Needs permission'],
+    ['waiting on 2 workers', 'Waiting for 2 workers'],
+    ['waiting on worker replies', 'Waiting for worker replies'],
+    ['waiting on parent reply', 'Waiting for parent reply'],
+    ['waiting for CI', 'Waiting for CI'],
+    ['waiting for merge', 'Waiting for merge'],
+    ['waiting for capacity', 'Waiting for capacity'],
+  ])(
+    'says the canonical attention label for %s',
+    (label, expected) => {
+      expect(metaStateWord(labelled(label), null, plain, NOW)).toBe(expected)
     },
   )
 
   describe('queued', () => {
     it.each([
-      [1, 'queued #1'],
-      [2, 'queued #2'],
-      [null, 'queued'],
+      [1, 'Queued #1'],
+      [2, 'Queued #2'],
+      [null, 'Queued'],
     ])('with position %s reads %j', (position, word) => {
       expect(metaStateWord(labelled('queued'), position, plain, NOW)).toBe(word)
     })
@@ -74,25 +85,25 @@ describe('metaStateWord (#617: the states the dot alone cannot say)', () => {
 
   describe('usage limit', () => {
     it.each([
-      ['a resume time in the future', ahead(12 * 60_000), 'usage limit, resumes in 12m'],
-      ['a resume time already due', ago(60_000), 'usage limit'],
-      ['no resume time', undefined, 'usage limit'],
-      ['an unreadable resume time', 'soon', 'usage limit'],
+      ['a resume time in the future', ahead(12 * 60_000), 'Usage limit, resumes in 12m'],
+      ['a resume time already due', ago(60_000), 'Usage limit'],
+      ['no resume time', undefined, 'Usage limit'],
+      ['an unreadable resume time', 'soon', 'Usage limit'],
     ])('with %s', (_name, autoResumeAt, word) => {
       expect(metaStateWord(labelled('usage limit'), null, run({ autoResumeAt }), NOW)).toBe(word)
     })
     it('names a provider-error hold (hearsay-tools/squawk#3337)', () => {
       expect(metaStateWord(labelled('usage limit'), null, run({ autoResumeAt: ahead(12 * 60_000), autoResumeReason: 'provider-error' }), NOW))
-        .toBe('provider error, resumes in 12m')
+        .toBe('Provider error, resumes in 12m')
     })
   })
 
   describe('monitoring', () => {
     it.each([
-      ['a timer wait with a readable time', timer(ahead(5 * 60_000)), `monitoring, next check ${clockText(ahead(5 * 60_000))}`],
-      ['a timer wait with an unreadable time', timer('later'), 'monitoring'],
-      ['a wait that is not a timer', commandWait(ahead(60_000)), 'monitoring'],
-      ['no wait at all', undefined, 'monitoring'],
+      ['a timer wait with a readable time', timer(ahead(5 * 60_000)), `Monitoring, next check ${clockText(ahead(5 * 60_000))}`],
+      ['a timer wait with an unreadable time', timer('later'), 'Monitoring'],
+      ['a wait that is not a timer', commandWait(ahead(60_000)), 'Monitoring'],
+      ['no wait at all', undefined, 'Monitoring'],
     ])('with %s', (_name, waitingOn, word) => {
       expect(metaStateWord(labelled('monitoring'), null, run({ waitingOn }), NOW)).toBe(word)
     })
@@ -103,28 +114,28 @@ describe('metaStateWord (#617: the states the dot alone cannot say)', () => {
     })
 
     it('names the timer only for the monitoring label', () => {
-      expect(metaStateWord(labelled('running'), null, run({ waitingOn: timer(ahead(5 * 60_000)) }), NOW)).toBe('running')
+      expect(metaStateWord(labelled('running'), null, run({ waitingOn: timer(ahead(5 * 60_000)) }), NOW)).toBe('Running')
     })
   })
 
   describe('waiting for a command', () => {
     it.each([
-      ['a process wait with a readable deadline', commandWait(ahead(30 * 60_000)), `waiting for a command, until ${clockText(ahead(30 * 60_000))}`],
-      ['a process wait with an unreadable deadline', commandWait('later'), 'waiting for a command'],
-      ['a wait that is not a process', timer(ahead(60_000)), 'waiting for a command'],
-      ['no wait at all', undefined, 'waiting for a command'],
+      ['a process wait with a readable deadline', commandWait(ahead(30 * 60_000)), `Waiting for command, until ${clockText(ahead(30 * 60_000))}`],
+      ['a process wait with an unreadable deadline', commandWait('later'), 'Waiting for command'],
+      ['a wait that is not a process', timer(ahead(60_000)), 'Waiting for command'],
+      ['no wait at all', undefined, 'Waiting for command'],
     ])('with %s', (_name, waitingOn, word) => {
       expect(metaStateWord(labelled('waiting for a command'), null, run({ waitingOn }), NOW)).toBe(word)
     })
 
     it('names the deadline only for that label', () => {
-      expect(metaStateWord(labelled('running'), null, run({ waitingOn: commandWait(ahead(30 * 60_000)) }), NOW)).toBe('running')
+      expect(metaStateWord(labelled('running'), null, run({ waitingOn: commandWait(ahead(30 * 60_000)) }), NOW)).toBe('Running')
     })
   })
 
   it('reads the label of a derived attention, not a literal', () => {
     const failed = run({ status: RUN_STATUS.failed })
-    expect(metaStateWord(deriveAttention(failed), null, failed, NOW)).toBe('failed')
+    expect(metaStateWord(deriveAttention(failed), null, failed, NOW)).toBe('Failed')
   })
 })
 
@@ -144,15 +155,15 @@ describe('runRowMeta (#617, #729: what the meta line is made of)', () => {
 
     it('is empty for a queued row, whose position rides in the state word', () => {
       const queued = run({ status: RUN_STATUS.queued })
-      expect(meta({ run: queued, queuePosition: 3 })).toMatchObject({ age: '', stateWord: 'queued #3' })
+      expect(meta({ run: queued, queuePosition: 3 })).toMatchObject({ age: '', stateWord: 'Queued #3' })
     })
   })
 
   describe('the state word', () => {
     it.each([
-      ['a running row elsewhere', false, 'running', 'running'],
+      ['a running row elsewhere', false, 'running', 'Running'],
       ['a running row in the Working group, where the group says it', true, 'running', undefined],
-      ['a row that is not running, in the Working group', true, 'monitoring', 'monitoring'],
+      ['a row that is not running, in the Working group', true, 'monitoring', 'Monitoring'],
     ])('for %s', (_name, inWorkingGroup, label, word) => {
       const attention = labelled(label)
       expect(meta({ run: run({ status: RUN_STATUS.running }), attention, inWorkingGroup }).stateWord).toBe(word)

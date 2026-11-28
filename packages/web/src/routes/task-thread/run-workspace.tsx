@@ -265,7 +265,7 @@ export function BranchCopy({ branch }: { branch: string }) {
     <span className="inline-flex min-w-0 max-w-full items-center gap-1">
       <span
         data-slot="branch-chip"
-        className="min-w-0 rounded-sm border border-border bg-card px-1.5 py-px font-mono text-[11px] font-medium break-all"
+        className="min-w-0 rounded-sm border border-border bg-card px-1.5 py-px font-mono text-xs font-medium break-all"
       >
         {branch}
       </span>

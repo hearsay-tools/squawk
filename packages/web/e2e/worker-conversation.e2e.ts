@@ -92,11 +92,11 @@ afterAll(async () => {
 function waitForFocusedCard(selector: string) {
   browser.waitForFunction(`(() => {
     const card = document.activeElement?.querySelector(${JSON.stringify(selector)});
-    const main = document.querySelector('[data-slot="main"]');
+    const scroller = document.querySelector('[data-slot="thread-transcript"]') ?? document.querySelector('[data-slot="main"]');
     const header = document.querySelector('[data-slot="run-header"]');
-    if (!card || !main) return false;
+    if (!card || !scroller) return false;
     const top = header && getComputedStyle(header).position === 'sticky'
-      ? header.getBoundingClientRect().bottom : main.getBoundingClientRect().top;
+      ? header.getBoundingClientRect().bottom : scroller.getBoundingClientRect().top;
     return card.getBoundingClientRect().top >= top - 1 && card.getBoundingClientRect().top < innerHeight;
   })()`)
 }
@@ -161,10 +161,10 @@ describe('chronological worker conversation', () => {
       // Hover can repin main's scroll so the sticky header covers Details (#548); an explicit
       // wheelAt reaches main where the CLI wheel did not.
       const scroller = browser.waitForStable<{ x: number; y: number; top: number; height: number; scrollHeight: number }>(`(() => {
-        const main = document.querySelector('[data-slot="main"]');
-        const rect = main.getBoundingClientRect();
+        const transcript = document.querySelector('[data-slot="thread-transcript"]');
+        const rect = transcript.getBoundingClientRect();
         return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2,
-          top: main.scrollTop, height: main.clientHeight, scrollHeight: main.scrollHeight };
+          top: transcript.scrollTop, height: transcript.clientHeight, scrollHeight: transcript.scrollHeight };
       })()`, {
         holdMs: 100,
         matcher: (state) => state !== null,
@@ -173,7 +173,7 @@ describe('chronological worker conversation', () => {
       browser.evaluate(`window.__cezWheelProbe = null; window.addEventListener('wheel', event => {
         window.__cezWheelProbe = {
           trusted: event.isTrusted,
-          inMain: document.querySelector('[data-slot="main"]').contains(event.target),
+          inMain: document.querySelector('[data-slot="thread-transcript"]').contains(event.target),
           target: event.target.tagName,
           deltaY: event.deltaY,
         };
@@ -185,7 +185,7 @@ describe('chronological worker conversation', () => {
       expect(wheel.trusted).toBe(true)
       expect(wheel.inMain).toBe(true)
       expect(wheel.deltaY).toBeLessThan(0)
-      const wheelTop = browser.waitForStable<number>(`document.querySelector('[data-slot="main"]').scrollTop`, { holdMs: 100 })
+      const wheelTop = browser.waitForStable<number>(`document.querySelector('[data-slot="thread-transcript"]').scrollTop`, { holdMs: 100 })
       expect(wheelTop).toBeLessThan(scroller.top)
       hoverVisiblePoint(browser, `${request} [data-slot="collapsible-trigger"]`)
       const visiblePoint = browser.waitForStable<{ y: number; headerBottom: number; visible: boolean }>(`(() => {

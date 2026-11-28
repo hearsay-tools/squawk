@@ -36,14 +36,14 @@ describe('DiffStatLabel', () => {
   it('omits a zero half instead of rendering it', () => {
     const el = renderStat({ adds: 12, dels: 0, files: 1 })
     expect(el.textContent).toBe('+12')
-    expect(el.querySelector('.text-success')?.textContent).toBe('+12')
-    expect(el.querySelector('.text-danger')).toBeNull()
+    expect(el.querySelector('.text-semantic-green')?.textContent).toBe('+12')
+    expect(el.querySelector('.text-semantic-red')).toBeNull()
     expect(el.title).toBe('+12 −0 across 1 file')
     cleanup()
     const removed = renderStat({ adds: 0, dels: 7, files: 1 })
     expect(removed.textContent).toBe('−7')
-    expect(removed.querySelector('.text-danger')?.textContent).toBe('−7')
-    expect(removed.querySelector('.text-success')).toBeNull()
+    expect(removed.querySelector('.text-semantic-red')?.textContent).toBe('−7')
+    expect(removed.querySelector('.text-semantic-green')).toBeNull()
   })
 
   it('shows a muted dash when both halves are zero', () => {

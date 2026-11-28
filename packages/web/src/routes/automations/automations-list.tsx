@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { scheduleLabel } from '@open-mercato/cezar-api-client/contract/automation-schedule'
 import { automationFailureNotice } from '@open-mercato/cezar-api-client/contract/automations'
-import type { AutomationListEntry, AutomationsResponse, OnceStatus } from '@open-mercato/cezar-api-client'
+import type { AutomationListEntry, AutomationsResponse } from '@open-mercato/cezar-api-client'
 
 import { cancelAutomation, checkAutomation, getAutomationCheck, runAutomationNow, setAutomationEnabled } from '@/api/client'
 import { CenteredState } from '@/components/centered-state'
@@ -18,6 +18,7 @@ import { Pill } from '@/components/pill'
 import { Button } from '@/components/ui/button'
 import { dayTime, relativeIn } from '@/lib/automation-format'
 import { Link } from '@/lib/project-router'
+import { automationStatusPresentation } from '@/lib/status-semantics'
 import { cn } from '@/lib/utils'
 import { eventsSentence } from './event-phrases'
 import { InlineLog } from './log'
@@ -135,7 +136,7 @@ export function AutomationsList({ data, error, refresh, archived = false, onArch
                     !archived && 'border-accent-text text-foreground',
                   )}
                 >
-                  Active
+                  Current
                   <TabCount count={activeEntries.length} />
                 </button>
                 <button
@@ -213,29 +214,14 @@ function triggerLabel(automation: AutomationListEntry): string {
   return `${eventsSentence(automation.events ?? [])} · every ${Math.round((automation.intervalSeconds ?? 300) / 60)} min`
 }
 
-/** A one-time schedule's status badge: the words and the dot tone (hearsay-tools/cezarion#1465). */
-const ONCE_BADGE: Record<OnceStatus, { label: string; dot: 'success' | 'neutral' | 'danger' | 'pending' }> = {
-  waiting: { label: 'Waiting', dot: 'success' },
-  paused: { label: 'Paused', dot: 'neutral' },
-  failed: { label: 'Failed', dot: 'danger' },
-  missed: { label: 'Missed', dot: 'pending' },
-  archived: { label: 'Archived', dot: 'neutral' },
-}
-
-/** A one-time schedule's status badge, or undefined when the card shows live Enabled/Paused. */
-function badgeFor(automation: AutomationListEntry): (typeof ONCE_BADGE)[OnceStatus] | undefined {
-  if (automation.schedule?.type !== 'once') return undefined
-  return ONCE_BADGE[automation.onceStatus ?? (automation.enabled ? 'waiting' : 'paused')]
-}
-
 /** The card head: kind icon, name, one metadata line (trigger · next run), and the status pill. */
-function AutomationCardHead({ automation, badge, nextRun }: {
+function AutomationCardHead({ automation, nextRun }: {
   automation: AutomationListEntry
-  badge: (typeof ONCE_BADGE)[OnceStatus] | undefined
   /** The next-run part of the metadata line; absent on an archived card. */
   nextRun?: ReactNode
 }) {
   const KindIcon = automation.kind === 'schedule' ? RefreshCwIcon : GithubIcon
+  const status = automationStatusPresentation(automation)
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
@@ -246,9 +232,7 @@ function AutomationCardHead({ automation, badge, nextRun }: {
           {nextRun ? <><span aria-hidden="true">·</span>{nextRun}</> : null}
         </p>
       </div>
-      {badge
-        ? <Pill dot={badge.dot}>{badge.label}</Pill>
-        : <Pill dot={automation.enabled ? 'success' : 'neutral'}>{automation.enabled ? 'Enabled' : 'Paused'}</Pill>}
+      <Pill dot={status.tone} shape={status.shape} pulse={status.pulse}>{status.label}</Pill>
     </div>
   )
 }
@@ -392,10 +376,9 @@ function AutomationCard({ automation, timeZone, note, busy, onRun, onToggle, onP
   const keep = () => { focusAfter.current = 'cancel'; setConfirmingCancel(false) }
   const archive = automation.archived
   return (
-    <li data-slot="automation-card" data-kind={automation.kind} className="flex min-w-0 flex-col gap-2.5 rounded-xl border bg-card p-4">
+    <li data-slot="automation-card" data-kind={automation.kind} className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-card-edge bg-card p-4 shadow-card">
       <AutomationCardHead
         automation={automation}
-        badge={badgeFor(automation)}
         nextRun={archive ? undefined : <NextRunMeta automation={automation} timeZone={timeZone} />}
       />
       {archive ? <ArchiveRecord automation={automation} archive={archive} /> : null}

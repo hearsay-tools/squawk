@@ -101,7 +101,7 @@ function reveal(expectedHeading?: string) {
     if (!(${headingReady})) return null
     if (document.querySelector('[data-slot="parent-task-link"]')) return true
     if (document.querySelector(${JSON.stringify(region)})) return true
-    document.querySelector('[data-slot="run-activity-dock"] > button[aria-expanded="false"]')?.click()
+    document.querySelector('[data-slot="run-activity-trigger"][aria-expanded="false"], [data-slot="run-activity-trigger-mobile"][aria-expanded="false"]')?.click()
     document.querySelector('[data-slot="run-activity-workers"] > button[aria-expanded="false"]')?.click()
     return null
   })()`, undefined, { failure: 'task relationships did not open' })
@@ -116,9 +116,20 @@ function open(id = parentId, suffix = '') {
   reveal()
 }
 
+// Saved receipts render the worker links before GET /runs/:id/relationships answers; each row's
+// status, cleanup state and Clean up control come only with that answer. Wait for it before
+// reading any of them: every row carries its status and the loading note is gone.
+function waitForRelationships(count: number) {
+  browser.waitForFunction(`(() => {
+    const section = document.querySelector(${JSON.stringify(region)})
+    return section !== null && !section.textContent.includes('Loading relationships')
+      && section.querySelectorAll('[data-slot="worker-item"][data-status]').length === ${count}
+  })()`)
+}
+
 it('retains all 32 scoped worker links only on Session, including archived workers', () => {
   open()
-  browser.waitForFunction(`document.querySelectorAll('${region} a').length === 32`)
+  waitForRelationships(32)
   expect(browser.count(`${region} a`)).toBe(32)
   expect(browser.evaluate(`[...document.querySelectorAll('${region} a')].every(a => a.getAttribute('href').startsWith('/p/${project}/tasks/'))`)).toBe(true)
   expect(browser.text(region)).toContain('Cleanup incomplete')
@@ -145,7 +156,7 @@ for (const [width, height] of [[1440, 900], [360, 640]]) for (const theme of ['l
       document.querySelector('[data-slot="appearance-theme"] [data-value="${theme}"]')?.getAttribute('aria-checked') === 'true' &&
       document.documentElement.classList.contains('light') === ${theme === 'light'}`)
     open()
-    browser.waitForFunction(`document.querySelectorAll('${region} a').length === 32`)
+    waitForRelationships(32)
     browser.setReducedMotion()
     // #816: a settled worker row also carries a Clean up button after its link, so the tab
     // stops between the first and last worker link are counted from the rendered controls
@@ -191,7 +202,9 @@ for (const [width, height] of [[1440, 900], [360, 640]]) for (const theme of ['l
     expect(parentFacts.visible).toBe(true)
     browser.screenshot(join(artifacts, `worker-parent-${width}-${theme}.png`), { viewport: true })
     browser.click(parentLink)
-    browser.waitForFunction(`location.pathname === '${route(parentId)}' && document.querySelector('[data-slot="run-activity-workers"]') !== null`)
+    browser.waitForFunction(`location.pathname === '${route(parentId)}'`)
+    reveal('Relationship parent with 32 workers')
+    browser.waitForFunction(`document.querySelector('[data-slot="run-activity-workers"]') !== null`)
   }, 120_000)
 }
 
@@ -206,28 +219,28 @@ for (const width of [320, 360]) for (const theme of ['light', 'dark']) {
     browser.waitForFunction(`document.body.textContent.includes('Pass 40:')`)
     const link = '[data-slot="mobile-parent-task-link"]'
     browser.waitForFunction(`document.querySelector('${link}') !== null`)
-    browser.evaluate(`(() => { const main = document.querySelector('[data-slot="main"]'); main.scrollTop = main.scrollHeight; })()`)
+    browser.evaluate(`(() => { const transcript = document.querySelector('[data-slot="thread-transcript"]'); transcript.scrollTop = transcript.scrollHeight; })()`)
     const facts = waitForSettledSample(browser, `(() => {
-      const main = document.querySelector('[data-slot="main"]'), link = document.querySelector('${link}');
+      const main = document.querySelector('[data-slot="main"]'), transcript = document.querySelector('[data-slot="thread-transcript"]'), link = document.querySelector('${link}');
       const r = link.getBoundingClientRect(), title = document.querySelector('[data-slot="mobile-run-title"] h1');
       const controls = [...document.querySelectorAll('[data-slot="mobile-top-bar"] a, [data-slot="mobile-top-bar"] button')];
-      return { scroll: main.scrollTop, bottomGap: main.scrollHeight - main.scrollTop - main.clientHeight,
-        // The Session header docks only its facet tabs on a phone: the breadcrumb scrolls out
-        // above the scrollport, and the tabs sit at its top edge.
-        breadcrumbBottom: document.querySelector('[data-slot="parent-task-link"]').getBoundingClientRect().bottom - main.getBoundingClientRect().top,
-        tabsTop: document.querySelector('[data-slot="run-tabs"]').getBoundingClientRect().top - main.getBoundingClientRect().top,
+      return { scroll: transcript.scrollTop, bottomGap: transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight,
+        tabsVisible: (() => {
+          const tabs = document.querySelector('[data-slot="run-tabs"]').getBoundingClientRect();
+          const m = main.getBoundingClientRect();
+          return tabs.top >= m.top - 0.5 && tabs.bottom <= m.bottom + 0.5;
+        })(),
         visible: r.top >= 0 && r.bottom <= innerHeight, height: r.height, width: r.width,
         hit: link.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)),
         controls: controls.map(el => { const b = el.getBoundingClientRect(); return { name: el.getAttribute('aria-label'), x: b.x, right: b.right, height: b.height }; }),
         titleWidth: title.getBoundingClientRect().width, titleLineClamp: getComputedStyle(title).webkitLineClamp,
         overflow: document.documentElement.scrollWidth > innerWidth, theme: document.documentElement.classList.contains('light') === ${theme === 'light'},
         href: link.getAttribute('href') };
-    })()`) as { scroll: number; bottomGap: number; breadcrumbBottom: number; tabsTop: number; visible: boolean; height: number; width: number; hit: boolean; controls: { name: string; x: number; right: number; height: number }[]; titleWidth: number; titleLineClamp: string; overflow: boolean; theme: boolean; href: string }
+    })()`) as { scroll: number; bottomGap: number; tabsVisible: boolean; visible: boolean; height: number; width: number; hit: boolean; controls: { name: string; x: number; right: number; height: number }[]; titleWidth: number; titleLineClamp: string; overflow: boolean; theme: boolean; href: string }
     observations.push({ case: 'mobile parent at transcript bottom', viewportWidth: width, selectedTheme: theme, ...facts })
     expect(facts.scroll).toBeGreaterThan(1000)
     expect(facts.bottomGap).toBeLessThanOrEqual(1)
-    expect(facts.breadcrumbBottom).toBeLessThanOrEqual(0.5)
-    expect(Math.abs(facts.tabsTop)).toBeLessThanOrEqual(0.5)
+    expect(facts.tabsVisible).toBe(true)
     expect(facts.visible).toBe(true); expect(facts.hit).toBe(true)
     expect(facts.height).toBeGreaterThanOrEqual(44); expect(facts.width).toBeGreaterThanOrEqual(44)
     expect(facts.overflow).toBe(false); expect(facts.theme).toBe(true)
@@ -263,21 +276,21 @@ it('shows unavailable parent with retry, successful empty state, worker wait and
   expect(browser.evaluate(`[...document.querySelectorAll('${parentRegion} a')].some(a => a.getAttribute('aria-label')?.includes('${absentId}'))`)).toBe(true)
   open(emptyId); browser.waitForFunction(`document.querySelector('${region}').textContent.includes('No workers')`)
   // A full record carries its worker ids, so the count is said (#617).
-  open(waitingId); expect(browser.text(region)).toContain('Waiting on 1 worker')
+  open(waitingId); expect(browser.text(region)).toContain('Waiting for 1 worker')
   expect(browser.count('[data-slot="ask-card"]')).toBe(0)
   // The real server derives attention from the seeded human wait.
   // Visit both lists before the ask detail so its history cannot prime attention.
   browser.goto(`${base}/p/${project}/`)
   const projectAsk = `[data-slot="task-row"][data-run-id="${askId}"]`
-  browser.waitForFunction(`document.querySelector('${projectAsk} [aria-label="needs you"]') !== null`)
-  expect(browser.count(`${projectAsk} [aria-label="needs you"]`)).toBe(1)
-  // Since #817 list rows carry the awaited worker ids, so a parked root reads "waiting on N
+  browser.waitForFunction(`document.querySelector('${projectAsk} [aria-label="Needs you"]') !== null`)
+  expect(browser.count(`${projectAsk} [aria-label="Needs you"]`)).toBe(1)
+  // Since #817 list rows carry the awaited worker ids, so a parked root reads "Waiting for N
   // worker(s)": match the whole family, not only the uncounted spelling.
-  expect(browser.count(`${projectAsk} [aria-label^="waiting on"]`)).toBe(0)
+  expect(browser.count(`${projectAsk} [aria-label^="Waiting for"]`)).toBe(0)
   browser.goto(`${base}/tasks`)
   const globalAsk = `[data-slot="global-task-row"][data-run-id="${askId}"]`
-  browser.waitForFunction(`document.querySelector('${globalAsk}')?.textContent.includes('needs you')`)
-  expect(browser.text(globalAsk)).not.toMatch(/waiting on (\d+ )?workers?/)
+  browser.waitForFunction(`document.querySelector('${globalAsk}')?.textContent.includes('Needs you')`)
+  expect(browser.text(globalAsk)).not.toMatch(/Waiting for (\d+ )?workers?/i)
   observations.push({ pendingHumanAsk: 'project and global lists need you before detail history loads' })
   open(askId)
   browser.waitForFunction(`document.body.textContent.includes('Which implementation should I use?')`)
@@ -340,12 +353,12 @@ it('global Tasks and cross-project palette keep parked-root status without listi
   browser.goto(`${base}/tasks`)
   browser.waitForFunction(`document.querySelector('[data-slot="global-task-row"][data-run-id="${waitingId}"]') !== null`)
   // The index row is the run summary since #817, which carries the awaited worker ids: counted.
-  expect(browser.text(`[data-slot="global-task-row"][data-run-id="${waitingId}"]`)).toContain('waiting on 1 worker')
+  expect(browser.text(`[data-slot="global-task-row"][data-run-id="${waitingId}"]`)).toContain('Waiting for 1 worker')
   expect(browser.text('body')).not.toContain('Worker')
   browser.press('Control+k')
   browser.fill('[cmdk-input]', 'Waiting root fixture')
   browser.waitForFunction(`document.querySelector('[cmdk-list]')?.textContent.includes('Waiting root fixture')`)
-  expect(browser.count('[cmdk-list] [aria-label="waiting on 1 worker"]')).toBe(1)
+  expect(browser.count('[cmdk-list] [aria-label="Waiting for 1 worker"]')).toBe(1)
   browser.fill('[cmdk-input]', 'Owned worker 1')
   const workerSearch = browser.waitForValue(`(() => {
     const input = document.querySelector('[cmdk-input]')
@@ -370,7 +383,7 @@ it('keeps request waits consistent in threads, global tasks and the palette at p
     browser.waitForFunction(`document.querySelector('[data-slot="appearance-theme"]') !== null`)
     // Completed registry chrome can move theme radios; the helper settles before clicking.
     clickAppearanceControl(browser, 'theme', theme)
-    for (const [id, label] of [[requestParentId, 'Waiting on worker replies'], [requestWorkerId, 'Waiting on parent reply']] as const) {
+    for (const [id, label] of [[requestParentId, 'Waiting for worker replies'], [requestWorkerId, 'Waiting for parent reply']] as const) {
       open(id)
       browser.waitForFunction(`document.querySelector('[data-slot="paused-hint"]') !== null`)
       expect(browser.text('[data-slot="paused-hint"]')).toContain(label)
@@ -389,8 +402,8 @@ it('keeps request waits consistent in threads, global tasks and the palette at p
   const parentRow = `[data-slot="global-task-row"][data-run-id="${requestParentId}"]`
   const workerRow = `[data-slot="global-task-row"][data-run-id="${requestWorkerId}"]`
   browser.waitForFunction(`document.querySelector('${parentRow}') !== null`)
-  expect(browser.text(parentRow)).toContain('waiting on worker replies')
-  expect(browser.text(parentRow)).not.toContain('needs you')
+  expect(browser.text(parentRow)).toContain('Waiting for worker replies')
+  expect(browser.text(parentRow)).not.toContain('Needs you')
   expect(browser.evaluate(`document.querySelector('${workerRow}')`)).toBeNull()
   browser.press('Control+k')
   browser.fill('[cmdk-input]', 'Worker awaiting parent reply')
@@ -401,7 +414,7 @@ it('keeps request waits consistent in threads, global tasks and the palette at p
     if (!list) return null
     return {
       workerPresent: list.querySelector('[data-slot="palette-task"][data-run-id="${requestWorkerId}"]') !== null,
-      waitingOnParent: list.querySelectorAll('[aria-label="waiting on parent reply"]').length,
+      waitingOnParent: list.querySelectorAll('[aria-label="Waiting for parent reply"]').length,
     }
   })()`) as { workerPresent: boolean; waitingOnParent: number }
   expect(workerWait.workerPresent).toBe(false)

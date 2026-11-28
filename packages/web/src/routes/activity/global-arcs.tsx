@@ -79,7 +79,7 @@ interface ArcsProps {
   paused?: boolean
 }
 
-const ARC_LABEL_BOX = 'pointer-events-none absolute z-[4] -translate-x-1/2 -translate-y-1/2 rounded-md border bg-background px-1.5 py-px text-[10.5px] whitespace-nowrap text-foreground tabular-nums max-md:hidden'
+const ARC_LABEL_BOX = 'pointer-events-none absolute z-[4] -translate-x-1/2 -translate-y-1/2 rounded-md border bg-background px-1.5 py-px text-xs whitespace-nowrap text-foreground tabular-nums max-md:hidden'
 
 function WaitArcLabel({ arc, wait, now, motion }: { arc: ArcShape; wait: PeerWait; now: number; motion: MotionState }) {
   return (

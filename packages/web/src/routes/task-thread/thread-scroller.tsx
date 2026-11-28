@@ -232,7 +232,9 @@ export function useThreadScroll(
     setContentEl(el)
     if (el) {
       scrollElRef.current = el.closest<HTMLElement>(
-        surface === 'panel' ? '[data-slot="transcript-viewport"]' : '[data-slot="main"]',
+        surface === 'panel'
+          ? '[data-slot="transcript-viewport"]'
+          : '[data-slot="thread-transcript"], [data-slot="main"]',
       )
       applyArrival()
     }
@@ -361,18 +363,25 @@ export function useThreadScroll(
     pendingFocusRef.current?.disconnect()
     const findRow = () => [...contentEl.querySelectorAll<HTMLElement>('[data-row-key]')]
       .find(row => row.dataset.rowKey === key)
+    const header = scroller.querySelector<HTMLElement>('[data-slot="run-header"]')
+    const inset = header && getComputedStyle(header).position === 'sticky' ? dockedHeaderHeight(header) : 0
     const focusRow = () => {
       const row = findRow()
       if (!row || getComputedStyle(row).visibility === 'hidden') return false
       const target = focusTarget?.(row) ?? row
       if (target === row) row.tabIndex = -1
+      else {
+        const scrollerRect = scroller.getBoundingClientRect()
+        const targetRect = target.getBoundingClientRect()
+        if (targetRect.top < scrollerRect.top + inset || targetRect.bottom > scrollerRect.bottom) {
+          setOffset(scroller.scrollTop + targetRect.top - scrollerRect.top - inset - 12)
+        }
+      }
       target.focus({ preventScroll: true })
       if (document.activeElement !== target) return false
       pendingFocusRef.current?.disconnect()
       return true
     }
-    const header = scroller.querySelector<HTMLElement>('[data-slot="run-header"]')
-    const inset = header && getComputedStyle(header).position === 'sticky' ? dockedHeaderHeight(header) : 0
     const handle = virtualizerRef.current
     if (savedTop !== undefined) setOffset(savedTop)
     else if (handle) handle.scrollToIndex(index, { align: 'start', ...(inset > 0 ? { offset: -inset } : {}) })
@@ -410,12 +419,16 @@ export function useThreadScroll(
     const pin = () => {
       if (stuckRef.current) toBottom()
     }
-    // The refreshed tail can remount the transcript, so the target is looked up under the
-    // shell scroller, not the rows container, and focused when it exists.
+    // The refreshed tail can remount the entire task-thread route through ThreadLoading, so
+    // anchor late focus observation on AppShell's persistent `[data-slot="main"]` container.
+    const focusRoot =
+      scroller.closest<HTMLElement>('[data-slot="main"]') ??
+      scroller.closest<HTMLElement>('[data-route="task-thread"]') ??
+      scroller
     const owns = () => ownsFocus(owner, generation)
     // True when the wait is over: the target took focus, or the caller gave it up.
     const focus = () => {
-      const target = focusTarget?.(scroller)
+      const target = focusTarget?.(focusRoot)
       if (target === false) return true
       if (!target) return false
       target.focus({ preventScroll: true })
@@ -436,7 +449,7 @@ export function useThreadScroll(
             else if (focus()) observer.disconnect()
           })
           pendingFocusRef.current = observer
-          observer.observe(scroller, { childList: true, subtree: true })
+          observer.observe(focusRoot, { childList: true, subtree: true })
         })
       })
     })

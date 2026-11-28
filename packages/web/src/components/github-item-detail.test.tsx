@@ -107,22 +107,27 @@ describe('GithubItemDetail outside the GitHub view', () => {
   it('shows confirmed optional reviews as passing and enables normal merging', async () => {
     mergeState = { ...MERGE_STATE, mergeState: { ...MERGE_STATE.mergeState, reviewDecision: 'not-required', checks: [{ name: 'test', state: 'passing', required: true }] } }
     renderDetail(PR_42)
-    const label = await screen.findByText('Reviews: not required')
+    const label = await screen.findByText('Reviews: Not required')
     expect(label.closest('li')?.querySelector('[data-slot="gh-merge-status-passing"]')).not.toBeNull()
     expect(screen.getByText('test · passing · required')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Squash and merge' }).hasAttribute('disabled')).toBe(false)
     expect(screen.queryByText('Merge without waiting for requirements')).toBeNull()
   })
 
-  it.each(['approved', 'changes-requested', 'review-required', 'unknown'] as const)(
-    'preserves the %s review label and merge controls', async (reviewDecision) => {
+  it.each([
+    ['approved', 'Approved'],
+    ['changes-requested', 'Changes requested'],
+    ['review-required', 'Waiting for review'],
+    ['unknown', 'Unknown'],
+  ] as const)(
+    'preserves the %s review label and merge controls', async (reviewDecision, expectedLabel) => {
       const ready = reviewDecision === 'approved'
       mergeState = { ...MERGE_STATE, mergeState: {
         ...MERGE_STATE.mergeState, reviewDecision, canMerge: ready, canOverride: !ready,
         eligibility: ready ? 'ready' : reviewDecision === 'unknown' ? 'unknown' : 'blocked',
       } }
       renderDetail(PR_42)
-      await screen.findByText(`Reviews: ${reviewDecision.replaceAll('-', ' ')}`)
+      await screen.findByText(`Reviews: ${expectedLabel}`)
       expect(screen.getByRole('button', { name: 'Squash and merge' }).hasAttribute('disabled')).toBe(!ready)
     },
   )
@@ -193,11 +198,15 @@ describe('detail metadata and discussion fallbacks', () => {
     expect(screen.getAllByText('(no body)')).toHaveLength(2)
   })
 
-  it.each(['approved', 'commented', 'dismissed'] as const)('renders the %s review state beside its body', async (reviewState) => {
+  it.each([
+    ['approved', 'Approved'],
+    ['commented', 'Commented'],
+    ['dismissed', 'Dismissed'],
+  ] as const)('renders the %s review state beside its body', async (reviewState, expectedLabel) => {
     stubThread({ available: true, comments: [{ id: 1, author: 'grace', body: 'Reviewed the change.',
       kind: 'review', reviewState, createdAt: PR_42.createdAt, url: `${PR_42.url}#review-1` }] })
     renderDetail(PR_42)
-    const chip = await screen.findByText(reviewState)
+    const chip = await screen.findByText(expectedLabel)
     expect(chip.getAttribute('data-review-state')).toBe(reviewState)
     expect(screen.getByText('Reviewed the change.')).toBeTruthy()
   })
@@ -254,7 +263,7 @@ describe('merge requirements in the detail', () => {
 
   it.each([
     ['mergeable', 'none', 'passing', null],
-    ['conflicting', 'present', 'failing', 'true'],
+    ['conflicting', 'present', 'conflict', 'true'],
     ['unknown', 'unknown', 'unknown', null],
   ] as const)('shows %s conflict status', async (mergeable, label, icon, attribute) => {
     mergeState = { ...MERGE_STATE, mergeState: { ...MERGE_STATE.mergeState, mergeable } }
@@ -271,7 +280,7 @@ describe('merge requirements in the detail', () => {
     } }
     renderDetail(PR_42)
     await screen.findByRole('heading', { name: 'Merge blocked · Requirements unknown' })
-    expect(screen.getByText('Reviews: unknown').closest('li')?.querySelector('[data-slot="gh-merge-status-unknown"]')).not.toBeNull()
+    expect(screen.getByText('Reviews: Unknown').closest('li')?.querySelector('[data-slot="gh-merge-status-unknown"]')).not.toBeNull()
     expect(screen.getByText(/Passing checks do not establish merge readiness/)).toBeTruthy()
     expect(screen.getByText('Review requirements could not be read.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Squash and merge' }).hasAttribute('disabled')).toBe(true)
@@ -280,7 +289,7 @@ describe('merge requirements in the detail', () => {
   it('shows an empty check list and the abbreviated branch head', async () => {
     renderDetail(PR_42, vi.fn())
     await screen.findByText('No checks configured')
-    expect(screen.getByText('feat/share (0123456) → main')).toBeTruthy()
+    expect(screen.getByText('feat/share (01234567) → main')).toBeTruthy()
     expect(screen.queryByText(/Passing checks do not establish merge readiness/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Run agent on this PR' })).toBeNull()
   })

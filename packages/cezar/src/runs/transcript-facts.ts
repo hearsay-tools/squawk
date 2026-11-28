@@ -2,7 +2,6 @@
  * Incremental transcript facts for delivery and delegation reconciliation. Keep history
  * authoritative and sidecars rebuildable; avoid whole-transcript reads on hot paths.
  */
-import { randomBytes } from 'node:crypto';
 import { renameSync, rmSync, writeFileSync } from 'node:fs';
 import type { RunEvent } from '@open-mercato/cezar-contract';
 import { historyPaths, historyStat } from './history-file.ts';
@@ -10,6 +9,7 @@ import { historyPaths, historyStat } from './history-file.ts';
 export { emptyFacts, foldEvent, foldText, stampOf, PROSE_HUMAN_GATE, workerOutcomeKey, type PendingAskFacts, type ArchiveStamp, type TranscriptFacts } from './transcript-facts-fold.ts';
 import { emptyFacts, foldEvent, sameStamp, stampOf, type ArchiveStamp, type TranscriptFacts } from './transcript-facts-fold.ts';
 import { readFactsSidecar, type FactsLoadResult } from './transcript-facts-load.ts';
+import { tempSidecarPath, type SidecarCommit } from './transcript-facts-sidecar.ts';
 
 import { REFRESH_FACTS, TranscriptFactsQueue } from './transcript-facts-queue.ts';
 
@@ -29,8 +29,9 @@ export class TranscriptFactsIndex {
   constructor(private readonly dataDir: string, private readonly readOnly = false) {
     this.queue = new TranscriptFactsQueue(
       dataDir,
-      (id, loaded, serialized) => this.accept(id, loaded, serialized),
+      (id, loaded, sidecar) => this.accept(id, loaded, sidecar),
       (id) => this.peek(id) ? this.entries.get(id) : undefined,
+      readOnly ? undefined : (id) => historyPaths(dataDir, id).facts,
     );
   }
 
@@ -142,15 +143,30 @@ export class TranscriptFactsIndex {
     return this.queue.join(runId);
   }
 
-  private accept(runId: string, loaded: FactsLoadResult | undefined, serialized?: string): Entry | undefined | typeof REFRESH_FACTS {
+  /** `sidecar` is the worker's commit; without one, a load that needs a sidecar writes it here. */
+  private accept(runId: string, loaded: FactsLoadResult | undefined, sidecar?: SidecarCommit): Entry | undefined | typeof REFRESH_FACTS {
     const newer = this.entries.get(runId);
     if (newer && this.current(runId, newer.facts)) return newer;
     if (!loaded) return undefined;
     if (!this.current(runId, loaded.facts)) return REFRESH_FACTS;
     const entry = { facts: loaded.facts, written: loaded.written };
-    try { if (loaded.needsWrite) this.persist(runId, entry, serialized); } catch { return undefined; }
+    if (loaded.needsWrite && !this.recordWrite(runId, entry, sidecar)) return undefined;
     this.entries.set(runId, entry);
     return entry;
+  }
+
+  /** False when a failed write left a temp file behind: do not cache that entry. */
+  private recordWrite(runId: string, entry: Entry, sidecar: SidecarCommit | undefined): boolean {
+    if (!sidecar) {
+      try { this.persist(runId, entry); } catch { return false; }
+      return true;
+    }
+    if ('error' in sidecar) {
+      this.warnWrite(runId, sidecar.error);
+      return sidecar.cleaned;
+    }
+    if (sidecar.written) entry.written = entry.facts.bytes;
+    return true;
   }
 
   /** A cache hit costs one stat (two once archived): the run may have changed hands (a second
@@ -166,20 +182,25 @@ export class TranscriptFactsIndex {
     }
   }
 
-  private persist(runId: string, entry: Entry, serialized?: string): void {
+  private persist(runId: string, entry: Entry): void {
     if (this.readOnly) { entry.written = entry.facts.bytes; return; }
+    // A worker load of this run must not rename its older snapshot over this write.
+    this.queue.revoke(runId);
     const path = historyPaths(this.dataDir, runId).facts;
-    const tmp = `${path}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
+    const tmp = tempSidecarPath(path);
     try {
-      writeFileSync(tmp, serialized ?? JSON.stringify(entry.facts), { mode: 0o600 });
+      writeFileSync(tmp, JSON.stringify(entry.facts), { mode: 0o600 });
       renameSync(tmp, path);
       entry.written = entry.facts.bytes;
     } catch (error) {
       rmSync(tmp, { force: true });
-      if (!this.warnedWrite.has(runId)) {
-        this.warnedWrite.add(runId);
-        console.warn(`[hsq] could not save transcript facts for ${runId}: ${(error as Error).message}`);
-      }
+      this.warnWrite(runId, (error as Error).message);
     }
+  }
+
+  private warnWrite(runId: string, message: string): void {
+    if (this.warnedWrite.has(runId)) return;
+    this.warnedWrite.add(runId);
+    console.warn(`[hsq] could not save transcript facts for ${runId}: ${message}`);
   }
 }

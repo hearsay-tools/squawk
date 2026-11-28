@@ -755,7 +755,7 @@ describe('the Git view Not landed section', () => {
     ])
     const noPr = document.querySelector<HTMLElement>('[data-slot="not-landed-row"][data-branch="cez/51ab2d7e"]')!
     expect(noPr.querySelector('[data-slot="not-landed-title"]')?.textContent).toBe('Retention sweep for archived runs')
-    expect(noPr.querySelector('[data-slot="not-landed-meta"]')?.textContent).toMatch(/^cez\/51ab2d7e·4 commits·\+212 −40·done \d+d$/)
+    expect(noPr.querySelector('[data-slot="not-landed-meta"]')?.textContent).toMatch(/^cez\/51ab2d7e·4 commits·\+212 −40·Done \d+d$/)
     expect(noPr.querySelector('[data-slot="status-dot"]')?.getAttribute('data-tone')).toBe('success')
     expect(noPr.querySelector('[data-action="not-landed-open"]')?.getAttribute('href')).toBe('/tasks/run-51')
     expect(noPr.querySelector('[data-action="not-landed-create-pr"]')).not.toBeNull()

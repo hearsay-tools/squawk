@@ -61,7 +61,7 @@ export function ZoomableImage({
               <img
                 src={src}
                 alt={alt}
-                className="max-h-full max-w-full rounded-md object-contain shadow-2xl"
+                className="max-h-full max-w-full rounded-md object-contain shadow-modal"
               />
             </div>,
             document.body,

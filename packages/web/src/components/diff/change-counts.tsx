@@ -9,9 +9,9 @@ export function ChangeCounts({ adds, dels, className }: { adds: number; dels: nu
   if (adds <= 0 && dels <= 0) return null
   return (
     <span data-slot="change-counts" className={cn('shrink-0 whitespace-nowrap tabular-nums', className)}>
-      {adds > 0 ? <span className="text-success">+{adds.toLocaleString('en-US')}</span> : null}
+      {adds > 0 ? <span className="text-semantic-green">+{adds.toLocaleString('en-US')}</span> : null}
       {adds > 0 && dels > 0 ? ' ' : null}
-      {dels > 0 ? <span className="text-danger">−{dels.toLocaleString('en-US')}</span> : null}
+      {dels > 0 ? <span className="text-semantic-red">−{dels.toLocaleString('en-US')}</span> : null}
     </span>
   )
 }

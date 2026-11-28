@@ -92,7 +92,7 @@
 [data-slot='execution-options'][open] .new-task-settings-chevron { transform: rotate(180deg); }
 [data-route='new'] [data-slot='execution-options'] summary > span:first-of-type { font-weight: 600; }
 .new-task-settings-body { padding-inline: 16px; padding-block-end: 8px; }
-.new-task-settings-description { display: none; color: var(--muted-foreground); font-size: 11px; line-height: 1.6; }
+.new-task-settings-description { display: none; color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
 .new-task-base-branch { border-block-start: 1px solid var(--border); }
 [data-route='new'] [data-slot='execution-options'] summary { padding-inline: 16px; }
 [data-route='new'] .new-task-run-settings > button { min-block-size: 48px; padding-block: 8px; }
@@ -110,7 +110,7 @@
   [data-route='new'] [data-slot='composer-execution-panel'] > div { gap: 12px; }
   [data-route='new'] .new-task-run-settings { margin-block-start: 0; }
   [data-route='new'] .new-task-editor { padding: 22px; }
-  [data-route='new'] .new-task-editor > label { padding: 0; font-size: 11px; }
+  [data-route='new'] .new-task-editor > label { padding: 0; font-size: 12px; }
   [data-route='new'] .new-task-editor [data-slot='composer-skill-hint'] { padding-block: 18px; padding-inline: 0; }
   [data-route='new'] .new-task-editor > div:has([data-slot='composer-footer-start']) { padding: 0; }
   [data-route='new'] .new-task-editor [data-slot='composer-footer-start'] { padding: 0; gap: 10px; }

@@ -112,7 +112,7 @@ export function GithubTemplateInput({
                 )}
               >
                 <span className="truncate text-[13px]">
-                  {suggestion.label} <span className="font-mono text-[11px] text-soft-foreground">{suggestion.slug}</span>
+                  {suggestion.label} <span className="font-mono text-xs text-soft-foreground">{suggestion.slug}</span>
                 </span>
                 <span className="truncate text-xs text-muted-foreground">{suggestion.description}</span>
               </li>

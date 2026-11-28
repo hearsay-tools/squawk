@@ -52,7 +52,7 @@ export function ImagePreview({
           type="button"
           data-slot="diff-image-open"
           onClick={() => onOpenInApp(file.path)}
-          className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
+          className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
         >
           Open in default app
         </button>

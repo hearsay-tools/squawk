@@ -13,6 +13,7 @@ import { RunDiff } from '@/components/run-diff'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
+import { Link as RouterLink } from 'react-router'
 import { Link } from '@/lib/project-router'
 import { isSubmitShortcut } from '@/lib/use-submit-shortcut'
 import { isHttpUrl } from '@/lib/utils'
@@ -31,33 +32,56 @@ import { useFinishRun } from './use-finish-run'
  * gate never shows a second empty text box above the composer), Draft PR (`POST /pr`; 409 → the copyable `git merge` manual
  * fallback), and ✓ Accept (the shared finish action from use-finish-run.ts).
  */
-export function ReviewPanel({ run }: { run: ApiRun }) {
+export function ReviewGateBanner({
+  run,
+  projectId,
+  onResolved,
+}: {
+  run: ApiRun
+  projectId?: string | undefined
+  onResolved?: (() => void) | undefined
+}) {
+  return (
+    <div
+      data-slot="review-banner"
+      className="flex flex-col gap-2 rounded-xl border border-info/35 bg-info/10 px-3.5 py-2.5"
+    >
+      <div className="flex min-w-0 items-start gap-2.5">
+        <EyeIcon className="size-4 shrink-0 text-semantic-info" aria-hidden="true" />
+        <p className="min-w-0 break-words text-[13px] leading-relaxed">
+          <span className="font-semibold">Review the changes before anything lands.</span>{' '}
+          <span className="block text-muted-foreground">
+            Read the diff, send notes back, draft a PR — or accept. Nothing merges on its own.
+          </span>
+        </p>
+      </div>
+      <ReviewActions run={run} projectId={projectId} onResolved={onResolved} />
+    </div>
+  )
+}
+
+export function ReviewPanel({
+  run,
+  projectId,
+  onResolved,
+  showDiff = true,
+}: {
+  run: ApiRun
+  projectId?: string | undefined
+  onResolved?: (() => void) | undefined
+  showDiff?: boolean
+}) {
   return (
     <section data-slot="review-panel" aria-label="Review the changes" className="flex flex-col gap-2.5">
-      <div
-        data-slot="review-banner"
-        className="flex flex-col gap-2 rounded-md border border-accent-strong/30 bg-accent-strong/10 px-3.5 py-2"
-      >
-        <div className="flex min-w-0 items-start gap-2.5">
-          <EyeIcon className="size-4 shrink-0 text-accent-icon" aria-hidden="true" />
-          <p className="min-w-0 break-words text-[13px] leading-relaxed">
-            <span className="font-semibold">Review the changes before anything lands.</span>{' '}
-            <span className="block text-muted-foreground">
-              Read the diff, send notes back, draft a PR — or accept. Nothing merges on its own.
-            </span>
-          </p>
-        </div>
-        <ReviewActions run={run} />
-      </div>
-
-      <RunDiff runId={run.id} />
+      <ReviewGateBanner run={run} projectId={projectId} onResolved={onResolved} />
+      {showDiff ? <RunDiff runId={run.id} projectId={projectId} /> : null}
     </section>
   )
 }
 
 // ---- notes + exits --------------------------------------------------------------------------
 
-function ReviewActions({ run }: { run: ApiRun }) {
+function ReviewActions({ run, projectId, onResolved }: { run: ApiRun; projectId?: string | undefined; onResolved?: (() => void) | undefined }) {
   const writer = useRunCacheWriter()
   const queryClient = useQueryClient()
   const notesRef = useRef<HTMLTextAreaElement>(null)
@@ -66,8 +90,8 @@ function ReviewActions({ run }: { run: ApiRun }) {
   // on screen, not two competing ones. Once open it stays open until the run leaves review.
   const [notesOpen, setNotesOpen] = useState(false)
   const [manual, setManual] = useState<string | null>(null)
-  const finish = useFinishRun(run.id)
-  const continuation = useContinuationProvider(run)
+  const finish = useFinishRun(run.id, { projectId, onSuccess: onResolved })
+  const continuation = useContinuationProvider(run, null, projectId)
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
 
   // Legacy send-back semantics verbatim (web/app.js `data-action="send-back"`): the notes go
@@ -76,26 +100,28 @@ function ReviewActions({ run }: { run: ApiRun }) {
   const sendBack = useMutation({
     mutationFn: async (text: string) => {
       if (!continuation.canContinue) return null
-      return continueRun(runAddress(run.id), {
+      return continueRun(runAddress(run.id, { projectId }), {
         text: `Review feedback:\n${text}`,
         runner: continuation.runnerOverride,
       })
     },
     // Capture the run's project at the start: navigation must not retarget the refresh.
-    onMutate: () => runAddress(run.id),
+    onMutate: () => runAddress(run.id, { projectId }),
     onSuccess: (result, _text, address) => {
       if (result === null) return
       setNotes('')
       void writer.invalidateAfter('continue', address)
+      onResolved?.()
     },
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
 
   const draftPr = useMutation({
-    mutationFn: () => createRunPr(run.id),
+    mutationFn: () => createRunPr(run.id, projectId),
     onSuccess: (result) => {
       toast(`Draft PR created — ${result.url}`)
       invalidate() // the run completed as done with `pullRequestUrl` — refetch shows PR ↗
+      onResolved?.()
     },
     onError: (error: Error) => {
       if (error instanceof ApiError && error.manual !== undefined) setManual(error.manual)
@@ -142,7 +168,11 @@ function ReviewActions({ run }: { run: ApiRun }) {
       ) : null}
       <div className="flex flex-wrap items-center gap-2 [&_button]:min-h-11 [&_a]:min-h-11">
         <Button asChild variant="outline" size="sm">
-          <Link to={`/tasks/${run.id}/changes`}><EyeIcon aria-hidden="true" />Review changes</Link>
+          {projectId ? (
+            <RouterLink to={`/p/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(run.id)}/changes`}><EyeIcon aria-hidden="true" />Review changes</RouterLink>
+          ) : (
+            <Link to={`/tasks/${run.id}/changes`}><EyeIcon aria-hidden="true" />Review changes</Link>
+          )}
         </Button>
         <Button
           data-slot="review-send-back"
@@ -252,7 +282,7 @@ function ManualMergeLine({ command }: { command: string }) {
           .then(() => toast('Command copied to clipboard.'))
           .catch(() => toast(`Run manually: ${command}`))
       }}
-      className="flex w-full min-w-0 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left font-mono text-[11px] text-soft-foreground hover:bg-muted hover:text-foreground"
+      className="flex w-full min-w-0 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left font-mono text-xs text-soft-foreground hover:bg-muted hover:text-foreground"
     >
       <CopyIcon className="size-3 shrink-0" aria-hidden="true" />
       <span className="truncate">manual path: {command}</span>

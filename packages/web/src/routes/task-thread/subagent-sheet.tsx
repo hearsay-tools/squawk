@@ -27,6 +27,8 @@ export function SubagentSheet({
   agent,
   entries,
   onClose,
+  onBeforeOpenReport,
+  onRestoreAgentFocus,
   taskTitles,
   recipientBackends,
 }: {
@@ -38,6 +40,10 @@ export function SubagentSheet({
   /** That agent's child entries, in event order (`subagentEntries`). */
   entries: ThreadEntry[]
   onClose: () => void
+  /** Called right before navigating into a report reader from inside the sheet. */
+  onBeforeOpenReport?: (() => void) | undefined
+  /** Restores focus to the agent row (reopening the Activity popover when needed) when the report closes. */
+  onRestoreAgentFocus?: ((agentId: string) => void) | undefined
   taskTitles?: TaskTitleMap | undefined
   recipientBackends?: RecipientBackendMap | undefined
 }) {
@@ -48,12 +54,18 @@ export function SubagentSheet({
     return () => { restoreCleanup.current?.() }
   }, [registry, runId])
   const openReport = (messageKey: string) => {
-    const trigger = [...document.querySelectorAll<HTMLButtonElement>('[data-agent-id]')].find(button => button.dataset.agentId === agent?.id)
+    const agentId = agent?.id
+    const trigger = [...document.querySelectorAll<HTMLButtonElement>('[data-agent-id]')].find(button => button.dataset.agentId === agentId)
     restoreCleanup.current?.()
     restoreCleanup.current = registry?.registerOpener(messageKey, () => {
+      if (agentId && onRestoreAgentFocus) {
+        onRestoreAgentFocus(agentId)
+        return
+      }
       trigger?.focus({ preventScroll: true })
     })
     openingReport.current = true
+    onBeforeOpenReport?.()
     onClose()
   }
   return (
@@ -101,7 +113,7 @@ function SheetBody({
           {agent.agentType !== undefined ? (
             <span
               data-slot="agent-type"
-              className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase"
+              className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tracking-[0.05em] text-muted-foreground uppercase"
             >
               {agent.agentType}
             </span>
@@ -149,7 +161,7 @@ function StatusPill({ status }: { status: SubagentSummary['status'] }) {
       data-slot="subagent-status"
       data-status={status}
       className={cn(
-        'rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-[0.05em] uppercase',
+        'rounded-full px-2 py-0.5 text-xs font-semibold tracking-[0.05em] uppercase',
         status === 'completed' && 'bg-success/15 text-success',
         (status === 'failed' || status === 'declined') && 'bg-danger/15 text-danger',
         (status === 'running' || status === 'pending') && 'bg-muted text-muted-foreground',

@@ -87,7 +87,7 @@ export function ResolveConflictsButton({
       </Button>
       {/* Only the REFUSAL is spelled out. What the button will do is the button's own words —
           quoting the prompt underneath said the same thing twice, at four times the length. */}
-      {blocked && delivery.reason ? <span className="block opacity-70">{delivery.reason}</span> : null}
+      {blocked && delivery.reason ? <span className="block text-muted-foreground">{delivery.reason}</span> : null}
     </>
   )
 }

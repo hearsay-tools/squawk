@@ -40,9 +40,19 @@ function selectedLabels(question: UiAskQuestion, answer: string | undefined): st
   return matches.length === 1 ? matches[0]! : []
 }
 
+const ADDITIONAL_COMMENTS_MARKER = '\n\nAdditional comments:\n'
+
+function splitComment(answer: string): { body: string; comment: string | undefined } {
+  const index = answer.indexOf(ADDITIONAL_COMMENTS_MARKER)
+  if (index < 0) return { body: answer, comment: undefined }
+  const comment = answer.slice(index + ADDITIONAL_COMMENTS_MARKER.length).trim()
+  return { body: answer.slice(0, index), comment: comment || undefined }
+}
+
 /** Read-only decision details, reused at the reply's chronological position. */
 export function AskAnswers({ ask }: { ask: ThreadAsk }) {
-  const answers = ask.answer === undefined ? undefined : splitAnswers(ask.questions, ask.answer)
+  const parsed = ask.answer === undefined ? undefined : splitComment(ask.answer)
+  const answers = parsed === undefined ? undefined : splitAnswers(ask.questions, parsed.body)
   return (
     <div data-slot="ask-answers" className="flex flex-col gap-4 text-sm">
       {ask.questions.map((question, index) => {
@@ -71,6 +81,12 @@ export function AskAnswers({ ask }: { ask: ThreadAsk }) {
           </section>
         )
       })}
+      {answers && parsed?.comment ? (
+        <section className="flex flex-col gap-1" aria-label="Additional comments">
+          <p className="text-xs font-medium text-muted-foreground">Additional comments</p>
+          <QuotedAnswer text={parsed.comment} />
+        </section>
+      ) : null}
       {!answers && ask.answer !== undefined ? <QuotedAnswer text={ask.answer} /> : null}
     </div>
   )

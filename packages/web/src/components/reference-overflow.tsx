@@ -89,7 +89,7 @@ export function ReferenceOverflow({
             pressOnHoverOpen.current = false
             openedByHover.current = false
           }}
-          className="no-hover:min-h-[44px] no-hover:min-w-[44px] max-md:min-h-[44px] max-md:min-w-[44px] shrink-0 rounded-full px-1 text-[11px] font-medium text-soft-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="no-hover:min-h-[44px] no-hover:min-w-[44px] max-md:min-h-[44px] max-md:min-w-[44px] shrink-0 rounded-full px-1 text-xs font-medium text-soft-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           +{hidden}
         </button>
@@ -120,7 +120,7 @@ export function ReferenceOverflow({
           if (openedByHover.current) event.preventDefault()
         }}
       >
-        <p className="px-1 pb-1.5 text-[11px] text-soft-foreground">References</p>
+        <p className="px-1 pb-1.5 text-xs text-soft-foreground">References</p>
         <span className="flex flex-col items-start gap-1">
           {references.map((reference) => (
             <ReferenceChip
@@ -184,8 +184,11 @@ export function ReferenceList({ references, maxVisible, taskTitle, projectId, ru
       let count = Math.min(maxVisible, references.length)
       // Cached intrinsic widths survive removing a chip; thresholds do not oscillate on resize.
       while (count > 0) {
-        const needed = references.slice(0, count).reduce((sum, reference) => sum + (widths.current.get(referenceKey(reference)) ?? 48) + 4, 0)
-          + (overflowContainer === undefined && count < references.length ? overflowWidth : 0)
+        const inlineOverflow = overflowContainer === undefined && count < references.length
+        const gaps = (inlineOverflow ? count : Math.max(0, count - 1)) * 4
+        const needed = references.slice(0, count).reduce((sum, reference) => sum + (widths.current.get(referenceKey(reference)) ?? 48), 0)
+          + gaps
+          + (inlineOverflow ? overflowWidth : 0)
         // Showing the last reference removes the protected overflow button. Its current width
         // must be returned to that candidate's budget, or a narrow row can stay stuck at +1.
         const reclaimed = count === references.length ? overflowContainer?.getBoundingClientRect().width ?? 0 : 0

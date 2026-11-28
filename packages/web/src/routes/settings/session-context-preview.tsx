@@ -149,13 +149,13 @@ function PreviewBlock({ block, role }: { block: SessionContextPreviewBlock; role
         <Badge
           data-slot="session-context-source"
           variant="outline"
-          className={cn('text-[11px]', accentSource && 'border-accent-strong/40 text-link-foreground')}
+          className={cn('text-xs', accentSource && 'border-accent-strong/40 text-link-foreground')}
         >
           {sourceLabel}
         </Badge>
-        {block.target && block.target !== 'built-in' && <Badge variant="outline" className="text-[11px]">{TARGET_LABEL[block.target]}</Badge>}
+        {block.target && block.target !== 'built-in' && <Badge variant="outline" className="text-xs">{TARGET_LABEL[block.target]}</Badge>}
         <span className="ml-auto font-mono text-[12px] text-soft-foreground">{block.bytes === null ? '—' : bytes(block.bytes)}</span>
-        <Badge variant="outline" className={cn('text-[11px]', STATUS_CLASS[block.status])}>{status}</Badge>
+        <Badge variant="outline" className={cn('text-xs', STATUS_CLASS[block.status])}>{status}</Badge>
       </div>
       {showReason && <p className="text-[12px] text-conflict">{block.reason}</p>}
       {block.text !== null && (

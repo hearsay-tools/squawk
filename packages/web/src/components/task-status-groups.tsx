@@ -1,6 +1,7 @@
 import * as React from 'react'
 
 import { useTaskPreviewHandoff } from '@/api/queries'
+import { Count } from '@/components/data-primitives'
 import { ChevronDownIcon, ChevronRightIcon } from '@/components/design-icons'
 import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
@@ -24,14 +25,24 @@ export function OriginFilter({
   counts,
   automations,
   onChange,
+  compact = false,
 }: {
   origin: TaskOrigin
   counts: Record<TaskOrigin, number>
   automations: boolean
   onChange: (origin: TaskOrigin) => void
+  compact?: boolean
 }) {
   return (
-    <div role="group" aria-label="Task origin" data-slot="origin-filter" className="flex flex-wrap items-center gap-1.5">
+    <div
+      role="group"
+      aria-label="Task origin"
+      data-slot="origin-filter"
+      className={cn(
+        'flex flex-wrap items-center',
+        compact ? 'inline-flex rounded-md border border-border bg-card p-0.5 gap-0.5' : 'gap-1.5',
+      )}
+    >
       {taskOrigins(automations).map((option) => {
         const pressed = option.value === origin
         return (
@@ -42,12 +53,14 @@ export function OriginFilter({
             aria-pressed={pressed}
             onClick={() => onChange(option.value)}
             className={cn(
-              'inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border px-3 text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground',
-              pressed && 'border-accent-strong bg-accent-strong/10 text-accent-text',
+              compact
+                ? 'inline-flex min-h-11 items-center gap-1 rounded-sm px-2.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground md:min-h-0 md:h-8'
+                : 'inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border px-3 text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground',
+              pressed && (compact ? 'bg-accent-strong/15 text-accent-text' : 'border-accent-strong bg-accent-strong/10 text-accent-text'),
             )}
           >
             {option.label}{' '}
-            <span className="tabular-nums">{counts[option.value]}</span>
+            <Count value={counts[option.value]} />
           </button>
         )
       })}
@@ -60,11 +73,11 @@ export function OriginFilter({
  * from `md`: on a phone each heading toggles its own group, and the first task stays above the
  * fold.
  */
-export function GroupFoldControls({ onExpand, onCollapse }: { onExpand: () => void; onCollapse: () => void }) {
+export function GroupFoldControls({ onExpand, onCollapse, compact = false }: { onExpand: () => void; onCollapse: () => void; compact?: boolean }) {
   return (
-    <div data-slot="group-fold-controls" className="hidden flex-wrap items-center gap-2 md:ml-auto md:flex">
-      <Button type="button" variant="ghost" className="min-h-11" data-action="expand-groups" onClick={onExpand}>Expand groups</Button>
-      <Button type="button" variant="ghost" className="min-h-11" data-action="collapse-groups" onClick={onCollapse}>Collapse groups</Button>
+    <div data-slot="group-fold-controls" className={cn('hidden flex-wrap items-center gap-1 md:flex', !compact && 'md:ml-auto md:gap-2')}>
+      <Button type="button" variant="ghost" size={compact ? 'sm' : 'default'} className={compact ? 'h-9 px-2 text-xs text-muted-foreground' : 'min-h-11'} data-action="expand-groups" onClick={onExpand}>Expand groups</Button>
+      <Button type="button" variant="ghost" size={compact ? 'sm' : 'default'} className={compact ? 'h-9 px-2 text-xs text-muted-foreground' : 'min-h-11'} data-action="collapse-groups" onClick={onCollapse}>Collapse groups</Button>
     </div>
   )
 }
@@ -91,12 +104,18 @@ export function TaskOriginRow({ origin, counts, automations, onChange, labels, o
 }
 
 /** What the heading dot says, for a reader who cannot see its colour. */
-const TONE_LABELS: Partial<Record<AttentionTone, string>> = {
-  pending: 'needs you',
-  running: 'working',
-  success: 'finished',
-  danger: 'contains failed tasks',
-  neutral: 'archived',
+function headingDotLabel(label: BucketLabel, tone: AttentionTone): string {
+  if (tone === 'danger') return 'contains failed tasks'
+  switch (label) {
+    case 'Needs you':
+      return 'needs you'
+    case 'Working':
+      return 'working'
+    case 'Finished':
+      return 'finished'
+    case 'Archived':
+      return 'archived'
+  }
 }
 
 /**
@@ -138,9 +157,9 @@ export function StatusGroupSection({
           className="inline-flex min-h-11 items-center gap-2 rounded-md pr-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground"
         >
           <Disclosure className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <StatusDot tone={tone} role="img" aria-label={TONE_LABELS[tone]} title={TONE_LABELS[tone]} />
+          <StatusDot tone={tone} role="img" aria-label={headingDotLabel(label, tone)} title={headingDotLabel(label, tone)} />
           <span>{label}</span>{' '}
-          <span className="font-normal tabular-nums text-muted-foreground">{count}</span>
+          <Count value={count} className="font-normal text-muted-foreground" />
         </button>
       </h2>
       <div id={`${id}-rows`} hidden={collapsed}>
@@ -198,8 +217,8 @@ export function TaskPreview({
   const lines = handoff.data === undefined ? [] : progressPreview(handoff.data)
   return (
     <div data-slot="task-preview" className="flex flex-col gap-3 rounded-md bg-muted/50 p-4 text-xs">
-      <p className="font-medium text-foreground first-letter:uppercase">{status}</p>
-      {error ? <p data-slot="task-preview-error" className="break-words text-danger">{error}</p> : null}
+      <p className="font-medium text-foreground">{status}</p>
+      {error ? <p data-slot="task-preview-error" className="break-words text-semantic-red">{error}</p> : null}
       {handoff.isPending ? (
         <p role="status" className="text-muted-foreground">Loading latest progress…</p>
       ) : handoff.isError ? (

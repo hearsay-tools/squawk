@@ -23,13 +23,14 @@ import {
 } from '@/api/queries'
 import { useRunHistory, type RunHistoryState } from '@/api/run-history'
 import { pendingAskOf } from '@open-mercato/cezar-api-client/contract/pending-ask'
+import { removedRunnerMessage } from '@open-mercato/cezar-api-client/contract/runner'
 import { asksQuestion } from '@open-mercato/cezar-api-client/contract/waits'
 import { runTitle } from '@/lib/task-groups'
 import type { RunSummary } from '@open-mercato/cezar-api-client'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
-import { Composer } from '@/components/composer/composer'
 import { ReadingPage } from '@/components/page-shell'
+import { RunDiff } from '@/components/run-diff'
 import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { useKeyboardInsetVar } from '@/lib/keyboard-inset'
@@ -37,18 +38,21 @@ import { isUnread } from '@/lib/read-state'
 import { taskIssueUrl, taskPrUrl } from '@/lib/tasks-table'
 import { cn, isHttpUrl } from '@/lib/utils'
 
-import { AutoResumeHint } from './auto-resume-hint'
 import { WorkingIndicator } from './thread-items'
 import { useContinueAction } from './follow-up-engine'
 import { findSubagent, subagentEntries } from './subagent-dock'
 import { SubagentSheet } from './subagent-sheet'
-import { AcceptCelebration, ReviewPanel } from './review-panel'
-import { hasLiveSession, offersComposerFinish, queuePosition, runActionFlags } from './run-actions'
-import { useWorkersLive } from './run-relationships'
+import { AcceptCelebration } from './review-panel'
+import { hasLiveSession, queuePosition } from './run-actions'
 import { useFinishRun } from './use-finish-run'
 import { useStopAction } from './stop-action'
 import { RunHeader } from './run-header'
 import { RunActivityDock } from './run-activity-dock'
+import {
+  DesktopActivityHeaderControl,
+  MobileActivityHeaderControl,
+  ULTRAWIDE_ACTIVITY_QUERY,
+} from './run-activity-header'
 import { AskCard, AskContext } from './ask-card'
 import { PermissionCard } from './permission-card'
 import { useAskAnswer } from './ask-answer'
@@ -56,22 +60,24 @@ import { useRunRecordReconcile } from './run-reconcile'
 import { useActiveProviderAvailability } from './active-provider'
 import { ThreadLoading } from './thread-loading'
 import { threadRenderMode } from './thread-scroll'
-import { JumpToLatestPill, useThreadScroll, type ThreadScrollControls } from './thread-scroller'
-import { AskOriginMarker, PENDING_ASK_SECTION_ID, pinnedAnswerControl, pinnedAskFocus, usePinnedAskInView } from './pending-ask-navigation'
+import { useThreadScroll, type ThreadScrollControls } from './thread-scroller'
+import { AskOriginMarker, pinnedAnswerControl, pinnedAskFocus } from './pending-ask-navigation'
 import { useRevealAskOrigin } from './use-reveal-ask-origin'
 import { useSessionViewport } from './session-viewport'
+import { ThreadDecisionZone } from './decision-zone'
+import { useSplitPaneOpen } from './preview/preview-split'
+import { usePreviewPane } from './preview/preview-state'
+import { useMediaQuery } from './preview/use-media-query'
 import {
   SessionTranscript,
-  askRow,
   buildTranscriptRows,
+  findPendingThreadAsk,
   mainTranscriptSections,
   type TranscriptMessageActions,
 } from './session-transcript'
-import { removedRunnerMessage } from '@open-mercato/cezar-api-client/contract/runner'
 import { recipientBackendsFromRuns, titlesFromRuns } from './conversation-presentation'
 import {
   reduceThread,
-  threadFilePaths,
   threadFooter,
   type ThreadAsk,
   type ThreadPermission,
@@ -79,15 +85,10 @@ import {
 } from './thread-state'
 
 /**
- * `/tasks/:id` — the Session tab (spec, "Task thread"): the run header (title/meta/tabs/
- * actions — see run-header.tsx), turns with user bubbles, assistant markdown, tool cards,
- * dim lifecycle lines, the closed footer, and the docked composer (plan dock · paused hint ·
- * reply box).
- *
- * Data doctrine: `useRun` is authoritative for the record; `useRunHistory` hydrates a bounded
- * visible transcript plus compact current-state context and falls back to `useRunEvents` when
- * the optimized route is unavailable. The rendered rows go through the threshold-switched scroller
- * (thread-scroller.tsx — flat + content-visibility below ~300 rows, virtua above).
+ * `/tasks/:id` — the Session tab (spec, "Task thread", viewport-locked in hearsay-tools/squawk#4374):
+ * the run header (title, Activity status trigger, tabs, actions), an independently scrollable
+ * transcript region, an optional ultra-wide Activity right sidebar, and a fixed bottom decision
+ * zone rendering the single active human action for the current task state.
  */
 export function TaskThreadRoute() {
   const { id } = useParams<{ id: string }>()
@@ -103,19 +104,6 @@ export function TaskThreadRoute() {
     [history.currentEvents, runStatus],
   )
 
-  // Read receipt (#unread-done-items): opening a finished task's thread marks it read — the same
-  // "opening the mail clears the unread dot" move. Gated on `isUnread` so it fires only for a
-  // genuinely-unread done item, and keyed on the record's read-relevant fields so it converges:
-  // the optimistic `seenAt` flips `isUnread` false and the effect does not re-fire. A run that
-  // later resumes and re-finishes (its `finishedAt` moves past the receipt) marks read again.
-  //
-  // The one exception is "Mark unread" from this very thread (#775): clearing the receipt makes
-  // `isUnread` true again, which without a guard this effect would immediately undo — the action
-  // would look broken in exactly the place a user reaches for it. `suppressAutoRead` is that
-  // guard, and it holds the run id rather than a bare boolean so the reset is implicit: it only
-  // suppresses the run it was set for, and the FIRST render of a later visit (a fresh mount, or
-  // navigating to another task and back) starts from an empty ref and auto-reads normally. That
-  // is the email grammar this is modelled on — reopening the mail marks it read again.
   const suppressAutoRead = useRef<string | undefined>(undefined)
   const suppressAutoReadFor = useCallback((runId: string) => {
     suppressAutoRead.current = runId
@@ -131,13 +119,8 @@ export function TaskThreadRoute() {
     run.data?.status,
     run.data?.finishedAt,
     run.data?.seenAt,
-    // `isUnread` reads `archived` too, so it belongs here: un-archiving an open thread makes the
-    // run unread again, and without this dep the effect would never fire to clear it.
     run.data?.archived,
   ])
-  // The two feeds can drift: a record update lost on the workspace stream leaves the thread
-  // showing Working… over a "run finished" transcript. The transcript is live here, so it
-  // arbitrates — a session end with no session after it refetches a record still claiming one.
   useRunRecordReconcile(run.data, history.visibleEvents)
 
   if (run.isPending) return <ThreadLoading />
@@ -197,9 +180,6 @@ export function ThreadView({
   thread: ThreadState
   currentThread?: ThreadState
   history?: RunHistoryState | undefined
-  /** Passed straight through to the header's "Mark unread" (#775) so the route can suppress its
-   *  auto-mark-read effect. Optional: every test that drives this view with a fixture, and the
-   *  header's other three tabs, have no such effect to suppress. */
   onMarkedUnread?: ((runId: string) => void) | undefined
 }) {
   useActiveProjectId()
@@ -208,57 +188,227 @@ export function ThreadView({
     queryFn: ({ signal }) => getRuns(projectAddress(), { signal }),
     select: selectThreadRuns,
   })
-  // Attention reads the open human wait on the record; the transcript's unanswered ask only
-  // decides whether the composer answers it (hearsay-tools/cezarion#1236, split by fact).
   const { pendingAsk, transcriptAsk, pendingAskId, historyLoading } = pendingThreadAsk(history, currentThread)
   const attention = deriveAttention(run)
   const footer = threadFooter(run.status, run.error, thread)
-  // The Agents dock's data: the current fan-out's sub-agents, or [] when there is none to
-  // show (#474). Derived from the same reduced turns the thread renders — no new subscription.
-  // The legacy session-open rule (web/app.js `updateDetail`): the composer can deliver while
-  // the engine owns a live session — running queues the message, waiting answers it.
-  // A usage-limit hold is `waiting` with no session until its resume (hearsay-tools/cezarion#1236).
   const sessionOpen = hasLiveSession(run)
-  // Closed runs keep their in-flight sub-agent cards as historical rows.
   const runIsTerminal = !sessionOpen && run.status !== 'queued'
-  // Queued sends amend the original prompt; they do not open a provider session.
   const queued = run.status === 'queued'
-  // …and the fourth: a closed run whose last session can be reopened. Continue used to be a
-  // bare button beside a DISABLED textarea, so "reopen it and say what to do next" meant
-  // continuing blind and then typing into the thread once the session came back. The composer
-  // stays authorable here instead: the draft is the prompt the reopened session starts on, and
-  // submitting an empty one is still the plain one-click Continue.
   const continueAction = useContinueAction(run)
   const stopAction = useStopAction(run)
-  // Finish as the composer's gold primary on a Needs-you task (#281). The rule lives in
-  // run-actions.ts with the rest of the action policy; the mutation is the shared one the header
-  // and the review panel's ✓ Accept already drive, so "finish" can never fork into three
-  // meanings. A rejection is already a danger toast from inside the hook — swallowed here so the
-  // click handler does not also surface it as an unhandled rejection.
   const finishAction = useFinishRun(run.id)
-  // Squawk's own waits ask nothing, so they leave empty Continue available (review of #1437).
   const needsAnswer = transcriptAsk || asksQuestion(run)
   const { hasContinuation, continuable } = threadContinuation(sessionOpen, queued, continueAction)
-  // A closed session can never settle its in-flight items — nothing in the reducer rewrites a
-  // `running` item on `session.ended`, so an interrupted fan-out stays `running` in the
-  // persisted stream forever. Without this, reopening it pulses `Agents · 0/1` above a dead
-  // transcript for good.
-  //
-  // Derived from `sessionOpen` rather than enumerated, so it cannot drift when a status is
-  // added: anything that is neither live nor still queued is closed. `review` matters most —
-  // it is where this pipeline's runs normally END, and `threadFooter` already calls it closed.
-  // The drill-down's whole state: which agent is open. Ephemeral by design (spec Q2/Q5) —
-  // sub-agents have no stable identity outside their run, so there is nothing to persist.
-  const [openAgentId, setOpenAgentId] = useState<string | undefined>(undefined)
-  // Item ids repeat across runs (codex mints `item_1`, `item_rv_1` per session), so a
-  // selection carried across a route change could pop the sheet open on an unrelated item.
-  const [selectionRunId, setSelectionRunId] = useState(run.id)
-  if (selectionRunId !== run.id) {
-    setSelectionRunId(run.id)
-    setOpenAgentId(undefined)
+
+  const {
+    openAgentId, setOpenAgentId, activityMode, activityOpen, setActivityOpen,
+    showActivitySidebar, closeActivityPopover,
+  } = useThreadChromeState(run.id)
+  const pendingAgentFocusRef = useRef<string | undefined>(undefined)
+  const restoreAgentFocus = useCallback((agentId: string) => {
+    const existing = [...document.querySelectorAll<HTMLButtonElement>('[data-agent-id]')]
+      .find(button => button.dataset.agentId === agentId)
+    if (existing) {
+      existing.focus({ preventScroll: true })
+      return
+    }
+    pendingAgentFocusRef.current = agentId
+    setActivityOpen(true)
+  }, [setActivityOpen])
+  const handleActivityPopoverAutoFocus = useCallback((event: Event) => {
+    const agentId = pendingAgentFocusRef.current
+    if (!agentId) return
+    pendingAgentFocusRef.current = undefined
+    const target = [...document.querySelectorAll<HTMLButtonElement>('[data-agent-id]')]
+      .find(button => button.dataset.agentId === agentId)
+    if (!target) return
+    event.preventDefault()
+    target.focus({ preventScroll: true })
+  }, [])
+  const { openAgent, openAgentChildren } = useOpenSubagent(openAgentId, currentThread, thread, runIsTerminal)
+  const sendMessage = useSendMessage(run.id)
+  const reply = useAskAnswer(run)
+  const activeProvider = useActiveProviderAvailability(run)
+  const { providerBlocked, providerReason } = threadProviderState(sessionOpen, activeProvider, hasContinuation, continueAction)
+  const messageActions = useQueuedMessageActions(run, queued)
+
+  const sectionsAskId = historyLoading ? undefined : (pendingAskId ?? null)
+  const pinnedAsk = useMemo(
+    () => findPendingThreadAsk(currentThread, sectionsAskId),
+    [currentThread, sectionsAskId],
+  )
+  const pendingQuestions = pinnedAsk?.questions.length ?? 0
+  const sections = useMemo(
+    () => mainTranscriptSections(run, thread, currentThread, sectionsAskId, { pinPendingAskInTranscript: false }),
+    [run, thread, currentThread, sectionsAskId],
+  )
+  const rows = useMemo(() => buildTranscriptRows(sections, run.id), [sections, run.id])
+
+  const { taskTitles, recipientBackends } = useThreadTaskMetadata(run, runs.data)
+  const renderPermission = useCallback((permission: ThreadPermission) => <PermissionCard permission={permission} runId={run.id} sessionOpen={sessionOpen} />, [run.id, sessionOpen])
+  const removedRunnerNotice = continuable && run.removedRunner !== undefined ? removedRunnerMessage(run.removedRunner) : undefined
+
+  const issueUrl = taskIssueUrl(run, useProjectRepoBase())
+  const { search } = useLocation()
+  const mode = threadRenderMode(search, rows.length)
+  const scroll = useThreadScroll(`${run.id}:main`, {
+    onLoadOlder: history?.hasOlder ? history.loadOlder : undefined,
+    onJumpToLatest: history?.jumpToLatest,
+    rowKeys: rows.map(({ key }) => key),
+  })
+  const revealOrigin = useRevealAskOrigin({
+    pendingAskId,
+    askSeq: history ? pendingAsk?.seq : undefined,
+    rows,
+    history,
+    jumpToRow: scroll.jumpToRow,
+  })
+  const settledAskIdRef = useRef(pendingAskId)
+  if (!historyLoading) settledAskIdRef.current = pendingAskId
+  const viewportRef = useSessionViewport()
+  const navigationRef = useRef({ reveal: revealOrigin.reveal })
+  navigationRef.current = { reveal: revealOrigin.reveal }
+
+  const focusPinnedQuestion = useCallback(() => {
+    const root = viewportRef.current ?? document.body
+    const target = pinnedAnswerControl(root)
+    target?.focus({ preventScroll: true })
+  }, [viewportRef])
+
+  const renderAsk = useCallback((ask: ThreadAsk) => {
+    if (ask.placement === 'origin') {
+      return (
+        <div className="flex flex-col gap-3">
+          {ask.context ? <AskContext text={ask.context} /> : null}
+          {!ask.resolved ? <AskOriginMarker onGoToQuestion={focusPinnedQuestion} /> : null}
+        </div>
+      )
+    }
+    return <AskCard ask={ask} run={run} onShowOrigin={() => navigationRef.current.reveal()} />
+  }, [run, focusPinnedQuestion])
+
+  useKeyboardInsetVar(scroll.restickIfStuck)
+  const currentComplete = history?.currentComplete ?? true
+  const activityControlProps = {
+    run,
+    thread,
+    currentThread,
+    currentComplete,
+    onOpenWorker: setOpenAgentId,
+    mode: activityMode,
+    open: activityOpen,
+    onOpenChange: setActivityOpen,
+    keepOpen: openAgentId !== undefined,
+    onOpenAutoFocus: handleActivityPopoverAutoFocus,
   }
-  // Resolved from the turns, NOT from `agents`: the dock can yield to the transcript (Q6)
-  // while a sheet is open, and that must not slam the panel shut mid-read.
+
+  return (
+    <ReadingPage
+      route="task-thread"
+      density={thread.turns.length === 0 ? 'empty' : 'full'}
+      fillHeight
+      flushPadding
+      rootRef={viewportRef}
+      rootProps={{ 'data-run-id': run.id }}
+      className="overflow-clip"
+    >
+      <RunHeader
+        run={run}
+        onMarkedUnread={() => onMarkedUnread?.(run.id)}
+        desktopActivitySlot={<DesktopActivityHeaderControl {...activityControlProps} />}
+        mobileActivitySlot={<MobileActivityHeaderControl {...activityControlProps} />}
+      />
+
+      <div data-slot="thread-workspace">
+        <div data-slot="thread-main">
+          <div
+            data-slot="thread-transcript"
+            role="region"
+            aria-label="Session transcript"
+            tabIndex={0}
+          >
+            <ThreadTranscript
+              run={run}
+              thread={thread}
+              history={history}
+              footer={footer}
+              issueUrl={issueUrl}
+              sections={sections}
+              renderAsk={renderAsk}
+              renderPermission={renderPermission}
+              messageActions={messageActions}
+              scroll={scroll}
+              mode={mode}
+              taskTitles={taskTitles}
+              recipientBackends={recipientBackends}
+            />
+          </div>
+
+          <ThreadDecisionZone
+            run={run}
+            thread={thread}
+            pinnedAsk={pinnedAsk}
+            pendingQuestions={pendingQuestions}
+            scroll={scroll}
+            onJump={() => {
+              const askId = pendingQuestions > 0 ? pinnedAsk?.id : undefined
+              scroll.jumpToLatest(askId === undefined ? undefined : pinnedAskFocus(askId, () => settledAskIdRef.current === askId))
+            }}
+            onShowOrigin={() => navigationRef.current.reveal()}
+            sessionOpen={sessionOpen}
+            attention={attention}
+            queued={queued}
+            continuable={continuable}
+            continueAction={continueAction}
+            stopAction={stopAction}
+            finishAction={finishAction}
+            needsAnswer={needsAnswer}
+            sendMessage={sendMessage}
+            reply={reply}
+            providerBlocked={providerBlocked}
+            providerReason={providerReason}
+            removedRunnerNotice={removedRunnerNotice}
+          />
+        </div>
+
+        {showActivitySidebar ? (
+          <aside data-slot="thread-activity-sidebar" aria-label="Session activity">
+            <RunActivityDock
+              presentation="panel"
+              run={run}
+              thread={thread}
+              currentThread={currentThread}
+              currentComplete={currentComplete}
+              onOpenWorker={setOpenAgentId}
+            />
+          </aside>
+        ) : null}
+      </div>
+
+      <AcceptCelebration status={run.status} />
+
+      <SubagentSheet
+        runId={run.id}
+        renderAsk={renderAsk}
+        renderPermission={renderPermission}
+        agent={openAgent}
+        entries={openAgentChildren}
+        taskTitles={taskTitles}
+        recipientBackends={recipientBackends}
+        onBeforeOpenReport={closeActivityPopover}
+        onRestoreAgentFocus={restoreAgentFocus}
+        onClose={() => setOpenAgentId(undefined)}
+      />
+    </ReadingPage>
+  )
+}
+
+function useOpenSubagent(
+  openAgentId: string | undefined,
+  currentThread: ThreadState,
+  thread: ThreadState,
+  runIsTerminal: boolean,
+) {
   const openAgent = useMemo(
     () =>
       openAgentId === undefined ?
@@ -270,181 +420,70 @@ export function ThreadView({
     () => (openAgentId === undefined ? [] : subagentEntries(thread.turns, currentThread.turns, openAgentId)),
     [thread.turns, currentThread.turns, openAgentId],
   )
-  const sendMessage = useSendMessage(run.id)
-  const reply = useAskAnswer(run)
-  const activeProvider = useActiveProviderAvailability(run)
-  // A queued send only amends the persisted prompt; it invokes no provider and therefore
-  // remains available even when provider discovery cannot authorize a live session. Once the
-  // session is open, mirror the server's active-backend gate as before.
-  const { providerBlocked, providerReason } = threadProviderState(sessionOpen, activeProvider, hasContinuation, continueAction)
+  return { openAgent, openAgentChildren }
+}
 
-  // The queued-run affordances (#472), passed only while the run is queued — so the bubbles
-  // go read-only on the next `run` SSE frame once it starts. The bubbles await these promises
-  // so a failed write keeps its editor/draft open and shows the server's error.
-  // Depend on the `mutateAsync` functions, NOT the mutation result objects: TanStack returns a
-  // fresh result object every render, so memoizing on those would rebuild `edit` — and with it
-  // every thread row — on each render, defeating the memo that exists because these threads get
-  // big enough to virtualize. `mutateAsync` is referentially stable.
+function useThreadTaskMetadata(
+  run: ApiRun,
+  runsData: ReturnType<typeof selectThreadRuns> | undefined,
+) {
+  const delegated = run.delegation?.role === 'root' || run.delegation?.role === 'worker'
+  const relationships = useRunRelationships(run.id, { enabled: delegated })
+  const taskTitles = useMemo(
+    () => ({ ...titlesFromRuns(run, undefined, relationships.data?.titles), ...runsData?.titles, [run.id]: runTitle(run) }),
+    [run, runsData, relationships.data],
+  )
+  const recipientBackends = useMemo(
+    () => ({ ...runsData?.backends, ...recipientBackendsFromRuns(run, undefined) }),
+    [run, runsData],
+  )
+  return { taskTitles, recipientBackends }
+}
+
+function useThreadChromeState(runId: string) {
+  const [openAgentId, setOpenAgentId] = useState<string | undefined>(undefined)
+  const [activityPopoverOpen, setActivityPopoverOpen] = useState(false)
+  const [activitySidebarOpen, setActivitySidebarOpen] = useState(true)
+  const [selectionRunId, setSelectionRunId] = useState(runId)
+  if (selectionRunId !== runId) {
+    setSelectionRunId(runId)
+    setOpenAgentId(undefined)
+    setActivityPopoverOpen(false)
+  }
+  const previewPane = usePreviewPane()
+  const splitPaneOpen = useSplitPaneOpen() || previewPane?.open === true
+  const ultrawide = useMediaQuery(ULTRAWIDE_ACTIVITY_QUERY, false)
+  const activityMode: 'popover' | 'sidebar' = ultrawide && !splitPaneOpen ? 'sidebar' : 'popover'
+  const activityOpen = activityMode === 'sidebar' ? activitySidebarOpen : activityPopoverOpen
+  const setActivityOpen = activityMode === 'sidebar' ? setActivitySidebarOpen : setActivityPopoverOpen
+  const showActivitySidebar = activityMode === 'sidebar' && activitySidebarOpen
+  const closeActivityPopover = useCallback(() => setActivityPopoverOpen(false), [])
+  return { openAgentId, setOpenAgentId, activityMode, activityOpen, setActivityOpen, showActivitySidebar, closeActivityPopover }
+}
+
+function useQueuedMessageActions(
+  run: ApiRun,
+  queued: boolean,
+): Readonly<Record<string, TranscriptMessageActions>> | undefined {
   const { mutateAsync: patchRunAsync } = usePatchRun(run.id)
   const { mutateAsync: editQueuedAsync } = useEditQueuedMessage(run.id)
   const { mutateAsync: removeQueuedAsync } = useRemoveQueuedMessage(run.id)
-  const edit = useMemo(
-    () =>
-      queued ?
-        {
-          onEditTask: async (text: string) => { await patchRunAsync({ task: text }) },
-          onEditMessage: (msgId: string, text: string) =>
-            editQueuedAsync({ msgId, message: { text } }).then(() => undefined),
-          onRemoveMessage: (msgId: string) => removeQueuedAsync(msgId).then(() => undefined),
-        }
-      : undefined,
-    [queued, patchRunAsync, editQueuedAsync, removeQueuedAsync],
-  )
-
-  // Current state is authoritative once its context has loaded: `null` then says no ask is
-  // pending, so an unresolved ask left in an older page renders as answered (#1495).
-  const sectionsAskId = historyLoading ? undefined : (pendingAskId ?? null)
-  const sections = useMemo(() => mainTranscriptSections(run, thread, currentThread, sectionsAskId), [run, thread, currentThread, sectionsAskId])
-  const rows = useMemo(() => buildTranscriptRows(sections, run.id), [sections, run.id])
-  // A delegated run's conversation names its parent and workers; once archived they may be past
-  // the run list's window (#864), so the relationships answer carries their titles too. The same
-  // cache entry the Workers section reads.
-  const delegated = run.delegation?.role === 'root' || run.delegation?.role === 'worker'
-  const relationships = useRunRelationships(run.id, { enabled: delegated })
-  const taskTitles = useMemo(() => ({ ...titlesFromRuns(run, undefined, relationships.data?.titles), ...runs.data?.titles, [run.id]: runTitle(run) }), [run, runs.data, relationships.data])
-  const recipientBackends = useMemo(() => ({ ...runs.data?.backends, ...recipientBackendsFromRuns(run, undefined) }), [run, runs.data])
-  const renderPermission = useCallback((permission: ThreadPermission) => <PermissionCard permission={permission} runId={run.id} sessionOpen={sessionOpen} />, [run.id, sessionOpen])
-  const messageActions = useMemo<Readonly<Record<string, TranscriptMessageActions>> | undefined>(() => {
-    if (edit === undefined) return undefined
+  return useMemo(() => {
+    if (!queued) return undefined
     const actions: Record<string, TranscriptMessageActions> = {
-      task: { onEdit: edit.onEditTask, editLabel: 'Edit the prompt' },
+      task: {
+        onEdit: async (text: string) => { await patchRunAsync({ task: text }) },
+        editLabel: 'Edit the prompt',
+      },
     }
     for (const message of run.queuedMessages ?? []) {
       actions[`queued:${message.id}`] = {
-        onEdit: (text) => edit.onEditMessage(message.id, text),
-        onRemove: () => edit.onRemoveMessage(message.id),
+        onEdit: (text) => editQueuedAsync({ msgId: message.id, message: { text } }).then(() => undefined),
+        onRemove: () => removeQueuedAsync(message.id).then(() => undefined),
       }
     }
     return actions
-  }, [edit, run.queuedMessages])
-  // #526: the footer's issue link may be synthesized from the CEZ:ISSUE marker, and the only
-  // repository it may ever name is the one on screen — never the transcript's.
-  const issueUrl = taskIssueUrl(run, useProjectRepoBase())
-  const { search } = useLocation()
-  const mode = threadRenderMode(search, rows.length)
-  const scroll = useThreadScroll(`${run.id}:main`, {
-    onLoadOlder: history?.hasOlder ? history.loadOlder : undefined,
-    onJumpToLatest: history?.jumpToLatest,
-    rowKeys: rows.map(({ key }) => key),
-  })
-  // The pending question (hearsay-tools/cezarion#1495): pinned after the newest entry, with a
-  // marker where it was asked. Rows and jumps go through refs so the card renderer stays stable.
-  const { pinnedAsk, pendingQuestions } = pinnedThreadAsk(sections)
-  const revealOrigin = useRevealAskOrigin({
-    pendingAskId,
-    askSeq: history ? pendingAsk?.seq : undefined,
-    rows,
-    history,
-    jumpToRow: scroll.jumpToRow,
-  })
-  // The pill's late focus reads this to give up once its question was answered. A history
-  // reload has no answer yet, so it keeps the last settled id.
-  const settledAskIdRef = useRef(pendingAskId)
-  if (!historyLoading) settledAskIdRef.current = pendingAskId
-  const navigationRef = useRef({ rows, jumpToRow: scroll.jumpToRow, reveal: revealOrigin.reveal })
-  navigationRef.current = { rows, jumpToRow: scroll.jumpToRow, reveal: revealOrigin.reveal }
-  const renderAsk = useCallback((ask: ThreadAsk) => {
-    if (ask.placement === 'origin') {
-      const goToQuestion = () => {
-        const { rows: current, jumpToRow } = navigationRef.current
-        const pinned = askRow(current, ask.id, 'pinned')
-        if (pinned) jumpToRow(pinned.key, pinned.index, (row) => pinnedAnswerControl(row))
-      }
-      return <div className="flex flex-col gap-3">
-        {ask.resolved && ask.context ? <AskContext text={ask.context} /> : null}
-        {!ask.resolved ? <AskOriginMarker onGoToQuestion={goToQuestion} /> : null}
-      </div>
-    }
-    return <AskCard ask={ask} run={run} onShowOrigin={() => navigationRef.current.reveal()} />
-  }, [run])
-  // Re-pin a tail reader after the viewport or document-flow composer changes size.
-  useKeyboardInsetVar(scroll.restickIfStuck)
-  const viewportRef = useSessionViewport()
-  return (
-    <ReadingPage
-      route="task-thread"
-      density={thread.turns.length === 0 ? 'empty' : 'full'}
-      flushPadding
-      rootRef={viewportRef}
-      rootProps={{ 'data-run-id': run.id }}
-    >
-      <RunHeader run={run} onMarkedUnread={() => onMarkedUnread?.(run.id)} />
-
-      <ThreadTranscript
-        run={run}
-        thread={thread}
-        history={history}
-        footer={footer}
-        issueUrl={issueUrl}
-        sections={sections}
-        renderAsk={renderAsk}
-        renderPermission={renderPermission}
-        messageActions={messageActions}
-        scroll={scroll}
-        mode={mode}
-        taskTitles={taskTitles}
-        recipientBackends={recipientBackends}
-      />
-
-      <AcceptCelebration status={run.status} />
-
-      {/* The drill-down for whichever Agents-dock row was clicked. Rendered outside the dock
-          so the sheet's portal is not affected by the dock's collapse state. SessionTranscript
-          owns the shared run-keyed card cache, so expanded sheet cards survive a reopen. */}
-      <SubagentSheet
-        runId={run.id}
-        renderAsk={renderAsk}
-        renderPermission={renderPermission}
-        agent={openAgent}
-        entries={openAgentChildren}
-        taskTitles={taskTitles}
-        recipientBackends={recipientBackends}
-        onClose={() => setOpenAgentId(undefined)}
-      />
-
-      <ThreadFooterDock
-        run={run}
-        thread={thread}
-        currentThread={currentThread}
-        // A fixture without history holds the whole thread (hearsay-tools/cezarion#2588).
-        currentComplete={history?.currentComplete ?? true}
-        scroll={scroll}
-        pendingQuestions={pendingQuestions}
-        onJump={() => {
-          const askId = pendingQuestions > 0 ? pinnedAsk?.id : undefined
-          scroll.jumpToLatest(askId === undefined ? undefined : pinnedAskFocus(askId, () => settledAskIdRef.current === askId))
-        }}
-        onOpenWorker={setOpenAgentId}
-        sessionOpen={sessionOpen}
-        attention={attention}
-        queued={queued}
-        continuable={continuable}
-        continueAction={continueAction}
-        stopAction={stopAction}
-        finishAction={finishAction}
-        needsAnswer={needsAnswer}
-        sendMessage={sendMessage}
-        reply={reply}
-        providerBlocked={providerBlocked}
-        providerReason={providerReason}
-      />
-
-      {/* The sole mobile scroll anchor sits after every region whose height can change. Keeping
-          this tail pixel in place makes streamed rows and composer growth settle in the same
-          layout pass: the textarea grows upward while the dock's bottom stays put. */}
-      <div data-slot="thread-tail-anchor" aria-hidden="true" className="h-px shrink-0 md:hidden" />
-    </ReadingPage>
-  )
+  }, [queued, run.queuedMessages, patchRunAsync, editQueuedAsync, removeQueuedAsync])
 }
 
 /** Compact current-state context is authoritative while history pages may contain old asks. */
@@ -453,7 +492,6 @@ function pendingThreadAsk(history: RunHistoryState | undefined, currentThread: T
   const transcriptAsk = history
     ? pendingAsk !== undefined
     : currentThread.turns.some(turn => turn.items.some(item => item.kind === 'ask' && !item.resolved))
-  // The id comes from the transcript, the same source the ask card renders from.
   const pendingAskId = history
     ? pendingAsk?.requestId
     : currentThread.turns.flatMap(turn => turn.items).reverse().find(item => item.kind === 'ask' && !item.resolved)?.id
@@ -484,13 +522,6 @@ function threadProviderState(
   return { providerBlocked, providerReason }
 }
 
-function pinnedThreadAsk(sections: ReturnType<typeof mainTranscriptSections>) {
-  const pinnedSection = sections.at(-1)
-  const pinnedAsk = pinnedSection?.id === PENDING_ASK_SECTION_ID ? pinnedSection.entries[0] : undefined
-  const pendingQuestions = pinnedAsk?.kind === 'ask' ? pinnedAsk.questions.length : 0
-  return { pinnedAsk, pendingQuestions }
-}
-
 type ThreadTranscriptProps = {
   sections: ReturnType<typeof mainTranscriptSections>
   renderAsk: (ask: ThreadAsk) => ReactNode
@@ -511,8 +542,6 @@ function ThreadTranscript({
   run, thread, history, footer, issueUrl, sections, renderAsk, renderPermission,
   messageActions, scroll, mode, taskTitles, recipientBackends,
 }: ThreadTranscriptProps) {
-  /* Row spacing lives on each thread row (pb-2.5, both render modes measure alike);
-      this gap only separates the sections — rows, empty state, footer, review panel. */
   return (
     <div data-slot="session-conversation" className="mx-auto flex w-full max-w-[var(--measure)] flex-1 flex-col gap-2.5 px-[18px] py-3 [padding-block-end:12px] md:gap-3.5 md:px-16 md:py-5 md:[padding-block-end:24px]">
       {history ? (
@@ -549,26 +578,19 @@ function ThreadTranscript({
         )
       ) : null}
 
-      {/* Live turn heartbeat: quiet gaps between bursts still show progress. Monitoring
-          keeps `running` while parked, so it must not show the working spinner. */}
       {run.status === 'running' ? <WorkingIndicator /> : null}
 
-      {/* Closed states read as the body's last line; the WAITING state lives in the dock
-          (mockup `.paused-hint`), right above the composer it is asking the user to use. */}
       {footer && footer.state === 'closed' ? (
         <div
           data-slot="thread-footer"
           data-state={footer.state}
           className={cn(
             'mt-auto flex items-center gap-2 border-t border-border pt-3 text-xs',
-            footer.tone === 'danger' ? 'text-danger' : 'text-soft-foreground',
+            footer.tone === 'danger' ? 'text-semantic-red' : 'text-soft-foreground',
           )}
         >
           {footer.label}
-          {/* href protocol guard (#431): link only for http(s) URLs. */}
           {isHttpUrl(taskPrUrl(run)) ? (
-            // The run shipped as a PR (review-gate Draft PR, or agent-opened), or worked on
-            // one (#407) — the link stays reachable after the panel is gone.
             <a
               data-slot="pr-link"
               href={taskPrUrl(run)}
@@ -579,8 +601,6 @@ function ThreadTranscript({
               PR ↗
             </a>
           ) : null}
-          {/* #526: an issue-subject run (om-prepare-issue) links the issue it created — it
-              declares no PR, so without this the created issue was unreachable from the UI. */}
           {isHttpUrl(issueUrl) ? (
             <a
               data-slot="issue-link"
@@ -595,209 +615,11 @@ function ThreadTranscript({
         </div>
       ) : null}
 
-      {/* The review gate (spec 009): a finished run with changes parks here — nothing
-          auto-merges. The panel exists exactly while the run rests at `review`. */}
-      {run.status === 'review' ? <ReviewPanel run={run} /> : null}
+      {/* Review gate diff stays inside the scrollable transcript; the compact review action bar
+          lives in the fixed bottom DecisionZone (hearsay-tools/squawk#4374). */}
+      {run.status === 'review' ? <RunDiff runId={run.id} /> : null}
     </div>
   )
-}
-
-type ThreadComposerProps = {
-  run: ApiRun
-  thread: ThreadState
-  stopAction: ReturnType<typeof useStopAction>
-  finishAction: ReturnType<typeof useFinishRun>
-  attention: ReturnType<typeof deriveAttention>
-  needsAnswer: boolean
-  continuable: boolean
-  continueAction: ReturnType<typeof useContinueAction>
-  queued: boolean
-  sendMessage: ReturnType<typeof useSendMessage>
-  reply: ReturnType<typeof useAskAnswer>
-  providerBlocked: boolean
-  providerReason: string | undefined
-  sessionOpen: boolean
-}
-
-type ThreadFooterDockProps = ThreadComposerProps & {
-  currentThread: ThreadState
-  currentComplete: boolean
-  scroll: ThreadScrollControls
-  pendingQuestions: number
-  onJump: () => void
-  onOpenWorker: (id: string) => void
-}
-
-function ThreadFooterDock({
-  run, thread, currentThread, currentComplete, scroll, pendingQuestions, onJump, onOpenWorker,
-  sessionOpen, attention, queued, continuable, continueAction,
-  stopAction, finishAction, needsAnswer, sendMessage, reply,
-  providerBlocked, providerReason,
-}: ThreadFooterDockProps) {
-  // The pinned ask card already is the latest thing to act on: while it shows, a floating
-  // jump pill would only cover its options.
-  const askInView = usePinnedAskInView(needsAnswer && pendingQuestions > 0, scroll.scrollElRef)
-  /* The footer follows the transcript; desktop keeps it visible while reading history. */
-  return (
-    <div
-      data-slot="thread-dock"
-      data-pending-ask={needsAnswer || undefined}
-      className="relative z-10 bg-background pt-1 pb-2 md:pt-1.5 md:pb-4"
-    >
-      {/* Desktop places Jump above the sticky footer; phones keep it in the viewport. */}
-      {scroll.pillVisible && !askInView ? (
-        <div data-slot="thread-jump" className="pointer-events-none z-30 flex justify-center">
-          <JumpToLatestPill
-            pendingQuestions={pendingQuestions}
-            onJump={onJump}
-          />
-        </div>
-      ) : null}
-      <div data-slot="thread-footer-content" className="mx-auto flex w-full max-w-[var(--measure)] flex-col gap-1.5 px-[14px] md:gap-2.5 md:px-16">
-        {/* Keyed by run and pending-answer state so each ask starts folded. The route survives
-            a task change: the route survives a task change, so
-            an unkeyed dock would carry the previous run's collapse state — its own and every
-            nested section's — into the next one. */}
-        <RunActivityDock key={`${run.id}:${needsAnswer}`} pendingAsk={needsAnswer} run={run} thread={thread} currentThread={currentThread} currentComplete={currentComplete} onOpenWorker={onOpenWorker} readerScroll={scroll.subscribeReaderScroll} />
-
-        {/* A usage-limit hold is a `waiting` run with a resume booked — the dock says when,
-            before the composer offers a Continue nobody needs to press. */}
-        <AutoResumeHint run={run} />
-
-        {run.status === 'waiting' && sessionOpen ? (
-          <div
-            data-slot="paused-hint"
-            className="flex items-center gap-2 px-1 text-xs text-muted-foreground"
-          >
-            <StatusDot tone={attention.tone} shape={attention.shape} pulse={attention.pulse} />
-            {
-              // oxlint-disable-next-line cez/attention-bucket-compare-outside-owner -- the composer explains permission approval separately
-              attention.bucket === 'permission' ? 'Choose an approval option above to continue'
-              // oxlint-disable-next-line cez/attention-bucket-compare-outside-owner -- the composer distinguishes a waiting reply
-              : attention.bucket === 'waiting' ? 'The agent is paused, waiting for your reply'
-                : `${attention.label.charAt(0).toUpperCase()}${attention.label.slice(1)} — you can send a message to resume`}
-          </div>
-        ) : null}
-
-        {queued ? (
-          <div
-            data-slot="queued-hint"
-            className="flex items-center gap-2 px-1 text-xs text-muted-foreground"
-          >
-            {/* The status key's queued mark (#617): a still neutral ring, waiting for a slot. */}
-            <StatusDot tone="neutral" shape="ring" />
-            Messages you add now are folded into the prompt before the run starts.
-          </div>
-        ) : null}
-
-        {continuable && run.removedRunner !== undefined ? (
-          <p className="px-1 text-xs text-muted-foreground" role="status">{removedRunnerMessage(run.removedRunner)}</p>
-        ) : continuable && continueAction.startsNewConversation ? (
-          <p className="px-1 text-xs text-muted-foreground" role="status">Starts a new agent conversation.</p>
-        ) : null}
-
-        <ThreadComposer
-          run={run}
-          thread={thread}
-          stopAction={stopAction}
-          finishAction={finishAction}
-          attention={attention}
-          needsAnswer={needsAnswer}
-          continuable={continuable}
-          continueAction={continueAction}
-          queued={queued}
-          sendMessage={sendMessage}
-          reply={reply}
-          providerBlocked={providerBlocked}
-          providerReason={providerReason}
-          sessionOpen={sessionOpen}
-        />
-      </div>
-    </div>
-  )
-}
-
-/** The list follows the live step, or the effective continuation identity. */
-function threadSkillContext(run: ApiRun, continuable: boolean, action: ReturnType<typeof useContinueAction>) {
-  if (continuable) return { skillRunner: action.skillRunner, skillAccount: action.skillAccount }
-  const step = run.steps.find((entry) => entry.id === run.currentStepId)
-  const definition = run.workflowDef?.steps.find((entry) => entry.id === run.currentStepId)
-  return {
-    skillRunner: step?.backend ?? definition?.runner ?? run.runner,
-    skillAccount: step?.profileId ?? definition?.agentProfile ?? run.agentProfile,
-  }
-}
-
-function ThreadComposer({
-  run, thread, stopAction, finishAction, attention,
-  needsAnswer, continuable, continueAction, queued, sendMessage, reply,
-  providerBlocked, providerReason, sessionOpen,
-}: ThreadComposerProps) {
-  const workersLive = useWorkersLive(run)
-  return (
-    <Composer
-      {...threadSkillContext(run, continuable, continueAction)}
-      onStop={runActionFlags(run, workersLive).cancel ? stopAction.stop : undefined}
-      onFinish={
-        offersComposerFinish(run)
-          ? () => finishAction.mutateAsync().catch(() => undefined)
-          : undefined
-      }
-      finishing={finishAction.isPending}
-      stopOnEmpty={composerStopsOnEmpty(run, attention, needsAnswer)}
-      stopping={stopAction.stopping}
-      retainDraftUntilSuccess
-      compactFeedback
-      pendingLabel={continuable ? 'Continuing…' : 'Sending…'}
-      failureHint="Your draft is kept. Check the task status and connection, then retry."
-      sessionControls={continuable ? continueAction.pills : undefined}
-      onSubmit={
-        continuable
-          ? (text, images) => continueAction.continueWith(text, images)
-          : queued ? (text, images) => sendMessage.mutateAsync({ text, images })
-          : async (text, images) => {
-              // Share the ask card's idle-close recovery. The composer clears its draft
-              // only on success, so convert the hook's returned failure to a rejection.
-              const error = await reply.send(text, images)
-              if (error !== undefined) throw new Error(error)
-            }
-      }
-      disabled={providerBlocked || (!sessionOpen && !queued && !continuable)}
-      disabledReason={providerBlocked ? providerReason : 'Session closed — no session to resume.'}
-      // The engine pills ride the enabled footer, so the picked runner/model and the
-      // typed prompt reach `POST /continue` in one request.
-      footerEnd={
-        providerBlocked && !continueAction.providerPending ? (
-          <Link
-            to="/settings/agent-defaults#providers"
-            className="text-xs font-medium text-foreground underline underline-offset-4"
-          >
-            Configure providers
-          </Link>
-        ) : undefined
-      }
-      // Continuing with nothing typed is the legacy one-click Continue.
-      allowEmptySubmit={continuable && !needsAnswer}
-      emptySubmitVariant={run.status === 'review' ? 'outline' : 'primary'}
-      emptySubmitLabel={continuable && !needsAnswer ? 'Continue' : undefined}
-      placeholder={threadComposerPlaceholder(run, queued, continuable)}
-      autocompleteSkills
-      quickReplies
-      getMentionCandidates={() => threadFilePaths(thread)}
-    />
-  )
-}
-
-function composerStopsOnEmpty(run: ApiRun, attention: ReturnType<typeof deriveAttention>, needsAnswer: boolean) {
-  // oxlint-disable-next-line cez/attention-bucket-compare-outside-owner -- empty submit stops a wait that asks no person
-  return run.status === 'queued' || run.status === 'running' || (run.status === 'waiting' && attention.bucket === 'none' && !needsAnswer)
-}
-
-function threadComposerPlaceholder(run: ApiRun, queued: boolean, continuable: boolean) {
-  return queued ? 'Add to the prompt — sent when the run starts…'
-    : continuable ? 'Continue — add a prompt, or send to just reopen the session…'
-    : run.status === 'waiting' ? 'Reply — / for skills, @ for files…'
-    : 'Message the agent — / for skills, @ for files…'
 }
 
 function HistoryBoundary({
@@ -824,7 +646,7 @@ function HistoryBoundary({
   }
   if (!hasOlder && !error) {
     return (
-      <div data-slot="history-start" className="flex items-center gap-3 text-[11px] text-soft-foreground">
+      <div data-slot="history-start" className="flex items-center gap-3 text-xs text-soft-foreground">
         <span aria-hidden className="h-px flex-1 bg-border" />
         Start of session
         <span aria-hidden className="h-px flex-1 bg-border" />
@@ -857,9 +679,6 @@ function HistoryBoundary({
   )
 }
 
-/** The queued run's honest empty state (legacy #351): a queued run has emitted nothing, so
- *  instead of a blank thread the placeholder names the parked state and its live position in
- *  the FIFO queue (from the runs list — the same feed the sidebar uses). */
 function QueuedPlaceholder({ run }: { run: ApiRun }) {
   const runs = useRuns()
   const position = queuePosition(runs.data ?? [], run.id)

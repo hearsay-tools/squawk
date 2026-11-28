@@ -12,6 +12,7 @@ import type {
   GithubPrMergeState,
   GithubPrMergeStateResponse,
 } from '@open-mercato/cezar-api-client'
+import { shortSha } from '@/components/data-primitives'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -31,13 +32,15 @@ const mergeLabels: Record<GithubMergeMethod, string> = {
   rebase: 'Rebase and merge',
 }
 
-type MergeRequirementState = 'passing' | 'failing' | 'pending' | 'unknown'
+type MergeRequirementState = 'passing' | 'failing' | 'pending' | 'review' | 'conflict' | 'unknown'
 
 function MergeRequirementIcon({ state }: { state: MergeRequirementState }) {
   const iconClass = 'size-4 shrink-0'
-  if (state === 'passing') return <CheckIcon size={16} aria-hidden="true" data-slot="gh-merge-status-passing" className={cn(iconClass, 'text-success')} />
-  if (state === 'failing') return <CircleXIcon size={16} aria-hidden="true" data-slot="gh-merge-status-failing" className={cn(iconClass, 'text-danger')} />
-  if (state === 'pending') return <LoaderCircleIcon aria-hidden="true" data-slot="gh-merge-status-pending" className={cn(iconClass, 'animate-spin text-warning')} />
+  if (state === 'passing') return <CheckIcon size={16} aria-hidden="true" data-slot="gh-merge-status-passing" className={cn(iconClass, 'text-semantic-green')} />
+  if (state === 'failing') return <CircleXIcon size={16} aria-hidden="true" data-slot="gh-merge-status-failing" className={cn(iconClass, 'text-semantic-red')} />
+  if (state === 'pending') return <LoaderCircleIcon aria-hidden="true" data-slot="gh-merge-status-pending" className={cn(iconClass, 'animate-spin text-semantic-amber motion-reduce:animate-none')} />
+  if (state === 'review') return <CircleIcon size={16} aria-hidden="true" data-slot="gh-merge-status-review" className={cn(iconClass, 'text-semantic-info')} />
+  if (state === 'conflict') return <TriangleAlertIcon size={16} aria-hidden="true" data-slot="gh-merge-status-conflict" className={cn(iconClass, 'text-semantic-conflict')} />
   return <CircleIcon size={16} aria-hidden="true" data-slot="gh-merge-status-unknown" className={cn(iconClass, 'text-soft-foreground')} />
 }
 
@@ -66,13 +69,24 @@ function mergeBoxTitle(state: GithubPrMergeState): string {
 
 function mergeReviewState(decision: GithubPrMergeState['reviewDecision']): MergeRequirementState {
   if (decision === 'approved' || decision === 'not-required') return 'passing'
+  if (decision === 'review-required') return 'review'
   if (decision === 'unknown') return 'unknown'
   return 'failing'
 }
 
+function mergeReviewLabel(decision: GithubPrMergeState['reviewDecision']): string {
+  switch (decision) {
+    case 'approved': return 'Approved'
+    case 'not-required': return 'Not required'
+    case 'review-required': return 'Waiting for review'
+    case 'changes-requested': return 'Changes requested'
+    case 'unknown': return 'Unknown'
+  }
+}
+
 function mergeConflictState(mergeable: GithubPrMergeState['mergeable']): MergeRequirementState {
   if (mergeable === 'mergeable') return 'passing'
-  if (mergeable === 'conflicting') return 'failing'
+  if (mergeable === 'conflicting') return 'conflict'
   return 'unknown'
 }
 
@@ -158,9 +172,9 @@ function GithubMergeBoxBody({
   return (
     <div className="flex items-start gap-3">
       {state.canMerge ? (
-        <CheckIcon size={16} aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-success" />
+        <CheckIcon size={16} aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-semantic-green" />
       ) : (
-        <TriangleAlertIcon size={16} aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-warning" />
+        <TriangleAlertIcon size={16} aria-hidden="true" className={cn('mt-0.5 size-5 shrink-0', state.mergeable === 'conflicting' ? 'text-semantic-conflict' : 'text-semantic-amber')} />
       )}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -176,13 +190,13 @@ function GithubMergeBoxBody({
             Refresh
           </Button>
         </div>
-        <p className="mt-1 font-mono text-[11px] text-soft-foreground">
-          {state.headRef} ({state.headSha.slice(0, 7)}) → {state.baseRef}
+        <p className="mt-1 font-mono text-xs text-soft-foreground">
+          {state.headRef} ({shortSha(state.headSha)}) → {state.baseRef}
         </p>
         <ul className="mt-3 space-y-2 text-xs">
           <li className="flex items-center gap-2">
             <MergeRequirementIcon state={reviewState} />
-            <span>Reviews: {state.reviewDecision.replaceAll('-', ' ')}</span>
+            <span>Reviews: {mergeReviewLabel(state.reviewDecision)}</span>
           </li>
           <li className="flex items-center gap-2">
             <MergeRequirementIcon state={conflictState} />
@@ -195,7 +209,7 @@ function GithubMergeBoxBody({
         </ul>
         {state.mergeable === 'conflicting' && onRunAgent ? <Button className="mt-4" onClick={onRunAgent}>Run agent on this PR</Button> : null}
         {state.canOverride ? (
-          <label className="mt-4 flex cursor-pointer items-start gap-2 rounded-md border border-warning/40 bg-warning/5 p-3 text-xs">
+          <label className="mt-4 flex cursor-pointer items-start gap-2 rounded-md border border-pending-strong/40 bg-pending/10 p-3 text-xs">
             <input
               type="checkbox"
               checked={overrideRules}
@@ -263,7 +277,7 @@ function GithubMergeConfirm({
             <div>
               <p>This will merge “{state.title}” into {state.baseRef}. GitHub will re-check the exact reviewed head before changing the repository.</p>
               {overrideRules && state.canOverride ? (
-                <p data-slot="gh-bypass-warning" className="mt-4 text-sm text-warning">
+                <p data-slot="gh-bypass-warning" className="mt-4 text-sm text-semantic-amber">
                   You are asking GitHub to bypass unmet repository requirements; GitHub may refuse if your permissions do not allow it.
                 </p>
               ) : null}
@@ -349,7 +363,7 @@ export function GithubMergeBox({ number, onRunAgent }: { number: number; onRunAg
   }
 
   return (
-    <section data-slot="gh-merge-box" data-eligibility={state.eligibility} data-conflicting={mergeBoxConflictingAttr(state.mergeable)} aria-live="polite" className="mt-6 rounded-lg border border-border bg-card p-4">
+    <section data-slot="gh-merge-box" data-eligibility={state.eligibility} data-conflicting={mergeBoxConflictingAttr(state.mergeable)} aria-live="polite" className="mt-6 rounded-lg border border-card-edge bg-card p-4 shadow-card">
       <GithubMergeBoxBody
         state={state}
         selectedMethod={selectedMethod}

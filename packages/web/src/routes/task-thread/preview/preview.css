@@ -8,6 +8,21 @@
   display: contents;
 }
 
+/* Task thread locks to the viewport height with its own transcript scroller; keep the split
+ * wrapper bounded to the shell's main height when the preview/report pane is open.
+ * Exclude collapsed tablet takeover (`data-collapsed`) so RunHeader keeps its natural height
+ * and the preview/report pane receives the remaining height below it. */
+[data-slot='task-split'][data-pane='open']:has([data-route='task-thread']) {
+  block-size: 100%;
+  min-block-size: 0;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+[data-slot='task-split'][data-pane='open']:has([data-route='task-thread']) > [data-slot='task-main']:not([data-collapsed]) {
+  block-size: 100%;
+  min-block-size: 0;
+}
+
 /* The pane docks beside the transcript and sticks to the shell's scrolling main, so it stays in
  * view while a long transcript scrolls. --preview-h is the main's measured height (100dvh until
  * measured); --preview-pane is the divider's width. */
@@ -31,6 +46,7 @@
 @media (min-width: 768px) {
   .preview-split[data-takeover] { flex-direction: column; height: 100%; min-height: 0; }
   .preview-split[data-takeover] [data-slot='task-main'] { flex: 0 0 auto; }
+  .preview-split[data-takeover]:has([data-route='task-thread']) > [data-slot='task-main']:not([data-collapsed]) { flex: 1 1 0; }
   .preview-split[data-takeover] .preview-pane {
     position: static;
     flex: 1 1 0;

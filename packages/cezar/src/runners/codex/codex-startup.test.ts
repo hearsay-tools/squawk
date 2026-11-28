@@ -330,6 +330,34 @@ describe('Codex startup and Stop (#493)', () => {
     expect(outcome).toBe('rejected'); expect(String(failure)).toMatch(/stdin.*write failed/);
   });
 
+  it('preserves trailing additional comments in a native requestUserInput reply', async () => {
+    start(); await initialize(); await thread(); await opening();
+    fake.frame({
+      id: 'ask_comment',
+      method: 'item/tool/requestUserInput',
+      params: {
+        questions: [
+          { id: 'framework', header: 'Framework', question: 'Which framework?', options: [{ label: 'React' }, { label: 'Svelte' }] },
+          { id: 'style', header: 'Style', question: 'Which style?', options: [{ label: 'CSS' }, { label: 'Tailwind' }] },
+        ],
+      },
+    });
+    await flush();
+    expect(session.sendMessage([{
+      type: 'text',
+      text: 'Framework: React\nStyle: CSS\n\nAdditional comments:\nKeep the bundle small.',
+    }])).toBe(true);
+    await flush();
+    const reply = fake.requests.find((message) => (message as { id?: unknown }).id === 'ask_comment') as
+      | { id: string; result?: { answers?: Record<string, { answers: string[] }> } }
+      | undefined;
+    expect(reply?.result?.answers).toEqual({
+      framework: { answers: ['React'] },
+      style: { answers: ['CSS', 'Additional comments:\nKeep the bundle small.'] },
+    });
+    session.interrupt(); fake.exit(); await flush();
+  });
+
   it('does not reinterpret an expected pipe error during Stop as a provider failure', async () => {
     start(); await initialize(); await thread(); await opening();
     session.interrupt(); fake.child.stdin.destroy(new Error('EPIPE')); await flush();

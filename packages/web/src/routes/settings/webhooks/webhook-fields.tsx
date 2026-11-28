@@ -14,7 +14,7 @@ import { TRIGGER_LABELS } from './trigger-labels'
 import type { WebhookDraft } from './webhook-draft'
 
 const fieldLabel = 'flex flex-col gap-1 text-[13px]'
-const fieldCaption = 'text-[11px] text-muted-foreground'
+const fieldCaption = 'text-xs text-muted-foreground'
 
 /** The inputs of one webhook form. Controlled: the card owns the draft, so collapsing the card
  *  or editing another one never resets it. */
@@ -81,7 +81,7 @@ export function WebhookFields({
           value={draft.description}
           onChange={(event) => onChange({ description: event.target.value })}
         />
-        <span id={descriptionHintId} className="text-[11px] text-soft-foreground">
+        <span id={descriptionHintId} className="text-xs text-soft-foreground">
           Agents read the name and description to decide when to use this webhook.
         </span>
       </div>
@@ -99,7 +99,7 @@ export function WebhookFields({
           value={draft.token}
           onChange={(event) => onChange({ token: event.target.value })}
         />
-        <span id={tokenHintId} className="text-[11px] text-soft-foreground">
+        <span id={tokenHintId} className="text-xs text-soft-foreground">
           {tokenSet
             ? 'The token is stored in ~/.cezar and never shown again. Leave it empty to keep it.'
             : 'The token is stored in ~/.cezar, never in the repo. It is sent as a Bearer header.'}
@@ -116,12 +116,12 @@ export function WebhookFields({
           />
           <span className="flex min-w-0 flex-col text-[13px]">
             <label htmlFor={tasksId} className="font-medium">Task notifications</label>
-            <span id={tasksHintId} className="text-[11px] text-soft-foreground">Tasks you hand off, or start with notify on, send their status here.</span>
+            <span id={tasksHintId} className="text-xs text-soft-foreground">Tasks you hand off, or start with notify on, send their status here.</span>
           </span>
         </div>
         {draft.tasks ? (
           <fieldset data-slot="webhook-triggers" className="flex flex-col gap-1 sm:ps-[3.25rem]">
-            <legend className="pbe-1 text-[11px] text-muted-foreground">Send a delivery when a task enters</legend>
+            <legend className="pbe-1 text-xs text-muted-foreground">Send a delivery when a task enters</legend>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-x-3">
               {WEBHOOK_TRIGGERS.map((trigger) => (
                 <label key={trigger} className="flex min-h-11 items-start gap-2.5 pbs-2 text-[13px]">
@@ -140,12 +140,12 @@ export function WebhookFields({
                   />
                   <span className="flex min-w-0 flex-col">
                     <span className="font-medium">{TRIGGER_LABELS[trigger].label}</span>
-                    <span className="text-[11px] text-soft-foreground">{TRIGGER_LABELS[trigger].hint}</span>
+                    <span className="text-xs text-soft-foreground">{TRIGGER_LABELS[trigger].hint}</span>
                   </span>
                 </label>
               ))}
             </div>
-            <p className="text-[11px] text-soft-foreground">Handing a task off and Send test always deliver.</p>
+            <p className="text-xs text-soft-foreground">Handing a task off and Send test always deliver.</p>
           </fieldset>
         ) : null}
       </div>
@@ -159,7 +159,7 @@ export function WebhookFields({
         />
         <span className="flex min-w-0 flex-col text-[13px]">
           <label htmlFor={agentId} className="font-medium">Let agents send reports</label>
-          <span id={agentHintId} className="text-[11px] text-soft-foreground">Agents in this project may post a report here when the task calls for it.</span>
+          <span id={agentHintId} className="text-xs text-soft-foreground">Agents in this project may post a report here when the task calls for it.</span>
         </span>
       </div>
     </>

@@ -231,7 +231,7 @@ export async function getRepoCommit(sha: string, opts?: ReadOptions): Promise<Re
 /** The Settings → Agent defaults knobs in one read (`GET /api/config`, additive R6 route). */
 export async function getConfig(opts?: ReadOptions): Promise<ConfigResponse> {
   return unwrap(
-    await cez.api.v1.p[':projectId'].config.$get({ param: { projectId: queryScope() } }, init(opts)),
+    await cez.api.v1.p[':projectId'].config.$get({ param: { projectId: opts?.projectId ?? queryScope() } }, init(opts)),
     '/config',
   )
 }

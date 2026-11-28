@@ -162,8 +162,33 @@ function stubFetch({
   // Stateful, like the real server: an archive really flips the flag, so the invalidation
   // refetch answers with the moved row rather than putting the old one back.
   const index: MockIndex = { rows: runs.map((run) => ({ ...run })) }
+  let workspaceUiState: Record<string, unknown> = { taskTable: { expandedColumns: {} } }
   // Tried in order; a route without a method answers every method.
   const routes: FetchRoute<MockRequest>[] = [
+    {
+      method: 'GET',
+      path: '/api/v1/runners',
+      respond: () =>
+        jsonResponse({
+          runners: [
+            { id: 'claude', name: 'Claude Code', available: true },
+            { id: 'codex', name: 'Codex', available: true },
+          ],
+        }),
+    },
+    {
+      method: 'GET',
+      path: '/api/v1/workspace/ui-state',
+      respond: () => jsonResponse(workspaceUiState),
+    },
+    {
+      method: 'PUT',
+      path: '/api/v1/workspace/ui-state',
+      respond: ({ body }) => {
+        workspaceUiState = { ...workspaceUiState, ...(body as Record<string, unknown>) }
+        return jsonResponse(workspaceUiState)
+      },
+    },
     // The FULL record, which this page's index row deliberately is not: the conflict panel's
     // action fetches it (per project, on open) to learn whether the task can be spoken to.
     { method: 'GET', path: /^\/api\/v1\/p\/([^/]+)\/runs\/([^/]+)$/, respond: (_request, match) => runDetail(index, match!) },
@@ -230,6 +255,50 @@ function stubFetch({
       method: 'POST',
       path: /^\/api\/v1\/p\/([^/]+)\/runs\/([^/]+)\/archive$/,
       respond: ({ body }, match) => setArchived(index, archiveStatus, match!, body),
+    },
+    {
+      method: 'POST',
+      path: /^\/api\/v1\/p\/([^/]+)\/runs\/([^/]+)\/pin$/,
+      respond: ({ body }, match) => {
+        const [, projectId, id] = match!
+        const pinned = (body as { pinned: boolean }).pinned
+        index.rows = index.rows.map((run) =>
+          run.projectId === projectId && run.id === id ? { ...run, pinned } : run,
+        )
+        return jsonResponse(index.rows.find((run) => run.projectId === projectId && run.id === id))
+      },
+    },
+    {
+      method: 'POST',
+      path: /^\/api\/v1\/p\/([^/]+)\/runs\/read-all$/,
+      respond: (_request, match) => {
+        const [, projectId] = match!
+        let marked = 0
+        index.rows = index.rows.map((run) => {
+          if (run.projectId === projectId && !run.seenAt && run.finishedAt && !run.archived) {
+            marked += 1
+            return { ...run, seenAt: run.createdAt }
+          }
+          return run
+        })
+        return jsonResponse({ marked })
+      },
+    },
+    {
+      method: 'POST',
+      path: /^\/api\/v1\/p\/([^/]+)\/runs\/archive-finished$/,
+      respond: (_request, match) => {
+        const [, projectId] = match!
+        let archived = 0
+        index.rows = index.rows.map((run) => {
+          if (run.projectId === projectId && !run.archived && (run.status === 'done' || run.status === 'failed' || run.status === 'cancelled')) {
+            archived += 1
+            return { ...run, archived: true }
+          }
+          return run
+        })
+        return jsonResponse({ archived })
+      },
     },
   ]
   vi.stubGlobal(
@@ -324,16 +393,18 @@ const rowIds = () =>
   )
 
 describe('global tasks page', () => {
-it('mounts summary actions only while the row is expanded', async () => {
+it('mounts row actions inside the Usage telemetry popover only when opened', async () => {
   stubFetch()
   renderPage()
   await screen.findByText('Bump the runner')
   const row = document.querySelector('[data-slot="global-task-row"][data-run-id="i1"]')!
-  expect(row.querySelector('[data-slot="global-task-actions"]')).toBeNull()
-  fireEvent.click(within(row as HTMLElement).getByRole('button', { name: 'Show resources for Bump the runner' }))
-  expect(row.querySelector('[data-slot="global-task-actions"]')).not.toBeNull()
-  fireEvent.click(within(row as HTMLElement).getByRole('button', { name: 'Hide resources for Bump the runner' }))
-  expect(row.querySelector('[data-slot="global-task-actions"]')).toBeNull()
+  expect(document.querySelector('[data-slot="task-telemetry-popover"]')).toBeNull()
+  const trigger = within(row as HTMLElement).getByRole('button', { name: 'Usage and telemetry for Bump the runner' })
+  fireEvent.click(trigger)
+  const popover = document.querySelector('[data-slot="task-telemetry-popover"]') as HTMLElement
+  expect(popover.querySelector('[data-action="archive-run"]')).not.toBeNull()
+  fireEvent.click(trigger)
+  expect(document.querySelector('[data-slot="task-telemetry-popover"]')).toBeNull()
 })
 
   it('lists every project’s tasks and links each into its OWN project', async () => {
@@ -463,7 +534,7 @@ it('mounts summary actions only while the row is expanded', async () => {
     it('opens and highlights Filters, with a count, when the URL restores a facet', async () => {
       stubFetch()
       renderPage(createQueryClient(), '/tasks?status=running&group=project')
-      await screen.findByText('Filter across projects and act on each run without opening the session.')
+      await screen.findByText('Add checkout endpoint')
       const toggle = screen.getByRole('button', { name: 'Filters' })
       expect(toggle.getAttribute('aria-expanded')).toBe('true')
       fireEvent.click(toggle)
@@ -945,12 +1016,13 @@ it('mounts summary actions only while the row is expanded', async () => {
       renderPage()
       await screen.findByText('Add checkout endpoint')
 
-      fireEvent.click(screen.getByRole('button', { name: 'Show resources for Add checkout endpoint' }))
-      expect(screen.getByText('$0.31')).toBeTruthy()
-      const cpu = document.querySelector('[data-usage="cpu"]')!
+      fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for Add checkout endpoint' }))
+      const popover = document.querySelector('[data-slot="task-telemetry-popover"]') as HTMLElement
+      expect(within(popover).getByText('$0.31')).toBeTruthy()
+      const cpu = popover.querySelector('[data-usage="cpu"]')!
       expect(cpu.textContent).toBe('84%')
       expect(cpu.getAttribute('data-usage-kind')).toBe('live')
-      expect(document.querySelector('[data-usage="mem"]')!.textContent).toBe('612 MB')
+      expect(popover.querySelector('[data-usage="mem"]')!.textContent).toBe('612 MB')
     })
 
     it('falls back to the persisted peak once the run is finished', async () => {
@@ -962,13 +1034,13 @@ it('mounts summary actions only while the row is expanded', async () => {
       renderPage()
       await screen.findByText('Bump the runner')
 
-      fireEvent.click(screen.getByRole('button', { name: 'Show resources for Bump the runner' }))
-      const mem = document.querySelector('[data-usage="mem"]')!
+      fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for Bump the runner' }))
+      const popover = document.querySelector('[data-slot="task-telemetry-popover"]') as HTMLElement
+      const mem = popover.querySelector('[data-usage="mem"]')!
       expect(mem.textContent).toBe('peak 900 MB')
       expect(mem.getAttribute('data-usage-kind')).toBe('peak')
       // CPU has no persisted peak, so it says nothing rather than inventing one.
-      if (screen.queryByRole('button', { name: 'Show resources for Bump the runner' })) fireEvent.click(screen.getByRole('button', { name: 'Show resources for Bump the runner' }))
-      expect(document.querySelector('[data-usage="cpu"]')!.getAttribute('data-usage-kind')).toBe(
+      expect(popover.querySelector('[data-usage="cpu"]')!.getAttribute('data-usage-kind')).toBe(
         'none',
       )
     })
@@ -986,7 +1058,7 @@ it('mounts summary actions only while the row is expanded', async () => {
       renderPage()
       await screen.findByText('Bump the runner')
 
-      if (screen.queryByRole('button', { name: 'Show resources for Bump the runner' })) fireEvent.click(screen.getByRole('button', { name: 'Show resources for Bump the runner' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for Bump the runner' }))
       expect(document.querySelector('[data-usage="cpu"]')!.getAttribute('data-usage-kind')).toBe(
         'none',
       )
@@ -997,9 +1069,11 @@ it('mounts summary actions only while the row is expanded', async () => {
       renderPage()
       await screen.findByText('Add checkout endpoint')
 
-      fireEvent.click(screen.getByRole('button', { name: 'Show resources for Add checkout endpoint' }))
-      expect(screen.queryByText('Cost')).toBeNull()
-      expect(screen.queryByText('$0.31')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for Add checkout endpoint' }))
+      const popover = document.querySelector('[data-slot="task-telemetry-popover"]') as HTMLElement
+      expect(within(popover).queryByText('Cost')).toBeNull()
+      expect(within(popover).queryByText('$0.31')).toBeNull()
+      expect(screen.getByRole('button', { name: 'Usage and telemetry for Add checkout endpoint' }).textContent).not.toContain('$0.31')
     })
   })
 
@@ -1015,7 +1089,7 @@ it('mounts summary actions only while the row is expanded', async () => {
       await screen.findByText('Bump the runner')
       expect(document.querySelectorAll('[aria-label="unread"]')).toHaveLength(1)
 
-      fireEvent.click(screen.getByRole('button', { name: 'Show resources for Bump the runner' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for Bump the runner' }))
       const markRead = screen.getByRole('button', { name: /Mark Bump the runner read/ })
       fireEvent.click(markRead)
 
@@ -1035,7 +1109,7 @@ it('mounts summary actions only while the row is expanded', async () => {
       await screen.findByText('Bump the runner')
       expect(document.querySelectorAll('[aria-label="unread"]')).toHaveLength(0)
 
-      fireEvent.click(screen.getByRole('button', { name: 'Show resources for Bump the runner' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for Bump the runner' }))
       fireEvent.click(screen.getByRole('button', { name: /Mark Bump the runner unread/ }))
 
       await waitFor(() =>
@@ -1053,9 +1127,9 @@ it('mounts summary actions only while the row is expanded', async () => {
       renderPage()
       await screen.findByText('Add checkout endpoint')
 
-      fireEvent.click(screen.getByRole('button', { name: 'Show resources for Add checkout endpoint' }))
-      const running = document.querySelector('[data-slot="global-task-row"][data-run-id="a1"]')!
-      expect(running.querySelector('[data-action^="mark-"]')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for Add checkout endpoint' }))
+      const popover = document.querySelector('[data-slot="task-telemetry-popover"]') as HTMLElement
+      expect(popover.querySelector('[data-action^="mark-"]')).toBeNull()
     })
   })
 
@@ -1065,15 +1139,14 @@ it('mounts summary actions only while the row is expanded', async () => {
     await screen.findByText('Bump the runner')
 
     // `i1` is done; `a1` is running, so it has no archive button at all.
-    fireEvent.click(screen.getByRole('button', { name: 'Show resources for Add checkout endpoint' }))
-    const row = document.querySelector('[data-slot="global-task-row"][data-run-id="a1"]')!
-    expect(row.querySelector('[data-action="archive-run"]')).toBeNull()
+    const a1Trigger = screen.getByRole('button', { name: 'Usage and telemetry for Add checkout endpoint' })
+    fireEvent.click(a1Trigger)
+    expect(document.querySelector('[data-slot="task-telemetry-popover"] [data-action="archive-run"]')).toBeNull()
+    fireEvent.click(a1Trigger)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show resources for Bump the runner' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for Bump the runner' }))
     fireEvent.click(
-      document
-        .querySelector('[data-slot="global-task-row"][data-run-id="i1"]')!
-        .querySelector<HTMLButtonElement>('[data-action="archive-run"]')!,
+      document.querySelector<HTMLButtonElement>('[data-slot="task-telemetry-popover"] [data-action="archive-run"]')!,
     )
 
     // The request names the run's own project, not the boot one.
@@ -1095,8 +1168,8 @@ it('mounts summary actions only while the row is expanded', async () => {
     fireEvent.click(screen.getByRole('button', { name: /^Archived(·|$)/ }))
     await waitFor(() => expect(rowIds()).toEqual(['i1']))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show resources for Bump the runner' }))
-    fireEvent.click(document.querySelector<HTMLButtonElement>('[data-action="unarchive-run"]')!)
+    fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for Bump the runner' }))
+    fireEvent.click(document.querySelector<HTMLButtonElement>('[data-slot="task-telemetry-popover"] [data-action="unarchive-run"]')!)
     await waitFor(() =>
       expect(sent.find((request) => request.method === 'POST')?.body).toEqual({ archived: false }),
     )
@@ -1108,11 +1181,9 @@ it('mounts summary actions only while the row is expanded', async () => {
     renderPage()
     await screen.findByText('Bump the runner')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show resources for Bump the runner' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for Bump the runner' }))
     fireEvent.click(
-      document
-        .querySelector('[data-slot="global-task-row"][data-run-id="i1"]')!
-        .querySelector<HTMLButtonElement>('[data-action="archive-run"]')!,
+      document.querySelector<HTMLButtonElement>('[data-slot="task-telemetry-popover"] [data-action="archive-run"]')!,
     )
 
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('still running'))
@@ -1210,7 +1281,7 @@ it('hides indexed workers while preserving parked-parent waiting phases', async 
   expect(screen.queryByText('Worker')).toBeNull()
   for (const phase of ['parked', 'wake-pending']) {
     const row = document.querySelector(`[data-slot="global-task-row"][data-run-id="${phase}"]`)
-    expect(row?.textContent).toContain(phase === 'parked' ? 'waiting on workers' : 'waiting for capacity')
+    expect(row?.textContent).toContain(phase === 'parked' ? 'Waiting for workers' : 'Waiting for capacity')
   }
 })
 
@@ -1219,8 +1290,8 @@ it('shows a parked parent human question from the slim workspace index', async (
   renderPage()
   await waitFor(() => expect(document.querySelector('[data-slot="global-task-row"][data-run-id="asking-parent"]')).not.toBeNull())
   const row = document.querySelector('[data-slot="global-task-row"][data-run-id="asking-parent"]')
-  expect(row?.textContent).toContain('needs you')
-  expect(row?.textContent).not.toContain('waiting on workers')
+  expect(row?.textContent).toContain('Needs you')
+  expect(row?.textContent).not.toContain('Waiting for workers')
 })
 
 
@@ -1256,8 +1327,8 @@ it('renders a parent request-wait as a global-task-row and hides the worker', as
   renderPage()
   await waitFor(() => expect(document.querySelector('[data-slot="global-task-row"][data-run-id="parent-wait"]')).not.toBeNull())
   const row = document.querySelector('[data-slot="global-task-row"][data-run-id="parent-wait"]')
-  expect(row?.textContent).toContain('waiting on worker replies')
-  expect(row?.textContent).not.toContain('needs you')
+  expect(row?.textContent).toContain('Waiting for worker replies')
+  expect(row?.textContent).not.toContain('Needs you')
   expect(document.querySelector('[data-slot="global-task-row"][data-run-id="request-wait"]')).toBeNull()
 })
 
@@ -1271,7 +1342,8 @@ describe('global tasks — status groups and origin (hearsay-tools/cezarion#1616
   const automated: RunIndexEntry = {
     ...RUNS[2]!, projectId: 'web', id: 'nightly-run', title: 'Nightly health', automationId: 'health', status: RUN_STATUS.done, createdAt: '2026-07-14T07:00:00Z',
   }
-  const origins = () => [...document.querySelectorAll('[data-slot="global-task-row"] [data-slot="task-origin"]')].map((line) => line.textContent)
+  const automationBadges = () => [...document.querySelectorAll('[data-slot="global-task-row"] [data-slot="task-automation-badge"]')].map((line) => line.textContent)
+  const projectBadges = () => [...document.querySelectorAll('[data-slot="global-task-row"] [data-slot="task-project"]')].map((line) => line.textContent)
 
   it('groups by status, and filters by origin through the URL', async () => {
     stubFetch({ runs: [...RUNS, automated], automations: {} })
@@ -1310,19 +1382,21 @@ describe('global tasks — status groups and origin (hearsay-tools/cezarion#1616
     expect(search()).toContain('origin=automations')
   })
 
-  it('names project and origin under every title, falling back to the automation id', async () => {
+  it('shows automatic project badge on every row and automation badge only on automation tasks', async () => {
     stubFetch({ runs: [RUNS[0]!, automated] })
     renderPage()
     await screen.findByText('Nightly health')
     const projectOf = (id: string) => PROJECTS.find((entry) => entry.id === id)!.name
     // Finished (the automation task) sorts above Working (the direct one).
-    expect(origins()).toEqual([`${projectOf('web')}·health`, `${projectOf('api')}·Direct task`])
+    expect(projectBadges()).toEqual([projectOf('web'), projectOf('api')])
+    expect(automationBadges()).toEqual(['health'])
+    expect(document.querySelector('[data-slot="global-tasks-table"]')?.textContent).not.toContain('Direct task')
   })
 
   it('reads automation names when the host has automations on, and searches them', async () => {
     stubFetch({ runs: [RUNS[0]!, automated], automations: { web: [{ id: 'health', name: 'Daily project health' }] } })
     renderPage()
-    await waitFor(() => expect(origins()[0]).toMatch(/·Daily project health$/))
+    await waitFor(() => expect(automationBadges()[0]).toBe('Daily project health'))
     fireEvent.change(screen.getByRole('textbox', { name: 'Search tasks across projects' }), { target: { value: 'daily project' } })
     await waitFor(() => expect(rowIds()).toEqual(['nightly-run']))
     // The facet counts read the same match as the list. The menu measures itself and scrolls its
@@ -1359,10 +1433,10 @@ describe('global tasks — status groups and origin (hearsay-tools/cezarion#1616
     expect(rowIds()).toEqual(['w1', 'nightly-run', 'a1'])
   })
 
-  it('previews a row inline with Open task in its own project', async () => {
+  it('previews a row in the Usage popover with Open task in its own project', async () => {
     stubFetch({ runs: [RUNS[2]!], handoff: '# Handoff\n\n## Progress log\n\n- 10:00 — runner bumped\n' })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Show resources for Bump the runner' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Usage and telemetry for Bump the runner' }))
     expect(await screen.findByText('10:00 — runner bumped')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Open task: Bump the runner' }).getAttribute('href')).toBe('/p/infra/tasks/i1')
     expect(sent.some((request) => request.path === '/api/v1/p/infra/runs/i1/handoff')).toBe(true)
@@ -1380,23 +1454,73 @@ describe('global tasks — status groups and origin (hearsay-tools/cezarion#1616
   })
 })
 
-it('keeps an expanded run open after a group move and a filter round trip', async () => {
+it('supports pinning, column selection, and scoped bulk actions on Global Tasks', async () => {
+  localStorage.clear()
+  const runs: RunIndexEntry[] = [
+    { ...RUNS[0]!, status: RUN_STATUS.done, finishedAt: RUNS[0]!.createdAt },
+    { ...RUNS[1]!, status: RUN_STATUS.done, finishedAt: RUNS[1]!.createdAt },
+    { ...RUNS[2]!, status: RUN_STATUS.done, finishedAt: RUNS[2]!.createdAt },
+  ]
+  stubFetch({
+    runs,
+    projects: [PROJECTS[0]!, { ...PROJECTS[1]!, tags: ['Storefront'] }, PROJECTS[2]!],
+  })
+  renderPage()
+  await screen.findByText('Add checkout endpoint')
+
+  // Pin a task in its own project.
+  const apiRow = document.querySelector<HTMLElement>('[data-slot="global-task-row"][data-run-id="a1"]')!
+  fireEvent.click(within(apiRow).getByRole('button', { name: 'Pin task' }))
+  await waitFor(() =>
+    expect(sent.some((request) => request.method === 'POST' && request.path === '/api/v1/p/api/runs/a1/pin')).toBe(true),
+  )
+
+  // Column selection adds the Branch column via workspace ui-state.
+  fireEvent.click(screen.getByRole('button', { name: 'Columns' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Branch' }))
+  await waitFor(() => expect(screen.getByText('feat/checkout')).toBeTruthy())
+
+  // Filter to the storefront tag (api + web, excluding infra); bulk actions scope to storefront only.
+  fireEvent.click(screen.getByRole('button', { name: /storefront/ }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Mark all read 2' })).toBeTruthy())
+  expect(screen.getByRole('button', { name: 'Archive finished 2' })).toBeTruthy()
+
+  // Search text does not narrow bulk action scope.
+  fireEvent.change(screen.getByRole('textbox', { name: 'Search tasks across projects' }), { target: { value: 'endpoint' } })
+  await waitFor(() => expect(rowIds()).toEqual(['a1']))
+  expect(screen.getByRole('button', { name: 'Mark all read 2' })).toBeTruthy()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Mark all read 2' }))
+  await waitFor(() => {
+    const readAllPaths = sent.filter((request) => request.path.endsWith('/runs/read-all')).map((request) => request.path).sort()
+    expect(readAllPaths).toEqual(['/api/v1/p/api/runs/read-all', '/api/v1/p/web/runs/read-all'])
+  })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Archive finished 2' }))
+  await waitFor(() => {
+    const archivePaths = sent.filter((request) => request.path.endsWith('/runs/archive-finished')).map((request) => request.path).sort()
+    expect(archivePaths).toEqual(['/api/v1/p/api/runs/archive-finished', '/api/v1/p/web/runs/archive-finished'])
+  })
+})
+
+it('keeps task row telemetry accessible after a group move and a filter round trip', async () => {
   localStorage.clear()
   stubFetch()
   const client = createQueryClient()
   renderPage(client, '/tasks?tasks=flat')
   await screen.findByText('Bump the runner')
   const row = () => document.querySelector<HTMLElement>('[data-slot="global-task-row"][data-run-id="i1"]')!
-  fireEvent.click(within(row()).getByRole('button', { name: 'Show resources for Bump the runner' }))
-  act(() => client.setQueryData(workspaceQueryKeys.runsIndex, (previous: { runs: RunIndexEntry[] }) => ({ ...previous, runs: previous.runs.map(run => run.id === 'i1' ? { ...run, status: RUN_STATUS.running } : run) })))
-  expect(within(row()).getByRole('button', { name: 'Hide resources for Bump the runner' })).not.toBeNull()
+  fireEvent.click(within(row()).getByRole('button', { name: 'Usage and telemetry for Bump the runner' }))
+  expect(document.querySelector('[data-slot="task-telemetry-popover"]')).not.toBeNull()
+  act(() => client.setQueryData(workspaceQueryKeys.runsIndex, (previous: { runs: RunIndexEntry[] }) => ({ ...previous, runs: previous.runs.map((run) => (run.id === 'i1' ? { ...run, status: RUN_STATUS.running } : run)) })))
   const input = screen.getByRole('textbox', { name: 'Search tasks across projects' })
   fireEvent.change(input, { target: { value: 'Checkout' } })
   await waitFor(() => expect(row()).toBeNull())
   expect(search()).toContain('tasks=flat')
   fireEvent.change(input, { target: { value: '' } })
   await waitFor(() => expect(row()).not.toBeNull())
-  expect(within(row()).getByRole('button', { name: 'Hide resources for Bump the runner' })).not.toBeNull()
+  fireEvent.click(within(row()).getByRole('button', { name: 'Usage and telemetry for Bump the runner' }))
+  expect(document.querySelector('[data-slot="task-telemetry-popover"]')).not.toBeNull()
 })
 
 it('associates summary cells with their headers in DOM order', async () => {
@@ -1405,11 +1529,24 @@ it('associates summary cells with their headers in DOM order', async () => {
   renderPage()
   await screen.findByText('Bump the runner')
   const table = document.querySelector<HTMLElement>('[data-slot="global-task-row"][data-run-id="i1"]')!.closest('[role="table"]')!
-  const headers = [...table.querySelectorAll('[role="columnheader"]')].map(cell => cell.textContent)
-  const row = table.querySelector('[data-run-id="i1"] [data-slot="global-task-cells"]')!
-  const cells = [...row.querySelectorAll(':scope > [role="cell"]')].map(cell => cell.getAttribute('data-slot'))
+  const headers = [...table.querySelectorAll('[role="columnheader"]')].map((cell) => cell.textContent)
+  const row = table.querySelector('[data-run-id="i1"]')!
+  const cells = [...row.querySelectorAll(':scope > [role="cell"]')].map((cell) => cell.getAttribute('data-column-id'))
   expect(headers.map((header, index) => [header, cells[index]])).toEqual([
-    ['Task', 'global-task-title'], ['Workflow', 'global-task-workflow'], ['Changes', 'global-task-diff'],
-    ['Pull request', 'global-task-references'], ['Started', 'global-task-age'],
+    ['Task', 'task'], ['Workflow', 'workflow'], ['Changes', 'diff'],
+    ['Reference', 'reference'], ['Usage', 'usage'], ['Started', 'started'],
   ])
+})
+
+it('sorts pinned tasks first inside grouped views', async () => {
+  localStorage.clear()
+  stubFetch({
+    runs: [
+      { ...RUNS[0]!, id: 'a-unpinned', title: 'Unpinned API task', pinned: false },
+      { ...RUNS[0]!, id: 'a-pinned', title: 'Pinned API task', pinned: true },
+    ],
+  })
+  renderPage(createQueryClient(), '/tasks?group=project')
+  await screen.findByText('Pinned API task')
+  expect(rowIds()).toEqual(['a-pinned', 'a-unpinned'])
 })

@@ -13,7 +13,7 @@ import { CenteredState } from '@/components/centered-state'
 import { Diff, type DiffHandle, type DiffMode } from '@/components/diff'
 import { pageShellDensity, ReadingPage } from '@/components/page-shell'
 import { ChangeCounts } from '@/components/diff/change-counts'
-import { DiffStatLabel } from '@/components/diff-stat'
+import { DiffStat as DiffStatPrimitive, Sha } from '@/components/data-primitives'
 import { CommitDiffPanel } from '@/components/diff/commit-diff-panel'
 import { useIsDesktop } from '@/lib/use-desktop'
 
@@ -150,11 +150,11 @@ function CommitsWorkspace({
                     <span aria-hidden="true">·</span>
                     <span title={activeCommit.data.when}>{gitAge(activeCommit.data.when)}</span>
                     <span aria-hidden="true">·</span>
-                    <span className="font-mono select-all" title={activeCommit.data.sha ?? selectedSha}>{(activeCommit.data.sha ?? selectedSha).slice(0, 8)}</span>
+                    <Sha sha={activeCommit.data.sha ?? selectedSha} variant="inline" />
                     {activeCommit.data.stat ? (
                       <>
                         <span aria-hidden="true">·</span>
-                        <DiffStatLabel stat={activeCommit.data.stat} />
+                        <DiffStatPrimitive stat={activeCommit.data.stat} />
                       </>
                     ) : null}
                   </p>
@@ -243,7 +243,7 @@ function CommitFiles({ runId, sha, files, onPick }: {
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 className="text-sm font-semibold text-foreground">
           {files.length} {files.length === 1 ? 'file' : 'files'} in{' '}
-          <span className="font-mono text-[13px] font-medium" title={sha}>{sha.slice(0, 8)}</span>
+          <Sha sha={sha} variant="inline" className="text-[13px] font-medium" />
         </h2>
         <Link to={`/tasks/${runId}/changes`} className="text-xs text-muted-foreground hover:text-foreground">
           All task changes ›

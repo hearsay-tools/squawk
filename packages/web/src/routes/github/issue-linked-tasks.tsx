@@ -3,8 +3,10 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { queryScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 
 import { useArchivedRuns, useProjectRuns } from '@/api/queries'
+import { Pill } from '@/components/pill'
 import { StatusDot } from '@/components/status-dot'
 import { deriveAttention } from '@/lib/attention'
+import { ARCHIVED_STATUS, runStatusPresentation } from '@/lib/status-semantics'
 import { Button } from '@/components/ui/button'
 import { Link } from '@/lib/project-router'
 import { runTitle, withArchivedPages } from '@/lib/task-groups'
@@ -66,6 +68,7 @@ function LinkedTasks({ number, repo, scope }: { number: number; repo?: string | 
             <ul className="mt-2 flex flex-col gap-1">
               {tasks.map((task) => {
                 const attention = deriveAttention(task)
+                const status = runStatusPresentation(task, attention)
                 return (
                   <li key={task.id}>
                     <Link
@@ -74,8 +77,8 @@ function LinkedTasks({ number, repo, scope }: { number: number; repo?: string | 
                     >
                       <span className="text-sm font-medium break-words [overflow-wrap:anywhere]">{runTitle(task)}</span>
                       <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                        <StatusDot tone={attention.tone} shape={attention.shape} pulse={attention.pulse} role="img" aria-label={attention.label} title={attention.label} />
-                        {task.archived ? <span className="rounded border border-border px-1">Archived</span> : null}
+                        <StatusDot tone={status.tone} shape={status.shape} pulse={status.pulse} role="img" aria-label={status.label} title={status.label} />
+                        {task.archived ? <Pill data-slot="linked-task-archived" dot={ARCHIVED_STATUS.tone} shape={ARCHIVED_STATUS.shape} className="px-2 py-px">{ARCHIVED_STATUS.label}</Pill> : null}
                         <time dateTime={task.createdAt}>{new Date(task.createdAt).toLocaleDateString()}</time>
                       </span>
                     </Link>

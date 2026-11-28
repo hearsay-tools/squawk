@@ -12,7 +12,7 @@ import type { ListView } from '@/lib/task-groups'
 export function TruncatedNotice({ projects, perProjectLimit }: { projects: readonly string[]; perProjectLimit: number | undefined }) {
   if (projects.length === 0) return null
   return (
-    <p data-slot="global-tasks-truncated" className="text-[11px] text-soft-foreground">
+    <p data-slot="global-tasks-truncated" className="text-xs text-soft-foreground">
       Showing every active task and the newest {perProjectLimit} archived tasks per project — older archived tasks in{' '}
       {projects.join(', ')} are in that project&rsquo;s own Tasks page.
     </p>

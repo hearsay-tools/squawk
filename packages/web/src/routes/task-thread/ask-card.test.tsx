@@ -156,27 +156,36 @@ describe('AskCard', () => {
     expect(mutateAsync).toHaveBeenCalledWith({ text: 'Library: date-fns' })
   })
 
-  it('multiple questions: one Send posts every answer in one combined message', () => {
+  it('multiple questions: stepped 1 of N posts every answer in one combined message and preserves drafts across steps', () => {
     renderAsk(twoQuestionAsk)
-    const send = screen.getByRole('button', { name: 'Send answer' }) as HTMLButtonElement
+    expect(document.querySelector('[data-slot="ask-step-indicator"]')?.textContent).toBe('1 of 2')
     // Answering only the first question does NOT send, and does not resolve.
     fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
-    expect(send.disabled).toBe(true)
     expect(mutateAsync).not.toHaveBeenCalled()
+    // Advance to question 2; Send stays disabled until question 2 is answered.
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+    expect(document.querySelector('[data-slot="ask-step-indicator"]')?.textContent).toBe('2 of 2')
+    expect((screen.getByRole('button', { name: 'Send answer' }) as HTMLButtonElement).disabled).toBe(true)
+    // Going back keeps question 1's selection intact.
+    fireEvent.click(screen.getByRole('button', { name: /Back/ }))
+    expect(screen.getByRole('button', { name: /date-fns/ }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }))
     // Both answered → one combined message.
     fireEvent.click(screen.getByRole('button', { name: /Relative/ }))
+    const send = screen.getByRole('button', { name: 'Send answer' }) as HTMLButtonElement
     expect(send.disabled).toBe(false)
     fireEvent.click(send)
     expect(mutateAsync).toHaveBeenCalledTimes(1)
     expect(mutateAsync).toHaveBeenCalledWith({ text: 'Library: date-fns\nStyle: Relative' })
   })
 
-  it('combines a chip answer and per-question Other text in one message', () => {
+  it('combines a chip answer and per-question Other text in one message across steps', () => {
     renderAsk(twoQuestionAsk)
-    const send = screen.getByRole('button', { name: 'Send answer' }) as HTMLButtonElement
-    const styleQuestion = screen.getByRole('group', { name: 'Which style?' })
-
     fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+    const styleQuestion = screen.getByRole('group', { name: 'Which style?' })
+    const send = screen.getByRole('button', { name: 'Send answer' }) as HTMLButtonElement
+
     fireEvent.click(within(styleQuestion).getByRole('button', { name: 'Other' }))
     const answer = within(styleQuestion).getByRole('textbox', { name: 'Your answer' })
     expect(send.disabled).toBe(true)
@@ -184,8 +193,12 @@ describe('AskCard', () => {
     fireEvent.change(answer, { target: { value: '   ' } })
     expect(send.disabled).toBe(true)
     fireEvent.change(answer, { target: { value: 'A short custom style' } })
-    expect(send.disabled).toBe(false)
-    fireEvent.click(send)
+    // Navigating back and forward preserves the Other draft.
+    fireEvent.click(screen.getByRole('button', { name: /Back/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+    expect(screen.getByRole('textbox', { name: 'Your answer' })).toHaveProperty('value', 'A short custom style')
+    expect((screen.getByRole('button', { name: 'Send answer' }) as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Send answer' }))
 
     expect(mutateAsync).toHaveBeenCalledWith({
       text: 'Library: date-fns\nStyle: A short custom style',
@@ -224,12 +237,13 @@ describe('AskCard', () => {
   it('keeps a custom answer in the field when delivery fails', async () => {
     mutateAsync.mockRejectedValueOnce(new Error('temporary failure'))
     renderAsk(twoQuestionAsk)
-    const styleQuestion = screen.getByRole('group', { name: 'Which style?' })
 
+    fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+    const styleQuestion = screen.getByRole('group', { name: 'Which style?' })
     fireEvent.click(within(styleQuestion).getByRole('button', { name: 'Other' }))
     const answer = within(styleQuestion).getByRole('textbox', { name: 'Your answer' })
     fireEvent.change(answer, { target: { value: 'A short custom style' } })
-    fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Send answer' }))
 
     expect((await screen.findByRole('alert')).textContent).toBe('temporary failure')
@@ -280,51 +294,97 @@ describe('AskCard', () => {
   })
 })
 
-// The question outlives its session: an idle timeout, a Squawk restart, Finish or a cancel
-// closes the session with the card still unanswered. Before this, every tap posted to
-// `POST /messages` and died on its `409 session closed` — silently.
-describe('AskCard — the reply jump', () => {
-  it('type a reply below scrolls to the thread composer and puts the caret in it', () => {
-    const scrolled = vi.fn()
+describe('AskCard — unified decision surface (hearsay-tools/squawk#4374)', () => {
+  it('embeds free-text reply as a mode inside the decision surface and preserves drafts across switches', () => {
     render(withRunners(
       <MemoryRouter>
-        <div data-route="task-thread">
-          <AskCard ask={twoQuestionAsk} run={activeRun} />
-          <div data-slot="thread-dock"><div data-slot="composer-editor"><textarea aria-label="Reply" /></div></div>
-        </div>
+        <AskCard ask={{ ...twoQuestionAsk, placement: 'pinned' }} run={activeRun} surface="decision-zone" />
       </MemoryRouter>,
     ))
-    const composer = screen.getByLabelText<HTMLTextAreaElement>('Reply')
-    composer.scrollIntoView = scrolled
-    fireEvent.click(screen.getByRole('button', { name: 'type a reply below' }))
-    expect(scrolled).toHaveBeenCalledWith(expect.objectContaining({ block: 'center' }))
-    expect(document.activeElement).toBe(composer)
-  })
-})
-
-describe('AskCard — the phone footer', () => {
-  // jsdom applies no media queries; the classes are the proof of the max-sm layout.
-  it('puts "Show where it was asked" on the Send row and the reply hint on its own line below', () => {
-    render(withRunners(<MemoryRouter><AskCard ask={{ ...twoQuestionAsk, placement: 'pinned' }} run={activeRun} onShowOrigin={() => {}} /></MemoryRouter>))
-    const footer = document.querySelector('[data-slot="ask-footer"]') as HTMLElement
-    const send = screen.getByRole('button', { name: 'Send answer' })
-    const origin = screen.getByRole('button', { name: 'Show where it was asked' })
-    const hint = footer.querySelector('[data-slot="ask-hint"]') as HTMLElement
-    expect(footer.className).toContain('max-sm:flex')
-    // The Send row dissolves into the footer, so all three are ordered there.
-    expect(send.parentElement?.className).toContain('max-sm:contents')
-    expect(send.className).toContain('max-sm:order-1')
-    expect(origin.className).toContain('max-sm:order-2')
-    expect(origin.className).toContain('max-sm:ms-auto')
-    expect(origin.className).toContain('max-sm:mbs-0')
-    expect(hint.className).toContain('max-sm:order-3')
-    expect(hint.className).toContain('max-sm:basis-full')
+    fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Write a reply' }))
+    expect(document.querySelector('[data-slot="ask-card"]')?.getAttribute('data-ask-mode')).toBe('reply')
+    const box = screen.getByRole('textbox', { name: 'Reply to the agent' })
+    fireEvent.change(box, { target: { value: 'Let us take a third path' } })
+    // Switch back to Options: selection is still there, and switching back to Reply retains the draft.
+    fireEvent.click(screen.getByRole('button', { name: 'Options' }))
+    expect(screen.getByRole('button', { name: /date-fns/ }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Write a reply' }))
+    expect(screen.getByRole('textbox', { name: 'Reply to the agent' })).toHaveProperty('value', 'Let us take a third path')
+    fireEvent.click(screen.getByRole('button', { name: 'Send reply' }))
+    expect(mutateAsync).toHaveBeenCalledWith({ text: 'Let us take a third path' })
   })
 
-  it('keeps a lone "Show where it was asked" at the start when a tap sends the answer', () => {
-    render(withRunners(<MemoryRouter><AskCard ask={{ ...singleAsk, placement: 'pinned' }} run={activeRun} onShowOrigin={() => {}} /></MemoryRouter>))
-    expect(screen.queryByRole('button', { name: 'Send answer' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Show where it was asked' }).className).not.toContain('max-sm:ms-auto')
+  it('appends optional final comment step to multi-question answers and keeps progress dots non-interactive', () => {
+    renderAsk(twoQuestionAsk)
+    const dots = document.querySelector('[data-slot="ask-progress-dots"]')!
+    expect(dots.querySelectorAll('button')).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
+    const styleStep = screen.getByRole('button', { name: /Style/ })
+    fireEvent.click(styleStep)
+    expect(styleStep.getAttribute('aria-current')).toBe('step')
+    fireEvent.click(screen.getByRole('button', { name: /ISO/ }))
+    fireEvent.click(screen.getByRole('button', { name: '+ Comment' }))
+    expect(document.querySelector('[data-slot="ask-step-indicator"]')?.textContent).toBe('Comment (optional)')
+    expect(document.querySelector('[data-slot="ask-comment-step"]')?.textContent).toContain('date-fns')
+    expect(document.querySelector('[data-slot="ask-comment-step"]')?.textContent).toContain('ISO')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Additional comments (optional)' }), {
+      target: { value: 'Keep UTC everywhere.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send answer' }))
+    expect(mutateAsync).toHaveBeenCalledWith({
+      text: 'Library: date-fns\nStyle: ISO\n\nAdditional comments:\nKeep UTC everywhere.',
+    })
+  })
+
+  it('opens Show context in a non-destructive sheet with a 44px Close control, restores focus on close, and offers Show where it was asked', async () => {
+    const onShowOrigin = vi.fn()
+    render(withRunners(
+      <MemoryRouter>
+        <AskCard
+          ask={{ ...twoQuestionAsk, placement: 'pinned', context: 'Full architectural rationale in [decision](/tmp/decision.md).' }}
+          run={activeRun}
+          surface="decision-zone"
+          onShowOrigin={onShowOrigin}
+        />
+      </MemoryRouter>,
+    ))
+    // In decision-zone mode, context is behind Show context rather than bloating the fixed dock.
+    expect(screen.queryByRole('region', { name: 'Context' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
+    const showContext = screen.getByRole('button', { name: /Show context/ })
+    fireEvent.click(showContext)
+    const contextRegion = screen.getByRole('region', { name: 'Context' })
+    expect(contextRegion.textContent).toContain('Full architectural rationale')
+    const fileLink = within(contextRegion).getByRole('link', { name: 'decision' })
+    expect(fileLink.getAttribute('href')).toBe(`/tasks/${activeRun.id}/files?path=%2Ftmp%2Fdecision.md`)
+    const closeBtn = screen.getByRole('button', { name: 'Close' })
+    expect(closeBtn.className).toContain('size-11')
+    // Closing via Close restores focus to Show context while preserving selections.
+    fireEvent.click(closeBtn)
+    expect(screen.queryByRole('region', { name: 'Context' })).toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(showContext))
+    expect(screen.getByRole('button', { name: /date-fns/ }).getAttribute('aria-pressed')).toBe('true')
+    // Reopening and choosing Show where it was asked invokes onShowOrigin with selection intact.
+    fireEvent.click(showContext)
+    fireEvent.click(screen.getByRole('button', { name: 'Show where it was asked' }))
+    expect(onShowOrigin).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: /date-fns/ }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('supports optional comment on single-question asks and disables one-tap send while open', () => {
+    renderAsk(singleAsk)
+    fireEvent.click(screen.getByRole('button', { name: '+ Add comment' }))
+    fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
+    expect(mutateAsync).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Additional comments (optional)' }), {
+      target: { value: 'Prefer v4.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send answer' }))
+    expect(mutateAsync).toHaveBeenCalledWith({
+      text: 'Library: date-fns\n\nAdditional comments:\nPrefer v4.',
+    })
   })
 })
 
@@ -344,7 +404,7 @@ describe('AskCard — answering after the session has ended', () => {
     const { unmount } = renderAsk(twoQuestionAsk, activeRun)
     expect(document.querySelector('[data-slot="ask-card"]')?.getAttribute('data-delivery')).toBe('live')
     expect(document.querySelector('[data-slot="ask-resume-hint"]')).toBeNull()
-    expect(document.querySelector('[data-slot="ask-hint"]')).toBeTruthy()
+    expect(document.querySelector('[data-slot="ask-progress-summary"]')).toBeTruthy()
     unmount()
     renderAsk(twoQuestionAsk, closedRun)
     expect(document.querySelector('[data-slot="ask-card"]')?.getAttribute('data-delivery')).toBe('resume')
@@ -354,6 +414,7 @@ describe('AskCard — answering after the session has ended', () => {
   it('combined Send on a closed run resumes once with every answer', async () => {
     renderAsk(twoQuestionAsk, closedRun)
     fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }))
     fireEvent.click(screen.getByRole('button', { name: /Relative/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Send answer & reopen' }))
     await waitFor(() => expect(continueAsync).toHaveBeenCalledTimes(1))
@@ -465,10 +526,11 @@ describe('AskCard — open questions', () => {
 
   it('beside a choice question, one Send answers both', () => {
     renderAsk({ ...openAsk, questions: [singleAsk.questions[0]!, openAsk.questions[0]!] })
-    const send = screen.getByRole('button', { name: 'Send answer' }) as HTMLButtonElement
     // The card is not one-tap any more: the chip only selects.
     fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
     expect(mutateAsync).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+    const send = screen.getByRole('button', { name: 'Send answer' }) as HTMLButtonElement
     expect(send.disabled).toBe(true)
     fireEvent.change(screen.getByRole('textbox', { name: 'Your answer' }), { target: { value: 'cez ask' } })
     fireEvent.click(send)
@@ -622,6 +684,7 @@ it('replaces Other with a chip without keeping the old custom answer', () => {
   fireEvent.click(within(library).getByRole('button', { name: 'Luxon' }))
   expect(within(library).queryByRole('textbox')).toBeNull()
   expect(within(library).getByRole('button', { name: 'Luxon' }).getAttribute('aria-pressed')).toBe('true')
+  fireEvent.click(screen.getByRole('button', { name: /Next/ }))
   fireEvent.click(screen.getByRole('button', { name: 'ISO' }))
   fireEvent.click(screen.getByRole('button', { name: 'Send answer' }))
   expect(mutateAsync).toHaveBeenCalledWith({ text: 'Library: Luxon\nStyle: ISO' })
@@ -650,4 +713,20 @@ it('trims an open answer and keeps Send disabled for whitespace', () => {
   expect(send).toHaveProperty('disabled', false)
   fireEvent.click(send)
   expect(mutateAsync).toHaveBeenCalledWith({ text: 'Notes: Keep the parser' })
+})
+
+it('replays structured answers with additional comments without demoting the chosen option to Other', () => {
+  renderAsk({
+    ...twoQuestionAsk,
+    resolved: true,
+    answer: 'Library: Luxon\nStyle: ISO\n\nAdditional comments:\nKeep the bundle small.',
+  })
+  const selected = [...document.querySelectorAll('[data-slot="ask-answers"] [data-selected="true"]')].map(
+    (el) => el.textContent,
+  )
+  expect(selected.some((text) => text?.includes('Luxon'))).toBe(true)
+  expect(selected.some((text) => text?.includes('ISO'))).toBe(true)
+  expect(selected.some((text) => text?.includes('Other'))).toBe(false)
+  expect(screen.getByText('Additional comments')).toBeTruthy()
+  expect(screen.getByText('Keep the bundle small.')).toBeTruthy()
 })

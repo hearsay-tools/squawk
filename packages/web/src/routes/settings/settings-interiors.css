@@ -1,9 +1,10 @@
 /* Settings interiors follow the same section card in both scopes. Settings remain full width; reading width applies only to task views. */
 .settings-panel {
   width: 100%;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-card);
   border-radius: 12px;
   background: var(--card);
+  box-shadow: var(--shadow-card);
   padding: 24px;
 }
 .settings-panel > [data-slot] {
@@ -55,7 +56,7 @@
 .settings-route-body { gap: 24px; padding-block: 0; padding-inline: 0; max-width: 56rem; width: 100%; }
 /* Agent config uses the Split template (file list + editor): full width inside SplitPage. */
 .settings-route[data-route=settings-agent-config] .settings-route-body { max-width: none; }
-.settings-section-picker { position: relative; width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+.settings-section-picker { position: relative; width: 100%; border: 1px solid var(--border-card); border-radius: 8px; background: var(--card); box-shadow: var(--shadow-card); }
 .settings-section-picker summary { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding-block: 12px; padding-inline: 14px; list-style: none; cursor: pointer; font-size: 14px; }
 .settings-section-picker summary::-webkit-details-marker { display: none; }
 .settings-section-picker nav { display: grid; padding: 4px; border-block-start: 1px solid var(--border); }
@@ -75,7 +76,7 @@
 .settings-panel [data-slot=appearance-section] [role=radio] { border-radius: 6px; padding-block: 8px; padding-inline: 14px; font-weight: 400; }
 
 .settings-panel [data-slot=notifications-permission] { margin-block: 20px; margin-inline: 0; }
-.settings-panel [data-slot=notifications-permission][data-permission=denied] { color: var(--danger); }
+.settings-panel [data-slot=notifications-permission][data-permission=denied] { color: var(--semantic-text-red); }
 .settings-panel .settings-readout { padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .settings-panel .settings-disclosure { border-block-start: 1px solid var(--border); padding-block-start: 16px; font-size: 12px; color: var(--muted-foreground); }
 .settings-panel .settings-disclosure summary { cursor: pointer; padding-block: 4px; padding-inline: 0; }

@@ -58,7 +58,7 @@ export function waitMotion(motion: MotionState, id: string): string {
   return id in motion.waitsClosing ? 'activity-line-out' : cn('activity-drift', id in motion.opening && 'activity-line-in')
 }
 
-const LABEL_BOX = 'pointer-events-none absolute z-[4] -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-background px-1.5 py-[3px] text-[10px] leading-[1.3] text-foreground tabular-nums'
+const LABEL_BOX = 'pointer-events-none absolute z-[4] -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-background px-1.5 py-[3px] text-xs leading-[1.3] text-foreground tabular-nums'
 
 /** A wait line's label: "Waiting", its age, a stub's other task, and how much of the wait's
  *  deadline window is used. Its border is dashed, as the line is not a request. */

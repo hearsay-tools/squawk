@@ -204,6 +204,7 @@ export class RunStore {
       isOpen: () => this.db !== null,
       held: this.held,
       listFamilyRunIds: (rootId) => this.queries.listFamilyRunIds(rootId),
+      listFamiliesRunIds: (rootIds) => this.queries.listFamiliesRunIds(rootIds),
       listConversationRootIds: () => this.queries.listConversationRootIds(),
       listRunIds: () => this.queries.listRunIds(),
     });

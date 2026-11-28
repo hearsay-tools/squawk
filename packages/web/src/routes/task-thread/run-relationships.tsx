@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { ArrowUpRightIcon, CircleCheckIcon, CircleIcon, CircleSlashIcon, CircleXIcon, GitBranchIcon } from '@/components/design-icons'
-import { LoaderCircleIcon } from 'lucide-react'
+import { ArrowUpRightIcon, CircleCheckIcon, CircleDotIcon, CircleIcon, CircleSlashIcon, CircleXIcon, GitBranchIcon } from '@/components/design-icons'
+import { EyeIcon, LoaderCircleIcon } from 'lucide-react'
 import { useIsDesktop } from '@/lib/use-desktop'
 import { workerWaitLabel, workersWaitingLabel } from '@/lib/attention'
+import { canonicalRungLabel, rawRunStatusLabel } from '@/lib/status-semantics'
 import { completionWaitView, requestsToPeers, workerWaitView } from '@open-mercato/cezar-api-client/contract/waits'
 import { isLiveStatus } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { runTitle } from '@/lib/task-groups'
@@ -200,42 +201,44 @@ function workerMeta({
   return [linked, ...parts].join(' · ')
 }
 
-/** The worker row's glyph — shape first, color second, the language the plan and agent rows use. */
+/** The worker row's glyph — shape first, color second, matching the canonical status model. */
 function WorkerGlyph({ status }: { status?: WorkerInspection['status'] | undefined }) {
   const base = 'size-[15px] shrink-0'
-  if (status === 'done') return <CircleCheckIcon aria-hidden className={cn(base, 'text-success')} />
-  if (status === 'failed') return <CircleXIcon aria-hidden className={cn(base, 'text-danger')} />
+  if (status === 'done') return <CircleCheckIcon aria-hidden className={cn(base, 'text-semantic-green')} />
+  if (status === 'failed') return <CircleXIcon aria-hidden className={cn(base, 'text-semantic-red')} />
   if (status === 'cancelled') return <CircleSlashIcon aria-hidden className={cn(base, 'text-soft-foreground')} />
-  if (status === 'running' || status === 'waiting' || status === 'review') {
+  if (status === 'review') return <EyeIcon aria-hidden className={cn(base, 'text-semantic-info')} />
+  if (status === 'waiting') return <CircleDotIcon aria-hidden className={cn(base, 'text-semantic-amber')} />
+  if (status === 'running') {
     return (
       <LoaderCircleIcon
         role="status"
         aria-label="Worker running"
-        className={cn(base, 'animate-spin stroke-pending motion-reduce:animate-none')}
+        className={cn(base, 'animate-spin stroke-status-running motion-reduce:animate-none')}
       />
     )
   }
   return <CircleIcon aria-hidden className={cn(base, 'text-soft-foreground')} />
 }
 
-/** `done` → `Done`. A label, not a CSS `capitalize`: that rule title-cases every word, so the
- *  fallback sentence for a deleted record came out as "Record Unavailable Or Deleted". */
 function workerStatusLabel(status: WorkerInspection['status']): string {
-  return `${status.charAt(0).toUpperCase()}${status.slice(1)}`
+  return rawRunStatusLabel(status)
 }
 
 function statusTone(status?: WorkerInspection['status']): string {
-  if (status === 'done') return 'text-success'
-  if (status === 'failed') return 'text-danger'
+  if (status === 'done') return 'text-semantic-green'
+  if (status === 'failed') return 'text-semantic-red'
+  if (status === 'review') return 'text-semantic-info'
+  if (status === 'waiting') return 'text-semantic-amber'
   return 'text-muted-foreground'
 }
 
 function WaitNote({ wait, dependencyLabel }: { wait: DelegationWait; dependencyLabel: string | undefined }) {
   return <p className="px-2 break-words">
-    {wait.phase === 'parked' && dependencyLabel ? `${dependencyLabel.charAt(0).toUpperCase()}${dependencyLabel.slice(1)}`
-      : 'requestIds' in wait && wait.requestIds ? (wait.phase === 'parked' ? 'Waiting on request replies' : wait.phase === 'wake-pending'
+    {wait.phase === 'parked' && dependencyLabel ? canonicalRungLabel('waiting-on-workers', dependencyLabel)
+      : 'requestIds' in wait && wait.requestIds ? (wait.phase === 'parked' ? 'Waiting for request replies' : wait.phase === 'wake-pending'
       ? 'Conversation update queued for this task' : 'Request wait registered — the agent is finishing its turn')
-      : wait.phase === 'parked' ? 'Waiting on workers' : wait.phase === 'wake-pending'
+      : wait.phase === 'parked' ? 'Waiting for workers' : wait.phase === 'wake-pending'
       ? 'Worker update queued for the parent' : 'Worker wait registered — the agent is finishing its turn'}.
     {'deadline' in wait ? <>{' '}Deadline: <time dateTime={wait.deadline}>{wait.deadline}</time></>
       : ` No deadline: Squawk wakes this task when they have all settled.`}

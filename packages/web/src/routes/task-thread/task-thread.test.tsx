@@ -447,7 +447,7 @@ describe('ThreadView', () => {
     expect(document.querySelector('[data-slot="follow-up-engine"]')).not.toBeNull()
   })
 
-  it('at the review gate the engine pills fold into one summary line that opens them', async () => {
+  it('at the review gate the bottom decision zone pins the review action bar without showing a duplicate composer', async () => {
     renderView(
       <ThreadView
         run={run('review', {
@@ -459,15 +459,139 @@ describe('ThreadView', () => {
         thread={reduceThread(EVENTS)}
       />,
     )
-    const summary = await screen.findByRole('button', { name: /^Agent settings: Claude Code · / })
-    expect(summary.getAttribute('aria-expanded')).toBe('false')
-    expect(document.querySelector('[data-slot="follow-up-model-pill"]')).toBeNull()
-    fireEvent.click(summary)
-    const model = document.querySelector<HTMLElement>('[data-slot="follow-up-model-pill"]')
-    expect(model).not.toBeNull()
-    expect(document.querySelector('[data-slot="follow-up-engine-summary"]')).toBeNull()
-    // Focus follows into the pickers, so the keyboard user does not land on <body>.
-    expect(document.querySelector('[data-slot="follow-up-engine"]')?.contains(document.activeElement)).toBe(true)
+    const dock = document.querySelector<HTMLElement>('[data-slot="thread-dock"]')
+    expect(dock?.dataset.decisionMode).toBe('review')
+    expect(dock?.querySelector('[data-slot="review-panel"]')).not.toBeNull()
+    expect(dock?.querySelector('[data-slot="thread-composer-slot"]')?.hasAttribute('hidden')).toBe(true)
+    expect(screen.queryByRole('textbox', { name: 'Reply to the agent' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Send back' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeTruthy()
+  })
+
+  it('preserves composer draft and pasted attachments across an arriving ask and reply-mode switches', async () => {
+    const runningRun = run('running')
+    const { rerender, queryClient } = renderView(<ThreadView run={runningRun} thread={reduceThread(EVENTS)} />)
+    const textarea = screen.getByRole('textbox', { name: 'Reply to the agent' }) as HTMLTextAreaElement
+    await waitFor(() => expect(textarea.disabled).toBe(false))
+    fireEvent.change(textarea, { target: { value: 'Draft before ask arrived' } })
+    const file = new File([new Uint8Array([9, 9])], 'notes.png', { type: 'image/png' })
+    fireEvent.paste(textarea, { clipboardData: { items: [{ kind: 'file', type: file.type, getAsFile: () => file }] } })
+    await screen.findByLabelText('Remove notes.png')
+
+    const askThread = reduceThread([
+      ...EVENTS,
+      line(10, 'ask.requested', {
+        requestId: 'arrived-ask',
+        questions: [{ header: 'Choice', question: 'Pick a path?', options: [{ label: 'Alpha' }, { label: 'Beta' }] }],
+      }),
+    ])
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <ThreadView run={run('waiting', { waits: [openHumanWait(10)] } as unknown as Partial<ApiRun>)} thread={askThread} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    // Switch to Write a reply: the running draft and pasted attachment survived untouched.
+    fireEvent.click(screen.getByRole('button', { name: 'Write a reply' }))
+    expect(screen.getByRole('textbox', { name: 'Reply to the agent' })).toHaveProperty('value', 'Draft before ask arrived')
+    expect(screen.getByLabelText('Remove notes.png')).toBeTruthy()
+    // Toggling back to Options and returning to Write a reply also retains the attachment.
+    fireEvent.click(screen.getByRole('button', { name: 'Options' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Write a reply' }))
+    expect(screen.getByRole('textbox', { name: 'Reply to the agent' })).toHaveProperty('value', 'Draft before ask arrived')
+    expect(screen.getByLabelText('Remove notes.png')).toBeTruthy()
+  })
+
+  it('exposes the transcript scrollport as a keyboard-focusable region', () => {
+    renderView(<ThreadView run={run('running')} thread={reduceThread(EVENTS)} />)
+    const scrollport = screen.getByRole('region', { name: 'Session transcript' })
+    expect(scrollport.dataset.slot).toBe('thread-transcript')
+    expect(scrollport.tabIndex).toBe(0)
+  })
+
+  it('disables unified free-text reply sends while an option answer is in flight', async () => {
+    let resolveMessage: ((response: Response) => void) | undefined
+    const askThread = reduceThread([
+      ...EVENTS,
+      line(10, 'ask.requested', {
+        requestId: 'inflight-ask',
+        questions: [{ header: 'Choice', question: 'Pick a path?', options: [{ label: 'Alpha' }, { label: 'Beta' }] }],
+      }),
+    ])
+    renderView(<ThreadView run={run('waiting', { waits: [openHumanWait(10)] } as unknown as Partial<ApiRun>)} thread={askThread} />)
+    const baseFetch = vi.mocked(fetch).getMockImplementation()!
+    let messagePosts = 0
+    vi.mocked(fetch).mockImplementation((input, init) => {
+      if (String(input).endsWith('/messages') && init?.method === 'POST') {
+        messagePosts += 1
+        return new Promise<Response>((resolve) => {
+          resolveMessage = resolve
+        })
+      }
+      return baseFetch(input, init)
+    })
+
+    // Wait for provider status so the option chip is interactive, then trigger an in-flight option send.
+    const alpha = screen.getByRole('button', { name: 'Alpha' }) as HTMLButtonElement
+    await waitFor(() => expect(alpha.disabled).toBe(false))
+    fireEvent.click(alpha)
+    await waitFor(() => expect(messagePosts).toBe(1))
+
+    // Switching to Write a reply while the option answer is pending keeps the composer disabled.
+    fireEvent.click(screen.getByRole('button', { name: 'Write a reply' }))
+    const textarea = screen.getByRole('textbox', { name: 'Reply to the agent' }) as HTMLTextAreaElement
+    expect(textarea.disabled).toBe(true)
+
+    // Settling the option request unlocks the shared delivery state without a second POST.
+    await act(async () => {
+      resolveMessage?.(new Response(JSON.stringify({ delivered: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    })
+    await waitFor(() => expect(textarea.disabled).toBe(false))
+    expect(messagePosts).toBe(1)
+  })
+
+  it('disables Alt+C quick-reply shortcuts while Composer is hidden in Options mode and reports Stop failures inline', async () => {
+    const askThread = reduceThread([
+      ...EVENTS,
+      line(10, 'ask.requested', {
+        requestId: 'shortcut-ask',
+        questions: [{ header: 'Choice', question: 'Pick a path?', options: [{ label: 'Alpha' }, { label: 'Beta' }] }],
+      }),
+    ])
+    renderView(<ThreadView run={run('waiting', { waits: [openHumanWait(10)], finishBlocked: null } as unknown as Partial<ApiRun>)} thread={askThread} />)
+    const baseFetch = vi.mocked(fetch).getMockImplementation()!
+    let messagePosts = 0
+    vi.mocked(fetch).mockImplementation((input, init) => {
+      const path = String(input)
+      if (path.endsWith('/messages') && init?.method === 'POST') {
+        messagePosts += 1
+        return Promise.resolve(new Response(JSON.stringify({ delivered: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      if (path.endsWith('/cancel') && init?.method === 'POST') {
+        return Promise.resolve(new Response(JSON.stringify({ error: 'Cancel refused by server' }), { status: 500, headers: { 'content-type': 'application/json' } }))
+      }
+      return baseFetch(input, init)
+    })
+
+    // Options mode exposes Finish when offersComposerFinish allows it and suppresses hidden Composer quick replies.
+    expect(screen.getByRole('button', { name: 'Finish' })).toBeTruthy()
+    fireEvent.keyDown(window, { altKey: true, code: 'KeyC' })
+    expect(messagePosts).toBe(0)
+
+    // Clicking Stop on a failing cancel request surfaces the server error inline in the ask card.
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Cancel refused by server')
+
+    // In Write a reply mode, Go to the question focuses the visible reply textarea.
+    fireEvent.click(screen.getByRole('button', { name: 'Write a reply' }))
+    const replyTextarea = screen.getByRole('textbox', { name: 'Reply to the agent' }) as HTMLTextAreaElement
+    await waitFor(() => expect(replyTextarea.disabled).toBe(false))
+    const goToButton = document.querySelector<HTMLButtonElement>('[data-slot="ask-go-to-question"]')
+    if (goToButton) {
+      fireEvent.click(goToButton)
+      expect(document.activeElement).toBe(replyTextarea)
+    }
   })
 
   it('closed but resumable → the action row holds exactly Continue; Archive stays in the header (#281)', async () => {
@@ -897,14 +1021,12 @@ describe('ThreadView', () => {
         thread={reduceThread(EVENTS)}
       />,
     )
+    // Activity lives in the header trigger rather than between the transcript/ask and composer (hearsay-tools/squawk#4374).
+    const trigger = screen.getByRole('button', { name: /^Session activity/ })
+    expect(trigger.textContent).toContain('Running')
+    expect(document.querySelector('[data-slot="thread-dock"] [data-slot="run-activity-dock"]')).toBeNull()
+    fireEvent.click(trigger)
     expect(document.querySelector('[data-slot="run-activity-dock"]')).not.toBeNull()
-    const dock = document.querySelector('[data-slot="run-activity-dock"]')!
-    expect(dock.textContent).toContain('Activity')
-    // The status is the same line the header pill reads (hearsay-tools/cezarion#1333).
-    expect(dock.textContent).toContain('Running')
-    // The card starts folded (hearsay-tools/cezarion#1601); its workflow row names the workflow
-    // and the step the run is on.
-    fireEvent.click(screen.getByRole('button', { name: /^Session activity/ }))
     expect(document.querySelector('[data-slot="run-activity-workflow"]')?.textContent).toContain('quick-task')
     expect(document.querySelector('[data-slot="run-activity-workflow"]')?.textContent).toContain('Do the task')
   })
@@ -983,13 +1105,16 @@ describe('ThreadView', () => {
     expect(document.querySelector('[data-slot="run-activity-status"]')?.textContent).not.toContain('All complete')
   })
 
-  it('the dock re-derives its collapse default per run, like the docks it replaced', () => {
+  it('the header activity popover resets closed when switching runs', () => {
     const steps = [{ id: 'task', name: 'Do the task', kind: STEP_KIND.agent, status: STEP_STATUS.running, iterations: 1, tokensUsed: 0 }]
     const { rerender } = renderView(
       <ThreadView run={run('running', { id: 'dock-run-a', steps } as Partial<ApiRun>)} thread={reduceThread(EVENTS)} />,
     )
-    fireEvent.click(screen.getByRole('button', { name: /^Session activity/ }))
-    expect(document.querySelector('[data-slot="run-activity-dock"]')?.getAttribute('data-state')).toBe('open')
+    const triggerA = screen.getByRole('button', { name: /^Session activity/ })
+    expect(triggerA.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(triggerA)
+    expect(triggerA.getAttribute('aria-expanded')).toBe('true')
+    expect(document.querySelector('[data-slot="run-activity-dock"]')).not.toBeNull()
 
     // The route does not remount between tasks: only the run prop changes.
     rerender(
@@ -999,10 +1124,10 @@ describe('ThreadView', () => {
         </MemoryRouter>
       </QueryClientProvider>,
     )
-    expect(document.querySelector('[data-slot="run-activity-dock"]')?.getAttribute('data-state')).toBe('collapsed')
+    expect(screen.getByRole('button', { name: /^Session activity/ }).getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('a plan in the stream → the dock above the composer area', () => {
+  it('a plan in the stream → the header Activity panel, never inside the bottom decision zone', () => {
     const withPlan: RunEvent[] = [
       ...EVENTS,
       line(8, 'plan.updated', {
@@ -1014,9 +1139,9 @@ describe('ThreadView', () => {
       }),
     ]
     renderView(<ThreadView run={run('running')} thread={reduceThread(withPlan)} />)
-    expect(document.querySelector('[data-slot="run-activity-dock"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="thread-dock"] [data-slot="run-activity-dock"]')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /^Session activity/ }))
-    // The plan is a section of the one dock now; its meter moved into it.
+    expect(document.querySelector('[data-slot="run-activity-dock"]')).not.toBeNull()
     expect(
       document.querySelector('[data-slot="run-activity-plan"] [data-slot="run-activity-meta"]')?.textContent,
     ).toBe('1 of 3 complete')
@@ -1470,13 +1595,16 @@ it.each(['parked', 'wake-pending'] as const)('uses honest dock copy for %s worke
   const hint = document.querySelector('[data-slot="paused-hint"]')
   // A full record carries the worker ids, so the parked count is said (#617).
   // A queued automatic wake is capacity waiting, not a human gate (#971).
-  expect(hint?.textContent).toContain(phase === 'parked' ? 'Waiting on 1 worker' : 'Waiting for capacity — you can send a message to resume')
-  expect(document.querySelector('[data-slot="pill"]')?.textContent?.toLowerCase()).toContain(phase === 'parked' ? 'waiting on 1 worker' : 'waiting for capacity')
+  expect(hint?.textContent).toContain(phase === 'parked' ? 'Waiting for 1 worker' : 'Waiting for capacity — you can send a message to resume')
+  expect(document.querySelector('[data-slot="pill"]')?.textContent?.toLowerCase()).toContain(phase === 'parked' ? 'waiting for 1 worker' : 'waiting for capacity')
 })
 it('keeps a visible human ask above parked worker context in the header and dock', () => {
   const thread = reduceThread([line(1, 'ask.requested', { requestId: 'ask', questions: [{ header: 'Choice', question: 'Choose a path', options: [{ label: 'Proceed', description: 'Continue' }] }] })])
   renderView(<ThreadView run={run('waiting', onWorkerWait({}, 1))} thread={thread} />)
-  expect(document.querySelector('[data-slot="paused-hint"]')?.textContent).toContain('waiting for your reply')
+  const dock = document.querySelector<HTMLElement>('[data-slot="thread-dock"]')
+  expect(dock?.dataset.decisionMode).toBe('ask')
+  expect(dock?.textContent).toContain('Needs your answer')
+  expect(dock?.textContent).not.toContain('Waiting on 1 worker')
   expect(document.querySelector('[data-slot="pill"]')?.textContent?.toLowerCase()).toContain('needs you')
   expect(screen.getByText('Choose a path')).toBeTruthy()
 })
@@ -1494,8 +1622,16 @@ it.each([false, true].flatMap(fallback => (['pending', 'refused-human-attempt', 
   const expectedPending = mode !== 'matched-answer' && mode !== 'old-history'
   // The record holds the human wait while the question is open, as the server writes it.
   renderView(<ThreadView run={run('waiting', onWorkerWait({ deadline: '2026-09-07T12:00:00.000Z' }, expectedPending ? 10 : undefined))} thread={reduceThread(visibleEvents)} currentThread={reduceThread(currentEvents)} history={history} />)
-  expect(document.querySelector('[data-slot="paused-hint"]')?.textContent).toContain(expectedPending ? 'waiting for your reply' : 'Waiting on 1 worker')
-  expect(document.querySelector('[data-slot="pill"]')?.textContent?.toLowerCase()).toContain(expectedPending ? 'needs you' : 'waiting on 1 worker')
+  const dock = document.querySelector<HTMLElement>('[data-slot="thread-dock"]')
+  if (expectedPending && mode !== 'refused-human-attempt') {
+    expect(dock?.dataset.decisionMode).toBe('ask')
+    expect(dock?.textContent).toContain('Needs your answer')
+  } else {
+    expect(document.querySelector('[data-slot="paused-hint"]')?.textContent).toContain(
+      expectedPending ? 'waiting for your reply' : 'Waiting for 1 worker',
+    )
+  }
+  expect(document.querySelector('[data-slot="pill"]')?.textContent?.toLowerCase()).toContain(expectedPending ? 'needs you' : 'waiting for 1 worker')
 })
 
 // Split by fact (phase 4b, hearsay-tools/cezarion#1236): attention reads the record's human wait.
@@ -1503,21 +1639,21 @@ it.each([false, true].flatMap(fallback => (['pending', 'refused-human-attempt', 
 it('reads attention from the record, not from an ask the transcript still shows', () => {
   const thread = reduceThread([line(1, 'ask.requested', { requestId: 'ask', questions: [{ header: 'Choice', question: 'Choose a path', options: [{ label: 'Proceed' }] }] })])
   renderView(<ThreadView run={run('waiting', onWorkerWait())} thread={thread} />)
-  expect(document.querySelector('[data-slot="pill"]')?.textContent?.toLowerCase()).toContain('waiting on 1 worker')
+  expect(document.querySelector('[data-slot="pill"]')?.textContent?.toLowerCase()).toContain('waiting for 1 worker')
 })
 
 describe('the pending question (#1495)', () => {
   const askEvent = (seq: number, requestId: string) =>
     line(seq, 'ask.requested', { requestId, questions: [{ header: 'Choice', question: `Choose ${requestId}`, options: [{ label: 'First' }, { label: 'Second' }] }] })
 
-  it('pins the pending ask and shows a marker at its origin', () => {
+  it('pins the pending ask in the bottom decision zone and shows a marker at its origin', () => {
     const thread = reduceThread([askEvent(1, 'q1'), line(2, 'note', { message: 'later work' })])
     renderView(<ThreadView run={run('waiting')} thread={thread} />)
-    expect(document.querySelectorAll('[data-slot="ask-card"][data-pinned="true"]')).toHaveLength(1)
-    expect(document.querySelectorAll('[data-slot="ask-origin"]')).toHaveLength(1)
+    expect(document.querySelectorAll('[data-slot="thread-dock"] [data-slot="ask-card"][data-pinned="true"]')).toHaveLength(1)
+    expect(document.querySelectorAll('[data-slot="thread-transcript"] [data-slot="ask-origin"]')).toHaveLength(1)
     expect(document.querySelectorAll('[data-slot="ask-card"][data-resolved="false"]')).toHaveLength(1)
-    const rows = [...document.querySelectorAll<HTMLElement>('[data-slot="thread-row"]')]
-    expect(rows.at(-1)?.dataset.rowKey).toBe('pending-ask:q1')
+    // Activity never sits inside the decision zone between the ask and reply input.
+    expect(document.querySelector('[data-slot="thread-dock"] [data-slot="run-activity-dock"]')).toBeNull()
   })
 
   it('pins a pending ask whose turn is outside the loaded history', () => {
@@ -1570,6 +1706,8 @@ describe('composer execution actions (#201)', () => {
       questions: [{ header: 'Checks', question: 'Where should checks run?', options: [{ label: 'Main' }, { label: 'Every branch' }] }],
     })])
     renderView(<ThreadView run={run('waiting', { waits: [openHumanWait(1)] } as unknown as Partial<ApiRun>)} thread={thread} />)
+    expect(screen.getByRole('button', { name: 'Stop' }).hasAttribute('disabled')).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Write a reply' }))
     await screen.findByRole('textbox', { name: 'Reply to the agent' })
     expect(screen.getByRole('button', { name: 'Stop' }).hasAttribute('disabled')).toBe(false)
   })
@@ -1681,6 +1819,7 @@ describe('composer replies after idle close (#315)', () => {
         messageStatus === 200 ? { delivered: true } : { error: messageStatus === 409 ? 'session closed' : 'cannot reach the server' },
       ), { status: messageStatus }))
     })
+    fireEvent.click(screen.getByRole('button', { name: 'Write a reply' }))
     const textarea = screen.getByRole('textbox', { name: 'Reply to the agent' }) as HTMLTextAreaElement
     return { posts, textarea, settle: (status = 200) => settleResume(new Response(JSON.stringify(
       status === 200 ? { continued: true } : { error: 'resume unavailable' },
@@ -1753,8 +1892,8 @@ it.each(['root', 'worker'] as const)('shows the actual dependency in a parked %s
     workspace: { kind: 'owned-isolated', ownerRunId: 'worker', resourceId: 'worker', path: '/worker', branch: 'cez/worker', baselineSha: 'a'.repeat(40) },
   }
   renderView(<ThreadView run={run('waiting', { delegation, waits: [wait] } as unknown as Partial<ApiRun>)} thread={reduceThread([])} />)
-  expect(document.querySelector('[data-slot="paused-hint"]')?.textContent).toContain(role === 'worker' ? 'Waiting on parent reply' : 'Waiting on worker replies')
-  expect(document.querySelector('[data-slot="pill"]')?.textContent?.toLowerCase()).toContain(role === 'worker' ? 'waiting on parent reply' : 'waiting on worker replies')
+  expect(document.querySelector('[data-slot="paused-hint"]')?.textContent).toContain(role === 'worker' ? 'Waiting for parent reply' : 'Waiting for worker replies')
+  expect(document.querySelector('[data-slot="pill"]')?.textContent?.toLowerCase()).toContain(role === 'worker' ? 'waiting for parent reply' : 'waiting for worker replies')
   expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
   expect(screen.getAllByRole('button', { name: 'Stop' }).some(button => !button.hasAttribute('disabled'))).toBe(true)
 })

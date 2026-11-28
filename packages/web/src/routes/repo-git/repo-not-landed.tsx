@@ -6,6 +6,7 @@ import { ApiError, createRunPr, deleteRepoBranches } from '@/api/client'
 import { queryKeys, useProjectRepoBase, useRepoBranches, useRuns } from '@/api/queries'
 import type { RepoBranchEntry } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
+import { Sha } from '@/components/data-primitives'
 import { PageShellEmptyState, PageShellSparseFooter } from '@/components/page-shell'
 import { Button } from '@/components/ui/button'
 import { ChangeCounts } from '@/components/diff/change-counts'
@@ -14,7 +15,8 @@ import { CopyIcon, EllipsisIcon, TriangleAlertIcon } from '@/components/design-i
 import { ReferenceChip } from '@/components/reference-chip'
 import { ReferenceStatusProvider, useReferenceStatus } from '@/components/reference-status'
 import { referenceStatusPresentation } from '@/lib/reference-status'
-import { StatusDot, type StatusDotTone } from '@/components/status-dot'
+import { rawRunStatusPresentation } from '@/lib/status-semantics'
+import { StatusDot } from '@/components/status-dot'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -63,12 +65,6 @@ export function retainedFinishedTasks(branches: readonly RepoBranchEntry[]): num
     entry.class === 'active' && entry.runId !== null && entry.ahead > 0 &&
     (entry.runStatus === 'done' || entry.runStatus === 'failed' || entry.runStatus === 'cancelled'),
   ).length
-}
-
-const STATUS_TONE: Partial<Record<NonNullable<RepoBranchEntry['runStatus']>, StatusDotTone>> = {
-  done: 'success',
-  failed: 'danger',
-  cancelled: 'neutral',
 }
 
 /**
@@ -307,7 +303,8 @@ function NotLandedTitleAndMeta({ entry, finishedAt }: {
   // compact age every list uses, with the full local time in its tooltip.
   const at = finishedAt ?? entry.lastCommit.at
   const age = shortAge(at)
-  const when = orphan || !entry.runStatus ? age : `${entry.runStatus}${age ? ` ${age}` : ''}`
+  const statusPresentation = entry.runStatus ? rawRunStatusPresentation(entry.runStatus) : undefined
+  const when = orphan || !statusPresentation ? age : `${statusPresentation.label}${age ? ` ${age}` : ''}`
   const whenTitle = Number.isFinite(Date.parse(at)) ? new Date(at).toLocaleString() : undefined
 
   return (
@@ -316,7 +313,7 @@ function NotLandedTitleAndMeta({ entry, finishedAt }: {
         {orphan ? (
           <CircleDashedIcon aria-label="Task deleted" className="size-[12px] text-muted-foreground" />
         ) : (
-          <StatusDot tone={(entry.runStatus && STATUS_TONE[entry.runStatus]) || 'neutral'} aria-label={entry.runStatus ?? undefined} />
+          <StatusDot tone={statusPresentation?.tone ?? 'neutral'} shape={statusPresentation?.shape ?? 'filled'} aria-label={statusPresentation?.label} />
         )}
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -402,7 +399,7 @@ export function DeleteBranchDialog({ entry, onClose }: { entry: RepoBranchEntry 
               </p>
               <p data-slot="delete-branch-dropped">
                 {commits} will be dropped{entry?.diffStat ? ` (+${entry.diffStat.additions} −${entry.diffStat.deletions})` : ''}, the latest “{entry?.lastCommit.subject}”
-                {' '}(<span className="font-mono" title={entry?.lastCommit.sha}>{entry?.lastCommit.sha.slice(0, 8)}</span>).
+                {entry?.lastCommit.sha ? <> (<Sha sha={entry.lastCommit.sha} variant="inline" />)</> : null}.
               </p>
             </div>
           </AlertDialogDescription>

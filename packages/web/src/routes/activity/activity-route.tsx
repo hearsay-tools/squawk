@@ -2,28 +2,34 @@ import * as React from 'react'
 import { queryScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 
 import { useActivityLive } from '@/api/activity-live'
-import { BoardPage, PageShellSparseFooter, pageShellDensity } from '@/components/page-shell'
+import { BoardPage, PageShellEmptyState, PageShellSparseFooter, pageShellDensity } from '@/components/page-shell'
 import { Button } from '@/components/ui/button'
 import { useActiveProjectId } from '@/lib/project-router'
 
-import { ActivityBoard } from './activity-board'
-import { ActivityQuickLinks, ScopeSwitch, SummaryChips, activityHeaderProps } from './activity-header'
+import {
+  ActivityHeaderActions,
+  ActivityQuickLinks,
+  SummaryChips,
+  activityHeaderProps,
+} from './activity-header'
 import { ActivityLoading } from './activity-loading'
 import { projectNotice, summarize } from './activity-model'
+import { ActivitySupervisionView } from './activity-supervision-view'
 import { useActivityMotion } from './use-activity-motion'
 import { useServerNow } from './use-server-now'
 import './activity-motion.css'
 
 /**
- * `/p/:projectId/activity` (spec 2026-11-05-live-activity-view, "Project view"): the live
- * snapshot (`useActivityLive`: the topic, or the 5 s re-read without topics) and its motion.
+ * `/p/:projectId/activity` (hearsay-tools/squawk#4376): live supervision decision queue for
+ * one project (`Needs your decision` top queue with inline triage drawer + compact `Working & active`
+ * live rows + collapsible margin arcs + explicit project grouping toggle + header legend trigger).
  */
 
 export function ProjectActivityRoute() {
   const scopeId = queryScope()
   const activity = useActivityLive({ kind: 'project', projectId: scopeId })
   const projectId = useActiveProjectId()
-  const [watchingSince] = React.useState(() => new Date().toISOString())
+  const [grouped, setGrouped] = React.useState(false)
   const now = useServerNow(activity.data?.generatedAt, activity.dataUpdatedAt)
   const { motion, feed, reduced, paused } = useActivityMotion(activity.data, scopeId)
   const project = activity.data?.projects[0]
@@ -37,7 +43,7 @@ export function ProjectActivityRoute() {
         density="empty"
         header={activityHeaderProps({
           name: projectId ?? 'project',
-          scopeSwitch: <ScopeSwitch scope="project" projectId={projectId} />,
+          scopeSwitch: <ActivityHeaderActions scope="project" projectId={projectId} />,
         })}
       >
         <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-5 text-[13px] text-muted-foreground">
@@ -47,6 +53,7 @@ export function ProjectActivityRoute() {
       </BoardPage>
     )
   }
+
   const density = pageShellDensity(project.tasks.length)
   return (
     <BoardPage
@@ -60,12 +67,20 @@ export function ProjectActivityRoute() {
         now,
         updatedAt: activity.data?.generatedAt,
         stale: activity.isError,
-        scopeSwitch: <ScopeSwitch scope="project" projectId={projectId ?? project.projectId} projectName={project.name} />,
+        scopeSwitch: (
+          <ActivityHeaderActions
+            scope="project"
+            projectId={projectId ?? project.projectId}
+            projectName={project.name}
+            grouped={grouped}
+            onToggleGroup={() => setGrouped((value) => !value)}
+          />
+        ),
       })}
       sparseFooter={
         !notice && project.tasks.length > 0 ? (
           <PageShellSparseFooter
-            summary={`${project.tasks.length} active ${project.tasks.length === 1 ? 'task' : 'tasks'} running in ${project.name}. Start more work in parallel or inspect all tasks.`}
+            summary={`${project.tasks.length} active ${project.tasks.length === 1 ? 'task' : 'tasks'} in ${project.name}. Start more work in parallel or inspect all tasks.`}
             actions={<ActivityQuickLinks />}
           />
         ) : undefined
@@ -74,8 +89,26 @@ export function ProjectActivityRoute() {
       <SummaryChips summary={summarize([project])} tasksTo="/" bumps={motion.bumps} />
       {notice ? (
         <p data-slot="activity-project-notice" role="status" className="rounded-xl border border-border bg-card p-5 text-[13px] text-muted-foreground">{notice}</p>
+      ) : project.tasks.length === 0 && project.requests.length === 0 && feed.length === 0 ? (
+        <PageShellEmptyState
+          slot="activity-empty"
+          title="No active work in this project."
+          description="Tasks waiting for your decision or actively running will appear here live."
+          actions={<ActivityQuickLinks primary />}
+        />
       ) : (
-        <ActivityBoard project={project} now={now} watchingSince={watchingSince} motion={motion} feed={feed} still={reduced} paused={paused} />
+        <ActivitySupervisionView
+          projects={[project]}
+          now={now}
+          global={false}
+          grouped={grouped}
+          projectOrder={[project.projectId]}
+          motion={motion}
+          feed={feed}
+          still={reduced}
+          paused={paused}
+          emptyMessage="No active work in this project."
+        />
       )}
     </BoardPage>
   )

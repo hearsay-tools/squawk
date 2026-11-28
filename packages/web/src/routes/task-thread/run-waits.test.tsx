@@ -145,7 +145,7 @@ describe('RunWaitDetails', () => {
     } as WorkerEntry
     renderWaits(run('waiting', { waits: [byWorker, byRequest, settled] }))
     const items = [...document.querySelectorAll<HTMLElement>('[data-slot="worker-wait-status"]')]
-    expect(items.map(item => item.querySelector('p')?.textContent)).toEqual(['Waiting on 2 workers', 'Waiting on 1 request reply'])
+    expect(items.map(item => item.querySelector('p')?.textContent)).toEqual(['Waiting for 2 workers', 'Waiting for 1 request reply'])
     expect(items.map(item => item.querySelector('time')?.getAttribute('datetime')))
       .toEqual(['2026-09-22T12:10:00.000Z', '2026-09-22T12:20:00.000Z'])
   })
@@ -172,7 +172,7 @@ describe('RunWaitDetails', () => {
     } as unknown as WorkerEntry
     renderWaits(run('waiting', { waits: [partialWorkers, partialRequests, resolved] }))
     const items = [...document.querySelectorAll<HTMLElement>('[data-slot="worker-wait-status"]')]
-    expect(items.map(item => item.querySelector('p')?.textContent)).toEqual(['Waiting on 2 workers', 'Waiting on 1 request reply'])
+    expect(items.map(item => item.querySelector('p')?.textContent)).toEqual(['Waiting for 2 workers', 'Waiting for 1 request reply'])
   })
 
   // hearsay-tools/cezarion#1995: a peer wait lists its peer tasks while it is open.
@@ -182,7 +182,7 @@ describe('RunWaitDetails', () => {
     const resolved = makePeerWait({ phase: WAIT_PHASE.resolved, resolvedAt: '2026-09-22T12:01:00.000Z', result: { reason: 'timeout' } })
     renderWaits(run(RUN_STATUS.waiting, { waits: [open, resolved] }))
     const items = [...document.querySelectorAll<HTMLElement>('[data-slot="peer-wait-status"]')]
-    expect(items.map(item => item.querySelector('p')?.textContent)).toEqual(['Waiting on 2 tasks'])
+    expect(items.map(item => item.querySelector('p')?.textContent)).toEqual(['Waiting for 2 tasks'])
     expect(items[0]?.querySelector('time')?.getAttribute('datetime')).toBe('2026-09-22T12:10:00.000Z')
   })
 
@@ -232,7 +232,7 @@ describe('RunWaitDetails', () => {
     ['deadline', 'CI wait timed out — inspect the PR checks'],
     ['error', 'CI wait unavailable — inspect access and the PR checks'],
     ['stuck', 'CI checks stuck in queue — inspect the PR checks'],
-    ['head_changed', 'CI head changed — 1234567 → fedcba9'],
+    ['head_changed', 'CI head changed — 12345678 → fedcba98'],
   ] as const)('shows the last settled CI observation when nothing is open (%s)', (outcome, label) => {
     renderWaits(run('done', { lastWaits: [ciEntry({ phase: WAIT_PHASE.delivered, result: observed(outcome) })] }))
     expect(screen.getByText(label)).not.toBeNull()
@@ -411,7 +411,7 @@ describe('RunWaitDetails', () => {
     renderWaits(run('done', { lastWaits: [ciEntry({ phase: WAIT_PHASE.delivered, prUrl: 'javascript:void(0)',
       result: { ...observed('head_changed')!, observedHeadSha: undefined },
     })] }))
-    expect(screen.getByText('CI head changed — 1234567 → unknown')).toBeTruthy()
+    expect(screen.getByText('CI head changed — 12345678 → unknown')).toBeTruthy()
     expect(screen.getByText('owner/repo#474')).toBeTruthy()
     expect(screen.queryByRole('link')).toBeNull()
   })

@@ -89,15 +89,15 @@ export function useAccountSignIns(): RunnerAccountChoice[] {
   })
 }
 
-export function useAgentAccounts(): AgentAccountChoices {
+export function useAgentAccounts(projectId?: string): AgentAccountChoices {
   const profiles = useAgentProfiles()
   const scope = useProjectScope()
-  const repo = useRepo()
+  const repo = useRepo(projectId)
   const accounts = useAccountSignIns()
   const repoRoot = repo.data?.info?.root
   return {
     accounts,
-    repoAccount: selectionForProject(profiles.data, scope.projectId, repoRoot),
+    repoAccount: selectionForProject(profiles.data, projectId ?? scope.projectId, repoRoot),
   }
 }
 
@@ -134,10 +134,10 @@ export interface RunnerAvailability extends AgentAccountChoices {
   readyOn: (runner: Runner, accountId: string | undefined) => boolean
 }
 
-export function useRunnerAvailability(): RunnerAvailability {
+export function useRunnerAvailability(projectId?: string): RunnerAvailability {
   const providers = useProviderStatus()
   const registered = useRunners()
-  const { accounts, repoAccount } = useAgentAccounts()
+  const { accounts, repoAccount } = useAgentAccounts(projectId)
   return {
     runners: usableRunners(providers.data, registered.data, accounts),
     uninstalled: uninstalledRunners(providers.data, registered.data),

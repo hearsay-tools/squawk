@@ -27,10 +27,10 @@ const SIZES = {
     branchIcon: 'size-[14px]',
     branch: 'text-[12.5px]',
     chevron: 'size-[12px]',
-    pull: 'h-[24px] gap-[4px] rounded-[6px] px-[8px] text-[11.5px] [&>svg]:size-[12px]',
-    line: 'text-[11px]',
+    pull: 'h-[24px] gap-[4px] rounded-[6px] px-[8px] text-xs [&>svg]:size-[12px]',
+    line: 'text-xs',
     lineChevron: 'size-[11px]',
-    dirty: 'gap-[6px] pt-[6px] text-[11px] [&>svg]:size-[12px]',
+    dirty: 'gap-[6px] pt-[6px] text-xs [&>svg]:size-[12px]',
   },
   screen: {
     card: 'gap-[10px] rounded-[10px] p-[12px]',

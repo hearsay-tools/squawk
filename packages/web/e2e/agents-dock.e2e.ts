@@ -113,7 +113,7 @@ afterAll(async () => {
 
 /** Since #402 the fan-out is a SECTION of the one Session activity card, not a dock of its own:
  *  the card owns the outer collapse, the section owns its rows and its odometer. */
-const CARD = '[data-slot="run-activity-dock"]'
+const TRIGGER = '[data-slot="run-activity-trigger"], [data-slot="run-activity-trigger-mobile"]'
 const DOCK = '[data-slot="run-activity-subagents"]'
 const METER = `${DOCK} [data-slot="run-activity-meta"]`
 const ROW = '[data-slot="agent-item"]'
@@ -125,26 +125,17 @@ function settledClick(selector: string): void {
   browser.click(selector)
 }
 
-/** Open the card (folded by default on every viewport, hearsay-tools/cezarion#1601) so the
- *  Subagents row exists, and leave the section itself closed for the caller to toggle. */
+/** Open the header Activity panel so the Subagents row exists, leaving the section closed. */
 function revealSubagentSection(): void {
-  browser.waitForFunction(`document.querySelector('${CARD} > button') !== null`)
-  if (browser.evaluate(`document.querySelector('${CARD} > button').getAttribute('aria-expanded')`) === 'false') {
-    clickThreadControl(`${CARD} > button`)
+  browser.waitForFunction(`document.querySelector('${TRIGGER}') !== null`)
+  if (browser.evaluate(`document.querySelector('${TRIGGER}').getAttribute('aria-expanded')`) === 'false') {
+    settledClick(TRIGGER)
   }
-  browser.waitForFunction(`document.querySelector('${CARD} > button')?.getAttribute('aria-expanded') === 'true'`)
+  browser.waitForFunction(`document.querySelector('${TRIGGER}')?.getAttribute('aria-expanded') === 'true'`)
   browser.waitForFunction(`document.querySelector('${DOCK} > button') !== null`)
 }
 
 function clickThreadControl(selector: string): void {
-  // Send actual upward pointer intent to detach follow-tail before bringing a
-  // document-flow control into view. Assert the real target, not scrollTop=0.
-  const point = waitForSettledSample(browser, `(() => {
-    const rect = document.querySelector('[data-slot="main"]').getBoundingClientRect()
-    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
-  })()`) as { x: number; y: number }
-  browser.moveTo(point.x, point.y)
-  browser.wheel(-120)
   browser.evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({ block: 'center', behavior: 'instant' })`)
   browser.waitForFunction(`(() => {
     const target = document.querySelector(${JSON.stringify(selector)})

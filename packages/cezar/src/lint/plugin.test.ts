@@ -130,6 +130,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'bundled-feature-import': ['packages/cezar/src/server/feature-reach.ts', "import setup from '../features/jobs/index.ts';\n"],
   'test-unpinned-clock-date': ['packages/web/src/clock-violation.test.ts', "const at = '2026-10-27T00:00:00Z';\n"],
   'stubborn-test-child': ['packages/cezar/src/stubborn-violation.test.ts', "spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)\"]);\n"],
+  'use-data-primitives': ['packages/web/src/routes/primitive-violation.tsx', "export function Bad({ sha }: { sha: string }) { return <span>{sha.slice(0, 8)}</span> }\n"],
 };
 
 /** Each approved exception, by the rule it exercises. None may produce a finding. */
@@ -146,7 +147,7 @@ const APPROVED: Record<string, string> = {
   'packages/cezar/scripts/mock-scenario-approved.mjs': "import { play } from './mock-scenario.mjs';\nconst x = 'mock:backend-resume';\n",
   'packages/web/src/wait-approved.test.tsx': 'await sleep(5); // bound: a negative window\n',
   'packages/cezar/src/wait-approved.test.ts': 'await sleep(5); // bound: a negative window\n',
-  'packages/web/src/routes/unknown-project.tsx': '<div className="bg-card-2"><span className="font-mono text-[11px] font-normal text-soft-foreground">old</span></div>',
+  'packages/web/src/routes/unknown-project.tsx': '<div className="bg-card-2"><span className="font-mono text-xs font-normal text-semantic-red">safe</span></div>',
 
   'packages/web/src/styles/index.ts': 'export const value = "h-dvh";',
   'packages/web/src/design-guardian.test.ts': 'confirm();',

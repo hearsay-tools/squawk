@@ -150,7 +150,7 @@ it.each([root, child])('shows request waiting for either participant ($id)', run
     kind: WAIT_KIND.worker, id: '10000000-0000-4000-8000-000000000003', source: WAIT_SOURCE.agent, via: WAIT_VIA['cez-worker-wait'], registeredAt: at,
     deadline: at, phase: WAIT_PHASE.open, turnId: 'turn-1', timeoutSeconds: 600, workerIds: [], requestIds: [workerId], revisions: [], outcomes: [],
   }] });
-  expect(screen.getByText(run.delegation.role === 'worker' ? /Waiting on parent reply/ : /Waiting on worker replies/)).toBeTruthy();
+  expect(screen.getByText(run.delegation.role === 'worker' ? /Waiting for parent reply/ : /Waiting for worker replies/)).toBeTruthy();
 });
 
 // Squawk's completion wait has no deadline (hearsay-tools/cezarion#1301): the parent still reads as
@@ -160,7 +160,7 @@ it('shows a parent parked on Cezar\'s completion wait, which has no deadline', (
     kind: WAIT_KIND.worker, id: '10000000-0000-4000-8000-000000000003', source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion, registeredAt: at,
     phase: WAIT_PHASE.open, turnId: 'turn-1', mode: 'all', workerIds: [workerId], revisions: [], outcomes: [],
   }] });
-  expect(screen.getByText(`Waiting on 1 worker. No deadline: Squawk wakes this task when they have all settled.`)).toBeTruthy();
+  expect(screen.getByText(`Waiting for 1 worker. No deadline: Squawk wakes this task when they have all settled.`)).toBeTruthy();
   expect(screen.queryByText(/Deadline:/)).toBeNull();
 });
 
@@ -170,7 +170,7 @@ it('shows a supervising worker parked on the completion wait', () => {
     kind: WAIT_KIND.worker, id: '10000000-0000-4000-8000-000000000003', source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion, registeredAt: at,
     phase: WAIT_PHASE.open, turnId: 'turn-1', mode: 'all', workerIds: [parentId], revisions: [], outcomes: [],
   }] });
-  expect(screen.getByText(/^Waiting on 1 worker\. No deadline: Squawk wakes this task when they have all settled\.$/)).toBeTruthy();
+  expect(screen.getByText(/^Waiting for 1 worker\. No deadline: Squawk wakes this task when they have all settled\.$/)).toBeTruthy();
 });
 
 // hearsay-tools/cezarion#2588: waits [A, B] and [A] are two pending workers, as the Activity row says.
@@ -185,7 +185,7 @@ it('counts each pending worker once across overlapping open waits', () => {
     wait('10000000-0000-4000-8000-000000000004', [workerId], '2026-09-06T00:20:00.000Z'),
   ] })
   // The newest wait's deadline stays the one the note names.
-  expect(screen.getByText(/^Waiting on 2 workers\. Deadline:/)).toBeTruthy()
+  expect(screen.getByText(/^Waiting for 2 workers\. Deadline:/)).toBeTruthy()
   expect(screen.getByText('2026-09-06T00:20:00.000Z')).toBeTruthy()
 })
 
@@ -415,14 +415,20 @@ it('offers Retry clean up while a destroy is pending, and plain Clean up otherwi
 })
 
 
-it.each(['running', 'waiting', 'review', 'queued', 'done', 'failed', 'cancelled'] as const)(
-  'shows the %s worker status and uses a running indicator only while active', async status => {
+it.each([
+  ['running', 'Running', 1],
+  ['waiting', 'Waiting', 0],
+  ['review', 'Needs review', 0],
+  ['queued', 'Queued', 0],
+  ['done', 'Done', 0],
+  ['failed', 'Failed', 0],
+  ['cancelled', 'Cancelled', 0],
+] as const)(
+  'shows the %s worker status and uses a running indicator only while running', async (status, label, runningCount) => {
     setup(root, async () => json({ workers: [{ ...worker, status, destroy: undefined }] }))
     const group = await section()
-    await within(group).findByText(status.charAt(0).toUpperCase() + status.slice(1))
-    expect(within(group).queryAllByRole('status', { name: 'Worker running' })).toHaveLength(
-      ['running', 'waiting', 'review'].includes(status) ? 1 : 0,
-    )
+    await within(group).findByText(label)
+    expect(within(group).queryAllByRole('status', { name: 'Worker running' })).toHaveLength(runningCount)
   },
 )
 

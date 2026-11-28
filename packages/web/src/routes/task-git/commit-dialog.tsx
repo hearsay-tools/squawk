@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { commitRun } from '@/api/client'
 import { queryKeys } from '@/api/queries'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
+import { shortSha } from '@/components/data-primitives'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -50,7 +51,7 @@ export function CommitDialog({
   const commit = useMutation({
     mutationFn: (text: string) => commitRun(run.id, text),
     onSuccess: (result) => {
-      toast(`Committed ${result.sha.slice(0, 7)}`)
+      toast(`Committed ${shortSha(result.sha)}`)
       onOpenChange(false)
       // The diff is anchored at the merge-base, so the files stay visible — but the record's
       // diffStat and the repo commit log moved; refetch what claims to know them.

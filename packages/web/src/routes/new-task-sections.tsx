@@ -279,7 +279,7 @@ export function ComposerFooterEnd({
       <ModeSegment planFirst={planFirst} planning={planning} onModeChange={onModeChange} />
       <kbd
         aria-hidden="true"
-        className="hidden rounded-[5px] border border-b-2 border-border bg-card px-[5px] py-px font-mono text-[11px] font-medium text-muted-foreground md:inline"
+        className="hidden rounded-[5px] border border-b-2 border-border bg-card px-[5px] py-px font-mono text-xs font-medium text-muted-foreground md:inline"
       >
         {submitShortcutHint()}
       </kbd>
@@ -440,7 +440,7 @@ function BaseBranchPill({ repo }: { repo: RepoResponse }) {
       searchPlaceholder="Search branches…"
       slot="base-pill"
       ariaLabel="Base branch"
-      label={<span className="text-[11px]">{current}</span>}
+      label={<span className="text-xs">{current}</span>}
       value={repo.baseBranch ?? ''}
       onPick={(value) => mutation.mutate(value === '' ? null : value)}
       options={[

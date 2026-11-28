@@ -10,11 +10,14 @@ import { toast } from '@/components/ui/toaster'
  * without a PR. The composer's Finish button and the review panel's ✓ Accept both sit on this
  * hook so the review-gate semantics can never fork between the two surfaces.
  */
-export function useFinishRun(runId: string) {
+export function useFinishRun(runId: string, options?: { projectId?: string | undefined; onSuccess?: (() => void) | undefined }) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: () => finishRun(runId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
+    mutationFn: () => finishRun(runId, options?.projectId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
+      options?.onSuccess?.()
+    },
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
 }

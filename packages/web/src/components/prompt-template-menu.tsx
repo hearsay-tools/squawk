@@ -133,7 +133,7 @@ export function PromptTemplateMenu({
                       </span>
                     ) : null}
                   </span>
-                  <span className="line-clamp-1 text-[11px] text-soft-foreground">
+                  <span className="line-clamp-1 text-xs text-soft-foreground">
                     {template.text}
                   </span>
                 </CommandItem>

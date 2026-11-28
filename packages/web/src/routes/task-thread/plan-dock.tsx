@@ -45,7 +45,7 @@ function PlanRow({ entry }: { entry: PlanEntry }) {
         entry.status === 'in_progress' && 'font-medium',
         entry.status === 'pending' && 'text-muted-foreground',
         // Struck through like a done row, but faded further: abandoned, not achieved.
-        entry.status === 'cancelled' && 'text-soft-foreground/70 line-through',
+        entry.status === 'cancelled' && 'text-disabled-foreground line-through',
       )}
     >
       <PlanIcon status={entry.status} />
@@ -53,7 +53,7 @@ function PlanRow({ entry }: { entry: PlanEntry }) {
       {entry.status === 'in_progress' ? (
         <span
           data-slot="plan-tag"
-          className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase"
+          className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tracking-[0.05em] text-muted-foreground uppercase"
         >
           in progress
         </span>
@@ -70,7 +70,7 @@ function PlanIcon({ status }: { status: PlanStatus }) {
     return (
       <svg
         aria-hidden
-        className="size-[15px] shrink-0 text-soft-foreground/70"
+        className="size-[15px] shrink-0 text-disabled-foreground"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"

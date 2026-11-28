@@ -77,7 +77,7 @@ function renderRoute(pathname = '/activity', state?: unknown) {
 const projectLink = (name: string) => within(screen.getByRole('navigation', { name: 'Activity scope' })).getByRole('link', { name })
 const panelIds = () => Array.from(document.querySelectorAll('[data-slot="activity-panel"]')).map((panel) => panel.getAttribute('data-project'))
 const panel = (id: string) => document.querySelector(`[data-slot="activity-panel"][data-project="${id}"]`) as HTMLElement
-const pill = (runId: string) => document.querySelector(`[data-activity-pill="${runId}"]`) as HTMLElement
+const row = (runId: string) => document.querySelector(`[data-activity-row="${runId}"]`) as HTMLElement
 const chip = (label: string) => document.querySelector(`[data-chip="${label}"]`)?.textContent
 const lineText = (el: HTMLElement) => Array.from(el.querySelectorAll('[data-slot="activity-line-text"] li')).map((li) => li.textContent)
 
@@ -100,23 +100,29 @@ describe('GlobalActivityRoute', () => {
   it('restores the originating project from the global history entry', async () => {
     serve()
     renderRoute('/activity', { activityProjectId: 'gamma' })
-    await screen.findByRole('heading', { level: 2, name: 'gamma' })
+    await screen.findByRole('heading', { level: 3, name: 'Adding verdict schema' })
     expect(projectLink('gamma').getAttribute('href')).toBe('/p/gamma/activity')
   })
 
   it.each([null, 'gamma', { activityProjectId: 123 }, { activityProjectId: 'removed' }])('keeps the boot fallback for unusable history state %j', async (state) => {
     serve()
     renderRoute('/activity', state)
-    await screen.findByRole('heading', { level: 2, name: 'gamma' })
+    await screen.findByRole('heading', { level: 3, name: 'Adding verdict schema' })
     expect(projectLink('alpha').getAttribute('href')).toBe('/p/alpha/activity')
   })
 
-  it('shows one panel per project with work or a notice, in project-rail order', async () => {
+  it('shows unloaded and unavailable notice panels in rail order and groups active tasks when toggled', async () => {
     serve()
     renderRoute()
-    // The rail puts projects the stored order does not name first, in registry order; zeta is not
-    // registered and has no panel anyway.
-    await waitFor(() => expect(panelIds()).toEqual(['beta', 'eps', 'gamma', 'alpha']))
+    await waitFor(() => expect(panelIds()).toEqual(['beta', 'eps']))
+    // Flat priority order by default; clicking Group by project groups Working rows in project-rail order.
+    const toggle = screen.getByRole('button', { name: 'Group by project' })
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    const workingGroups = Array.from(document.querySelectorAll('[data-slot="activity-working"] [data-slot="activity-project-group"]'))
+      .map((el) => el.getAttribute('data-project'))
+    expect(workingGroups).toEqual(['gamma', 'alpha'])
   })
 
   it('collapses loaded idle projects into one line, and never an unloaded or unavailable one', async () => {
@@ -135,13 +141,13 @@ describe('GlobalActivityRoute', () => {
   it('counts every project in the summary chips and offers the scope switch', async () => {
     serve()
     renderRoute()
-    await screen.findByRole('heading', { level: 2, name: 'alpha' })
-    expect(chip('needs you')).toBe('1 needs you')
-    expect(chip('working')).toBe('2 working')
-    expect(chip('active workers')).toBe('2 active workers')
-    expect(chip('open requests')).toBe('2 open requests')
-    expect(chip('in review')).toBe('3 in review')
-    expect(screen.getByRole('link', { name: /3 in review/ }).getAttribute('href')).toBe('/tasks')
+    await screen.findByRole('heading', { level: 3, name: 'Porting upstream SSE' })
+    expect(chip('Needs you')).toBe('1 Needs you')
+    expect(chip('Working')).toBe('2 Working')
+    expect(chip('Active workers')).toBe('2 Active workers')
+    expect(chip('Open requests')).toBe('2 Open requests')
+    expect(chip('Needs review')).toBe('3 Needs review')
+    expect(screen.getByRole('link', { name: /3 Needs review/ }).getAttribute('href')).toBe('/tasks')
     const scope = screen.getByRole('navigation', { name: 'Activity scope' })
     expect(within(scope).getByRole('link', { name: 'All projects' }).getAttribute('aria-current')).toBe('page')
     expect(within(scope).getByRole('link', { name: 'alpha' }).getAttribute('href')).toBe('/p/alpha/activity')
@@ -149,42 +155,37 @@ describe('GlobalActivityRoute', () => {
     expect(within(scope).queryByRole('link', { name: 'This project' })).toBeNull()
   })
 
-  it('draws a pill per card with its verb, main line, heartbeat and one dot per live worker', async () => {
+  it('leads with Attention decisions carrying project identity and compact Working rows with worker trees', async () => {
     serve()
     renderRoute()
-    await screen.findByRole('heading', { level: 2, name: 'gamma' })
-    expect(within(panel('alpha')).getByRole('link', { name: 'Open project activity →' }).getAttribute('href')).toBe('/p/alpha/activity')
-    expect(panel('gamma').querySelector('[data-slot="activity-panel-detail"]')?.textContent).toBe('1 active task · 2 workers')
-    // The age ticks from the server clock and the client's receive time: about a minute.
-    expect(pill('a2').querySelector('[data-slot="activity-pill-line"]')?.textContent).toMatch(/^Needs you · (59s|1m) · Retry the shard\?$/)
-    expect(within(pill('a2')).getByRole('link', { name: 'Answer' }).getAttribute('href')).toBe('/p/alpha/tasks/a2')
-    expect(pill('a1').querySelector('[data-slot="activity-heartbeat"]')).not.toBeNull()
-    expect(pill('g1').querySelectorAll('[data-slot="activity-pill-workers"] [data-activity-anchor]')).toHaveLength(2)
-    expect(pill('g1').querySelector('[data-slot="activity-pill-workers"]')?.textContent).toBe('2 workers')
+    await screen.findByRole('heading', { level: 3, name: 'Adding verdict schema' })
+    expect(row('a2').getAttribute('data-slot')).toBe('activity-decision')
+    expect(row('a2').querySelector('[data-slot="activity-project-badge"]')?.textContent).toBe('alpha')
+    expect(row('a2').querySelector('[data-slot="activity-main"]')?.textContent).toBe('Retry the shard?')
+    expect(within(row('a2')).getByRole('button', { name: 'Answer' })).toBeTruthy()
+    expect(row('a1').querySelector('[data-slot="activity-heartbeat"]')).not.toBeNull()
+    expect(row('g1').querySelectorAll('[data-slot="activity-worker"]')).toHaveLength(2)
   })
 
-  it('draws an arc only between two pills of one panel', async () => {
-    // The label's age ticks from the server clock and the client's receive time: about 4:10.
+  it('draws a margin arc only between two rows of the same project', async () => {
     serve()
     renderRoute()
-    await screen.findByRole('heading', { level: 2, name: 'gamma' })
-    await waitFor(() => expect(panel('alpha').querySelector(`path[data-request="${ALPHA_PEER.requestId}"]`)).not.toBeNull())
-    expect(panel('alpha').querySelector(`[data-slot="activity-arc-label"][data-request="${ALPHA_PEER.requestId}"]`)?.textContent).toMatch(/^Request · 4:\d{2}$/)
+    await screen.findByRole('heading', { level: 3, name: 'Adding verdict schema' })
+    await waitFor(() => expect(document.querySelector(`path[data-request="${ALPHA_PEER.requestId}"]`)).not.toBeNull())
     expect(document.querySelector(`path[data-request="${GAMMA_AWAY.requestId}"]`)).toBeNull()
-    expect(panel('gamma').querySelector('[data-slot="activity-arcs"]')).toBeNull()
   })
 
-  it('makes each pill a link to its task, with the text form of its arcs', async () => {
+  it('links each row to its task with the text form of its peer requests', async () => {
     serve()
     renderRoute()
-    await screen.findByRole('heading', { level: 2, name: 'alpha' })
-    expect(within(pill('a1')).getByRole('link', { name: 'Porting upstream SSE' }).getAttribute('href')).toBe('/p/alpha/tasks/a1')
-    expect(within(pill('g1')).getByRole('link', { name: 'Adding verdict schema' }).getAttribute('href')).toBe('/p/gamma/tasks/g1')
-    expect(lineText(pill('a1'))).toEqual(['Waiting for a reply from Fixing flaky shard'])
-    expect(lineText(pill('a2'))).toEqual(['Porting upstream SSE waits for your reply'])
-    expect(lineText(pill('g1'))).toEqual(['Waiting for a reply from Porting upstream SSE'])
-    // The narrow layout names the peer on the sender pill instead of the arc.
-    expect(within(pill('a1')).getByRole('link', { name: '→ Fixing flaky shard' }).getAttribute('href')).toBe('/p/alpha/tasks/a2')
+    await screen.findByRole('heading', { level: 3, name: 'Porting upstream SSE' })
+    expect(within(row('a1')).getByRole('link', { name: 'Porting upstream SSE' }).getAttribute('href')).toBe('/p/alpha/tasks/a1')
+    expect(within(row('g1')).getByRole('link', { name: 'Adding verdict schema' }).getAttribute('href')).toBe('/p/gamma/tasks/g1')
+    expect(lineText(row('a1'))).toEqual(['Waiting for a reply from Fixing flaky shard'])
+    expect(lineText(row('a2'))).toEqual(['Porting upstream SSE waits for your reply'])
+    expect(lineText(row('g1'))).toEqual(['Waiting for a reply from Porting upstream SSE'])
+    // The narrow layout names the peer on the sender row instead of the arc.
+    expect(within(row('a1')).getByRole('link', { name: '→ Fixing flaky shard' }).getAttribute('href')).toBe('/p/alpha/tasks/a2')
   })
 
   it('keeps the header and the scope switch while the snapshot loads', async () => {
@@ -193,7 +194,7 @@ describe('GlobalActivityRoute', () => {
     const answer = fetchMock.getMockImplementation()
     fetchMock.mockImplementation(async (input, init) => (String(input).startsWith('/api/v1/workspace/activity') ? new Promise<Response>(() => {}) : answer!(input, init)))
     renderRoute()
-    expect(screen.getByRole('heading', { level: 1, name: 'Activity · All projects' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Activity')
     expect(screen.getByRole('status').textContent).toBe('Loading activity…')
     expect((await waitFor(() => projectLink('alpha'))).getAttribute('href')).toBe('/p/alpha/activity')
   })

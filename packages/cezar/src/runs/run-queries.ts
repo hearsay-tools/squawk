@@ -503,12 +503,50 @@ export class RunQueriesTopic implements RunQueries, RunFamilyReads {
 
   /** Indexed family enumeration, including members not yet flushed to SQLite. */
   listFamilyRunIds(rootId: string): string[] {
-    const ids = new Set([rootId, ...(this.db?.listIdsByParent(rootId) ?? [])]);
-    for (const [id, run] of this.held) {
-      if (familyRootOf(run) === rootId) ids.add(id);
-      else if (id !== rootId) ids.delete(id);
+    return this.familyRunIds(rootId, this.db?.listIdsByParent(rootId) ?? [], this.heldFamilies());
+  }
+
+  /** `listFamilyRunIds` of each root, with one SQLite read and one pass over held records for
+   *  all of them: the cost grows with roots plus records, not roots times held records. */
+  listFamiliesRunIds(rootIds: readonly string[]): string[][] {
+    const stored = new Map<string, string[]>();
+    for (const { id, parentId } of this.db?.listParentLinks() ?? []) {
+      const ids = stored.get(parentId);
+      if (ids) ids.push(id);
+      else stored.set(parentId, [id]);
     }
-    for (const id of this.deleted) ids.delete(id);
+    const held = this.heldFamilies();
+    return rootIds.map(rootId => this.familyRunIds(rootId, stored.get(rootId) ?? [], held));
+  }
+
+  /** Held records override stored rows: each held id's family root, and each root's held members
+   *  in held order. */
+  private heldFamilies(): HeldFamilies {
+    const rootOf = new Map<string, string | undefined>();
+    const members = new Map<string, string[]>();
+    for (const [id, run] of this.held) {
+      const root = familyRootOf(run);
+      rootOf.set(id, root);
+      if (root === undefined) continue;
+      const ids = members.get(root);
+      if (ids) ids.push(id);
+      else members.set(root, [id]);
+    }
+    return { rootOf, members };
+  }
+
+  /** The root, its stored workers that no held record moves elsewhere, then its held members;
+   *  never a deleted run. */
+  private familyRunIds(rootId: string, stored: readonly string[], held: HeldFamilies): string[] {
+    const ids = new Set([rootId]);
+    for (const id of stored) if (!held.rootOf.has(id) || held.rootOf.get(id) === rootId) ids.add(id);
+    for (const id of held.members.get(rootId) ?? []) ids.add(id);
+    for (const id of ids) if (this.deleted.has(id)) ids.delete(id);
     return [...ids];
   }
+}
+
+interface HeldFamilies {
+  rootOf: ReadonlyMap<string, string | undefined>;
+  members: ReadonlyMap<string, readonly string[]>;
 }

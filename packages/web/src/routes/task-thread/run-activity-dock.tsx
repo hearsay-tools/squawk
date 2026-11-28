@@ -89,6 +89,9 @@ interface RunActivityDockProps {
   onOpenWorker?: ((id: string) => void) | undefined
   /** The transcript's reader scroll signals (`useThreadScroll().subscribeReaderScroll`). */
   readerScroll?: ((listener: ReaderScrollListener) => () => void) | undefined
+  /** `card` is the standalone collapsible accordion; `panel` renders expanded sections inside
+   *  the header popover or ultra-wide Activity sidebar (hearsay-tools/squawk#4374). */
+  presentation?: 'card' | 'panel' | undefined
 }
 
 export function RunActivityDock(props: RunActivityDockProps) {
@@ -115,6 +118,7 @@ function SessionActivityCard({
   pendingAsk = false,
   onOpenWorker,
   readerScroll,
+  presentation = 'card',
   prNumbers,
   hasReferences,
   references,
@@ -128,7 +132,7 @@ function SessionActivityCard({
   // `chosen` is the reader's choice; `open` is what shows, after a temporary fold for reading.
   const [chosen, setChosen] = useState(() => pendingAsk ? false : openByRun.get(run.id) ?? false)
   const scrollFold = useReaderScrollFold(readerScroll, chosen)
-  const open = scrollFold.open
+  const open = presentation === 'panel' ? true : scrollFold.open
   // Nested rows start closed on every viewport — the expanded card is a list of section heads,
   // and a reader opens the one they came for. Workers are the exception, open by default so
   // their task links stay directly reachable: they are navigation, not detail.
@@ -143,6 +147,48 @@ function SessionActivityCard({
     setSections((state) => ({ ...state, [key]: next }))
   }
   const disclosure = (key: SectionKey): SectionDisclosure => ({ open: isOpen(key), onToggle: () => toggle(key) })
+
+  const body = (
+    <div className="flex min-w-0 flex-col border-t border-border">
+      <StatusSection run={run} activity={activity} {...disclosure('status')} />
+      <WorkflowSection run={run} desktop={desktop} automations={activity.automations} {...disclosure('workflow')} />
+      <SubagentsSection activity={activity} desktop={desktop} onOpenWorker={onOpenWorker} {...disclosure('subagents')} />
+      <WorkersSection run={run} {...disclosure('workers')} />
+      <PlanSection activity={activity} desktop={desktop} {...disclosure('plan')} />
+      <UsageSection run={run} identity={identity} activity={activity} {...disclosure('usage')} />
+      <WorkspaceSection
+        run={run}
+        references={references}
+        conflicts={activity.conflicts}
+        hasReferences={hasReferences}
+        onResume={() => resume.mutate()}
+        {...disclosure('workspace')}
+      />
+    </div>
+  )
+
+  if (presentation === 'panel') {
+    return (
+      <section
+        data-slot="run-activity-dock"
+        data-presentation="panel"
+        data-state="open"
+        aria-label="Session activity"
+        className="flex min-w-0 flex-col bg-card"
+      >
+        <div className="sticky inset-bs-0 z-10 flex items-center gap-2 bg-card px-3.5 py-2.5 text-[13px]">
+          <LayersIcon aria-hidden className="size-4 shrink-0 text-accent-text" />
+          <span className="font-semibold text-foreground">Session activity</span>
+          {activity.cost ? (
+            <span data-slot="run-activity-cost" className="ms-auto shrink-0 font-mono text-[12px] text-muted-foreground tabular-nums">
+              {activity.cost}
+            </span>
+          ) : null}
+        </div>
+        {body}
+      </section>
+    )
+  }
 
   return (
     <section
@@ -163,24 +209,7 @@ function SessionActivityCard({
           scrollFold.chose(!open)
         }}
       />
-      {open ? (
-        <div className="flex min-w-0 flex-col border-t border-border">
-          <StatusSection run={run} activity={activity} {...disclosure('status')} />
-          <WorkflowSection run={run} desktop={desktop} automations={activity.automations} {...disclosure('workflow')} />
-          <SubagentsSection activity={activity} desktop={desktop} onOpenWorker={onOpenWorker} {...disclosure('subagents')} />
-          <WorkersSection run={run} {...disclosure('workers')} />
-          <PlanSection activity={activity} desktop={desktop} {...disclosure('plan')} />
-          <UsageSection run={run} identity={identity} activity={activity} {...disclosure('usage')} />
-          <WorkspaceSection
-            run={run}
-            references={references}
-            conflicts={activity.conflicts}
-            hasReferences={hasReferences}
-            onResume={() => resume.mutate()}
-            {...disclosure('workspace')}
-          />
-        </div>
-      ) : null}
+      {open ? body : null}
     </section>
   )
 }
@@ -193,19 +222,23 @@ interface SectionDisclosure {
 
 type SessionActivity = ReturnType<typeof useSessionActivity>
 
-/** Everything the header and more than one section read, derived once per render. */
-function useSessionActivity(run: ApiRun, thread: ThreadState, currentThread: ThreadState, currentComplete: boolean, prNumbers: number[]) {
+/** Shared live status, agent, plan, worker and usage facts read by both the Activity panel and header trigger. */
+export function useActivityStatusFacts(
+  run: ApiRun,
+  thread: ThreadState,
+  currentThread: ThreadState,
+  currentComplete: boolean,
+) {
   const health = useHealth()
   const metrics = usageMetricVisibility(health.data)
   const runs = useRuns()
   const queuePosition = run.status === 'queued' ? queuePositions(runs.data ?? []).get(run.id) : undefined
   const line = runStatusLine(run, { queuePosition })
-  const conflicts = useConflictingPullRequests(prNumbers)
   const runIsTerminal = !isSessionOpen(run) && run.status !== 'queued'
   // A partial thread can miss agents the newest page starts after, so the section waits for the
   // whole current state rather than show a wrong count (hearsay-tools/cezarion#2588).
   const agents = useMemo(
-    () => currentComplete ? collectSubagents(currentThread.turns, runIsTerminal, thread.turns) : [],
+    () => (currentComplete ? collectSubagents(currentThread.turns, runIsTerminal, thread.turns) : []),
     [currentComplete, currentThread.turns, runIsTerminal, thread.turns],
   )
   const planEntries = latestPlanEntries(currentThread) ?? []
@@ -214,16 +247,26 @@ function useSessionActivity(run: ApiRun, thread: ThreadState, currentThread: Thr
   const agentCounts = subagentCounts(agents)
   const planCountsValue = planCounts(planEntries)
   return {
+    health,
     line,
     ...activityStatus(run, line, workers, currentComplete ? agentCounts : undefined, planCountsValue),
     ...usageValues(run, metrics),
-    conflicts,
-    waitReferences: ciWaitReferences(run),
     agents,
     agentCounts,
     planEntries,
     planCounts: planCountsValue,
-    automations: automationsAvailable(health.data),
+  }
+}
+
+/** Everything the header and more than one section read, derived once per render. */
+function useSessionActivity(run: ApiRun, thread: ThreadState, currentThread: ThreadState, currentComplete: boolean, prNumbers: number[]) {
+  const facts = useActivityStatusFacts(run, thread, currentThread, currentComplete)
+  const conflicts = useConflictingPullRequests(prNumbers)
+  return {
+    ...facts,
+    conflicts,
+    waitReferences: ciWaitReferences(run),
+    automations: automationsAvailable(facts.health.data),
   }
 }
 
@@ -232,7 +275,7 @@ type Counts = { done: number; total: number }
 /** `agentCounts` is undefined while the thread's current state is still loading: nothing about
  *  the agents is known yet, so the run is neither "All complete" nor "Incomplete"
  *  (hearsay-tools/cezarion#2588). */
-function activityStatus(run: ApiRun, line: RunStatusLine, workers: WorkersVerdict, agentCounts: Counts | undefined, plan: Counts) {
+export function activityStatus(run: ApiRun, line: RunStatusLine, workers: WorkersVerdict, agentCounts: Counts | undefined, plan: Counts) {
   // Complete means SUCCEEDED, not merely settled: a failed or cancelled step keeps the green
   // summary away, matching `subagentCounts` (which counts only `completed`) and the danger X
   // the rail shows one click below. `skipped` stays complete — it never ran and never failed.
@@ -266,7 +309,7 @@ function activityStatus(run: ApiRun, line: RunStatusLine, workers: WorkersVerdic
   return {
     allComplete,
     statusText,
-    failed: line.attention.tone === 'danger' || run.status === 'cancelled',
+    failed: line.attention.tone === 'danger',
     glyph: allComplete
       ? <CircleCheckIcon aria-hidden className="size-3.5 shrink-0 text-success" />
       : <StatusDot tone={line.attention.tone} shape={line.attention.shape} pulse={line.attention.pulse} />,
@@ -283,7 +326,7 @@ function usageValues(run: ApiRun, metrics: ReturnType<typeof usageMetricVisibili
 
 /** The status colour both the folded summary and the status row use. */
 function statusTone(activity: SessionActivity) {
-  return activity.allComplete ? 'text-success' : activity.failed && 'text-danger'
+  return activity.allComplete ? 'text-semantic-green' : activity.failed && 'text-semantic-red'
 }
 
 /** The workflow step the folded header and the Workflow row name, through the same steps, index

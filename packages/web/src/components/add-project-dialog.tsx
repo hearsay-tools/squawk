@@ -121,7 +121,7 @@ export function AddProjectDialog({
         <DialogFooter className="min-w-0 sm:items-center sm:justify-between">
           <span
             data-slot="add-project-target"
-            className="min-w-0 truncate font-mono text-[11px] text-muted-foreground"
+            className="min-w-0 truncate font-mono text-xs text-muted-foreground"
             title={target ?? undefined}
           >
             {target ?? ''}

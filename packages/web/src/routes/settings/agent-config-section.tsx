@@ -147,8 +147,8 @@ function AgentConfigView({
           >
             {d.label}
             {!installed.includes(d.id) && (
-              <Badge variant="outline" className="text-[12px] text-soft-foreground">
-                not installed
+              <Badge variant="outline" className="text-xs text-soft-foreground">
+                Not installed
               </Badge>
             )}
           </button>
@@ -234,7 +234,7 @@ function AgentPane({
         if (files.length === 0 && !userMcp && !g.empty) return null
         return (
           <section key={g.id} data-slot="agent-config-group" data-group={g.id} data-agent={agent.id}>
-            <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-soft-foreground">
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-soft-foreground">
               {g.label}
             </p>
             {g.note && <p className="mb-2 text-xs text-muted-foreground">{g.note}</p>}
@@ -266,7 +266,7 @@ function AgentPane({
                     {file.seeded || !file.exists ? (
                       <span data-slot="agent-config-file-meta" className="flex flex-wrap items-center gap-1.5">
                         {file.seeded && (
-                          <Badge variant="outline" className="text-[11px]">
+                          <Badge variant="outline" className="text-xs">
                             Default template
                           </Badge>
                         )}
@@ -294,7 +294,7 @@ function UserMcpBlock({ userMcp, path }: { userMcp: NonNullable<AgentConfigListi
       <p className="mb-2 text-xs text-muted-foreground">
         {/* One unbroken code span: a wrap inside the command split it into a code half and a prose half. */}
         Managed by <code data-slot="agent-config-user-mcp-command" className="whitespace-nowrap font-mono">claude mcp add</code> in{' '}
-        <code data-slot="agent-config-user-mcp-path" title={userMcp.path} className="break-all font-mono text-foreground/80">{path}</code> — Squawk
+        <code data-slot="agent-config-user-mcp-path" title={userMcp.path} className="break-all font-mono text-foreground">{path}</code> — Squawk
         does not edit Claude’s state file.
       </p>
       {userMcp.readable ? (
@@ -302,7 +302,7 @@ function UserMcpBlock({ userMcp, path }: { userMcp: NonNullable<AgentConfigListi
           <ul className="flex flex-wrap gap-1">
             {userMcp.servers.map((name) => (
               <li key={name}>
-                <Badge variant="outline" className="font-mono text-[11px]">
+                <Badge variant="outline" className="font-mono text-xs">
                   {name}
                 </Badge>
               </li>
@@ -358,7 +358,7 @@ export function FileEditor({ file }: { file: AgentConfigFile }) {
           {SCOPE_LABEL[file.scope]}
         </Badge>
       </div>
-      <p data-slot="agent-config-path" title={file.path} className="font-mono text-xs text-foreground/80">{homeShortPath(file.path, [file])}</p>
+      <p data-slot="agent-config-path" title={file.path} className="font-mono text-xs text-foreground">{homeShortPath(file.path, [file])}</p>
       <div className="settings-readout flex flex-wrap items-center gap-2">
         <span className="font-mono text-[13px]">{file.label}</span>
         <Badge variant="outline" className="text-[12px] uppercase">
@@ -396,7 +396,7 @@ export function FileEditor({ file }: { file: AgentConfigFile }) {
       <p data-slot="agent-config-precedence" className="text-xs text-muted-foreground">
         {file.precedence}
       </p>
-      <p data-slot="agent-config-effect" className="text-xs text-foreground/80">
+      <p data-slot="agent-config-effect" className="text-xs text-foreground">
         {effectLabel(file)}
         {file.hotReload ? ` ${file.hotReload}` : ''}
       </p>
@@ -435,7 +435,7 @@ function EditorFrame({
         <pre
           data-slot="agent-config-placeholder"
           aria-hidden="true"
-          className="pointer-events-none absolute inset-px m-0 overflow-hidden whitespace-pre px-3 py-2 font-mono text-xs leading-[1.7] text-muted-foreground/80"
+          className="pointer-events-none absolute inset-px m-0 overflow-hidden whitespace-pre px-3 py-2 font-mono text-xs leading-[1.7] text-soft-foreground"
         >
           {placeholderFor(file, isMcp)}
         </pre>
