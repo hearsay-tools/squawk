@@ -133,7 +133,7 @@ function AutomationBadge({ badge }: { badge: NonNullable<TaskRowModel['automatio
 }
 
 function ProjectBadge({ name, href }: { name: string; href?: string | undefined }) {
-  const cls = 'inline-flex max-w-[140px] shrink-0 items-center truncate rounded-md border border-border bg-muted px-1.5 py-px font-mono text-[11px] font-medium text-foreground'
+  const cls = 'inline-flex h-[18px] max-w-[140px] shrink-0 items-center truncate rounded-md border border-border bg-muted px-1.5 font-mono text-[11px] leading-none font-medium text-foreground'
   if (!href) {
     return (
       <span data-slot="task-project" className={cls} title={name}>
@@ -730,7 +730,7 @@ export function TaskTable({
           data-density="card"
           className="flex flex-col rounded-lg border border-border bg-card px-3"
         >
-          <TaskListItems itemSize={112} items={items} itemKey={(item) => item.key}>
+          <TaskListItems itemSize={123} items={items} itemKey={(item) => item.key}>
             {(item) => (
               <TaskTableCard
                 key={item.key}
@@ -791,7 +791,7 @@ export function TaskTable({
               </div>
             ))}
           </div>
-          <TaskListItems itemSize={compact ? 56 : 74} items={items} itemKey={(item) => item.key}>
+          <TaskListItems itemSize={compact ? 56 : 63} items={items} itemKey={(item) => item.key}>
             {(item, index) => (
               <TaskTableRow
                 key={item.key}

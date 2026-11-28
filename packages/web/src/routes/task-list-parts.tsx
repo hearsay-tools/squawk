@@ -251,7 +251,7 @@ export function TaskBulkActions({
                 event.preventDefault()
                 archiveSelected.current = false
                 const root = focusReturnRef?.current ?? document
-                root.querySelector<HTMLButtonElement>('[data-view="active"]')?.focus()
+                root.querySelector<HTMLButtonElement>('[data-slot="overview-tab"][data-view="active"]')?.focus()
               }
             }}
           >
