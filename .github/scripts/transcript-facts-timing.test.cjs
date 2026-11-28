@@ -150,6 +150,15 @@ test('records hooked calls, restores them even on throw, and totals them per pha
   assert.deepEqual(totals, { a: { count: 2, elapsedMs: 7, mainThreadCpuMs: 5, maxElapsedMs: 5 } });
 });
 
+test('names the waits of every sample over the budget', async () => {
+  const { attachWaitsOverBudget } = await timing;
+  const samples = [{ from: 0, blockingMs: 60 }, { from: 10, blockingMs: 5 }, { from: 20, blockingMs: 50 }];
+  const wait = (at, syscall) => ({ at, state: 'S', syscall, wchan: 'w' });
+  attachWaitsOverBudget(samples, [wait(1, '202'), wait(9, '202'), wait(12, '230'), wait(25, '230'), wait(30, '1')], 50,
+    sample => [sample.from, sample.from + 10]);
+  assert.deepEqual(samples.map(sample => sample.waits), [{ 'S syscall=202 w': 2 }, undefined, { 'S syscall=230 w': 1 }]);
+});
+
 test('names the main-thread wait a watcher thread sees', async () => {
   const { startThreadWatch, summarizeWaits } = await timing;
   assert.deepEqual(summarizeWaits([{ state: 'S', syscall: '202', wchan: 'futex_wait_queue' },

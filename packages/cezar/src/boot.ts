@@ -79,6 +79,7 @@ async function sealRuntime({ pluginsDir, bundledRunnersDir, bundledFeaturesDir, 
   const { registerBuiltInWaitKinds, sealBuiltInWaitKinds } = await import('./built-in-wait-kinds.ts');
   const { sealRunLifecycleListeners } = await import('./runs/lifecycle-registry.ts');
   const { sealRunners } = await import('./core/runner-registry.ts');
+  const { sealHttpRoutes } = await import('./core/http-route-registry.ts');
   const loader = await import('./plugin/loader.ts');
   registerBuiltInRunSlots();
   registerBuiltInLaunchParts();
@@ -95,6 +96,7 @@ async function sealRuntime({ pluginsDir, bundledRunnersDir, bundledFeaturesDir, 
   }
   await beforeSeal?.();
   sealBuiltInCliCommands();
+  sealHttpRoutes();
   sealRunners();
   sealBuiltInRunSlots();
   sealBuiltInLaunchParts();

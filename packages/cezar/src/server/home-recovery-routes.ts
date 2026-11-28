@@ -38,10 +38,12 @@ export function createHomeRecoveryRoutes({ home, socketHub, localHandoff }: {
       return next();
     })
     .use('/home/recovery/*', async (c, next) => {
-      // Grant files are host-CLI-only, including in a local cockpit (remote-settings.ts).
+      // Grant and MCP token files are host-CLI-only, including in a local cockpit (ADR 0055).
       const body: unknown = await c.req.json().catch(() => undefined);
-      if (body && typeof body === 'object' && 'file' in body && typeof body.file === 'string'
-        && body.file.startsWith('remote-settings/')) return c.json({ error: 'Remote settings grants require the host CLI.' }, 403);
+      if (body && typeof body === 'object' && 'file' in body && typeof body.file === 'string') {
+        if (body.file.startsWith('remote-settings/')) return c.json({ error: 'Remote settings grants require the host CLI.' }, 403);
+        if (body.file.startsWith('mcp-tokens/')) return c.json({ error: 'MCP bearer tokens require the host CLI.' }, 403);
+      }
       return next();
     })
     .post('/home/recovery/restore', jsonZodValidator(homeRecoveryActionSchema), (c) =>

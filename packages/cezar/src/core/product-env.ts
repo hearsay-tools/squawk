@@ -32,3 +32,8 @@ export function productEnvEntries(suffix: string, value: string): Record<string,
 export function remoteEnvEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.HSQ_REMOTE === '1' || env.CEZ_REMOTE === '1';
 }
+
+/** Task-context guards fail closed: an empty `HSQ_TASK_ID` never masks a live `CEZ_TASK_ID`. */
+export function inTaskContext(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(env.HSQ_TASK_ID?.trim() || env.CEZ_TASK_ID?.trim());
+}

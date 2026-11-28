@@ -1,16 +1,18 @@
-import { ArrowUpRightIcon, BotIcon, MessageSquareIcon } from 'lucide-react'
+import { ArrowUpRightIcon, BotIcon, FolderKanbanIcon, InfoIcon, MessageSquareIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link as RouterLink } from 'react-router'
 
 import { StatusDot } from '@/components/status-dot'
 import type { PageShellHeaderProps } from '@/components/page-shell'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 
 import { agoOf, fullTimeOf, since } from './activity-format'
 import type { ActivitySummary } from './activity-model'
 import type { MotionState } from './activity-motion'
+import { Heartbeat } from './now-box-view'
 
 /**
  * The activity view's header and summary chips (spec 2026-11-05-live-activity-view, "Header" and
@@ -26,7 +28,7 @@ const SEGMENT = 'inline-flex min-w-0 items-center rounded-md border px-3 py-1 te
 export function ScopeSwitch({ scope, projectId, projectName }: { scope: 'project' | 'all'; projectId: string | null; projectName?: string | undefined }) {
   const segment = (active: boolean) => cn(SEGMENT, active ? 'border-border bg-card text-foreground shadow-xs' : 'border-transparent text-muted-foreground hover:text-foreground')
   return (
-    <nav aria-label="Activity scope" data-slot="activity-scope" className="ml-auto inline-flex max-w-full rounded-lg border border-border bg-muted/60 p-1">
+    <nav aria-label="Activity scope" data-slot="activity-scope" className="inline-flex max-w-full rounded-lg border border-border bg-muted/60 p-1">
       {projectId === null ? null : (
         <RouterLink to={`/p/${encodeURIComponent(projectId)}/activity`} aria-current={scope === 'project' ? 'page' : undefined} className={segment(scope === 'project')}>
           <span className="max-w-40 truncate" title={projectName ?? projectId}>{projectName ?? projectId}</span>
@@ -36,6 +38,95 @@ export function ScopeSwitch({ scope, projectId, projectName }: { scope: 'project
         All projects
       </RouterLink>
     </nav>
+  )
+}
+
+/** Explicit project grouping toggle shared by project and global Activity (hearsay-tools/squawk#4376). */
+export function GroupByProjectToggle({ grouped, onToggle }: { grouped: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      data-slot="activity-group-toggle"
+      aria-pressed={grouped}
+      onClick={onToggle}
+      className={cn(
+        'inline-flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11 pointer-coarse:min-h-11',
+        grouped
+          ? 'border-accent-text/60 bg-accent-strong/10 text-foreground'
+          : 'border-border bg-card text-muted-foreground hover:text-foreground',
+      )}
+    >
+      <FolderKanbanIcon aria-hidden="true" className="size-3.5" />
+      <span>Group by project</span>
+    </button>
+  )
+}
+
+/** Subtle header info popover replacing the bottom Legend disclosure (hearsay-tools/squawk#4376). */
+export function ActivityLegendTrigger() {
+  const row = 'flex items-center gap-2'
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-slot="activity-legend"
+          aria-label="Activity legend"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11 pointer-coarse:min-h-11"
+        >
+          <InfoIcon aria-hidden="true" className="size-3.5" />
+          <span>Legend</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 text-[12px] text-muted-foreground">
+        <div className="flex flex-col gap-2">
+          <p className="text-[11px] font-semibold tracking-[0.05em] text-foreground uppercase">Activity legend</p>
+          <div className={row}><StatusDot tone="pending" aria-hidden="true" /><span><strong className="text-foreground">Needs answer</strong> — waiting for your reply</span></div>
+          <div className={row}><StatusDot tone="info" aria-hidden="true" /><span><strong className="text-foreground">Needs review</strong> — ready for diff review or PR</span></div>
+          <div className={row}><StatusDot tone="danger" aria-hidden="true" /><span><strong className="text-foreground">Failed</strong> — stopped with an error</span></div>
+          <div className={row}><StatusDot tone="running" aria-hidden="true" /><span><strong className="text-foreground">Working</strong> — running tools right now</span></div>
+          <div className={row}><StatusDot tone="info" shape="ring" aria-hidden="true" /><span><strong className="text-foreground">Ring</strong> — waiting on CI, peer, or timer</span></div>
+          <div className={row}><StatusDot tone="running" shape="workers" aria-hidden="true" /><span><strong className="text-foreground">Robot</strong> — waiting on its own workers</span></div>
+          <div className={row}><Heartbeat rate={[0, 2, 5, 1, 3, 0, 4, 2]} className="w-[34px]" /><span>Heartbeat: tool calls, last 30 s</span></div>
+          <div className={row}>
+            <svg aria-hidden="true" viewBox="0 0 34 10" className="h-2.5 w-[34px] shrink-0">
+              <path d="M2 5h30" strokeWidth={2} strokeDasharray="6 4" className="stroke-message-peer-accent" />
+            </svg>
+            <span>Open peer request (task → task)</span>
+          </div>
+          <div className={row}>
+            <svg aria-hidden="true" viewBox="0 0 34 10" className="h-2.5 w-[34px] shrink-0">
+              <path d="M2 5h24" strokeWidth={2.2} strokeLinecap="round" strokeDasharray="0 6" className="stroke-message-peer-accent opacity-80" />
+              <circle cx="29.5" cy="5" r="3" strokeWidth={1.6} className="fill-card stroke-message-peer-accent" />
+            </svg>
+            <span>Waiting for a peer to write</span>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/** Shared header action cluster: Legend popover, optional Group by project toggle, and ScopeSwitch. */
+export function ActivityHeaderActions({
+  scope,
+  projectId,
+  projectName,
+  grouped,
+  onToggleGroup,
+}: {
+  scope: 'project' | 'all'
+  projectId: string | null
+  projectName?: string | undefined
+  grouped?: boolean | undefined
+  onToggleGroup?: (() => void) | undefined
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <ActivityLegendTrigger />
+      {onToggleGroup ? <GroupByProjectToggle grouped={Boolean(grouped)} onToggle={onToggleGroup} /> : null}
+      <ScopeSwitch scope={scope} projectId={projectId} projectName={projectName} />
+    </div>
   )
 }
 

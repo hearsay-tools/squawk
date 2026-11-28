@@ -6,6 +6,8 @@ import {
 } from '@open-mercato/cezar-api-client/contract/wait-factories.testkit';
 import { runDelegationSummarySchema } from '@open-mercato/cezar-api-client/contract/delegation'
 import { runWorkflowLabel } from '@open-mercato/cezar-api-client/contract/run-labels'
+import { deriveRunStatePreview } from '@open-mercato/cezar-api-client/contract/runs'
+import { computeWaitingOn } from '@open-mercato/cezar-api-client/contract/waiting-on'
 import type { HumanWaitEntry, RunRecord, RunSummary } from '@open-mercato/cezar-api-client'
 
 /**
@@ -20,11 +22,14 @@ import type { HumanWaitEntry, RunRecord, RunSummary } from '@open-mercato/cezar-
 export function summaryOf(run: RunRecord): RunSummary {
   const currentStepBackend = run.steps.find((step) => step.id === run.currentStepId)?.backend
   const delegation = runDelegationSummarySchema.safeParse(run.delegation)
+  const waitingOn = computeWaitingOn(run)
+  const statePreview = deriveRunStatePreview(run, waitingOn)
   return {
     ...run,
     ...(run.delegation !== undefined && delegation.success ? { delegation: delegation.data } : {}),
     workflowLabel: runWorkflowLabel(run),
     ...(currentStepBackend === undefined ? {} : { currentStepBackend }),
+    ...(statePreview === undefined ? {} : { statePreview }),
   } as unknown as RunSummary
 }
 

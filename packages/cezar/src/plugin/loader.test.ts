@@ -82,7 +82,7 @@ describe('loadPluginFolder', () => {
     const { report, cli } = await load();
     expect(report.loaded).toEqual([{
       name: 'greeter', source: 'host', path: join(dir, 'greeter'),
-      contributions: { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: ['greet', 'wave'], removalSlots: 0, runLifecycleListeners: 0, launchParts: [] },
+      contributions: { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: ['greet', 'wave'], httpRoutes: [], removalSlots: 0, runLifecycleListeners: 0, launchParts: [] },
     }]);
     expect(cli.cliCommand('greet')?.name).toBe('greet');
   });
@@ -144,7 +144,7 @@ describe('loadPluginFolder', () => {
 });
 
 describe('pluginHealth', () => {
-  const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], removalSlots: 0, runLifecycleListeners: 0, launchParts: [] };
+  const none = { runners: [], agentTools: [], waitKinds: [], stepKinds: [], cliCommands: [], httpRoutes: [], removalSlots: 0, runLifecycleListeners: 0, launchParts: [] };
   const failure = (name: string, reason: 'missing-entry' | 'no-setup' | 'import' | 'setup', error: string) =>
     ({ name, source: 'host' as const, path: `/srv/My Plugins/${name}`, reason, error });
   const report = {

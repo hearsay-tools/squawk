@@ -19,7 +19,7 @@ export function homeEntryAuthorization(root: string): EntryAuthorization | undef
 
 export function registryFiles(home: Home): string[] {
   const files = [home.workspaceConfig, `${home.workspaceConfig}.bak`, home.agentAccounts, home.workspaceUiState, home.serverState()];
-  for (const dir of [home.remoteSettings, home.serverInstances]) {
+  for (const dir of [home.remoteSettings, home.mcpTokens, home.serverInstances]) {
     try { files.push(...readdirSync(dir).filter(name => /^[a-zA-Z0-9-]+\.json$/.test(name)).map(name => join(dir, name))); }
     catch { /* An unreadable family must not hide the other registry families. Retry at entry. */ }
   }

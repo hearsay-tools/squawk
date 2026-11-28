@@ -32,12 +32,15 @@ function answer(proc: ReturnType<typeof child>) { proc.stdio[4]!.write('{"id":1,
 
 it('allows a silent cold launch beyond 30 seconds while process counters advance', async () => {
   const children = launcher();
+  const warn = vi.fn();
   const pending = launchChromium('fake', join(dir, 'profile'), {}, {
     readProgress: () => String(Math.floor(Date.now() / 1000)),
+    warn,
   });
   await vi.advanceTimersByTimeAsync(35_000);
   expect(children).toHaveLength(1);
   expect(children[0]!.kill).not.toHaveBeenCalled();
+  expect(warn).not.toHaveBeenCalled();
   answer(children[0]!);
   const result = await pending;
   expect(result.proc).toBe(children[0] as unknown as ChildProcess);
@@ -57,14 +60,16 @@ it('allows a launch beyond 30 seconds while stderr arrives', async () => {
   (await pending).browser.close();
 });
 
-it('kills and retries a silent process with unchanged counters at the silence window', async () => {
+it('kills and retries a silent process with unchanged counters at the silence window, and says so', async () => {
   const children = launcher();
-  const pending = launchChromium('fake', join(dir, 'profile'), {}, { readProgress: () => 'unchanged' }).catch(error => error);
+  const warn = vi.fn();
+  const pending = launchChromium('fake', join(dir, 'profile'), {}, { readProgress: () => 'unchanged', warn }).catch(error => error);
   await vi.advanceTimersByTimeAsync(29_999);
   expect(children[0]!.kill).not.toHaveBeenCalled();
   await vi.advanceTimersByTimeAsync(1);
   expect(children[0]!.kill).toHaveBeenCalledWith('SIGKILL');
   expect(children).toHaveLength(2);
+  expect(warn).toHaveBeenCalledExactlyOnceWith('[hsq] Chromium was silent for 30 s; killed it 30 s after it started and starting it again (attempt 2 of 2, fake)');
   await vi.advanceTimersByTimeAsync(30_000);
   expect(await pending).toMatchObject({ kind: 'timeout', message: expect.stringContaining('silent for 30 s') });
 });

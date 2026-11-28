@@ -116,9 +116,20 @@ function open(id = parentId, suffix = '') {
   reveal()
 }
 
+// Saved receipts render the worker links before GET /runs/:id/relationships answers; each row's
+// status, cleanup state and Clean up control come only with that answer. Wait for it before
+// reading any of them: every row carries its status and the loading note is gone.
+function waitForRelationships(count: number) {
+  browser.waitForFunction(`(() => {
+    const section = document.querySelector(${JSON.stringify(region)})
+    return section !== null && !section.textContent.includes('Loading relationships')
+      && section.querySelectorAll('[data-slot="worker-item"][data-status]').length === ${count}
+  })()`)
+}
+
 it('retains all 32 scoped worker links only on Session, including archived workers', () => {
   open()
-  browser.waitForFunction(`document.querySelectorAll('${region} a').length === 32`)
+  waitForRelationships(32)
   expect(browser.count(`${region} a`)).toBe(32)
   expect(browser.evaluate(`[...document.querySelectorAll('${region} a')].every(a => a.getAttribute('href').startsWith('/p/${project}/tasks/'))`)).toBe(true)
   expect(browser.text(region)).toContain('Cleanup incomplete')
@@ -145,7 +156,7 @@ for (const [width, height] of [[1440, 900], [360, 640]]) for (const theme of ['l
       document.querySelector('[data-slot="appearance-theme"] [data-value="${theme}"]')?.getAttribute('aria-checked') === 'true' &&
       document.documentElement.classList.contains('light') === ${theme === 'light'}`)
     open()
-    browser.waitForFunction(`document.querySelectorAll('${region} a').length === 32`)
+    waitForRelationships(32)
     browser.setReducedMotion()
     // #816: a settled worker row also carries a Clean up button after its link, so the tab
     // stops between the first and last worker link are counted from the rendered controls

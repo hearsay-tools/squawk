@@ -161,18 +161,25 @@ export function useRun(id: string | undefined) {
 /**
  * One run of a NAMED project — what a surface outside `/p/:projectId` has to use.
  */
-export function useProjectRun(projectId: string | undefined, id: string | undefined, enabled = true) {
+export function useProjectRun(
+  projectId: string | undefined,
+  id: string | undefined,
+  enabled = true,
+  options?: { staleTime?: number; refetchOnMount?: boolean | 'always' },
+) {
   return useQuery({
     queryKey: [projectId ?? 'default', 'runs', 'detail', id ?? ''] as const,
     queryFn: ({ signal }) => getRun(runAddress(id as string, { projectId: projectId as string }), { signal }),
     enabled: enabled && Boolean(projectId) && Boolean(id),
+    ...(options?.staleTime !== undefined ? { staleTime: options.staleTime } : {}),
+    ...(options?.refetchOnMount !== undefined ? { refetchOnMount: options.refetchOnMount } : {}),
   })
 }
 
-export function useRunDiff(id: string | undefined) {
+export function useRunDiff(id: string | undefined, projectId?: string) {
   return useQuery({
-    queryKey: queryKeys.runs.diff(id ?? ''),
-    queryFn: ({ signal }) => getRunDiff(id as string, { signal }),
+    queryKey: projectId ? [projectId, 'runs', 'diff', id ?? ''] as const : queryKeys.runs.diff(id ?? ''),
+    queryFn: ({ signal }) => getRunDiff(id as string, { signal, ...(projectId ? { projectId } : {}) }),
     enabled: Boolean(id),
   })
 }

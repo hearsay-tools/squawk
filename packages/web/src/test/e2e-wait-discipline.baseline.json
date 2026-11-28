@@ -158,24 +158,6 @@
       "count": 1
     },
     {
-      "file": "task-list-virtualization.e2e.ts",
-      "rule": "stale-element-handle",
-      "site": "browser.evaluate('window.__collapsePreview.click()')",
-      "count": 1
-    },
-    {
-      "file": "task-list-virtualization.e2e.ts",
-      "rule": "stale-element-handle",
-      "site": "browser.waitForFunction(`window.__collapsePreview.getAttribute('aria-expanded') === 'false'`)",
-      "count": 1
-    },
-    {
-      "file": "task-list-virtualization.e2e.ts",
-      "rule": "stale-element-handle",
-      "site": "if (change === 'preview') browser.waitForFunction('window.__collapsePreview.isConnected')",
-      "count": 1
-    },
-    {
       "file": "task-pr-collection.e2e.ts",
       "rule": "one-shot-input",
       "site": "browser.fill('input[aria-label=\"Search tasks across projects\"]', query)",

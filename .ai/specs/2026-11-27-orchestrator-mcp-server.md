@@ -1,5 +1,5 @@
 # Orchestrator MCP server
-Status: draft
+Status: done
 
 Issues: hearsay-tools/squawk#4401 (Slice 1, stdio `hsq mcp`) and hearsay-tools/squawk#4402 (Slice 2, Streamable HTTP `/api/v1/mcp` with bearer tokens).
 Baseline: `main` at `ba0c3f735` (2026-11-27). Paths are under `packages/cezar/` unless noted.

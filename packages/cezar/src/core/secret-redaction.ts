@@ -2,6 +2,7 @@
  * Best-effort transcript credential redaction by known environment values and token patterns.
  * Enabled by default; CEZ_REDACT_SECRETS=0 opts out.
  */
+import { productEnv } from './product-env.ts';
 
 export const REDACTED = '[REDACTED]';
 
@@ -37,6 +38,9 @@ const SECRET_VALUE_NAME_ALLOW: ReadonlySet<string> = new Set([
  */
 const MIN_SECRET_LEN = 12;
 
+/** Squawk MCP HTTP bearer token shape (always scrubbed, even when host redaction is disabled). */
+export const MCP_TOKEN_PATTERN = /hsq_mcp_[A-Za-z0-9_-]{20,}/g;
+
 /** Well-known credential shapes, independent of the host env. */
 const TOKEN_PATTERNS: readonly RegExp[] = [
   /gh[pousr]_[A-Za-z0-9]{20,}/g, // GitHub PAT / OAuth / server / user / refresh
@@ -49,15 +53,50 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
   /ya29\.[0-9A-Za-z_-]+/g, // Google OAuth access token
   /xox[baprs]-[0-9A-Za-z-]{10,}/g, // Slack
   /glpat-[0-9A-Za-z_-]{20,}/g, // GitLab PAT
+  MCP_TOKEN_PATTERN,
 ];
+
+/** Scrub `hsq_mcp_*` bearer token shapes even when general host redaction is disabled. */
+export function redactMcpTokenPattern(text: string): string {
+  return text.includes('hsq_mcp_') ? text.replace(MCP_TOKEN_PATTERN, REDACTED) : text;
+}
 
 /** Matches where any TOKEN_PATTERNS entry matches. With no match, the passes change nothing. */
 const ANY_TOKEN_PATTERN = new RegExp(TOKEN_PATTERNS.map((re) => `(?:${re.source})`).join('|'));
+
+const MAX_RUNTIME_SECRETS = 128;
+const runtimeSecrets = new Set<string>();
+
+/** Register an active runtime bearer token so logs and transcripts never retain it. */
+export function registerRuntimeSecret(value: string): void {
+  const trimmed = value.trim();
+  if (!trimmed || runtimeSecrets.has(trimmed)) return;
+  if (runtimeSecrets.size >= MAX_RUNTIME_SECRETS) {
+    const oldest = runtimeSecrets.values().next().value;
+    if (oldest !== undefined) runtimeSecrets.delete(oldest);
+  }
+  runtimeSecrets.add(trimmed);
+}
+
+/** Clear runtime-registered secrets (test helper). */
+export function clearRuntimeSecrets(): void {
+  runtimeSecrets.clear();
+}
+
+/** Active MCP bearer tokens (env or runtime-verified), longest first. */
+export function activeMcpSecretValues(env: NodeJS.ProcessEnv = process.env): string[] {
+  const values = new Set<string>(runtimeSecrets);
+  const envToken = productEnv('MCP_TOKEN', env)?.trim();
+  if (envToken) values.add(envToken);
+  return [...values].sort((a, b) => b.length - a.length);
+}
 
 /** Collect the concrete secret values present in `env` (deduped, longest
  *  first so a value that contains another is replaced whole). */
 export function collectSecretValues(env: NodeJS.ProcessEnv = process.env): string[] {
   const values = new Set<string>();
+  const envMcpToken = productEnv('MCP_TOKEN', env)?.trim();
+  if (envMcpToken) values.add(envMcpToken);
   for (const [name, value] of Object.entries(env)) {
     if (!value || value.length < MIN_SECRET_LEN) continue;
     if (SECRET_VALUE_NAME_ALLOW.has(name.toUpperCase())) continue;

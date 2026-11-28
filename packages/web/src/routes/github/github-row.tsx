@@ -4,8 +4,8 @@ import { CircleDotIcon, GitPullRequestIcon } from '@/components/design-icons'
 import { getGithubComments } from '@/api/client'
 import { queryKeys } from '@/api/queries'
 import type { GithubItem } from '@open-mercato/cezar-api-client'
+import { RelativeTime } from '@/components/data-primitives'
 import { ChecksGlyph, CommentCount, LabelChip } from '@/components/github-item-detail'
-import { shortAge } from '@/lib/format'
 import { githubTaskPrompt } from '@/lib/github-task'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
@@ -90,7 +90,7 @@ export function GithubRow({
         <MetaDot />
         <span data-slot="gh-row-author" className="max-w-full shrink-0 truncate md:min-w-0 md:shrink">{item.author}</span>
         <MetaDot />
-        <time className="shrink-0" dateTime={item.createdAt} title={new Date(item.createdAt).toLocaleString()}>{shortAge(item.createdAt)}</time>
+        <RelativeTime iso={item.createdAt} className="shrink-0" />
         {comments ? (
           <>
             <MetaDot />

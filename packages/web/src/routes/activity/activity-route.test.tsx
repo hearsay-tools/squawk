@@ -56,8 +56,9 @@ describe('ProjectActivityRoute', () => {
     const clock = document.querySelector('[data-slot="activity-clock"]')!
     expect(clock.textContent).toBe('Live· updated just now')
     expect(clock.getAttribute('title')).toContain(Intl.DateTimeFormat().resolvedOptions().timeZone)
-    // The legend is a closed disclosure below the graph, not a permanent column beside it.
-    expect((document.querySelector('[data-slot="activity-legend"]') as HTMLDetailsElement).open).toBe(false)
+    // The legend lives in a subtle header trigger button, and project grouping is an explicit toggle.
+    expect(document.querySelector('[data-slot="activity-legend"]')?.tagName).toBe('BUTTON')
+    expect(document.querySelector('[data-slot="activity-group-toggle"]')?.getAttribute('aria-pressed')).toBe('false')
     expect(chip('needs you')).toBe('1 needs you')
     expect(chip('working')).toBe('1 working')
     expect(chip('waiting')).toBe('1 waiting')
@@ -68,6 +69,8 @@ describe('ProjectActivityRoute', () => {
     expect(screen.getByRole('link', { name: /3 in review/ }).getAttribute('href')).toBe('/p/cezarion/')
     expect(document.querySelector('[data-slot="activity-summary"]')?.getAttribute('aria-live')).toBe('polite')
     expect(document.querySelectorAll('[data-activity-card]')).toHaveLength(4)
+    expect(document.querySelectorAll('[data-slot="activity-decision"]')).toHaveLength(1)
+    expect(document.querySelectorAll('[data-slot="activity-working-row"]')).toHaveLength(3)
     const scope = screen.getByRole('navigation', { name: 'Activity scope' })
     expect(within(scope).getByRole('link', { name: 'cezarion' }).getAttribute('aria-current')).toBe('page')
     expect(within(scope).getByRole('link', { name: 'All projects' }).getAttribute('href')).toBe('/activity')

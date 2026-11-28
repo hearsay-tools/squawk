@@ -99,6 +99,13 @@ response is the fresh snapshot; a recovery failure returns `{error}` with 409.
 They use the normal origin guard and require `localHandoff`; hosted sessions receive 403. Remote-settings grant files are host-CLI-only and receive 403 even locally. GET uses the same read boundary as workspace config. No file content is returned.
 
 Recovery actions apply only to the incident named by `detectedAt`. A newer incident returns 409; an already resolved incident returns the current snapshot without writing. Explicit CLI backup restore can still select retained backups when no incident is open.
+MCP token files (`mcp-tokens/<port>.json`) are also host-CLI-only and receive 403 on home-recovery mutations even locally.
+
+## Plugin HTTP routes and Streamable HTTP MCP (`/api/v1/mcp`)
+
+Non-RPC plugin HTTP routes register through `SquawkPluginApi.registerHttpRoute` (`core/http-route-registry.ts`), seal at runtime boot (`boot.ts`), and mount in `server/server.ts` outside `AppType` RPC inference, behind the global `/api/*` request-origin guard and before the SPA catch-all (hearsay-tools/squawk#4402).
+
+The bundled `mcp` feature (`features/mcp/http.ts`) mounts stateless Streamable HTTP (`WebStandardStreamableHTTPServerTransport`, `sessionIdGenerator: undefined`, `keepAliveMs: 15_000`) at `POST /api/v1/mcp`, calling the shared `task-cli` operations in-process via `app.fetch` (synthetic loopback `Host`, no `Origin`). It rejects any `Origin` header (`403`), enforces a 1 MiB body cap (`413`), returns `404` when no token is configured for the cockpit port (or `HSQ_MCP_TOKEN`), verifies `Authorization: Bearer <token>` with SHA-256 + `crypto.timingSafeEqual` (`401` + `WWW-Authenticate: Bearer` on missing/invalid/Basic auth), and returns `405` (`Allow: POST`) on non-`POST` methods. Project-scoped tokens filter `project_list` and reject any `task_*` call targeting another project or `project: "all"`.
 
 A committed migrated home also reports `legacy-change` rows
 with `canImport`. POST `/home/recovery/import` takes the same `{file, detectedAt}` and

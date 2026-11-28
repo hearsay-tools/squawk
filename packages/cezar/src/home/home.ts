@@ -19,6 +19,8 @@ export interface Home {
   readonly workspaceUiState: string;
   readonly agentAccounts: string;
   readonly remoteSettings: string;
+  /** Per-port hashed MCP bearer token files, `<config>/mcp-tokens/<port>.json`. */
+  readonly mcpTokens: string;
   readonly serverInstances: string;
   readonly versions: string;
   readonly bin: string;
@@ -65,6 +67,7 @@ export function kindHomePaths(roots: HomeRoots, layout: HomeLayout, platform: No
   return Object.freeze(Object.defineProperties(paths, {
     config: { value: config }, state: { value: state }, data: { value: data },
     runtime: { value: roots.runtime }, layout: { value: layout }, plugins: { value: join(config, 'plugins') },
+    mcpTokens: { value: join(config, 'mcp-tokens') },
   })) as Home;
 }
 

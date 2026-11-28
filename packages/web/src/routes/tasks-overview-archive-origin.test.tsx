@@ -289,14 +289,14 @@ describe('TasksOverview — status groups and origin (hearsay-tools/cezarion#161
     expect(rowIds()).toEqual(['/tasks/old'])
   })
 
-  it('names the origin under each title, falling back to the recorded automation id', () => {
+  it('shows an automation badge only on automation tasks, falling back to the recorded automation id', () => {
     renderOverview({ runs: [run({ id: 'mine' }), automated({ id: 'named' })], automationName: () => undefined }, false)
-    const origins = [...document.querySelectorAll('[data-slot="task-summary-row"] [data-slot="task-origin"]')].map((line) => line.textContent)
-    expect(origins).toContain('Direct task')
-    expect(origins).toContain('nightly')
+    const badges = [...document.querySelectorAll('[data-slot="task-summary-row"] [data-slot="task-automation-badge"]')].map((line) => line.textContent)
+    expect(badges).toEqual(['nightly'])
+    expect(document.querySelector('[data-slot="tasks-summary"]')?.textContent).not.toContain('Direct task')
     cleanup()
     renderOverview({ runs: [automated()], automationName: (id) => (id === 'nightly' ? 'Nightly health' : undefined) }, false)
-    expect(document.querySelector('[data-slot="task-origin"]')?.textContent).toBe('Nightly health')
+    expect(document.querySelector('[data-slot="task-automation-badge"]')?.textContent).toBe('Nightly health')
   })
 
   it('finds a task by its automation name', () => {
@@ -305,10 +305,10 @@ describe('TasksOverview — status groups and origin (hearsay-tools/cezarion#161
     expect(rowIds()).toEqual(['/tasks/auto'])
   })
 
-  it('previews the latest progress inline with Open task, and says when it cannot', async () => {
+  it('previews the latest progress in the Usage popover with Open task, and says when it cannot', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('# Handoff\n\n## Progress log\n\n- 10:02 — tests pass\n', { status: 200 })))
     renderOverview({ runs: [run({ id: 'p', title: 'Preview me', status: RUN_STATUS.failed, error: 'exit 1' })] }, false)
-    fireEvent.click(screen.getByRole('button', { name: 'Show resources for Preview me' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for Preview me' }))
     const preview = document.querySelector('[data-slot="task-preview"]') as HTMLElement
     expect(within(preview).getByRole('status').textContent).toBe('Loading latest progress…')
     expect(await within(preview).findByText('10:02 — tests pass')).toBeTruthy()
@@ -318,7 +318,7 @@ describe('TasksOverview — status groups and origin (hearsay-tools/cezarion#161
     cleanup()
     vi.stubGlobal('fetch', vi.fn(async () => new Response('gone', { status: 404 })))
     renderOverview({ runs: [run({ id: 'q', title: 'No journal' })] }, false)
-    fireEvent.click(screen.getByRole('button', { name: 'Show resources for No journal' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Usage and telemetry for No journal' }))
     expect(await screen.findByText('Latest progress is unavailable.')).toBeTruthy()
   })
 

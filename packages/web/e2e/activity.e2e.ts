@@ -12,6 +12,7 @@ import { AgentBrowser, bootProjectId, squawkCli, fixtureServeEnv } from './agent
 import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './fixture-server'
 import { pollFor, waitForStatus } from './poll'
 import { seedRuns } from './seed-runs'
+import { settleVisual, waitForSettledSample } from './visual-ready'
 // fixture-server starts: 1
 
 /**
@@ -194,7 +195,7 @@ describe('activity view', () => {
 
     expect(before.cards.running?.verb).toBe('Running')
     expect(before.cards.sender).toEqual({ verb: 'Waiting for reply', lines: [`Waiting for a reply from ${titles.recipient}`] })
-    expect(before.cards.recipient).toEqual({ verb: 'Needs you', lines: [`${titles.sender} waits for your reply`, `${titles.waiter} waits for you to write`] })
+    expect(before.cards.recipient).toEqual({ verb: 'Needs answer', lines: [`${titles.sender} waits for your reply`, `${titles.waiter} waits for you to write`] })
     expect(before.cards.waiter).toEqual({ verb: 'Waiting for a peer', lines: [`Waiting for a message from ${titles.recipient}`] })
     expect(before.waitLine).toBe(true)
     expect(before.cards.parent).toEqual({ verb: 'Waiting for workers', lines: [`${titles.worker} waits for your reply`] })
@@ -205,6 +206,20 @@ describe('activity view', () => {
     expect(before.rail.find(entry => entry.id === peerRequest.id)?.text).toContain(peerRequest.text)
     expect(before.rail.find(entry => entry.id === familyRequest.id)?.text).toContain(familyRequest.text)
     expect(before.openChip).toBe('2')
+
+    // Clicking Answer opens the inline triage drawer on Activity without navigating away.
+    browser.click(`[data-activity-card="${recipientId}"] [data-slot="activity-triage-trigger"]`)
+    expect(browser.waitForValue<boolean>(`(() => {
+      const drawer = document.querySelector('[data-slot="activity-triage-drawer"]');
+      const closeBtn = drawer?.querySelector('button[aria-label="Close triage drawer"]');
+      if (!drawer || !closeBtn || !drawer.textContent.includes('Ship the contract before the migration?')) return false;
+      const drawerRect = drawer.getBoundingClientRect();
+      const closeRect = closeBtn.getBoundingClientRect();
+      return closeRect.width > 0 && closeRect.right <= window.innerWidth && Math.abs(drawerRect.right - window.innerWidth) <= 1;
+    })()`, undefined, { failure: 'clicking Answer never opened the triage drawer inside the viewport with the question' })).toBe(true)
+    expect(browser.waitForValue<string>('location.pathname')).toBe(`/p/${project}/activity`)
+    browser.click('[data-slot="activity-triage-drawer"] button[aria-label="Close triage drawer"]')
+    expect(browser.waitForValue<boolean>(`document.querySelector('[data-slot="activity-triage-drawer"]') === null`)).toBe(true)
 
     // Cancelling the recipient stores `cancelled` in the sender's ledger, and the topic sends the
     // next snapshot. The view must drop the line and the rail entry without a reload.
@@ -221,24 +236,58 @@ describe('activity view', () => {
     expect(after.openChip).toBe('1')
   })
 
-  it('lists the project as a panel of pills in the global view, and the scope switch moves between views', () => {
+  it('shows the unified supervision queue in the global view with project grouping and scope switching', () => {
     browser.goto(`${base}/activity`)
-    const panel = `[data-slot="activity-panel"][data-project="${project}"]`
-    const pills = browser.waitForValue<Record<string, string | null>>(`(() => {
-      const panel = document.querySelector(${JSON.stringify(panel)});
-      if (!panel) return null;
-      const verb = id => panel.querySelector('[data-activity-pill="' + id + '"] [data-slot="activity-verb"]')?.textContent?.trim() ?? null;
+    const rows = browser.waitForValue<Record<string, string | null>>(`(() => {
+      const verb = id => document.querySelector('[data-activity-row="' + id + '"] [data-slot="activity-verb"]')?.textContent?.trim() ?? null;
       const facts = { running: verb(${JSON.stringify(runningId)}), parent: verb(${JSON.stringify(parentId)}), sender: verb(${JSON.stringify(senderId)}) };
       return Object.values(facts).every(Boolean) ? facts : null;
-    })()`, undefined, { failure: 'the global view never listed the project panel with its pills' })
-    expect(pills.running).toBe('Running')
-    expect(pills.parent).toBe('Waiting for workers')
+    })()`, undefined, { failure: 'the global view never listed the supervision rows' })
+    expect(rows.running).toBe('Running')
+    expect(rows.parent).toBe('Waiting for workers')
+
+    browser.click('[data-slot="activity-group-toggle"]')
+    expect(browser.waitForValue<boolean>(`document.querySelector('[data-slot="activity-project-group"][data-project="${project}"]') !== null`))
+      .toBe(true)
 
     browser.click(`[data-slot="activity-scope"] a[href="/p/${project}/activity"]`)
     expect(browser.waitForValue<string>(`document.querySelector('[data-route="activity"] [data-activity-card="${parentId}"]') ? location.pathname : null`))
       .toBe(`/p/${project}/activity`)
     browser.click('[data-slot="activity-scope"] a[href="/activity"]')
-    expect(browser.waitForValue<string>(`document.querySelector('[data-route="activity-global"] ${panel}') ? location.pathname : null`))
+    expect(browser.waitForValue<string>(`document.querySelector('[data-route="activity-global"] [data-activity-row="${parentId}"]') ? location.pathname : null`))
       .toBe('/activity')
+  })
+
+  it('keeps dark, light, and 360x640 mobile layouts free of horizontal overflow', () => {
+    browser.goto(`${base}/activity`)
+    browser.waitForValue<boolean>(`document.querySelector('[data-activity-row="${parentId}"]') !== null`)
+    const darkBg = browser.waitForValue<string>('getComputedStyle(document.body).backgroundColor')
+    const lightBg = browser.waitForValue<string>(`(() => {
+      document.documentElement.classList.add('light');
+      return getComputedStyle(document.body).backgroundColor;
+    })()`)
+    expect(lightBg).not.toBe(darkBg)
+    browser.waitForValue<boolean>(`(() => { document.documentElement.classList.remove('light'); return true; })()`)
+
+    browser.setViewport(360, 640)
+    settleVisual(browser, '[data-route="activity-global"]', { idle: true })
+    const mobile = waitForSettledSample<{ overflow: boolean; toggleHeight: number; arcsHidden: boolean }>(
+      browser,
+      `(() => {
+        const toggle = document.querySelector('[data-slot="activity-group-toggle"]');
+        const arcs = document.querySelector('[data-slot="activity-margin-arcs"]');
+        return {
+          overflow: document.documentElement.scrollWidth > window.innerWidth,
+          toggleHeight: toggle ? Math.round(toggle.getBoundingClientRect().height) : 0,
+          arcsHidden: !arcs || getComputedStyle(arcs).display === 'none',
+        };
+      })()`,
+      () => true,
+      '[data-route="activity-global"]',
+    )
+    expect(mobile.overflow).toBe(false)
+    expect(mobile.toggleHeight).toBeGreaterThanOrEqual(44)
+    expect(mobile.arcsHidden).toBe(true)
+    browser.setViewport(1440, 900)
   })
 })

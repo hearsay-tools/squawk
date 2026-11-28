@@ -44,14 +44,14 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 
 ## Steps
 
-| Step | What | State on 2026-11-26 |
+| Step | What | State on 2026-11-27 |
 | --- | --- | --- |
 | 0 | Draw the line: define the core, add the layer map and `cez/layer-import` | Done: hearsay-tools/squawk#3706, ADR 0065 |
 | 1 | Runners become definitions that register themselves | Done: epic hearsay-tools/squawk#3824, [spec](2026-11-18-runner-definitions.md), [ADR 0067](../../docs/adr/0067-register-each-runner-as-one-definition.md) |
 | 2 | A typed run lifecycle, and a narrower run store | Done: epic hearsay-tools/squawk#4007, [spec](2026-11-21-run-lifecycle-and-store-ports.md), [ADR 0068](../../docs/adr/0068-publish-a-run-lifecycle-and-reach-the-run-store-through-ports.md) |
 | 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Done: epic hearsay-tools/squawk#4152, [spec](2026-11-23-open-registries-and-tables.md), [ADR 0069](../../docs/adr/0069-adopt-register-then-seal-registries-for-extension-tables.md) |
 | 4 | Loader and package format | Done (first version, host folder only): epic hearsay-tools/squawk#4188, [spec](2026-11-24-plugin-loader-and-runner-kit.md), [ADR 0070](../../docs/adr/0070-load-host-folder-plugins-and-export-the-runner-kit.md); self-contained runner folders done (epic hearsay-tools/squawk#4232, [spec](2026-11-25-self-contained-runner-folders.md), [ADR 0071](../../docs/adr/0071-keep-runner-folders-self-contained.md)); project plugins, a trust gate and npm or git installation wait for a later epic |
-| 5 | Move features out of the core, smallest first | First epic done: hearsay-tools/squawk#4309 ([spec](2026-11-26-launch-slot-and-bundled-jobs.md), [ADR 0072](../../docs/adr/0072-add-a-launch-slot-and-load-bundled-feature-plugins.md)), launch slot and `jobs` as the first bundled feature plugin. Later epics (HTTP routes and server start/stop slots) are not filed |
+| 5 | Move features out of the core, smallest first | First epic done: hearsay-tools/squawk#4309 ([spec](2026-11-26-launch-slot-and-bundled-jobs.md), [ADR 0072](../../docs/adr/0072-add-a-launch-slot-and-load-bundled-feature-plugins.md)), launch slot and `jobs` as the first bundled feature plugin. Second epic filed: hearsay-tools/squawk#4420, server slots and automations as the first bundled feature with routes that the cockpit calls. Later epics are not filed |
 | 6 | Cockpit slots | Not filed |
 
 Steps 0 to 3 pay off with no outside plugin: the code is modular and every change is internal.
@@ -67,6 +67,10 @@ as a feature layer; the [core layer map spec](2026-11-16-core-layer-map.md) reco
 changed. The account contract lives in each runner's definition and in the run engine, so a
 runner that loads as a plugin gets account support with no accounts plugin.
 hearsay-tools/squawk#3871 and hearsay-tools/squawk#3872 are closed as not planned.
+
+Remote execution is on the roadmap (owner decision, 2026-11-27): the agent of a task runs on
+another host than the cockpit. It is a track beside the steps, not a numbered step.
+[Track: remote execution](#track-remote-execution) describes it.
 
 ### Step 1: runner definitions
 
@@ -247,12 +251,21 @@ selects 1,191 test files (1,187 at baseline `a1bfe21d2`, +4 from new tests) and
 
 The other three features that use the launch slot each have a server part. Webhooks is tied
 to task start and to the project settings routes. Artifacts has routes, a WebSocket topic and
-an index that starts with the server. Automations has routes, a scheduler and a store for each project, and it starts tasks.
-The next epic therefore adds a slot for HTTP routes and for server start and stop, with the
-first feature that needs it. The typed client is computed from a static chain of routes in
-`server/server.ts`, so that epic's spec decides how the client keeps a bundled feature's
-routes. Automations is the proposed first feature: its cockpit page already hides when the
-feature is off.
+an index that starts with the server. Automations has routes, a scheduler and a store for each
+project, and it starts tasks.
+
+The second epic (hearsay-tools/squawk#4420, filed on 2026-11-27) adds the server slots and moves
+automations: HTTP routes that the cockpit's typed client covers, server start and stop, and
+state for each project. Automations is first because its cockpit page already hides when the
+feature is off. A measurement at `259ec2f8c` found 11 production files outside
+`automations/` that import it; the epic's proof is that none is left.
+
+The epic builds on the MCP work. `features/mcp/` is the second bundled feature
+(hearsay-tools/squawk#4401). hearsay-tools/squawk#4402 added the first HTTP route registration
+to the plugin API (`registerHttpRoute`): one handler on one path, outside the typed client. The
+typed client is computed from a static chain of routes in `server/server.ts`, so the epic's
+spec decides how the client keeps a bundled feature's routes. The epic extends that
+registration and adds no second route registry.
 
 ### Step 6: cockpit slots
 
@@ -264,6 +277,52 @@ First the server describes slots as data: a navigation item, a settings section,
 Then a plugin panel is HTML in the sandboxed frame that the report reader uses
 ([ADR 0057](../../docs/adr/0057-run-report-scripts-in-a-nested-opaque-frame.md)). No outside
 React component loads into the cockpit bundle.
+
+### Track: remote execution
+
+A runner says which agent CLI runs. An execution host says where it runs. Today the second
+answer is always the host that runs Squawk. Hosted mode (`HSQ_REMOTE=1`) serves the cockpit to
+a remote browser, and every task still runs on the cockpit's host.
+
+Two shapes give remote execution, and one does not exclude the other:
+
+- **Several Squawk hosts.** Each host runs its own tasks, and an outside orchestrator drives
+  them. The orchestrator MCP server ([spec](2026-11-27-orchestrator-mcp-server.md)) is the first
+  part: `hsq mcp` over SSH (hearsay-tools/squawk#4401) and an HTTP endpoint with bearer tokens
+  (hearsay-tools/squawk#4402). One cockpit view over several hosts is not designed.
+- **An execution host.** One cockpit and one run store, and the agent of a task runs on another
+  machine. Nothing exists for this shape.
+
+The plugin API does not give the second shape. A runner that loads as a plugin still starts its
+CLI on the cockpit's host, because the rest of a task is local to that host:
+
+- The worktree, the handoff file, the artifact directory and the temp directory are paths on it.
+- The agent tools reach the run engine through a local socket.
+- `hsq worker` accepts a loopback address only (`delegation/cli.ts`).
+- The proofs before a cleanup
+  ([ADR 0032](../../docs/adr/0032-prove-process-and-workspace-ownership-before-cleanup.md))
+  read process ids and `/proc`.
+
+A text search at `259ec2f8c` on 2026-11-27 counts the non-test service files that do this
+work: 54 import `node:child_process` (11 of them under `runners/`), 32 import
+`git-command.ts`, and 20 read `/proc` or probe a process id. The counts are approximate.
+
+The missing seam for the second shape is an execution host: one interface in front of the
+workspace, Git, files, processes and the tool connection. The proposal follows the method of
+the steps:
+
+- A lint rule with a shrink-only list draws the line, as step 0 did for the core: a file
+  reaches the host only through the interface.
+- The local host is the built-in implementation. A default install does not change.
+- Another kind of host registers through the plugin API, as a runner does.
+- The run engine, the run store, the waits and the cockpit stay on the host that runs Squawk.
+
+The hardest design problem of the second shape is a third outcome. "Host unreachable" is not
+"process dead", and every wait, hold and cleanup proof needs an answer for it.
+
+The track is not filed beyond the MCP server. Its first deliverable is a spec with a new
+measurement. The spec also settles the decisions that [Open decisions](#open-decisions) lists
+for it.
 
 ## Evidence
 
@@ -312,6 +371,10 @@ The owner decides each of these in the spec of the step that needs it.
 | Who writes plugins: only this team, or other people | Step 4 | Only this team: the plan ends after step 3 plus step 5 inside the repository, with no loader, trust gate or API promise |
 | Do plugins run inside the Squawk process or in a child process | Step 4 | pi runs an extension with all of pi's permissions. Squawk runs unattended and holds logins, so that answer does not transfer |
 | Is the cockpit part of the core | Step 6 | Decided on 2026-11-26: the shell and the basics are core, and feature views move to their plugins in step 6. The other answer made the core `hsq run` and the API, with the cockpit as the largest built-in plugin |
+| Which shape comes next after the MCP server: a view over several Squawk hosts, an execution host, or both | Remote execution | Several hosts need no change to the run engine. An execution host needs the new seam and the third outcome |
+| How the cockpit reaches an execution host, and who may add one | Remote execution | It sets the trust model. Today only the host operator adds plugins and grants remote settings |
+| What a task does while its host is unreachable | Remote execution | Waits, holds and cleanup proofs each need a third outcome beside "running" and "dead" |
+| Where the agent logins live for a remote task | Remote execution | Accounts are core, and today they are files in the home of the cockpit's host |
 
 ## Not planned
 

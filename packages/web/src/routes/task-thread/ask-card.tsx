@@ -65,7 +65,9 @@ export function formatAskPayload(
 export function AskCard({
   ask,
   run,
+  projectId,
   onShowOrigin,
+  onAnswered,
   renderFreeTextReply,
   onStop,
   stopping = false,
@@ -77,8 +79,12 @@ export function AskCard({
 }: {
   ask: ThreadAsk
   run: ApiRun
+  /** Target project id when triaging from outside `/p/:projectId` (e.g. Global Activity). */
+  projectId?: string | undefined
   /** Jump to the question's original place in the transcript (hearsay-tools/cezarion#1495). */
   onShowOrigin?: (() => void) | undefined
+  /** Called after an answer is delivered cleanly (used by Activity's inline triage drawer). */
+  onAnswered?: (() => void) | undefined
   /** Shared composer rendered inside the embedded free-text reply mode. */
   renderFreeTextReply?: ((props: FreeTextReplyRenderProps) => ReactNode) | undefined
   /** Optional Stop action kept reachable while a pending ask waits for a reply. */
@@ -123,8 +129,10 @@ export function AskCard({
       <PendingAsk
         ask={ask}
         run={run}
+        projectId={projectId}
         surface={surface}
         onShowOrigin={showOrigin}
+        onAnswered={onAnswered}
         renderFreeTextReply={renderFreeTextReply}
         onStop={onStop}
         stopping={stopping}
@@ -255,6 +263,7 @@ function usePendingAskState(
   delivery: AskAnswerDelivery,
   controlledMode?: 'options' | 'reply',
   onModeChange?: (next: 'options' | 'reply') => void,
+  onAnswered?: () => void,
 ) {
   const blocked = delivery.blockedBy !== undefined
   const questions = ask.questions
@@ -308,12 +317,17 @@ function usePendingAskState(
   const hasOtherAnswer = questions.some((question, index) => !question.options || otherAnswers[index] !== undefined)
   const answeredCount = questions.filter((_, index) => questionAnswered(index, selections, otherAnswers)).length
   const allAnswered = answeredCount === questions.length
+  const deliver = async (text: string) => {
+    const error = await delivery.send(text)
+    if (error === undefined) onAnswered?.()
+    return error
+  }
   const sendAll = () =>
-    void delivery.send(formatAskPayload(questions, selections, otherAnswers, additionalComment))
+    void deliver(formatAskPayload(questions, selections, otherAnswers, additionalComment))
   const sendFreeText = () => {
     const trimmed = freeTextDraft.trim()
     if (!trimmed) return
-    void delivery.send(trimmed).then((err) => {
+    void deliver(trimmed).then((err) => {
       if (err === undefined) setFreeTextDraft('')
     })
   }
@@ -324,7 +338,7 @@ function usePendingAskState(
     additionalComment, setAdditionalComment, singleCommentOpen, setSingleCommentOpen,
     freeTextDraft, setFreeTextDraft, contextOpen, setContextOpen,
     onCommentStep, oneTap, setQuestion, clearOtherAnswer, selectOther,
-    hasOtherAnswer, answeredCount, allAnswered, sendAll, sendFreeText,
+    hasOtherAnswer, answeredCount, allAnswered, deliver, sendAll, sendFreeText,
   }
 }
 
@@ -375,7 +389,7 @@ function PendingAskBody({
         onSelect={(labels) => {
           if (state.blocked) return
           state.clearOtherAnswer(activeIndex)
-          if (state.oneTap) void state.delivery.send(formatAnswer(activeQuestion, labels))
+          if (state.oneTap) void state.deliver(formatAnswer(activeQuestion, labels))
           else state.setQuestion(activeIndex, labels)
         }}
         onOtherToggle={() => {
@@ -411,8 +425,10 @@ function PendingAskBody({
 interface PendingAskProps {
   ask: ThreadAsk
   run: ApiRun
+  projectId: string | undefined
   surface: 'transcript' | 'decision-zone'
   onShowOrigin: (() => void) | undefined
+  onAnswered: (() => void) | undefined
   renderFreeTextReply: ((props: FreeTextReplyRenderProps) => ReactNode) | undefined
   onStop: (() => void) | undefined
   stopping: boolean
@@ -431,7 +447,7 @@ function PendingAsk(props: PendingAskProps) {
 }
 
 function PendingAskOwnDelivery(props: Omit<PendingAskProps, 'delivery'>) {
-  const delivery = useAskAnswer(props.run)
+  const delivery = useAskAnswer(props.run, props.projectId)
   return <PendingAskContent {...props} delivery={delivery} />
 }
 
@@ -440,6 +456,7 @@ function PendingAskContent({
   run,
   surface,
   onShowOrigin,
+  onAnswered,
   renderFreeTextReply,
   onStop,
   stopping,
@@ -448,7 +465,7 @@ function PendingAskContent({
   hideReplyBody,
   delivery,
 }: Omit<PendingAskProps, 'delivery'> & { delivery: AskAnswerDelivery }) {
-  const state = usePendingAskState(ask, delivery, controlledMode, onModeChange)
+  const state = usePendingAskState(ask, delivery, controlledMode, onModeChange, onAnswered)
   const contextButtonRef = useRef<HTMLButtonElement>(null)
   const resuming = state.delivery.mode === 'resume'
   const showModeSwitch = surface === 'decision-zone' || renderFreeTextReply !== undefined

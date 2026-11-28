@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { collectSecretValues, redactDeep, redactSecrets, REDACTED } from './secret-redaction.ts';
+import { afterEach, describe, expect, it } from 'vitest';
+import { activeMcpSecretValues, clearRuntimeSecrets, collectSecretValues, redactDeep, redactSecrets, REDACTED, registerRuntimeSecret } from './secret-redaction.ts';
 
 /**
  * #427: credentials must never be persisted to a run's NDJSON transcript.
@@ -51,6 +51,8 @@ describe('collectSecretValues', () => {
 });
 
 describe('redactSecrets', () => {
+  afterEach(() => clearRuntimeSecrets());
+
   it('scrubs concrete host secret values found in text', () => {
     const secrets = collectSecretValues({ GITHUB_TOKEN: 'gho_myrealsecrettoken1234' });
     const out = redactSecrets('run: gh auth uses gho_myrealsecrettoken1234 here', secrets);
@@ -64,10 +66,23 @@ describe('redactSecrets', () => {
       'anthropic: sk-ant-api03-abcdefghijklmnopqrstuvwxyz',
       'aws: AKIAIOSFODNN7EXAMPLE',
       'google: AIzaSyA0123456789abcdefghijklmnopqrstuv',
+      'mcp: hsq_mcp_0123456789abcdefghijABCDEFGHIJ0123',
     ].join('\n');
     const out = redactSecrets(line, []);
-    expect(out).not.toMatch(/ghp_|sk-ant|AKIA|AIza/);
-    expect(out.match(new RegExp(REDACTED.replace(/[[\]]/g, '\\$&'), 'g'))?.length).toBe(4);
+    expect(out).not.toMatch(/ghp_|sk-ant|AKIA|AIza|hsq_mcp_/);
+    expect(out.match(new RegExp(REDACTED.replace(/[[\]]/g, '\\$&'), 'g'))?.length).toBe(5);
+  });
+
+  it('collects and redacts HSQ_MCP_TOKEN and runtime-registered MCP bearer tokens', () => {
+    const envTok = 'custom-static-mcp-secret';
+    const runtimeTok = 'runtime-verified-mcp-secret';
+    registerRuntimeSecret(runtimeTok);
+    const envValues = collectSecretValues({ HSQ_MCP_TOKEN: envTok });
+    expect(envValues).toContain(envTok);
+    const activeValues = activeMcpSecretValues({ HSQ_MCP_TOKEN: envTok });
+    expect(activeValues).toEqual(expect.arrayContaining([envTok, runtimeTok]));
+    const scrubbed = redactSecrets(`headers: Bearer ${envTok} and ${runtimeTok}`, activeValues);
+    expect(scrubbed).toBe(`headers: Bearer ${REDACTED} and ${REDACTED}`);
   });
 
   /** The passes run one pattern at a time, in list order; one alternation would choose other spans. */
