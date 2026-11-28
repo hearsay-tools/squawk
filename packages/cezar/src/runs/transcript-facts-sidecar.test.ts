@@ -1,8 +1,9 @@
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Worker } from 'node:worker_threads';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { commitSidecar, revokeSidecar, SIGNAL_BYTES } from './transcript-facts-sidecar.ts';
+import { COMMIT_SLOT, commitSidecar, RENAMING, revokeSidecar, SETTLED, SIGNAL_BYTES } from './transcript-facts-sidecar.ts';
 
 let dir: string;
 const signal = () => new Int32Array(new SharedArrayBuffer(SIGNAL_BYTES));
@@ -32,4 +33,34 @@ it('a revoke before the rename keeps the old sidecar and removes the temp file',
 it('reports a failed write without throwing', () => {
   const result = commitSidecar(join(dir, 'missing', 'a.facts.json'), '{}', signal());
   expect(result).toMatchObject({ error: expect.stringContaining('ENOENT'), cleaned: true });
+});
+
+it('a revoke waits for a rename under way, however long it takes', async () => {
+  // Slot 2 is this test's handshake; slots 0 and 1 are the job's.
+  const slots = new Int32Array(new SharedArrayBuffer(SIGNAL_BYTES + 4));
+  const renamer = new Worker(`
+    const { workerData } = require('node:worker_threads');
+    const slots = new Int32Array(workerData);
+    Atomics.store(slots, ${COMMIT_SLOT}, ${RENAMING});
+    Atomics.store(slots, 2, 1);
+    Atomics.notify(slots, 2);
+    Atomics.wait(slots, 0, 0, 1_200);
+    Atomics.store(slots, ${COMMIT_SLOT}, ${SETTLED});
+    Atomics.notify(slots, ${COMMIT_SLOT});
+  `, { eval: true, workerData: slots.buffer });
+  try {
+    // Real time: the rename outlasts any short bound a revoke might take.
+    await Atomics.waitAsync(slots, 2, 0, 30_000).value; // bound: hang guard if the worker never starts
+    const started = performance.now();
+    revokeSidecar(slots);
+    expect(Atomics.load(slots, COMMIT_SLOT)).toBe(SETTLED);
+    expect(performance.now() - started).toBeGreaterThan(1_000);
+  } finally { await renamer.terminate(); }
+});
+
+it('a revoke after the worker exited does not wait for its rename', () => {
+  const slots = signal();
+  Atomics.store(slots, COMMIT_SLOT, RENAMING);
+  revokeSidecar(slots, false);
+  expect(Atomics.load(slots, COMMIT_SLOT)).toBe(RENAMING);
 });

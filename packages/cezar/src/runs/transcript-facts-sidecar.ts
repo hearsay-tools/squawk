@@ -8,14 +8,12 @@ import { renameSync, rmSync, writeFileSync } from 'node:fs';
 
 /** Int32 slots of a job's shared signal buffer. */
 export const RESULT_SLOT = 0;
-const COMMIT_SLOT = 1;
+export const COMMIT_SLOT = 1;
 export const SIGNAL_BYTES = 8;
 const OPEN = 0;
-const RENAMING = 1;
-const SETTLED = 2;
+export const RENAMING = 1;
+export const SETTLED = 2;
 const REVOKED = 3;
-// bound: one rename by a live worker; reached only when it dies mid-rename.
-const RENAME_WAIT_MS = 1_000;
 
 /** What the worker did with the sidecar it was asked to commit. */
 export type SidecarCommit = { written: boolean } | { error: string; cleaned: boolean };
@@ -46,9 +44,11 @@ export function commitSidecar(path: string, serialized: string, signal: Int32Arr
 }
 
 /** Index side: after this returns, the worker renames no sidecar for this job. A rename already
- *  under way finishes first, so a caller that removes or rewrites the sidecar next wins. */
-export function revokeSidecar(signal: Int32Array): void {
-  if (Atomics.compareExchange(signal, COMMIT_SLOT, OPEN, REVOKED) === RENAMING) {
-    Atomics.wait(signal, COMMIT_SLOT, RENAMING, RENAME_WAIT_MS);
-  }
+ *  under way finishes first, so a caller that removes or rewrites the sidecar next wins. The wait
+ *  has no deadline: a live worker leaves RENAMING right after its rename, and a timed-out wait
+ *  could let it rename later. Pass `workerAlive` false once the worker has exited; it renames
+ *  nothing more, and its slot may never leave RENAMING. */
+export function revokeSidecar(signal: Int32Array, workerAlive = true): void {
+  if (Atomics.compareExchange(signal, COMMIT_SLOT, OPEN, REVOKED) !== RENAMING || !workerAlive) return;
+  while (Atomics.load(signal, COMMIT_SLOT) === RENAMING) Atomics.wait(signal, COMMIT_SLOT, RENAMING);
 }

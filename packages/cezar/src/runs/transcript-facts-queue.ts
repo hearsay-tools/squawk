@@ -164,9 +164,9 @@ export class TranscriptFactsQueue<T> {
     const lifecycle = new Int32Array(new SharedArrayBuffer(8));
     const worker = new Worker(url, { execArgv: [], workerData: { lifecycle: lifecycle.buffer } });
     this.workerLifecycle = lifecycle;
-    worker.on('error', (error) => { if (this.worker === worker) this.fail(error); });
+    worker.on('error', (error) => { if (this.worker === worker) this.fail(error, true); });
     worker.on('exit', (code) => {
-      if (this.worker === worker) this.fail(new Error(`Transcript facts worker exited (${code})`));
+      if (this.worker === worker) this.fail(new Error(`Transcript facts worker exited (${code})`), true);
     });
     return worker;
   }
@@ -225,9 +225,10 @@ export class TranscriptFactsQueue<T> {
     this.schedule();
   }
 
-  private disposeWorker(): void {
+  /** `exited`: the worker already stopped on its own ('error' or 'exit'). */
+  private disposeWorker(exited = false): void {
     // Revoke before terminating: a terminated worker could leave a rename half-signalled.
-    if (this.active?.signal) revokeSidecar(this.active.signal);
+    if (this.active?.signal) revokeSidecar(this.active.signal, !exited);
     const worker = this.worker;
     const lifecycle = this.workerLifecycle;
     this.worker = undefined;
@@ -249,8 +250,8 @@ export class TranscriptFactsQueue<T> {
     void worker.terminate().catch(() => undefined);
   }
 
-  private fail(error: Error): void {
-    this.disposeWorker();
+  private fail(error: Error, exited = false): void {
+    this.disposeWorker(exited);
     if (this.dispatch) clearImmediate(this.dispatch);
     this.dispatch = undefined;
     for (const job of this.jobs.values()) this.settle(job, error);
