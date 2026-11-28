@@ -64,6 +64,42 @@ function collectProjectGhosts(
   return { requests, folding, waits }
 }
 
+interface SelectedTriageRef {
+  token: number
+  projectId: string
+  runId: string
+  snapshot: DecisionRecord
+}
+
+function resolveTriageSelection(
+  selectedRef: SelectedTriageRef | null,
+  attention: readonly DecisionRecord[],
+): { activeDecision: DecisionRecord | null; resolvedExternally: boolean } {
+  if (!selectedRef) return { activeDecision: null, resolvedExternally: false }
+  const liveDecision = attention.find(
+    (item) => item.runId === selectedRef.runId && item.projectId === selectedRef.projectId,
+  ) ?? null
+  return {
+    activeDecision: liveDecision ?? selectedRef.snapshot,
+    resolvedExternally: liveDecision === null,
+  }
+}
+
+function stageGutterAttrs(gutterWidth: number): {
+  'data-has-arcs': 'true' | undefined
+  style: React.CSSProperties | undefined
+  className: string
+} {
+  if (gutterWidth <= 0) {
+    return { 'data-has-arcs': undefined, style: undefined, className: 'relative flex min-w-0 flex-col gap-6' }
+  }
+  return {
+    'data-has-arcs': 'true',
+    style: { '--activity-arc-gutter': `${gutterWidth}px` } as React.CSSProperties,
+    className: 'relative flex min-w-0 flex-col gap-6 md:pl-(--activity-arc-gutter)',
+  }
+}
+
 function restoreTriageFocus(
   trigger: HTMLButtonElement | null,
   stage: HTMLDivElement | null,
@@ -92,7 +128,7 @@ export function ActivitySupervisionView({
   const rootRef = React.useRef<HTMLDivElement | null>(null)
   const [stageEl, setStageEl] = React.useState<HTMLDivElement | null>(null)
   const selectionSeqRef = React.useRef(0)
-  const [selectedRef, setSelectedRef] = React.useState<{ token: number; projectId: string; runId: string; snapshot: DecisionRecord } | null>(null)
+  const [selectedRef, setSelectedRef] = React.useState<SelectedTriageRef | null>(null)
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const [hover, setHover] = React.useState<{ pointer?: string; focus?: string }>({})
   const [announcement, setAnnouncement] = React.useState<string | undefined>(undefined)
@@ -160,12 +196,10 @@ export function ActivitySupervisionView({
 
   // Track the live Attention item while open, and flag if it leaves Attention externally so the
   // drawer never keeps stale interactive controls mounted for a resolved or cancelled task.
-  const liveDecision = React.useMemo(() => {
-    if (!selectedRef) return null
-    return attention.find((item) => item.runId === selectedRef.runId && item.projectId === selectedRef.projectId) ?? null
-  }, [attention, selectedRef])
-  const activeDecision = liveDecision ?? selectedRef?.snapshot ?? null
-  const drawerResolvedExternally = selectedRef !== null && liveDecision === null
+  const { activeDecision, resolvedExternally: drawerResolvedExternally } = React.useMemo(
+    () => resolveTriageSelection(selectedRef, attention),
+    [attention, selectedRef],
+  )
 
   const handleTriage = React.useCallback((record: DecisionRecord, trigger: HTMLButtonElement | null) => {
     triggerRef.current = trigger
@@ -199,9 +233,7 @@ export function ActivitySupervisionView({
         <div
           ref={setStageEl}
           data-slot="activity-stage"
-          data-has-arcs={gutterWidth > 0 ? 'true' : undefined}
-          style={gutterWidth > 0 ? ({ '--activity-arc-gutter': `${gutterWidth}px` } as React.CSSProperties) : undefined}
-          className={gutterWidth > 0 ? 'relative flex min-w-0 flex-col gap-6 md:pl-(--activity-arc-gutter)' : 'relative flex min-w-0 flex-col gap-6'}
+          {...stageGutterAttrs(gutterWidth)}
         >
           <ActivityMarginArcs
             stage={stageEl}
