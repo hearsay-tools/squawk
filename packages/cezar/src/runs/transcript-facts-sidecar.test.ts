@@ -49,12 +49,11 @@ it('a revoke waits for a rename under way, however long it takes', async () => {
     Atomics.notify(slots, ${COMMIT_SLOT});
   `, { eval: true, workerData: slots.buffer });
   try {
-    // Real time: the rename outlasts any short bound a revoke might take.
+    // Real time: the rename outlasts the one-second bound a revoke once had. The worker settles
+    // only after its sleep, so a revoke that returns early still sees RENAMING.
     await Atomics.waitAsync(slots, 2, 0, 30_000).value; // bound: hang guard if the worker never starts
-    const started = performance.now();
     revokeSidecar(slots);
     expect(Atomics.load(slots, COMMIT_SLOT)).toBe(SETTLED);
-    expect(performance.now() - started).toBeGreaterThan(1_000);
   } finally { await renamer.terminate(); }
 });
 
