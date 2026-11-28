@@ -17,7 +17,7 @@ import {
   type WorkspaceEvent,
   type WorkspaceRunEvent,
 } from './events'
-import { apiPath, getApiScope } from '@open-mercato/cezar-api-client/utils/project-scope'
+import { apiPath, getApiScope, queryScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { healthPayloadSchema } from './health-payload'
 import { queryKeys, useHealthSubscription, workspaceQueryKeys } from './queries'
 import { createRunDetailFetcher, createRunDetailRefresher, dropFinishVerdict, type RunDetailFetcher } from './run-detail-refresh'
@@ -580,6 +580,29 @@ function applyGlobalEvent(
   }
 }
 
+/** Keep explicit-project detail readers (`useProjectRun` on Global Activity) live across projects. */
+function syncExplicitProjectDetail(
+  queryClient: QueryClient,
+  details: { fetcher: Pick<RunDetailFetcher, 'onEvent' | 'forget'>; refreshParent: (id: string, projectId?: string) => void },
+  project: string,
+  event: WorkspaceRunEvent,
+): void {
+  if (project === queryScope()) return
+  if (event.type === 'run-summary') {
+    const run = event.summary
+    details.fetcher.onEvent(run.id, project)
+    if (run.delegation?.role === 'worker') {
+      const parentRunId = run.delegation.parentRunId
+      dropFinishVerdict(queryClient, [project, 'runs', 'detail', parentRunId])
+      details.refreshParent(parentRunId, project)
+    }
+    return
+  }
+  details.fetcher.forget(event.id, project)
+  queryClient.removeQueries({ queryKey: [project, 'runs', 'detail', event.id] })
+  queryClient.removeQueries({ queryKey: [project, 'runs', 'diff', event.id] })
+}
+
 /**
  * Hold one EventSource open for as long as this is mounted.
  *
@@ -724,6 +747,7 @@ export function useGlobalEvents(usage: UsageStore, url: string = SSE_URL): void 
           // `ping` (project null) always passes — liveness is not project-owned.
           if (parsed.project !== null && (parsed.event.type === 'run-summary' || parsed.event.type === 'run-deleted')) {
             runListBatcher.onEvent(parsed.project, parsed.event)
+            syncExplicitProjectDetail(queryClient, details, parsed.project, parsed.event)
           }
           if (parsed.project === null || parsed.project === activeProject(queryClient)) {
             applyGlobalEvent(queryClient, usage, parsed.event, details, relationshipsRefresher)

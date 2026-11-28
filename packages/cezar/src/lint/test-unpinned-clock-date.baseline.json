@@ -226,7 +226,6 @@
     "packages/cezar/src/workspace/config.test.ts": 2,
     "packages/cezar/src/workspace/projects.test.ts": 2,
     "packages/cezar/test/unit/test-env-launcher.test.ts": 2,
-    "packages/contract/src/activity.test.ts": 2,
     "packages/contract/src/ask-schema.test.ts": 1,
     "packages/contract/src/attention.test.ts": 39,
     "packages/contract/src/automation-schedule.test.ts": 17,

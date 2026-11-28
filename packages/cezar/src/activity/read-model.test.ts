@@ -57,13 +57,18 @@ describe('the activity snapshot', () => {
   });
 });
 
-describe('D8: which roots are cards', () => {
+describe('D8 + hearsay-tools/squawk#4376: which roots appear on Live Activity', () => {
   it.each([
     [RUN_STATUS.queued, true], [RUN_STATUS.running, true], [RUN_STATUS.waiting, true],
-    [RUN_STATUS.review, false], [RUN_STATUS.failed, false], [RUN_STATUS.done, false], [RUN_STATUS.cancelled, false],
-  ])('a %s root without a live worker is a card: %s', (status, shown) => {
-    const root = makeRoot({ status });
-    expect(read([root]).tasks.map((task) => task.runId)).toEqual(shown ? [root.id] : []);
+    [RUN_STATUS.review, true], [RUN_STATUS.failed, true], [RUN_STATUS.done, false], [RUN_STATUS.cancelled, false],
+  ])('an unarchived %s root without a live worker appears on Activity: %s', (status, shown) => {
+    const root = makeRoot({ status, finishedAt: status === RUN_STATUS.review || status === RUN_STATUS.failed ? iso(-2_000) : undefined });
+    const tasks = read([root]).tasks;
+    expect(tasks.map((task) => task.runId)).toEqual(shown ? [root.id] : []);
+    if (shown) {
+      expect(tasks[0]!.createdAt).toBe(root.createdAt);
+      if (root.finishedAt) expect(tasks[0]!.finishedAt).toBe(root.finishedAt);
+    }
   });
 
   it('counts review roots for the chip, and never workers', () => {
@@ -83,9 +88,10 @@ describe('D8: which roots are cards', () => {
     expect(shown.wait).toBeUndefined();
     expect(shown.workers.map((worker) => worker.runId).sort()).toEqual([live.id, settled.id].sort());
     if (status === RUN_STATUS.failed) expect(shown.error).toBe('build broke');
-    // The card leaves when its last worker settles.
+    // Done and cancelled roots leave when their last worker settles; review and failed stay in Attention until archived.
     live.status = RUN_STATUS.done;
-    expect(read([root, live, settled]).tasks).toEqual([]);
+    const after = read([root, live, settled]).tasks.map((task) => task.runId);
+    expect(after).toEqual(status === RUN_STATUS.review || status === RUN_STATUS.failed ? [root.id] : []);
   });
 
   it('never lists an archived root, and orders cards by creation', () => {
@@ -132,7 +138,7 @@ describe('unreadable records', () => {
   it('logs a request recipient it cannot read once, and draws the request without its title', () => {
     const sender = makeRoot({ status: RUN_STATUS.waiting });
     // Not a card: only the request read meets it.
-    const recipient = makeRoot({ status: RUN_STATUS.review });
+    const recipient = makeRoot({ status: RUN_STATUS.done });
     const request = addRequest(sender, sender, recipient, { relationship: 'peer' });
     const { snapshots, logged } = twoSnapshots([sender, recipient], { unreadable: [recipient.id] });
     for (const project of snapshots) {

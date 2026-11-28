@@ -89,9 +89,12 @@ export function createRunDetailFetcher(queryClient: QueryClient) {
     }
     if (event.query.state.fetchStatus === 'idle') pump(entry)
   })
+const detailKey = (id: string, projectId?: string) =>
+  (projectId ? ([projectId, 'runs', 'detail', id] as const) : queryKeys.runs.detail(id))
+
   return {
-    onEvent(id: string): void {
-      const key = queryKeys.runs.detail(id)
+    onEvent(id: string, projectId?: string): void {
+      const key = detailKey(id, projectId)
       const query = find(key)
       if (!query) return
       const cacheKey = JSON.stringify(key)
@@ -105,8 +108,8 @@ export function createRunDetailFetcher(queryClient: QueryClient) {
       entry.owed = true
       pump(entry)
     },
-    forget(id: string): void {
-      const cacheKey = JSON.stringify(queryKeys.runs.detail(id))
+    forget(id: string, projectId?: string): void {
+      const cacheKey = JSON.stringify(detailKey(id, projectId))
       clearTimeout(entries.get(cacheKey)?.timer)
       entries.delete(cacheKey)
     },
@@ -126,8 +129,8 @@ export type RunDetailFetcher = ReturnType<typeof createRunDetailFetcher>
 export function createRunDetailRefresher(queryClient: QueryClient) {
   const pending = new Map<string, ReturnType<typeof setTimeout>>()
   return {
-    refresh(id: string): void {
-      const key = queryKeys.runs.detail(id)
+    refresh(id: string, projectId?: string): void {
+      const key = projectId ? ([projectId, 'runs', 'detail', id] as const) : queryKeys.runs.detail(id)
       if (!queryClient.getQueryState(key)) return
       const cacheKey = JSON.stringify(key)
       clearTimeout(pending.get(cacheKey))
