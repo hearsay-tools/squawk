@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runDelegationSummarySchema } from './delegation.ts';
 import { isAutomationTask, runIndexEntrySchema, runSummarySchema, toRunSummary, type RunRecord } from './runs.ts';
 import {
@@ -26,6 +26,14 @@ import {
 
 const PARENT = '11111111-1111-4111-8111-111111111111';
 const REQUEST = '22222222-2222-4222-8222-222222222222';
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-11-27T10:00:00.000Z'));
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 function record(over: Partial<RunRecord> = {}): RunRecord {
   return makeRunRecord({
@@ -224,6 +232,47 @@ describe('toRunSummary', () => {
   it('never writes an undefined-valued key', () => {
     const summary = toRunSummary(record());
     expect(Object.values(summary).every((value) => value !== undefined)).toBe(true);
+  });
+
+  it('derives concise 1-line statePreview for urgent and failed runs', () => {
+    const perm = toRunSummary(record({ status: RUN_STATUS.running, hasPendingPermission: true }));
+    expect(perm.statePreview).toEqual({ kind: 'permission', text: 'Permission requested' });
+
+    const ask = toRunSummary(record({
+      status: RUN_STATUS.waiting,
+      waits: [makeHumanWait({
+        id: '66666666-6666-4666-8666-666666666666',
+        registeredAt: '2026-10-04T10:00:00.000Z',
+        questions: [{ header: 'Scope', question: 'Keep\n  multiline   question?' }],
+      })],
+    }));
+    expect(ask.statePreview).toEqual({ kind: 'ask', text: 'Keep multiline question?' });
+
+    const plainWait = toRunSummary(record({
+      status: RUN_STATUS.waiting,
+      waits: [makeHumanWait({ id: '66666666-6666-4666-8666-666666666667', registeredAt: '2026-10-04T10:00:00.000Z' })],
+    }));
+    expect(plainWait.statePreview).toEqual({ kind: 'ask', text: 'Waiting for your reply' });
+
+    const review = toRunSummary(record({
+      status: RUN_STATUS.review,
+      doneAccepted: { session: 's1', at: '2026-10-04T10:05:00.000Z', seq: 5, openWaits: [], settledWaits: [], summary: 'Shipped unified table\nwith tests.' },
+    }));
+    expect(review.statePreview).toEqual({ kind: 'review', text: 'Shipped unified table with tests.' });
+
+    const reviewFallback = toRunSummary(record({ status: RUN_STATUS.review }));
+    expect(reviewFallback.statePreview).toEqual({ kind: 'review', text: 'Ready for review' });
+
+    const failed = toRunSummary(record({ status: RUN_STATUS.failed, error: 'Build failed\nstack trace' }));
+    expect(failed.statePreview).toEqual({ kind: 'error', text: 'Build failed stack trace' });
+
+    const archivedReview = toRunSummary(record({ status: RUN_STATUS.review, archived: true }));
+    expect('statePreview' in archivedReview).toBe(false);
+
+    const running = toRunSummary(record({ status: RUN_STATUS.running }));
+    expect('statePreview' in running).toBe(false);
+    expect(runSummarySchema.parse(ask)).toEqual(ask);
+    expect(runIndexEntrySchema.parse({ projectId: 'p1', ...review })).toHaveProperty('statePreview', review.statePreview);
   });
 });
 

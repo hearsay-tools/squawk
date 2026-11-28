@@ -207,8 +207,13 @@ export async function runTaskListsBenchmark(values: TaskListBenchmarkOptions = {
           const api: number[] = []
           for (let i = 0; i < 10; i++) { const at = performance.now(); const response = await fetch(`${fixture.origin}/api/v1/projects`); await response.arrayBuffer(); if (!response.ok) throw new Error(`API ${response.status}`); api.push(performance.now() - at) }
           const frames = await evaluate(`new Promise(resolve=>{const owner=document.querySelector('[data-slot="main"]');if(!owner){resolve([]);return}const times=[];let previous=performance.now(),n=0;function frame(now){times.push(now-previous);previous=now;owner.scrollTop+=64;if(++n<${values.smoke ? 2 : 60})requestAnimationFrame(frame);else resolve(times)}requestAnimationFrame(frame)})`)
-          const expand = `document.querySelector('[data-route="${scope === 'project' ? 'tasks' : 'global-tasks'}"] button[aria-label^="Show resources"]')`
-          if (await evaluate(`!!(${expand})`)) interactions.push(await interact('Expand', expand))
+          const expand = `document.querySelector('[data-route="${scope === 'project' ? 'tasks' : 'global-tasks'}"] button[data-task-control="usage"]')`
+          if (await evaluate(`!!(${expand})`)) {
+            interactions.push(await interact('Expand', expand))
+            await page('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', windowsVirtualKeyCode: 27 })
+            await page('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', windowsVirtualKeyCode: 27 })
+            await until(`!document.querySelector('[data-slot="task-telemetry-popover"]')`)
+          }
           const search = `document.querySelector('input[aria-label="Search tasks"],input[placeholder*="Search"]')`
           if (await evaluate(`!!(${search})`)) {
             const at = performance.now(); await click(search); await page('Input.insertText', { text: 'Tab task' }); await frame()

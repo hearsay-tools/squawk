@@ -423,7 +423,7 @@ function disablePasswordManagerLeakDetection(profileDir: string): void {
 /**
  * Starts headless Chromium with its DevTools on a pipe and resolves once the browser answers
  * `Browser.getVersion` on it. A launch that stalls without progress is killed and tried once more
- * (`LAUNCH_ATTEMPTS`); any other failure kills the process and says why at once. While it runs,
+ * (`LAUNCH_ATTEMPTS`), and `warn` says so; any other failure kills the process and says why at once. While it runs,
  * `CHROMIUM_PID_FILE` in the profile's parent names it. Leak detection is turned off in the profile
  * Preferences before spawn so Chrome's leaked-password dialog cannot freeze preview input
  * (hearsay-tools/cezarion#972).
@@ -432,12 +432,18 @@ export async function launchChromium(
   bin: string,
   profileDir: string,
   env: NodeJS.ProcessEnv,
-  opts: { /** Silence window; the overall hang guard is independent. */ timeoutMs?: number; readProgress?: typeof chromiumProcessProgress } = {},
+  opts: {
+    /** Silence window; the overall hang guard is independent. */ timeoutMs?: number;
+    readProgress?: typeof chromiumProcessProgress;
+    /** Where a killed and retried launch is reported; the host's log by default. */ warn?: (line: string) => void;
+  } = {},
 ): Promise<{ proc: ChildProcess; browser: CdpConnection }> {
   mkdirSync(profileDir, { recursive: true });
   disablePasswordManagerLeakDetection(profileDir);
   const timeoutMs = opts.timeoutMs ?? LAUNCH_SILENCE_MS;
+  const warn = opts.warn ?? ((line: string) => console.warn(line));
   for (let attempt = 1; ; attempt++) {
+    const startedAt = Date.now();
     try {
       return await launchOnce(bin, profileDir, env, timeoutMs, opts.readProgress);
     } catch (error) {
@@ -445,6 +451,8 @@ export async function launchChromium(
       if (attempt >= LAUNCH_ATTEMPTS) {
         throw new ChromiumError('timeout', error.stderrTail, `Chromium was silent for ${timeoutMs / 1000} s, twice (${bin})`);
       }
+      const seconds = Math.round((Date.now() - startedAt) / 1000);
+      warn(`[hsq] Chromium was silent for ${timeoutMs / 1000} s; killed it ${seconds} s after it started and starting it again (attempt ${attempt + 1} of ${LAUNCH_ATTEMPTS}, ${bin})`);
     }
   }
 }

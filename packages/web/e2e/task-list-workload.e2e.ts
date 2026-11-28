@@ -19,8 +19,11 @@ it('runs the task-list workload matrix with tiny fixtures and clean shutdown', a
     for (const sample of report.cases) {
       const perProject = sample.view === 'active' ? 3 : 5
       expect(sample.mountedRows).toBe(perProject * (sample.scope === 'global' ? 2 : 1))
-      const representation = sample.scope === 'global' ? (sample.setting === 'grouped' ? 'cards' : 'summary')
-        : sample.width === 360 ? 'cards' : sample.setting === 'detailed' ? 'resources' : 'summary'
+      const representation = sample.width === 360
+        ? 'cards'
+        : sample.scope === 'global'
+          ? (sample.setting === 'grouped' ? 'cards' : 'summary')
+          : (sample.setting === 'detailed' ? 'resources' : 'summary')
       expect(sample.representation).toBe(representation)
       expect(sample.frames).toHaveLength(2)
       expect(sample.scrollFrameP50).toBe(sample.frames[1])

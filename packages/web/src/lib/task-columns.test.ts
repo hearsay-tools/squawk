@@ -15,10 +15,12 @@ describe('TASK_COLUMNS', () => {
     expect(TASK_COLUMNS.map((column) => column.id)).toEqual([
       'status',
       'task',
+      'runner',
       'workflow',
       'branch',
       'diff',
       'reference',
+      'usage',
       'tokens',
       'cost',
       'cpu',
@@ -35,17 +37,19 @@ describe('TASK_COLUMNS', () => {
     }
   })
 
-  it('folds only Branch by default', () => {
+  it('folds only Runner and Branch by default', () => {
     const normalized = normalizeExpandedColumns(undefined)
     expect(
       Object.fromEntries(TASK_COLUMNS.map((column) => [column.id, isColumnExpanded(column.id, normalized)])),
     ).toEqual({
       status: true,
       task: true,
+      runner: false,
       workflow: true,
       branch: false,
       diff: true,
       reference: true,
+      usage: true,
       tokens: true,
       cost: true,
       cpu: true,
