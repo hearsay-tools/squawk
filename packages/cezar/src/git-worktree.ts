@@ -455,9 +455,15 @@ async function isWorktreeRoot(
   return top.ok && canonicalPath(top.stdout.trim()) === canonicalPath(worktreePath);
 }
 
-/** True when the worktree's index contains an initialized submodule (populated gitlink dir),
- *  which causes Git's unforced `worktree remove` to refuse even a clean checkout. */
-async function hasInitializedSubmodule(worktreePath: string): Promise<boolean> {
+/** True when Git's unforced `worktree remove` would refuse this worktree for submodules:
+ *  either the worktree's admin `modules` directory exists (even after `git submodule deinit`,
+ *  matching Git's `validate_no_submodules`) or a tracked gitlink (`160000`) directory is non-empty. */
+async function hasWorktreeSubmodules(worktreePath: string): Promise<boolean> {
+  const modules = await git(worktreePath, ['rev-parse', '--path-format=absolute', '--git-path', 'modules']);
+  if (modules.ok && modules.stdout.trim()) {
+    const info = await lstat(modules.stdout.trim()).catch(() => undefined);
+    if (info?.isDirectory()) return true;
+  }
   const listed = await git(worktreePath, ['--no-optional-locks', 'ls-files', '-s', '-z']);
   if (!listed.ok) return false;
   for (const entry of listed.stdout.split('\0')) {
@@ -498,7 +504,7 @@ export async function inspectWorktreeReclaimBlocker(
   }
   if (uncommittedFiles > 0) return { kind: 'dirty', uncommittedFiles, detachedHead };
   if (detachedHead) return { kind: 'detached-head' };
-  if (await hasInitializedSubmodule(worktreePath)) return { kind: 'submodules' };
+  if (await hasWorktreeSubmodules(worktreePath)) return { kind: 'submodules' };
   return null;
 }
 

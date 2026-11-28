@@ -446,7 +446,7 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
       }
     });
 
-    it('detects a clean initialized submodule as a reclaim blocker and allows explicit discardWork reclaim', async () => {
+    it('detects initialized and deinited submodules as reclaim blockers and allows explicit discardWork reclaim', async () => {
       const subRepo = await mkdtemp(join(repoRoot, '..', 'cez-submod-'));
       try {
         await run('git', ['init', '-b', 'main'], { cwd: subRepo });
@@ -460,7 +460,13 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
         await run('git', ['-c', 'protocol.file.allow=always', 'submodule', 'add', subRepo, 'sub'], { cwd: wtPath });
         await run('git', [...GIT_ID, 'commit', '-q', '-m', 'add submodule'], { cwd: wtPath });
 
-        const listed = Object.fromEntries((await getWorktrees()).worktrees.map((w) => [w.runId, w]));
+        let listed = Object.fromEntries((await getWorktrees()).worktrees.map((w) => [w.runId, w]));
+        expect(listed[id]!.reclaimBlocker).toEqual({ kind: 'submodules' });
+
+        // Even after `git submodule deinit`, Git keeps the worktree admin `modules` directory and
+        // still refuses unforced `worktree remove`, so it must stay blocked until forced.
+        await run('git', ['submodule', 'deinit', '-f', 'sub'], { cwd: wtPath });
+        listed = Object.fromEntries((await getWorktrees()).worktrees.map((w) => [w.runId, w]));
         expect(listed[id]!.reclaimBlocker).toEqual({ kind: 'submodules' });
 
         // Clean reclaim fails with 409 naming submodules.
