@@ -43,11 +43,15 @@ function formatAnswer(question: UiAskQuestion, labels: string[], otherAnswer?: s
  * as its opening prompt. The composer below stays available for a free-form
  * "Other". Resolved cards preserve the context, questions and options.
  */
-export function AskCard({ ask, run, onShowOrigin }: {
+export function AskCard({ ask, run, projectId, onShowOrigin, onAnswered }: {
   ask: ThreadAsk
   run: ApiRun
+  /** Target project id when triaging from outside `/p/:projectId` (e.g. Global Activity). */
+  projectId?: string | undefined
   /** The pinned copy's link back to where the agent asked (hearsay-tools/cezarion#1495). */
   onShowOrigin?: () => void
+  /** Called after an answer is delivered cleanly (used by Activity's inline triage drawer). */
+  onAnswered?: () => void
 }) {
   // An answered card is a static summary — split so the delivery hook (two mutations and a
   // provider-status subscription) only mounts for a question that can still be answered.
@@ -71,7 +75,7 @@ export function AskCard({ ask, run, onShowOrigin }: {
   const showOrigin = ask.placement === 'pinned' && onShowOrigin ? onShowOrigin : undefined
   return <div className="flex flex-col gap-3">{context}{ask.routedToParent
     ? <RoutedAsk ask={ask} onShowOrigin={showOrigin} />
-    : <PendingAsk ask={ask} run={run} onShowOrigin={showOrigin} />}</div>
+    : <PendingAsk ask={ask} run={run} projectId={projectId} onShowOrigin={showOrigin} onAnswered={onAnswered} />}</div>
 }
 
 /** The pinned copy's link to the question's original place in the transcript. */
@@ -166,8 +170,14 @@ function RoutedAsk({ ask, onShowOrigin }: { ask: ThreadAsk; onShowOrigin: (() =>
 }
 
 /** The unanswered card: option chips wired to whichever delivery seam the run's state allows. */
-function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; onShowOrigin: (() => void) | undefined }) {
-  const delivery = useAskAnswer(run)
+function PendingAsk({ ask, run, projectId, onShowOrigin, onAnswered }: {
+  ask: ThreadAsk
+  run: ApiRun
+  projectId?: string | undefined
+  onShowOrigin: (() => void) | undefined
+  onAnswered?: (() => void) | undefined
+}) {
+  const delivery = useAskAnswer(run, projectId)
   const blocked = delivery.blockedBy !== undefined
   const questions = ask.questions
   // One-tap only when there is a single single-select question with options; every
@@ -198,8 +208,13 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
     (_, index) => (selections[index]?.length ?? 0) > 0 || Boolean(otherAnswers[index]?.trim()),
   )
 
+  const deliver = async (text: string) => {
+    const error = await delivery.send(text)
+    if (error === undefined) onAnswered?.()
+  }
+
   const sendAll = () =>
-    void delivery.send(
+    void deliver(
       questions
         .map((q, index) => formatAnswer(q, selections[index] ?? [], otherAnswers[index]))
         .join('\n'),
@@ -234,7 +249,7 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
             onSelect={(labels) => {
               if (blocked) return
               clearOtherAnswer(index)
-              if (oneTap) void delivery.send(formatAnswer(question, labels))
+              if (oneTap) void deliver(formatAnswer(question, labels))
               else setQuestion(index, labels)
             }}
             onOtherToggle={() => {

@@ -154,7 +154,7 @@ export async function getRunHistory(
 export async function getRunHistoryContext(id: string, opts?: ReadOptions): Promise<RunHistoryContext> {
   return unwrapValidated(
     await cez.api.v1.p[':projectId'].runs[':id']['history-context'].$get(
-      { param: { projectId: queryScope(), id: encodeURIComponent(id) } },
+      { param: { projectId: opts?.projectId ?? queryScope(), id: encodeURIComponent(id) } },
       init(opts),
     ),
     `${runPath(id)}/history-context`,
@@ -190,7 +190,16 @@ export async function getRunCommit(
 
 /** The run's worktree diff against its base, as unified-diff text. Also the plain-text
  *  "(no worktree — …)" sentence for runs that executed in the repo working tree. */
-export function getRunDiff(id: string, opts?: ReadOptions): Promise<string> {
+export async function getRunDiff(id: string, opts?: ReadOptions): Promise<string> {
+  if (opts?.projectId !== undefined) {
+    const res = await cez.api.v1.p[':projectId'].runs[':id'].diff.$get(
+      { param: { projectId: opts.projectId, id: encodeURIComponent(id) } },
+      { init: { ...defined({ signal: opts.signal }) }, headers: { accept: 'text/plain' } },
+    )
+    const body = await res.text()
+    if (!res.ok) throw errorFor(res.status, res.statusText, body)
+    return body
+  }
   return requestText(runPath(id, '/diff'), { method: 'GET', ...defined({ signal: opts?.signal }) })
 }
 
@@ -380,10 +389,10 @@ export async function markAllRunsSeen(
 }
 
 /** Close a waiting session gracefully — the run completes as done. 409 when nothing is open. */
-export async function finishRun(id: string): Promise<FinishResponse> {
+export async function finishRun(id: string, projectId?: string): Promise<FinishResponse> {
   return unwrap(
     await cez.api.v1.p[':projectId'].runs[':id'].finish.$post({
-      param: { projectId: queryScope(), id: encodeURIComponent(id) },
+      param: { projectId: projectId ?? queryScope(), id: encodeURIComponent(id) },
     }),
     runPath(id, '/finish'),
   )
@@ -429,10 +438,10 @@ export async function continueRun({ projectId, runId: id }: RunAddress, opts: Co
 /** Draft PR from the review gate (spec 009): push the branch, `gh pr create --draft`; the run
  *  completes as done with the PR badge. On 409 the ApiError's `manual` carries the
  *  `git merge <branch>` fallback to show copyable. */
-export async function createRunPr(id: string): Promise<CreatePrResponse> {
+export async function createRunPr(id: string, projectId?: string): Promise<CreatePrResponse> {
   return unwrap(
     await cez.api.v1.p[':projectId'].runs[':id'].pr.$post({
-      param: { projectId: queryScope(), id: encodeURIComponent(id) },
+      param: { projectId: projectId ?? queryScope(), id: encodeURIComponent(id) },
     }),
     runPath(id, '/pr'),
   )

@@ -127,7 +127,9 @@ const activityRunShape = {
   runner: runnerSchema.optional(),
   model: z.string().optional(),
   currentStepId: z.string().optional(),
+  createdAt: z.string().optional(),
   startedAt: z.string().optional(),
+  finishedAt: z.string().optional(),
   wait: activityWaitSchema.optional(),
   tool: activityToolSchema.optional(),
   /** Tool calls started per second, oldest first. */

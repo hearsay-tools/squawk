@@ -79,9 +79,9 @@ function useProviderSources() {
 }
 
 /** One provider decision for every UI path that reopens an existing agent session. */
-export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null = null) {
+export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null = null, projectId?: string) {
   const { registered, providersPending, providersError, providersReady } = useProviderSources()
-  const config = useConfig()
+  const config = useConfig(projectId)
   const untouched = isStoppedBeforeStarting(run)
   // A task saved on a removed runner has no runner of its own: it starts on the project's default
   // runner, and the server needs that runner named (hearsay-tools/squawk#3715).
@@ -89,7 +89,7 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
   const needsConfig = (untouched && !run.runner) || removed
   // A continuation sends no account: each runner counts when the account the server will continue
   // it on is signed in, not only the default one (hearsay-tools/squawk#4116).
-  const availability = useRunnerAvailability()
+  const availability = useRunnerAvailability(projectId)
   const isWorker = run.delegation?.role === 'worker'
   const storedDefault = config.data?.defaultRunner
   const fallback = planRunner(storedDefault, runnerIds(registered.data)) ?? storedDefault

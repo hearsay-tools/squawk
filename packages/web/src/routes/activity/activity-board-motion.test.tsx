@@ -98,7 +98,7 @@ describe('the board in motion', () => {
     expect(path?.hasAttribute('stroke-dasharray')).toBe(false)
     expect(document.querySelector('[data-slot="activity-line-label"]')?.textContent).toMatch(/^Replied/)
     expect(document.querySelector('[data-slot="activity-request-closing"]')).toBeNull()
-    expect(screen.getByText('No task waits for a reply.')).toBeTruthy()
+    expect(document.querySelector('[data-slot="activity-open-requests"]')).toBeNull()
   })
 
   // Rule: docs/areas/web-ui.md § Activity view (reduced motion, motion cost).
@@ -115,7 +115,6 @@ describe('the board in motion', () => {
     renderBoard(project({ tasks: [A] }), EMPTY_MOTION, [{ id: 2, at: NOW - 12_000, tone: 'success', text: 'Review branch finished' }, { id: 1, at: NOW - 90_000, tone: 'success', text: 'PR 7: check “lint” passed' }])
     const feed = screen.getByRole('complementary', { name: 'Activity details' }).querySelector('[data-slot="activity-just-now"]') as HTMLElement
     expect(Array.from(within(feed).getAllByRole('listitem')).map((li) => li.textContent)).toEqual(['Review branch finished12s', 'PR 7: check “lint” passed1m'])
-    expect(feed.textContent).toMatch(/Watching since \d{2}:\d{2}/)
   })
 
   // Rule: docs/areas/web-ui.md § Activity view (reduced motion, motion cost).

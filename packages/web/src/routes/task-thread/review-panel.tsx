@@ -13,6 +13,7 @@ import { RunDiff } from '@/components/run-diff'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
+import { Link as RouterLink } from 'react-router'
 import { Link } from '@/lib/project-router'
 import { isSubmitShortcut } from '@/lib/use-submit-shortcut'
 import { isHttpUrl } from '@/lib/utils'
@@ -31,7 +32,7 @@ import { useFinishRun } from './use-finish-run'
  * gate never shows a second empty text box above the composer), Draft PR (`POST /pr`; 409 → the copyable `git merge` manual
  * fallback), and ✓ Accept (the shared finish action from use-finish-run.ts).
  */
-export function ReviewPanel({ run }: { run: ApiRun }) {
+export function ReviewPanel({ run, projectId, onResolved }: { run: ApiRun; projectId?: string | undefined; onResolved?: (() => void) | undefined }) {
   return (
     <section data-slot="review-panel" aria-label="Review the changes" className="flex flex-col gap-2.5">
       <div
@@ -47,17 +48,17 @@ export function ReviewPanel({ run }: { run: ApiRun }) {
             </span>
           </p>
         </div>
-        <ReviewActions run={run} />
+        <ReviewActions run={run} projectId={projectId} onResolved={onResolved} />
       </div>
 
-      <RunDiff runId={run.id} />
+      <RunDiff runId={run.id} projectId={projectId} />
     </section>
   )
 }
 
 // ---- notes + exits --------------------------------------------------------------------------
 
-function ReviewActions({ run }: { run: ApiRun }) {
+function ReviewActions({ run, projectId, onResolved }: { run: ApiRun; projectId?: string | undefined; onResolved?: (() => void) | undefined }) {
   const writer = useRunCacheWriter()
   const queryClient = useQueryClient()
   const notesRef = useRef<HTMLTextAreaElement>(null)
@@ -66,8 +67,8 @@ function ReviewActions({ run }: { run: ApiRun }) {
   // on screen, not two competing ones. Once open it stays open until the run leaves review.
   const [notesOpen, setNotesOpen] = useState(false)
   const [manual, setManual] = useState<string | null>(null)
-  const finish = useFinishRun(run.id)
-  const continuation = useContinuationProvider(run)
+  const finish = useFinishRun(run.id, { projectId, onSuccess: onResolved })
+  const continuation = useContinuationProvider(run, null, projectId)
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
 
   // Legacy send-back semantics verbatim (web/app.js `data-action="send-back"`): the notes go
@@ -76,26 +77,28 @@ function ReviewActions({ run }: { run: ApiRun }) {
   const sendBack = useMutation({
     mutationFn: async (text: string) => {
       if (!continuation.canContinue) return null
-      return continueRun(runAddress(run.id), {
+      return continueRun(runAddress(run.id, { projectId }), {
         text: `Review feedback:\n${text}`,
         runner: continuation.runnerOverride,
       })
     },
     // Capture the run's project at the start: navigation must not retarget the refresh.
-    onMutate: () => runAddress(run.id),
+    onMutate: () => runAddress(run.id, { projectId }),
     onSuccess: (result, _text, address) => {
       if (result === null) return
       setNotes('')
       void writer.invalidateAfter('continue', address)
+      onResolved?.()
     },
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
 
   const draftPr = useMutation({
-    mutationFn: () => createRunPr(run.id),
+    mutationFn: () => createRunPr(run.id, projectId),
     onSuccess: (result) => {
       toast(`Draft PR created — ${result.url}`)
       invalidate() // the run completed as done with `pullRequestUrl` — refetch shows PR ↗
+      onResolved?.()
     },
     onError: (error: Error) => {
       if (error instanceof ApiError && error.manual !== undefined) setManual(error.manual)
@@ -142,7 +145,11 @@ function ReviewActions({ run }: { run: ApiRun }) {
       ) : null}
       <div className="flex flex-wrap items-center gap-2 [&_button]:min-h-11 [&_a]:min-h-11">
         <Button asChild variant="outline" size="sm">
-          <Link to={`/tasks/${run.id}/changes`}><EyeIcon aria-hidden="true" />Review changes</Link>
+          {projectId ? (
+            <RouterLink to={`/p/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(run.id)}/changes`}><EyeIcon aria-hidden="true" />Review changes</RouterLink>
+          ) : (
+            <Link to={`/tasks/${run.id}/changes`}><EyeIcon aria-hidden="true" />Review changes</Link>
+          )}
         </Button>
         <Button
           data-slot="review-send-back"

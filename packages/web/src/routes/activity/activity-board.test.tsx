@@ -185,11 +185,11 @@ describe('ActivityBoard', () => {
   })
 
   describe('the rail', () => {
-    it('says no task waits for a reply, and watches from the time the view opened', () => {
+    it('hides zero-item Open requests and Just now panels when empty', () => {
       renderBoard(project({ tasks: [A] }))
-      const rail = screen.getByRole('complementary', { name: 'Activity details' })
-      expect(within(rail).getByText('No task waits for a reply.')).toBeTruthy()
-      expect(rail.querySelector('[data-slot="activity-just-now"]')?.textContent).toMatch(/Watching since \d{2}:\d{2}/)
+      expect(screen.queryByRole('complementary', { name: 'Activity details' })).toBeNull()
+      expect(document.querySelector('[data-slot="activity-open-requests"]')).toBeNull()
+      expect(document.querySelector('[data-slot="activity-just-now"]')).toBeNull()
     })
 
     it('says a request is overdue once its reply deadline passes', () => {

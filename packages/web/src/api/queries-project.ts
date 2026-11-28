@@ -28,10 +28,10 @@ export function useWorkflows() {
   })
 }
 
-export function useRepo() {
+export function useRepo(projectId?: string) {
   return useQuery({
-    queryKey: queryKeys.repo,
-    queryFn: ({ signal }) => getRepo({ signal }),
+    queryKey: projectId ? ([projectId, 'repo'] as const) : queryKeys.repo,
+    queryFn: ({ signal }) => getRepo({ signal }, projectId),
   })
 }
 
@@ -88,10 +88,10 @@ export function useRepoCommit(sha: string | undefined) {
 /** The Settings → Agent defaults knobs (R6 1.5): base branch, default runner, system prompt, per-runner
  *  model presets. Task-start surfaces read this project-scoped query for both runner and model
  *  defaults; `/api/health` is workspace-level and intentionally describes only the boot repo. */
-export function useConfig() {
+export function useConfig(projectId?: string) {
   return useQuery({
-    queryKey: queryKeys.config,
-    queryFn: ({ signal }) => getConfig({ signal }),
+    queryKey: projectId ? ([projectId, 'config'] as const) : queryKeys.config,
+    queryFn: ({ signal }) => getConfig({ signal, ...(projectId ? { projectId } : {}) }),
   })
 }
 

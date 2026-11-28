@@ -123,7 +123,8 @@ function loadedProject(store: ActivityStore, isActive: (runId: string) => boolea
   return { project: { ...empty, loaded: true, inReview, tasks, requests: read.requests, closed: read.closed }, openLedgers: read.openLedgers };
 }
 
-/** D8 from the store's summaries: live roots, and the parents of live workers. */
+/** Roots shown on Live Activity: live roots, parents of live workers, and unarchived human-blocking
+ *  `review` and `failed` roots for the top Attention queue (hearsay-tools/squawk#4376). */
 function activeRoots(store: ActivityStore): { active: Set<string>; inReview: number } {
   const active = new Set<string>();
   const parents = new Set<string>();
@@ -133,7 +134,7 @@ function activeRoots(store: ActivityStore): { active: Set<string>; inReview: num
       if (isLiveStatus(summary.status)) parents.add(summary.delegation.parentRunId);
       continue;
     }
-    if (isLiveStatus(summary.status)) active.add(summary.id);
+    if (isLiveStatus(summary.status) || summary.status === 'review' || summary.status === 'failed') active.add(summary.id);
     if (summary.status === 'review') inReview++;
   }
   for (const id of parents) active.add(id);
@@ -169,7 +170,9 @@ function activityRunBase(run: RunRecord, ledger: (id: string) => ConversationMes
     ...(run.runner === undefined ? {} : { runner: run.runner }),
     ...(run.model === undefined ? {} : { model: run.model }),
     ...(run.currentStepId === undefined ? {} : { currentStepId: run.currentStepId }),
+    ...(run.createdAt === undefined ? {} : { createdAt: run.createdAt }),
     ...(run.startedAt === undefined ? {} : { startedAt: run.startedAt }),
+    ...(run.finishedAt === undefined ? {} : { finishedAt: run.finishedAt }),
     ...(wait === undefined ? {} : { wait }),
     ...(activity?.tool === undefined ? {} : { tool: activity.tool }),
     rate: activity?.rate.length === ACTIVITY_RATE_SECONDS ? [...activity.rate] : Array.from({ length: ACTIVITY_RATE_SECONDS }, () => 0),

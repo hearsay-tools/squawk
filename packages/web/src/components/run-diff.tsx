@@ -25,16 +25,17 @@ const FILE_CAP = 20
 /** Per-file line cap — a generated lockfile must not wedge the page. */
 const DIFF_CLAMP_LINES = 300
 
-export function RunDiff({ runId }: { runId: string }) {
+export function RunDiff({ runId, projectId }: { runId: string; projectId?: string | undefined }) {
   const queryClient = useQueryClient()
-  const diff = useRunDiff(runId)
+  const diff = useRunDiff(runId, projectId)
   // Legacy parity (web/app.js: the review panel "(re)loads the diff on each entry"): both
   // consumers mount this exactly when the reader enters the surface — marking the cached diff
   // stale here refetches it on every re-entry, never showing a pre-send-back diff after the
   // agent worked again.
   useEffect(() => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.runs.diff(runId) })
-  }, [queryClient, runId])
+    const key = projectId ? [projectId, 'runs', 'diff', runId] as const : queryKeys.runs.diff(runId)
+    void queryClient.invalidateQueries({ queryKey: key })
+  }, [projectId, queryClient, runId])
 
   const files = useMemo(() => parseUnifiedDiff(diff.data ?? ''), [diff.data])
   const [showAllFiles, setShowAllFiles] = useState(false)
