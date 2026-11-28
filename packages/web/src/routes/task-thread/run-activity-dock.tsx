@@ -309,7 +309,7 @@ export function activityStatus(run: ApiRun, line: RunStatusLine, workers: Worker
   return {
     allComplete,
     statusText,
-    failed: line.attention.tone === 'danger' || run.status === 'cancelled',
+    failed: line.attention.tone === 'danger',
     glyph: allComplete
       ? <CircleCheckIcon aria-hidden className="size-3.5 shrink-0 text-success" />
       : <StatusDot tone={line.attention.tone} shape={line.attention.shape} pulse={line.attention.pulse} />,
@@ -326,7 +326,7 @@ function usageValues(run: ApiRun, metrics: ReturnType<typeof usageMetricVisibili
 
 /** The status colour both the folded summary and the status row use. */
 function statusTone(activity: SessionActivity) {
-  return activity.allComplete ? 'text-success' : activity.failed && 'text-danger'
+  return activity.allComplete ? 'text-semantic-green' : activity.failed && 'text-semantic-red'
 }
 
 /** The workflow step the folded header and the Workflow row name, through the same steps, index

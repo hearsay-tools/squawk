@@ -4,6 +4,7 @@ import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { Composer } from '@/components/composer/composer'
 import { StatusDot } from '@/components/status-dot'
 import type { deriveAttention } from '@/lib/attention'
+import { runStatusPresentation } from '@/lib/status-semantics'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 
@@ -239,7 +240,7 @@ function DecisionStatusLine({
           attention.bucket === 'permission' ? 'Choose an approval option above to continue'
           // oxlint-disable-next-line cez/attention-bucket-compare-outside-owner -- the composer distinguishes a waiting reply
           : attention.bucket === 'waiting' ? 'The agent is paused, waiting for your reply'
-            : `${attention.label.charAt(0).toUpperCase()}${attention.label.slice(1)} — you can send a message to resume`}
+            : `${runStatusPresentation(run, attention).label} — you can send a message to resume`}
       </div>
     )
   }

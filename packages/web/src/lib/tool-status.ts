@@ -1,15 +1,20 @@
 import type { BackendCheck } from '@open-mercato/cezar-api-client'
-import type { StatusDotTone } from '@/components/status-dot'
+import type { StatusDotShape, StatusDotTone } from '@/components/status-dot'
+import { toolAvailabilityPresentation } from '@/lib/status-semantics'
 
 /**
  * One reading of a probed tool, shared by the desktop Tools menu and the /tools page (the phone's
- * only door to the same probes) so the two surfaces cannot drift: green when present, red when
- * not. The dot is never the only carrier — callers pair it with the words below.
+ * only door to the same probes) so the two surfaces cannot drift: green when installed, neutral
+ * ring with a separate Dry run mode badge when simulated, neutral when an optional CLI is missing,
+ * and danger when a required tool (`git`) is missing.
  */
-export const toolTone = (check: BackendCheck): StatusDotTone => (check.available ? 'success' : 'danger')
+export const toolTone = (check: BackendCheck): StatusDotTone => toolAvailabilityPresentation(check).availability.tone
 
-/** The state word /tools prints beside the dot. */
-export const toolStateLabel = (check: BackendCheck): string => (check.available ? 'Installed' : 'Not installed')
+/** Dot shape for a probed tool: ring when simulated in dry-run mode, filled otherwise. */
+export const toolShape = (check: BackendCheck): StatusDotShape => toolAvailabilityPresentation(check).availability.shape
+
+/** The canonical state word printed beside the dot: `Installed`, `Simulated`, or `Not installed`. */
+export const toolStateLabel = (check: BackendCheck): string => toolAvailabilityPresentation(check).availability.label
 
 /** The server's hint for a missing tool, verbatim; null while the tool works or has none to give. */
 export const toolHint = (check: BackendCheck): string | null => (check.available ? null : (check.hint ?? null))

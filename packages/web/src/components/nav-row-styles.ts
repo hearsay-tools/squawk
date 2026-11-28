@@ -29,7 +29,7 @@ export function navIconClass(isActive: boolean): string {
 
 /* The count chips share the variant letter chip's geometry in fixed px, so a density that
  * shrinks `--spacing` cannot shrink them. */
-const NAV_COUNT_SHAPE = 'ml-auto rounded-[9px] px-[6px] py-px text-[11px] leading-[16px] font-semibold tabular-nums'
+const NAV_COUNT_SHAPE = 'ml-auto rounded-[9px] px-[6px] py-px text-xs leading-[16px] font-semibold tabular-nums'
 
 /**
  * The Tasks unread count: neutral, because unread is news rather than a to-do. On a selected
@@ -61,12 +61,12 @@ export const SIDEBAR_LIST_BODY_CLASS = 'flex flex-col gap-[12px]'
 export const SIDEBAR_LIST_HEADING_CLASS = 'flex h-[26px] items-center pr-[6px] pl-[10px] text-[13px] font-semibold'
 export const SIDEBAR_LIST_GROUP_CLASS = 'flex flex-col gap-px'
 export const SIDEBAR_LIST_UNLABELLED_GROUP_CLASS = 'flex flex-col gap-px'
-export const SIDEBAR_LIST_GROUP_LABEL_CLASS = 'truncate px-[10px] pt-[2px] pb-[4px] text-[11px] font-medium text-soft-foreground'
+export const SIDEBAR_LIST_GROUP_LABEL_CLASS = 'truncate px-[10px] pt-[2px] pb-[4px] text-xs font-medium text-soft-foreground'
 /** A 32px row: 15px icon, 13px label, 10px padding and gap. Add the hover, or a disabled look. */
 export const SIDEBAR_LIST_ROW_CLASS = 'group flex h-[32px] items-center gap-[10px] rounded-[6px] px-[10px] text-[13px] text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring'
 export const SIDEBAR_LIST_ROW_HOVER_CLASS = 'hover:bg-sidebar-row-hover hover:text-foreground'
 export const SIDEBAR_LIST_ICON_CLASS = 'size-[15px] shrink-0 text-soft-foreground group-aria-[current=page]:text-foreground'
-export const SIDEBAR_LIST_COUNT_CLASS = 'ml-auto text-[11.5px] tabular-nums text-soft-foreground'
+export const SIDEBAR_LIST_COUNT_CLASS = 'ml-auto text-xs tabular-nums text-soft-foreground'
 
 /*
  * The same lists as their own phone screen (board "Mobile · same principles", GitHub screen):

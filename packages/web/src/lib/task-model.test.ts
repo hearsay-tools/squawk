@@ -57,12 +57,14 @@ describe('task-model', () => {
       }),
     })
     expect(ask.urgent).toBe(true)
+    expect(ask.status.label).toBe('Needs you')
     expect(ask.statePreview).toEqual({ kind: 'ask', text: 'Approve schema migration?' })
 
     const reviewFallback = projectRunToTaskModel({
       run: makeSummary({ id: 'r-rev', status: RUN_STATUS.review }),
     })
     expect(reviewFallback.urgent).toBe(true)
+    expect(reviewFallback.status.label).toBe('Needs review')
     expect(reviewFallback.statePreview).toEqual({ kind: 'review', text: 'Ready for review' })
 
     const failed = projectRunToTaskModel({

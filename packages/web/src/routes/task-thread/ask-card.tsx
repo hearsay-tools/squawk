@@ -193,7 +193,7 @@ function RoutedAsk({
       data-ask-id={ask.id}
       data-pinned={ask.placement === 'pinned' ? 'true' : undefined}
       data-routed="parent"
-      className="rounded-xl border border-border bg-card px-3 py-2.5"
+      className="rounded-xl border border-card-edge bg-card shadow-card px-3 py-2.5"
     >
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-link-foreground">The agent is asking its parent</span>
@@ -215,7 +215,7 @@ function RoutedAsk({
         {ask.questions.map((question, index) => (
           <div key={question.id ?? index} role="group" aria-label={question.question}>
             <div className="mb-0.5 flex items-center gap-2">
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {question.header}
               </span>
             </div>
@@ -725,12 +725,12 @@ function AskQuestionBlock({
   return (
     <div data-slot="ask-question" role="group" aria-label={question.question}>
       <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="shrink-0 rounded-md bg-accent-strong px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent-strong-foreground">
+        <span className="shrink-0 rounded-md bg-accent-strong px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-accent-strong-foreground">
           {question.header}
         </span>
         <p className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground">{question.question}</p>
         {multiSelect ? (
-          <span className="ms-auto text-[11px] text-soft-foreground">select all that apply</span>
+          <span className="ms-auto text-xs text-soft-foreground">select all that apply</span>
         ) : null}
       </div>
       {options ? (

@@ -118,7 +118,7 @@ export function DesktopActivityHeaderControl(props: ThreadActivityProps) {
   const { run, thread, currentThread, currentComplete, mode, open, onOpenChange } = props
   const facts = useHeaderActivityFacts(run, thread, currentThread, currentComplete)
   const label = triggerAriaLabel(facts, mode)
-  const statusColor = facts.allComplete ? 'text-success' : facts.failed ? 'text-danger' : 'text-foreground'
+  const statusColor = facts.allComplete ? 'text-semantic-green' : facts.failed ? 'text-semantic-red' : 'text-foreground'
 
   const button = (
     <button
@@ -144,17 +144,17 @@ export function DesktopActivityHeaderControl(props: ThreadActivityProps) {
         <span className="hidden max-w-[140px] truncate text-muted-foreground xl:inline">· {facts.activeStepName}</span>
       ) : null}
       {facts.workerCount > 0 ? (
-        <span data-slot="activity-workers-badge" className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground tabular-nums">
+        <span data-slot="activity-workers-badge" className="rounded-full bg-muted px-2 py-0.5 text-xs text-foreground tabular-nums">
           {facts.workerCount} {facts.workerCount === 1 ? 'worker' : 'workers'}
         </span>
       ) : null}
       {facts.agentCounts.total > 0 ? (
-        <span data-slot="activity-subagents-badge" className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground tabular-nums">
+        <span data-slot="activity-subagents-badge" className="rounded-full bg-muted px-2 py-0.5 text-xs text-foreground tabular-nums">
           {facts.agentCounts.done}/{facts.agentCounts.total} agents
         </span>
       ) : null}
       {facts.cost ? (
-        <span data-slot="run-activity-cost" className="font-mono text-[11px] text-muted-foreground tabular-nums">
+        <span data-slot="run-activity-cost" className="font-mono text-xs text-muted-foreground tabular-nums">
           {facts.cost}
         </span>
       ) : null}
@@ -191,7 +191,7 @@ export function MobileActivityHeaderControl(props: ThreadActivityProps) {
   const { run, thread, currentThread, currentComplete, open } = props
   const facts = useHeaderActivityFacts(run, thread, currentThread, currentComplete)
   const label = triggerAriaLabel(facts, 'popover')
-  const statusColor = facts.allComplete ? 'text-success' : facts.failed ? 'text-danger' : 'text-muted-foreground'
+  const statusColor = facts.allComplete ? 'text-semantic-green' : facts.failed ? 'text-semantic-red' : 'text-muted-foreground'
 
   return (
     <ActivityPopover
@@ -217,17 +217,17 @@ export function MobileActivityHeaderControl(props: ThreadActivityProps) {
           <span data-slot="run-activity-status-label" className="truncate">{facts.statusText}</span>
         </span>
         {facts.workerCount > 0 ? (
-          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground tabular-nums">
+          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground tabular-nums">
             {facts.workerCount}w
           </span>
         ) : null}
         {facts.agentCounts.total > 0 ? (
-          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground tabular-nums">
+          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground tabular-nums">
             {facts.agentCounts.done}/{facts.agentCounts.total}
           </span>
         ) : null}
         {facts.cost ? (
-          <span className="ms-auto shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
+          <span className="ms-auto shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
             {facts.cost}
           </span>
         ) : null}

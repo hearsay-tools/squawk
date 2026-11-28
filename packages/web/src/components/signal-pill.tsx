@@ -16,12 +16,12 @@ export const SEGMENT_CLASS: Record<SignalTone, string> = {
   green: 'bg-success text-signal-ink',
 }
 
-/** Segment width in fixed px: 18 alone, 14 each when split, and `9+` widens to 22. */
+/** Segment width in fixed px: 20 alone, 16 each when split, and `9+` widens to 24. */
 function segmentWidth(count: number, segments: number, compact: boolean): number {
-  // `compact` (the mobile menu button, 64px wide): a split pill never widens, so it stays 32px and
-  // clear of the menu icon. `9+` still fits 14px at 10px bold.
-  if (count > 9 && !(compact && segments > 1)) return 22
-  return segments === 1 ? 18 : 14
+  // `compact` (the mobile menu button, 64px wide): a split pill never widens, so it stays 34px and
+  // clear of the menu icon. `9+` fits cleanly at 12px bold.
+  if (count > 9 && !(compact && segments > 1)) return 24
+  return segments === 1 ? 20 : 16
 }
 
 /**
@@ -51,7 +51,7 @@ export function SignalPill({
       // `markHeight - 11px` (25px) at the bottom. `pointer-events-none`: the pill sits over the
       // mark's link and must not eat its click.
       className={cn(
-        'pointer-events-none absolute -right-[4px] box-border flex h-[17px] overflow-hidden rounded-[9px] border-2 border-background',
+        'pointer-events-none absolute -right-[4px] box-border flex h-[19px] overflow-hidden rounded-[10px] border-2 border-background',
         position === 'top' ? '-top-[6px]' : 'top-[25px]',
         className,
       )}
@@ -62,7 +62,7 @@ export function SignalPill({
           data-segment={tone}
           data-count={count}
           style={{ width: segmentWidth(count, shown.length, compact) }}
-          className={cn('flex items-center justify-center text-[10px] leading-[13px] font-bold tabular-nums', SEGMENT_CLASS[tone])}
+          className={cn('flex items-center justify-center text-xs leading-[14px] font-bold tabular-nums', SEGMENT_CLASS[tone])}
         >
           {count > 9 ? '9+' : count}
         </span>

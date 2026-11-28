@@ -136,7 +136,7 @@ function classOverrides(classes: string[], surfaceClasses: Set<string>): ClassOv
   const inheritsSurface = backgrounds.length === 0 || backgrounds.some(c => c === 'bg-transparent' || c.includes('/'))
   const ownColors = classes
     .map(c => c.replace(/^(text-(?:danger|destructive|soft-foreground|pending-strong))\/.+$/, '$1'))
-    .filter(c => /^text-(?:danger|destructive|soft-foreground|pending-strong|muted-foreground|supporting-foreground|link-foreground|foreground|signal-word-red|signal-word-amber)$/.test(c))
+    .filter(c => /^text-(?:danger|destructive|soft-foreground|pending-strong|muted-foreground|supporting-foreground|link-foreground|foreground|signal-word-red|signal-word-amber|semantic-red|semantic-amber|semantic-violet|semantic-green|semantic-info|semantic-conflict)$/.test(c))
   const sizes = classes.filter(c => /^text-(?:xs|sm|base|lg|xl|\d+xl)(?:\/.*)?$|^text-(?:\[|\(length:)/.test(c))
   const weights = classes.filter(c => /^font-(?:thin|extralight|light|normal|medium|semibold|bold|extrabold|black)$|^font-(?:\[|\(weight:)/.test(c))
   return {

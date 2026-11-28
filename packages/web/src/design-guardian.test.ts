@@ -54,7 +54,7 @@ describe('design guardian', () => {
     for (const [name, value] of [...Object.entries(dark), ...Object.entries(light)]) {
       if (reservedPurple.has(value)) {
         expect(
-          name.startsWith('merged') || name === 'running' || name === 'status-running',
+          name.startsWith('merged') || name === 'running' || name === 'status-running' || name === 'semantic-text-violet',
           `${name} still carries reserved purple ${value}`,
         ).toBe(true)
       }

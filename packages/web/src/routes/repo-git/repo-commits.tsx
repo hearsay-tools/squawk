@@ -88,7 +88,7 @@ export function RepoCommitsSection({ repo, info }: { repo: RepoResponse; info: R
  *  subject it does not recognise), never that a person wrote the commit, so it claims nothing about
  *  authorship. Hidden below `md`, where the row has no room beside its subject. */
 function CommitSource({ source }: { source: LogEntry['source'] }) {
-  const cell = 'hidden max-w-[45%] shrink-0 items-center gap-[5px] pr-4 text-[11.5px] text-muted-foreground md:flex'
+  const cell = 'hidden max-w-[45%] shrink-0 items-center gap-[5px] pr-4 text-xs text-muted-foreground md:flex'
   if (!source) {
     return (
       <span data-slot="commit-source" data-source="unknown" className={cell}>

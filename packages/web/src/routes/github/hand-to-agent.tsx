@@ -319,7 +319,7 @@ export function HandToAgent({
           </span>
         ) : null}
       </div>
-      <p className="text-[11px] leading-relaxed text-muted-foreground">{item.kind === 'pr' ? 'PR' : 'Issue'} number and link remain attached to the task. Edit the prompt before starting. Cmd/Ctrl+Enter submits; Enter adds a new line.</p>
+      <p className="text-xs leading-relaxed text-muted-foreground">{item.kind === 'pr' ? 'PR' : 'Issue'} number and link remain attached to the task. Edit the prompt before starting. Cmd/Ctrl+Enter submits; Enter adds a new line.</p>
     </section>
       <div data-slot="gh-handoff-actions" className="mt-[22px] flex flex-wrap items-center gap-2.5">
         {isHttpUrl(item.url) ? <Button asChild variant="outline"><a href={item.url} target="_blank" rel="noopener noreferrer">Open in GitHub</a></Button> : null}
@@ -334,7 +334,7 @@ export function HandToAgent({
         </Button>
         <kbd
           aria-hidden="true"
-          className="rounded-[5px] border border-b-2 border-border bg-card px-[5px] py-px font-mono text-[11px] font-medium text-muted-foreground"
+          className="rounded-[5px] border border-b-2 border-border bg-card px-[5px] py-px font-mono text-xs font-medium text-muted-foreground"
         >
           {submitShortcutHint()}
         </kbd>
@@ -405,7 +405,7 @@ function WorkflowPicker({
           type="button"
           data-slot="gh-workflow-trigger"
           aria-label="Choose a workflow"
-          className={cn(chipClass, value && 'border-foreground/60 font-mono text-[11px] font-semibold text-foreground')}
+          className={cn(chipClass, value && 'border-foreground/60 font-mono text-xs font-semibold text-foreground')}
         >
           <WorkflowIcon size={16} aria-hidden="true" className="size-3 shrink-0 text-accent-icon" />
           <span className="min-w-0 max-w-44 truncate">{value ?? 'workflow'}</span>

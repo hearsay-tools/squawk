@@ -49,7 +49,7 @@ export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
   }
 
   return (
-    <section aria-labelledby="copy-as-cli-heading" data-slot="copy-as-cli" className="min-w-0 max-w-full overflow-hidden rounded-xl border bg-card px-4 py-3.5">
+    <section aria-labelledby="copy-as-cli-heading" data-slot="copy-as-cli" className="min-w-0 max-w-full overflow-hidden rounded-xl border border-card-edge bg-card shadow-card px-4 py-3.5">
       {/* One row at the 320px aside width: heading, the fold toggle, and Copy flush right inside
           the card's padding. The toggle shrinks (the button base sets shrink-0) and truncates
           before Copy would reach the card's edge. */}
@@ -86,7 +86,7 @@ export function CopyAsCliCard({ draft }: { draft: AutomationDraft }) {
       <p role="status" className="mbs-2 text-xs break-words text-muted-foreground">
         {state === 'failed'
           ? 'Could not copy — select the line and copy it by hand.'
-          : <>The definition Save paused would create. <code className="rounded-sm bg-muted px-1 py-px font-mono text-[11px] whitespace-nowrap text-foreground [word-spacing:-0.2em]">{`${productCommand()} automation schema`}</code> prints its shape.</>}
+          : <>The definition Save paused would create. <code className="rounded-sm bg-muted px-1 py-px font-mono text-xs whitespace-nowrap text-foreground [word-spacing:-0.2em]">{`${productCommand()} automation schema`}</code> prints its shape.</>}
       </p>
     </section>
   )

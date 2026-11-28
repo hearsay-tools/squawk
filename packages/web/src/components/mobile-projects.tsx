@@ -68,7 +68,7 @@ export function DrawerIdentity({ version, latestVersion = null }: { version: str
           pushing the Close button out of the row. */}
       {version ? <span data-slot="drawer-version" data-update-available={updateAvailable ? 'true' : undefined}
         title={updateAvailable ? `v${version} — update available: v${latestVersion}` : `v${version}`}
-        className="mt-[14px] min-w-0 truncate text-[11px] leading-none text-soft-foreground">
+        className="mt-[14px] min-w-0 truncate text-xs leading-none text-soft-foreground">
         {updateAvailable ? <StatusDot tone="pending" className="mr-1 inline-block size-[5px] align-middle" /> : null}
         v{version}
       </span> : null}
@@ -121,7 +121,7 @@ function DrawerProjectRow({ project, signal, known, current, onNavigate }: {
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-[2px]">
         <span className="truncate text-[14.5px] leading-tight font-semibold">{project.name}</span>
-        <ProjectStateWords signal={signal} known={known} current={current} slot="drawer-project-state" className="flex-wrap gap-x-[6px] text-[11.5px] leading-tight" />
+        <ProjectStateWords signal={signal} known={known} current={current} slot="drawer-project-state" className="flex-wrap gap-x-[6px] text-xs leading-tight" />
       </span>
       {current ? <CheckIcon aria-hidden="true" className="size-[16px] shrink-0 text-foreground" /> : null}
     </RouterLink>
@@ -200,7 +200,7 @@ export function DrawerGlobal({ onNavigate, tools }: { onNavigate: () => void; to
           </span>
           <span className="flex min-w-0 flex-col">
             <span>Tools</span>
-            {tools.note ? <span id="drawer-tools-note" data-slot="drawer-tools-note" className="text-[11.5px] leading-tight text-soft-foreground">{tools.note}</span> : null}
+            {tools.note ? <span id="drawer-tools-note" data-slot="drawer-tools-note" className="text-xs leading-tight text-soft-foreground">{tools.note}</span> : null}
           </span>
         </RouterLink>
       ) : null}

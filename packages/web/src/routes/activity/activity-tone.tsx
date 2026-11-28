@@ -22,6 +22,7 @@ import type { ComponentProps } from 'react'
 
 import { StatusDot } from '@/components/status-dot'
 import { attentionOfRung, type AttentionShape, type AttentionTone } from '@/lib/attention'
+import { canonicalRungLabel } from '@/lib/status-semantics'
 import { cn } from '@/lib/utils'
 
 import { isLiveStatus, type NowIcon } from './now-box'
@@ -31,12 +32,12 @@ import { isLiveStatus, type NowIcon } from './now-box'
  *  Small text on card-2 spells these classes out where the cez/card-2-contrast lint can read them
  *  (`NowBoxView`); a class read from this map is invisible to it. */
 export const TONE_INK: Record<AttentionTone, string> = {
-  success: 'text-success',
-  pending: 'text-signal-word-amber',
-  danger: 'text-signal-word-red',
+  success: 'text-semantic-green',
+  pending: 'text-semantic-amber',
+  danger: 'text-semantic-red',
   accent: 'text-accent-text',
-  info: 'text-info',
-  running: 'text-status-running',
+  info: 'text-semantic-info',
+  running: 'text-semantic-violet',
   neutral: 'text-muted-foreground',
 }
 
@@ -50,12 +51,12 @@ export function ToneWord({ tone, className, children, ...props }: ComponentProps
     <span
       {...props}
       className={cn('bg-card-2', {
-        'text-success': tone === 'success',
-        'text-signal-word-amber': tone === 'pending',
-        'text-signal-word-red': tone === 'danger',
+        'text-semantic-green': tone === 'success',
+        'text-semantic-amber': tone === 'pending',
+        'text-semantic-red': tone === 'danger',
         'text-accent-text': tone === 'accent',
-        'text-info': tone === 'info',
-        'text-status-running': tone === 'running',
+        'text-semantic-info': tone === 'info',
+        'text-semantic-violet': tone === 'running',
         'text-muted-foreground': tone === 'neutral',
       }, className)}
     >
@@ -112,7 +113,7 @@ export const NOW_ICON: Record<NowIcon, LucideIcon> = {
 export function shapeOf(run: Pick<ActivityRun | ActivityWorker, 'rung' | 'wait'>, role: 'root' | 'worker'): { tone: AttentionTone; shape: AttentionShape; label: string } {
   const attention = attentionOfRung(run.rung)
   const outside = run.rung === 'waiting-on-workers' && (role === 'worker' || run.wait?.kind === 'peers')
-  return { tone: attention.tone, shape: outside ? 'ring' : attention.shape, label: labelOf(run, role) ?? attention.label }
+  return { tone: attention.tone, shape: outside ? 'ring' : attention.shape, label: labelOf(run, role) ?? canonicalRungLabel(run.rung, attention.label) }
 }
 
 const counted = (lead: string, n: number, noun: string) => `${lead} ${n} ${noun}${n === 1 ? '' : 's'}`
@@ -124,19 +125,19 @@ function waitsOnOwnWorkers(wait: (ActivityRun | ActivityWorker)['wait']): boolea
 }
 
 /**
- * The dot's accessible name for the waits whose rung label is generic. These are the words
- * `deriveAttention` gives the same runs in the task list: a worker waits on its parent's reply,
- * a root on its peers, on replies, on N workers or on N subagents.
+ * The dot's accessible name for the waits whose rung label is generic. These are the canonical
+ * Sentence-case labels used across the cockpit: a worker waits for its parent's reply, a root for
+ * its peers, for replies, for N workers or for N subagents.
  */
 function labelOf(run: Pick<ActivityRun | ActivityWorker, 'rung' | 'wait'>, role: 'root' | 'worker'): string | undefined {
   const wait = run.wait
   if (run.rung === 'waiting-on-workers') {
-    if (role === 'worker' && !waitsOnOwnWorkers(wait)) return 'waiting on parent reply'
-    if (wait?.kind === 'peers' && wait.detail.peerRunIds.length > 0) return counted('waiting on', wait.detail.peerRunIds.length, 'task')
-    if (wait?.kind === 'workers' && wait.detail.replies) return 'waiting on replies'
-    if (wait?.kind === 'workers' && wait.detail.owed > 0) return counted('waiting on', wait.detail.owed, 'worker')
+    if (role === 'worker' && !waitsOnOwnWorkers(wait)) return 'Waiting for parent reply'
+    if (wait?.kind === 'peers' && wait.detail.peerRunIds.length > 0) return counted('Waiting for', wait.detail.peerRunIds.length, 'task')
+    if (wait?.kind === 'workers' && wait.detail.replies) return 'Waiting for replies'
+    if (wait?.kind === 'workers' && wait.detail.owed > 0) return counted('Waiting for', wait.detail.owed, 'worker')
   }
-  if (run.rung === 'waiting-on-subagents' && wait?.kind === 'subagents' && wait.detail.running > 0) return counted('waiting for', wait.detail.running, 'subagent')
+  if (run.rung === 'waiting-on-subagents' && wait?.kind === 'subagents' && wait.detail.running > 0) return counted('Waiting for', wait.detail.running, 'subagent')
   return undefined
 }
 

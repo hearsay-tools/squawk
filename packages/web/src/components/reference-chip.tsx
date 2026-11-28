@@ -20,33 +20,32 @@ import { cn, isHttpUrl } from '@/lib/utils'
 /** Border + text per status tone. `accent` IS the chip's own resting look, which is why a
  *  reference with no status known keeps it: nothing has been learned, so nothing changes. */
 const TONE_CLASS: Record<ReferenceStatusTone, string> = {
-  success: 'border-success/40 text-success',
-  danger: 'border-danger/40 text-danger',
+  success: 'border-success/40 text-semantic-green',
+  danger: 'border-danger/40 text-semantic-red',
   accent: 'border-accent-strong/35 text-accent-text',
   merged: 'border-merged-strong/35 text-merged-text',
-  info: 'border-info/40 text-info',
+  info: 'border-info/40 text-semantic-info',
   neutral: 'border-border text-muted-foreground',
   // The WHOLE chip goes amber while checks run, not just its dot: "something is happening to this
   // right now" is the state a table is scanned for, and a neutral chip with a coloured dot reads
-  // as neutral at a glance. `text-pending-strong`, not `text-pending` — the dot's amber-400 is a
-  // fill colour and fails contrast as ink on the light theme, so the ink token darkens per theme.
-  pending: 'border-pending-strong/45 text-pending-strong',
+  // as neutral at a glance. `text-semantic-amber` stays >= 4.5:1 across all surfaces in both themes.
+  pending: 'border-pending-strong/45 text-semantic-amber',
   // Orange, and its own token: this is the mergeability axis, not a shade of failure. See
   // `REFERENCE_CONFLICT`.
-  conflict: 'border-conflict/45 text-conflict',
+  conflict: 'border-conflict/45 text-semantic-conflict',
 }
 
 /** Sidebar glyphs carry status without colouring the meta label. Completed issues use
  * purple here only; full chips keep their brand accent (#677). */
 const PLAIN_GLYPH_CLASS: Record<ReferenceStatusTone, string> = {
-  success: 'text-success',
-  danger: 'text-danger',
+  success: 'text-semantic-green',
+  danger: 'text-semantic-red',
   accent: 'text-merged-text',
   merged: 'text-merged-text',
-  info: 'text-info',
+  info: 'text-semantic-info',
   neutral: 'text-soft-foreground',
-  pending: 'text-pending-strong',
-  conflict: 'text-conflict',
+  pending: 'text-semantic-amber',
+  conflict: 'text-semantic-conflict',
 }
 
 /** The hover wash, per tone — a LINK chip only; the inert one has nothing to hover into. It
@@ -252,12 +251,12 @@ function ReferenceChipPanel({
       <span className="block">{tooltip.detail}</span>
       {/* The status the conflict painted over. It is still true — a conflicting PR can also be
           green and approved — and burying it would trade one hidden fact for another. */}
-      {tooltip.also ? <span className="block opacity-70">{tooltip.also}</span> : null}
+      {tooltip.also ? <span className="block text-muted-foreground">{tooltip.also}</span> : null}
       {/* The URL the native `title` used to carry. Worth keeping: a reference can name a
           DIFFERENT repository than the project on screen (#526), and the host is the only
           thing that says so. */}
       {url && isHttpUrl(url) ? (
-        <span className="block opacity-70">{url.replace(/^https?:\/\//, '')}</span>
+        <span className="block text-muted-foreground">{url.replace(/^https?:\/\//, '')}</span>
       ) : null}
     </>
   )

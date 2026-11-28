@@ -127,7 +127,7 @@ describe('ProviderSettings', () => {
     serve()
     renderSettings()
 
-    await within(card('claude')).findByText('Credentials found')
+    await within(card('claude')).findByText('Connected')
     expect(
       [...document.querySelectorAll('[data-slot="provider-card"]')].map((item) => item.getAttribute('data-provider')),
     ).toEqual(RUNNER_IDS)
@@ -164,11 +164,11 @@ describe('ProviderSettings', () => {
     })
     renderSettings()
 
-    await within(card('claude')).findByText('Credentials found')
+    await within(card('claude')).findByText('Connected')
     expect(within(card('claude')).queryByRole('button', { name: 'Connect' })).toBeNull()
     expect(screen.getByRole('switch', { name: 'Use Claude Code' })).toBeTruthy()
 
-    expect(within(card('codex')).getByText('Credentials found')).toBeTruthy()
+    expect(within(card('codex')).getByText('Connected')).toBeTruthy()
     expect(within(card('codex')).getByText('Disabled')).toBeTruthy()
     expect(screen.getByRole('switch', { name: 'Use Codex' })).toBeTruthy()
 
@@ -273,7 +273,7 @@ describe('ProviderSettings', () => {
     expect(within(fallback).getByText('codex login --device-auth')).toBeTruthy()
     fireEvent.click(within(card('codex')).getByRole('button', { name: 'Check again' }))
 
-    await within(card('codex')).findByText('Credentials found')
+    await within(card('codex')).findByText('Connected')
     expect(screen.queryByRole('region', { name: 'Codex manual sign-in' })).toBeNull()
     expect(screen.queryByText('codex login --device-auth')).toBeNull()
   })
@@ -334,7 +334,7 @@ describe('ProviderSettings', () => {
     renderSettings()
 
     const toggle = await screen.findByRole('switch', { name: 'Use Claude Code' })
-    await within(card('claude')).findByText('Credentials found')
+    await within(card('claude')).findByText('Connected')
     fireEvent.click(toggle)
     expect(await within(card('claude')).findByText('Disabled')).toBeTruthy()
     expect(requests).toContainEqual({
@@ -355,7 +355,7 @@ describe('ProviderSettings', () => {
     renderSettings()
 
     const toggle = await screen.findByRole('switch', { name: 'Use Claude Code' })
-    await within(card('claude')).findByText('Credentials found')
+    await within(card('claude')).findByText('Connected')
     fireEvent.click(toggle)
     await within(card('claude')).findByText('Disabled')
     fireEvent.click(toggle)
@@ -383,7 +383,7 @@ describe('ProviderSettings', () => {
     renderSettings()
 
     const toggle = await screen.findByRole('switch', { name: 'Use Claude Code' })
-    await within(card('claude')).findByText('Credentials found')
+    await within(card('claude')).findByText('Connected')
     fireEvent.click(toggle)
     await within(card('claude')).findByText('Disabled')
     fireEvent.click(toggle)
@@ -406,7 +406,7 @@ describe('ProviderSettings', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Use Codex' }))
 
     await act(() => claudeFailure.resolve(json({ error: 'Claude preference failed.' }, 500)))
-    await within(card('claude')).findByText('Credentials found')
+    await within(card('claude')).findByText('Connected')
     expect(await screen.findByText('Claude preference failed.')).toBeTruthy()
 
     await act(() => codexSuccess.resolve(json({
@@ -485,10 +485,10 @@ describe('ProviderSettings', () => {
     fireEvent.click(toggle)
     await within(card('claude')).findByText('Disabled')
     fireEvent.click(within(card('claude')).getByRole('button', { name: 'Try again' }))
-    await within(card('claude')).findByText('Credentials found')
+    await within(card('claude')).findByText('Connected')
 
     await act(() => failure.resolve(json({ error: 'Provider preference could not be saved.' }, 500)))
-    await within(card('claude')).findByText('Credentials found')
+    await within(card('claude')).findByText('Connected')
     expect(within(card('claude')).queryByText('Disabled')).toBeNull()
     expect(within(card('claude')).queryByRole('button', { name: 'Try again' })).toBeNull()
   })
@@ -499,7 +499,7 @@ describe('ProviderSettings', () => {
     const client = renderSettings()
 
     const toggle = await screen.findByRole('switch', { name: 'Use Claude Code' })
-    await within(card('claude')).findByText('Credentials found')
+    await within(card('claude')).findByText('Connected')
     fireEvent.click(toggle)
     await within(card('claude')).findByText('Disabled')
     act(() => {
@@ -552,7 +552,7 @@ describe('ProviderSettings', () => {
         body: { authFailureId: 'open-1' },
       }),
     )
-    expect(await within(card('opencode')).findByText('Credentials found')).toBeTruthy()
+    expect(await within(card('opencode')).findByText('Connected')).toBeTruthy()
     expect(within(card('opencode')).getByText('Disabled')).toBeTruthy()
   })
 

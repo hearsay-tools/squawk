@@ -104,12 +104,18 @@ export function TaskOriginRow({ origin, counts, automations, onChange, labels, o
 }
 
 /** What the heading dot says, for a reader who cannot see its colour. */
-const TONE_LABELS: Partial<Record<AttentionTone, string>> = {
-  pending: 'needs you',
-  running: 'working',
-  success: 'finished',
-  danger: 'contains failed tasks',
-  neutral: 'archived',
+function headingDotLabel(label: BucketLabel, tone: AttentionTone): string {
+  if (tone === 'danger') return 'contains failed tasks'
+  switch (label) {
+    case 'Needs you':
+      return 'needs you'
+    case 'Working':
+      return 'working'
+    case 'Finished':
+      return 'finished'
+    case 'Archived':
+      return 'archived'
+  }
 }
 
 /**
@@ -151,7 +157,7 @@ export function StatusGroupSection({
           className="inline-flex min-h-11 items-center gap-2 rounded-md pr-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground"
         >
           <Disclosure className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <StatusDot tone={tone} role="img" aria-label={TONE_LABELS[tone]} title={TONE_LABELS[tone]} />
+          <StatusDot tone={tone} role="img" aria-label={headingDotLabel(label, tone)} title={headingDotLabel(label, tone)} />
           <span>{label}</span>{' '}
           <Count value={count} className="font-normal text-muted-foreground" />
         </button>
@@ -211,8 +217,8 @@ export function TaskPreview({
   const lines = handoff.data === undefined ? [] : progressPreview(handoff.data)
   return (
     <div data-slot="task-preview" className="flex flex-col gap-3 rounded-md bg-muted/50 p-4 text-xs">
-      <p className="font-medium text-foreground first-letter:uppercase">{status}</p>
-      {error ? <p data-slot="task-preview-error" className="break-words text-danger">{error}</p> : null}
+      <p className="font-medium text-foreground">{status}</p>
+      {error ? <p data-slot="task-preview-error" className="break-words text-semantic-red">{error}</p> : null}
       {handoff.isPending ? (
         <p role="status" className="text-muted-foreground">Loading latest progress…</p>
       ) : handoff.isError ? (

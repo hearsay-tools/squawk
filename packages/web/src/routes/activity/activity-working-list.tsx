@@ -105,12 +105,12 @@ function WorkingRow({
           </h3>
           <span
             data-slot="activity-project-badge"
-            className="inline-flex shrink-0 items-center rounded-md border border-border bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+            className="inline-flex shrink-0 items-center rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
           >
             {record.projectName}
           </span>
           {task.currentStepId ? (
-            <span data-slot="activity-step" className="hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
+            <span data-slot="activity-step" className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
               step {task.currentStepId}
             </span>
           ) : null}
@@ -124,7 +124,7 @@ function WorkingRow({
             data-slot="activity-main"
             className={cn(
               'min-w-0 truncate text-foreground',
-              box.mono && 'font-mono text-[11.5px]',
+              box.mono && 'font-mono text-xs',
               slideKey !== undefined && 'activity-slide',
             )}
           >
@@ -196,7 +196,7 @@ export function ActivityWorkingList({
   if (items.length === 0) return null
 
   const renderBox = (records: readonly WorkingRecord[]) => (
-    <div className="divide-y divide-border rounded-xl border border-border bg-card">
+    <div className="divide-y divide-border rounded-xl border border-card-edge bg-card shadow-card">
       {records.map((record) => {
         const index = indexByProject.get(record.projectId) ?? EMPTY_INDEX
         const ctx: NowContext = { now, titleOf: (runId) => index.get(runId)?.title ?? 'Unreadable task' }
@@ -226,7 +226,7 @@ export function ActivityWorkingList({
         </h2>
         <span
           data-slot="activity-working-count"
-          className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11.5px] font-semibold text-foreground tabular-nums"
+          className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-foreground tabular-nums"
         >
           {items.length}
         </span>

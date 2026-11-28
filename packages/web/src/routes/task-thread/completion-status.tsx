@@ -67,7 +67,7 @@ export function CompletionStatus({ run }: { run: ApiRun }) {
   if (!pendingAction && !blocker) return null
   const prUrl = run.pullRequestUrl ?? run.pullRequests?.find(pr => pr.url)?.url
   return (
-    <section data-slot="completion-status" aria-label="Completion action" className="grid min-w-0 gap-2 rounded-lg border border-border bg-card p-3 [margin-block:0.75rem]">
+    <section data-slot="completion-status" aria-label="Completion action" className="grid min-w-0 gap-2 rounded-lg border border-card-edge bg-card p-3 shadow-card [margin-block:0.75rem]">
       {pendingAction ? <CompletionActionBody run={run} action={pendingAction} prUrl={prUrl} patch={patch} /> : null}
       {blocker ? <ArchiveBlockerBody run={run} blocker={blocker} flags={flags} /> : null}
     </section>

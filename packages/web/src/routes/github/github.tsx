@@ -640,7 +640,7 @@ function GithubFilterToolbar({ view, gh, filters, labelOptions, labelColors, sea
           placeholder={view === 'issues' ? 'Filter issues…' : 'Filter pull requests…'}
           value={filters.query}
           onChange={(event) => filters.setQuery(event.target.value)}
-          className="min-h-11 w-full rounded-lg border border-border bg-card py-1 pr-2.5 pl-8 text-[13px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="min-h-11 w-full rounded-lg border border-card-edge bg-card shadow-card py-1 pr-2.5 pl-8 text-[13px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         />
       </div>
       <LabelFilter
@@ -724,7 +724,7 @@ function GithubListPane({
       data-slot="gh-list"
       data-mobile-preview={compactPreview || undefined}
       style={{ '--github-list-width': `${width}px` } as CSSProperties}
-      className="relative flex w-full min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-3 md:w-[var(--github-list-width)] md:shrink-0 md:overflow-x-hidden md:overflow-y-auto"
+      className="relative flex w-full min-h-0 min-w-0 flex-col rounded-lg border border-card-edge bg-card shadow-card p-3 md:w-[var(--github-list-width)] md:shrink-0 md:overflow-x-hidden md:overflow-y-auto"
     >
       {items.length === 0 ? (
         // Nothing in the OPEN list matched. Rather than the old flat "no match" — which was a
@@ -874,7 +874,7 @@ function GithubSearchHits({ hits, searchPayload, rows }: {
 }) {
   return (
     <div data-slot="gh-search-hits">
-      <p className="px-4 pt-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+      <p className="px-4 pt-2 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
         Found on GitHub{searchPayload?.truncated ? ' (first matches)' : ''}
       </p>
       <ul className="flex flex-col gap-0.5 px-2 pb-2">
@@ -906,7 +906,7 @@ function GithubDetailPane({ view, n, selected, selectedNumber, exact, repo, rows
     <section
       data-slot="gh-detail"
       className={cn(
-        'w-full min-w-0 min-h-0 flex-1 flex-col rounded-lg border border-border bg-card md:overflow-y-auto',
+        'w-full min-w-0 min-h-0 flex-1 flex-col rounded-lg border border-card-edge bg-card shadow-card md:overflow-y-auto',
         n === undefined ? 'hidden md:flex' : 'flex',
       )}
     >

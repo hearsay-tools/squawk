@@ -90,8 +90,8 @@ export function Count({
       data-slot="count"
       className={cn(
         'tabular-nums',
-        variant === 'badge' && 'rounded-full bg-muted px-1.5 text-[11px] leading-[18px] font-medium text-muted-foreground',
-        variant === 'accent' && 'rounded-full bg-accent-strong/20 px-1.5 text-[11px] leading-[18px] font-semibold',
+        variant === 'badge' && 'rounded-full bg-muted px-1.5 text-xs leading-[18px] font-medium text-muted-foreground',
+        variant === 'accent' && 'rounded-full bg-accent-strong/20 px-1.5 text-xs leading-[18px] font-semibold',
         className,
       )}
       {...props}
@@ -164,7 +164,7 @@ export function Path({
       className={cn(
         'font-mono',
         variant === 'chip'
-          ? 'block max-w-full truncate rounded-[6px] bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground'
+          ? 'block max-w-full truncate rounded-[6px] bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground'
           : wrap
             ? 'break-all'
             : 'block min-w-0 truncate',

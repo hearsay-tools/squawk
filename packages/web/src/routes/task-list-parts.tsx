@@ -31,6 +31,7 @@ import {
 import { ARCHIVED_WINDOW, listCounts, type BucketLabel, type ListView } from '@/lib/task-groups'
 import { groupTone, type originCounts as originCountsFn, type TaskOrigin } from '@/lib/task-origin'
 import { DESKTOP_MEDIA_QUERY } from '@/lib/use-desktop'
+import type { SearchParamsUpdate } from '@/lib/use-search-params-writer'
 import { cn } from '@/lib/utils'
 import type { ArchivedPages } from './tasks-overview'
 
@@ -533,4 +534,13 @@ export function useArchivedPages(runs: readonly RunSummary[] | undefined, view: 
   const plainHasMore = unfiltered === undefined ? undefined : unfiltered.at(-1)?.nextCursor != null
   const enrichedPages = React.useMemo(() => pages && { ...pages, plainHasMore }, [pages, plainHasMore])
   return { pages: enrichedPages, total: unfiltered?.[0]?.total, search: setTyped }
+}
+
+/** Write or clear a single URL search parameter. */
+export function setParam(key: string, value: string | null): SearchParamsUpdate {
+  return (current) => {
+    if (value === null) current.delete(key)
+    else current.set(key, value)
+    return current
+  }
 }

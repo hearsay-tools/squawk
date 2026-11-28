@@ -128,7 +128,7 @@ it('the Archived filter shows the archived entries from one include fetch, with 
   expect(screen.queryByText('Old rollout check')).toBeNull()
   const archivedTab = screen.getByRole('button', { name: /^Archived/ })
   expect(archivedTab.textContent).toBe('Archived· 1')
-  expect(screen.getByRole('button', { name: /^Active/ }).textContent).toBe('Active· 1')
+  expect(screen.getByRole('button', { name: /^Current/ }).textContent).toBe('Current· 1')
   const count = lists.length
   fireEvent.click(archivedTab)
   expect(await screen.findByText('Old rollout check')).not.toBeNull()

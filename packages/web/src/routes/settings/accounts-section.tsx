@@ -28,6 +28,7 @@ import {
 import type { RunnerEntry, RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import { planRunner, runnerDisplayName, runnerEntry, runnerIds, useRunners } from '@/api/runners'
 import { agentCardId } from '@/lib/agents-settings-path'
+import { DRY_RUN_MODE, isDryRunVersion, providerStatusPresentation } from '@/lib/status-semantics'
 import type {
   BackendCheck,
   ProviderId,
@@ -90,10 +91,10 @@ import { SettingsAgentPicker } from './settings-agent-picker'
 
 /** Same vocabulary the Providers card uses — one wording for "is this logged in?". */
 const STATUS_PRESENTATION = {
-  connected: { label: 'Connected', tone: 'success' },
-  disconnected: { label: 'Not connected', tone: 'pending' },
-  'not-installed': { label: 'Not installed', tone: 'neutral' },
-  unknown: { label: 'Could not verify', tone: 'danger' },
+  connected: providerStatusPresentation('connected'),
+  disconnected: providerStatusPresentation('disconnected'),
+  'not-installed': providerStatusPresentation('not-installed'),
+  unknown: providerStatusPresentation('unknown'),
 } as const satisfies Record<string, { label: string; tone: StatusDotTone }>
 
 export function GlobalAgentsSection() {
@@ -250,26 +251,22 @@ function InstallReadout({ entry, check }: { entry: RunnerEntry; check: BackendCh
       </span>
     )
   }
+  const simulated = isDryRunVersion(check.version)
   return (
     <span className="whitespace-nowrap">
-      <span data-slot="agent-installed">CLI installed</span>
+      <span data-slot="agent-installed">{simulated ? 'CLI simulated' : 'CLI installed'}</span>
       {/* A middle dot, never parentheses: a version can carry its own. */}
       {check.version ? <><span aria-hidden="true" className="settings-agent-summary-sep">·</span><VersionReadout version={check.version} /></> : null}
     </span>
   )
 }
 
-/** The dry-run probe reports `mock (HSQ_DRY_RUN=1)` as its version: an env flag is not a version. */
-const DRY_RUN_VERSION = /^mock \(\w*DRY_RUN=1\)$/
-
-/** The CLI version, or a flat "Dry run" status tag when the host runs mock agents: a neutral fill
- *  and no border, so it never reads as a button. The raw string stays in the tooltip, so the env
- *  flag is one hover away and never in the copy. */
+/** The CLI version, or a neutral "Dry run" capability-mode tag when the host runs mock agents. */
 function VersionReadout({ version }: { version: string }) {
-  if (DRY_RUN_VERSION.test(version)) {
+  if (isDryRunVersion(version)) {
     return (
-      <span data-slot="agent-version" data-dry-run="" title={version} className="rounded bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-        Dry run
+      <span data-slot="agent-version" data-dry-run="" title={version} className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        {DRY_RUN_MODE.label}
       </span>
     )
   }
@@ -652,7 +649,7 @@ function AccountRow({ account, runners, editable, onRemove, agent }: {
     <>
       <span className="settings-account-label">{account.label}</span>
       {account.isDefault ? (
-        <Badge variant="outline" data-slot="account-discovered" className="shrink-0 text-[11px] font-normal text-muted-foreground">
+        <Badge variant="outline" data-slot="account-discovered" className="shrink-0 text-xs font-normal text-muted-foreground">
           discovered
         </Badge>
       ) : null}

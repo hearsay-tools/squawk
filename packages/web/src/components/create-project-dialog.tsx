@@ -93,7 +93,7 @@ function createProjectPayload({ trimmed, checkoutId, github, chosenOwner, effect
 function CreatedWarning({ created }: { created: { projectId: string; warning: string } }) {
   return (
     <>
-      <TriangleAlertIcon aria-hidden="true" className="mbs-0.5 size-5 shrink-0 text-warning" />
+      <TriangleAlertIcon aria-hidden="true" className="mbs-0.5 size-5 shrink-0 text-semantic-amber" />
       <div className="grid min-w-0 gap-2">
         <p className="font-medium">The project was created, but its GitHub repository is not finished.</p>
         <p className="min-w-0 whitespace-pre-wrap break-words font-mono text-xs">{created.warning}</p>
@@ -144,7 +144,7 @@ function NameField({ fieldId, name, setName, trimmed, nameValid, projectsDir, is
       ) : null}
       <p
         data-slot="create-project-path"
-        className="min-w-0 truncate font-mono text-[11px] text-soft-foreground"
+        className="min-w-0 truncate font-mono text-xs text-soft-foreground"
         title={`${projectsDir}/${trimmed}`}
       >
         {trimmed === '' ? `${projectsDir}/…` : `${projectsDir}/${trimmed}`}
@@ -238,7 +238,7 @@ function CreateProjectStatus({ isPending, progress, failed, error }: {
   return (
     <>
       {isPending ? (
-        <p data-slot="create-project-progress" className="flex-none truncate font-mono text-[11px] text-muted-foreground">
+        <p data-slot="create-project-progress" className="flex-none truncate font-mono text-xs text-muted-foreground">
           {progress ?? 'Starting…'}
         </p>
       ) : null}

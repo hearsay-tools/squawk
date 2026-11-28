@@ -755,7 +755,7 @@ function GroupedTaskLists({
                   ) : (
                     group.label
                   )}
-                  <Count value={orderedTasks.length} className="font-mono text-[11px] font-medium" />
+                  <Count value={orderedTasks.length} className="font-mono text-xs font-medium" />
                 </h2>
                 <TaskTable
                   {...sharedTableProps}
@@ -831,7 +831,7 @@ export function TagChip({ tag, className }: { tag: string; className?: string | 
     <span
       data-slot="project-tag"
       className={cn(
-        'inline-flex max-w-full items-center truncate rounded-full bg-muted px-1.5 py-px text-[11px] font-medium text-muted-foreground',
+        'inline-flex max-w-full items-center truncate rounded-full bg-muted px-1.5 py-px text-xs font-medium text-muted-foreground',
         className,
       )}
     >

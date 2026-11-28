@@ -121,7 +121,7 @@ export function WorktreesPanel() {
           <h2 id="worktrees-panel-title" className="text-[13px] font-semibold text-foreground">
             Worktrees on disk{headingSize ? ` · ${headingSize}` : ''}
           </h2>
-          <p data-slot="worktrees-retention" className="text-[11.5px] leading-[17px] text-soft-foreground">
+          <p data-slot="worktrees-retention" className="text-xs leading-[17px] text-soft-foreground">
             {keep === 0
               ? 'Retention is unlimited ('
               : `Retention keeps the newest ${keep} finished checkout${keep === 1 ? '' : 's'} (`}
@@ -225,7 +225,7 @@ function WorktreeRow({
     <span
       data-slot="worktree-state"
       data-state={state.tone === 'in-use' ? 'in-use' : worktree.pastKeep ? 'reclaimable' : 'kept'}
-      className={cn('text-[11.5px]', state.tone === 'in-use' ? 'text-status-running' : 'text-soft-foreground')}
+      className={cn('text-xs', state.tone === 'in-use' ? 'text-status-running' : 'text-soft-foreground')}
     >
       {state.label}
     </span>
@@ -235,12 +235,12 @@ function WorktreeRow({
     <li data-slot="worktree-row" data-run={worktree.runId} className="flex min-h-[44px] items-center gap-[12px] border-b border-border px-[14px] py-[4px] last:border-0">
       <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
         <span className="truncate text-[12.5px] text-foreground" title={worktree.title}>{worktree.title}</span>
-        <span className="truncate font-mono text-[11px] text-soft-foreground">
+        <span className="truncate font-mono text-xs text-soft-foreground">
           {worktree.branch ?? worktree.runId.slice(0, 8)} · {status}
           <span className="md:hidden"> · {state.label}</span>
         </span>
       </div>
-      <span data-slot="worktree-size" className="shrink-0 text-[11.5px] tabular-nums text-muted-foreground">
+      <span data-slot="worktree-size" className="shrink-0 text-xs tabular-nums text-muted-foreground">
         {worktree.sizeBytes !== null ? formatMem(worktree.sizeBytes) || '0 kB' : '—'}
       </span>
       <span className="hidden shrink-0 md:inline">{stateLabel}</span>

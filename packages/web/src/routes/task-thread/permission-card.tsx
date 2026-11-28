@@ -73,7 +73,7 @@ function PermissionChoices({ permission, state, offline = false, error, onSelect
     : 'Choose an option to respond to this permission request.'
   return (
     <section data-slot="permission-card" data-request-id={permission.requestId} data-state={offline && state === 'pending' ? 'offline' : state} aria-labelledby={titleId} aria-busy={state === 'sending'}
-      className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card p-3.5 text-sm [overflow-wrap:anywhere]">
+      className="flex min-w-0 flex-col gap-3 rounded-lg border border-card-edge bg-card shadow-card p-3.5 text-sm [overflow-wrap:anywhere]">
       <div className="flex min-w-0 flex-col gap-1">
         <span className="text-xs font-medium text-muted-foreground">Permission request</span>
         <h3 id={titleId} className="font-semibold whitespace-pre-wrap">{permission.title}</h3>

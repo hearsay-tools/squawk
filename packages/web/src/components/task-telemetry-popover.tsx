@@ -45,7 +45,7 @@ export function TaskTelemetryPopover({
           aria-expanded={open}
           aria-label={`Usage and telemetry for ${model.title}`}
           className={cn(
-            'inline-flex h-7 max-w-full items-center gap-1 rounded-md border border-border bg-background px-2 font-mono text-[11.5px] text-muted-foreground tabular-nums transition-colors hover:border-control-border hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11 max-md:px-2.5',
+            'inline-flex h-7 max-w-full items-center gap-1 rounded-md border border-border bg-background px-2 font-mono text-xs text-muted-foreground tabular-nums transition-colors hover:border-control-border hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11 max-md:px-2.5',
             open && 'border-accent-strong bg-accent-strong/10 text-foreground',
             className,
           )}
@@ -96,17 +96,17 @@ function UsageMetricsGrid({ model, sample, showTokens, showCost }: {
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold tracking-[0.05em] text-accent-text uppercase">
+        <span className="text-xs font-semibold tracking-[0.05em] text-accent-text uppercase">
           Task telemetry
         </span>
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {isLive ? 'Live' : 'Recorded'}
         </span>
       </div>
       <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-xs">
         {showTokens ? (
           <div>
-            <dt className="text-[11px] text-muted-foreground">Tokens IN / OUT</dt>
+            <dt className="text-xs text-muted-foreground">Tokens IN / OUT</dt>
             <dd className="mt-0.5 font-mono text-foreground">
               <DirectionalUsage inputTokens={run.inputTokens} outputTokens={run.outputTokens} omitWhenUnknown={false} />
             </dd>
@@ -114,25 +114,25 @@ function UsageMetricsGrid({ model, sample, showTokens, showCost }: {
         ) : null}
         {showCost ? (
           <div>
-            <dt className="text-[11px] text-muted-foreground">Cost</dt>
+            <dt className="text-xs text-muted-foreground">Cost</dt>
             <dd className="mt-0.5 font-mono text-foreground tabular-nums">{formatCost(run.costUsd) || '—'}</dd>
           </div>
         ) : null}
         <div>
-          <dt className="text-[11px] text-muted-foreground">CPU</dt>
+          <dt className="text-xs text-muted-foreground">CPU</dt>
           <dd data-usage="cpu" data-usage-kind={usage.cpu.kind} title={usage.cpu.title} className="mt-0.5 font-mono text-foreground tabular-nums">
             {usage.cpu.text || '—'}
           </dd>
         </div>
         <div>
-          <dt className="text-[11px] text-muted-foreground">Memory</dt>
+          <dt className="text-xs text-muted-foreground">Memory</dt>
           <dd data-usage="mem" data-usage-kind={usage.mem.kind} title={usage.mem.title} className="mt-0.5 font-mono text-foreground tabular-nums">
             {usage.mem.text || '—'}
           </dd>
         </div>
         {model.branch ? (
           <div className="col-span-2 border-t border-border pt-2">
-            <dt className="text-[11px] text-muted-foreground">Branch</dt>
+            <dt className="text-xs text-muted-foreground">Branch</dt>
             <dd className="mt-1">
               <Path value={model.branch} variant="chip" />
             </dd>
@@ -162,7 +162,7 @@ function TelemetryPopoverBody({ model, showTokens, showCost, liveUsageSource, op
         <TaskPreview
           projectId={model.projectId}
           runId={model.runId}
-          status={model.attention.label}
+          status={model.status.label}
           error={model.run.error}
           open={
             <div className="flex flex-wrap items-center gap-2">

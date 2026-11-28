@@ -33,14 +33,14 @@ export function NoteLine({ note }: { note: ThreadNote }) {
         data-tone={note.tone}
         className="group/failure min-w-0 px-0.5 text-xs"
       >
-        <div className={cn('flex items-start gap-2', note.tone === 'danger' ? 'text-danger [.light_&]:text-red-700' : 'text-soft-foreground')}>
+        <div className={cn('flex items-start gap-2', note.tone === 'danger' ? 'text-semantic-red' : 'text-soft-foreground')}>
           <span className="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere">
             {note.tone === 'danger' ? '✗ ' : null}
             {note.text}
           </span>
           <CollapsibleTrigger
             data-slot="note-details-toggle"
-            className="inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11 max-md:min-w-11 max-md:justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center"
+            className="inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11 max-md:min-w-11 max-md:justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center"
           >
             <ChevronRightIcon
               aria-hidden="true"
@@ -52,11 +52,11 @@ export function NoteLine({ note }: { note: ThreadNote }) {
         <CollapsibleContent>
           <ul
             data-slot="note-details"
-            className="mbs-1.5 flex flex-col gap-1 border-s border-border ps-3 font-mono text-[11px] text-muted-foreground"
+            className="mbs-1.5 flex flex-col gap-1 border-s border-border ps-3 font-mono text-xs text-muted-foreground"
           >
             {note.details.map((detail, index) => (
               <li key={`${detail.source}:${index}`} className="min-w-0 whitespace-pre-wrap wrap-anywhere">
-                <span className="font-sans font-medium text-foreground/80">
+                <span className="font-sans font-medium text-foreground">
                   {FAILURE_DETAIL_LABELS[detail.source]}:{' '}
                 </span>
                 {detail.text}
@@ -71,7 +71,7 @@ export function NoteLine({ note }: { note: ThreadNote }) {
     <div
       data-slot="note-line"
       data-tone={note.tone}
-      className={cn('px-0.5 text-xs', note.tone === 'danger' ? 'text-danger [.light_&]:text-red-700' : 'text-soft-foreground')}
+      className={cn('px-0.5 text-xs', note.tone === 'danger' ? 'text-semantic-red' : 'text-soft-foreground')}
     >
       {note.tone === 'danger' ? '✗ ' : null}
       {note.text}

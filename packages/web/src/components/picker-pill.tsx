@@ -391,7 +391,7 @@ export function PickerPill({
               <span className="flex min-w-0 flex-col">
                 <span className="text-[13px] font-medium">{option.label}</span>
                 {option.desc ? (
-                  <span className="text-[11px] text-muted-foreground">{option.desc}</span>
+                  <span className="text-xs text-muted-foreground">{option.desc}</span>
                 ) : null}
               </span>
             </DropdownMenuRadioItem>
@@ -401,7 +401,7 @@ export function PickerPill({
           <p role="status" className="px-2 py-5 text-center text-xs text-muted-foreground">No matches found.</p>
         ) : null}
         {status ? (
-          <DropdownMenuItem disabled onPointerMove={retainSearchFocus} onPointerLeave={retainSearchFocus} className="border-t border-border text-[11px] text-muted-foreground">
+          <DropdownMenuItem disabled onPointerMove={retainSearchFocus} onPointerLeave={retainSearchFocus} className="border-t border-border text-xs text-muted-foreground">
             {status}
           </DropdownMenuItem>
         ) : null}
@@ -543,7 +543,7 @@ export function UnavailableRunnerLinks({ uninstalled, signedOut }: { uninstalled
   const entries = runnerEntries(registered).flatMap((entry) => {
     const name = entry.displayName
     if (uninstalled.includes(entry.id)) return [{ id: entry.id, name, state: 'Not installed', action: 'Install in Settings' }]
-    if (signedOut.includes(entry.id)) return [{ id: entry.id, name, state: 'Not signed in', action: 'Sign in in Settings' }]
+    if (signedOut.includes(entry.id)) return [{ id: entry.id, name, state: 'Not connected', action: 'Sign in in Settings' }]
     return []
   })
   if (entries.length === 0) return null
@@ -555,7 +555,7 @@ export function UnavailableRunnerLinks({ uninstalled, signedOut }: { uninstalled
           <RouterLink to={agentCardPath(entry.id)} data-slot="runner-install-link" data-runner={entry.id}>
             <span className="flex min-w-0 flex-col">
               <span className="text-[13px] font-medium text-muted-foreground">{entry.name}</span>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {entry.state} · <span className="font-medium text-accent-text">{entry.action}</span>
               </span>
             </span>

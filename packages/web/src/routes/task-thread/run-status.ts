@@ -2,6 +2,7 @@ import type { ApiRun } from '@open-mercato/cezar-api-client'
 
 import { deriveAttention, type Attention } from '@/lib/attention'
 import { checkTimeText } from '@/lib/format'
+import { runStatusPresentation } from '@/lib/status-semantics'
 
 /**
  * The one status line a run shows (hearsay-tools/cezarion#1333): the desktop header pill and the
@@ -24,7 +25,7 @@ export function runStatusLine(
   { queuePosition, now = new Date() }: { queuePosition?: number | undefined; now?: Date },
 ): RunStatusLine {
   const attention = deriveAttention(run)
-  const base = attention.label.charAt(0).toUpperCase() + attention.label.slice(1)
+  const base = runStatusPresentation(run, attention).label
   const label = queuePosition !== undefined ? `${base} #${queuePosition}` : base
   const nextCheck = IN_FLIGHT.includes(run.status) ? earliestOpenTimer(run, now) : undefined
   return nextCheck ? { attention, label, nextCheck } : { attention, label }

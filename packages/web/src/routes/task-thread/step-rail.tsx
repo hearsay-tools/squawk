@@ -82,7 +82,7 @@ export function StepRail({ steps, runStatus = 'running' }: { steps: StepState[];
               ×{step.iterations}
             </span>
           ) : null}
-          <span className="ml-auto shrink-0 pl-2 text-[11px] text-soft-foreground tabular-nums">
+          <span className="ml-auto shrink-0 pl-2 text-xs text-soft-foreground tabular-nums">
             {step.pluginKind ?? step.kind} · step {index + 1} of {steps.length}
           </span>
         </div>

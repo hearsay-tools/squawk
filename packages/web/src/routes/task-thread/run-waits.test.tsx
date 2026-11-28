@@ -145,7 +145,7 @@ describe('RunWaitDetails', () => {
     } as WorkerEntry
     renderWaits(run('waiting', { waits: [byWorker, byRequest, settled] }))
     const items = [...document.querySelectorAll<HTMLElement>('[data-slot="worker-wait-status"]')]
-    expect(items.map(item => item.querySelector('p')?.textContent)).toEqual(['Waiting on 2 workers', 'Waiting on 1 request reply'])
+    expect(items.map(item => item.querySelector('p')?.textContent)).toEqual(['Waiting for 2 workers', 'Waiting for 1 request reply'])
     expect(items.map(item => item.querySelector('time')?.getAttribute('datetime')))
       .toEqual(['2026-09-22T12:10:00.000Z', '2026-09-22T12:20:00.000Z'])
   })
@@ -172,7 +172,7 @@ describe('RunWaitDetails', () => {
     } as unknown as WorkerEntry
     renderWaits(run('waiting', { waits: [partialWorkers, partialRequests, resolved] }))
     const items = [...document.querySelectorAll<HTMLElement>('[data-slot="worker-wait-status"]')]
-    expect(items.map(item => item.querySelector('p')?.textContent)).toEqual(['Waiting on 2 workers', 'Waiting on 1 request reply'])
+    expect(items.map(item => item.querySelector('p')?.textContent)).toEqual(['Waiting for 2 workers', 'Waiting for 1 request reply'])
   })
 
   // hearsay-tools/cezarion#1995: a peer wait lists its peer tasks while it is open.
@@ -182,7 +182,7 @@ describe('RunWaitDetails', () => {
     const resolved = makePeerWait({ phase: WAIT_PHASE.resolved, resolvedAt: '2026-09-22T12:01:00.000Z', result: { reason: 'timeout' } })
     renderWaits(run(RUN_STATUS.waiting, { waits: [open, resolved] }))
     const items = [...document.querySelectorAll<HTMLElement>('[data-slot="peer-wait-status"]')]
-    expect(items.map(item => item.querySelector('p')?.textContent)).toEqual(['Waiting on 2 tasks'])
+    expect(items.map(item => item.querySelector('p')?.textContent)).toEqual(['Waiting for 2 tasks'])
     expect(items[0]?.querySelector('time')?.getAttribute('datetime')).toBe('2026-09-22T12:10:00.000Z')
   })
 

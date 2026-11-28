@@ -7,7 +7,8 @@ import type { BackendCheck, HealthResponse } from '@open-mercato/cezar-api-clien
 import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import { runnerIds } from '@/api/runners'
 import { StatusDot } from '@/components/status-dot'
-import { TOOL_SETTINGS_PATH, toolHint, toolSetupPath, toolTone } from '@/lib/tool-status'
+import { TOOL_SETTINGS_PATH, toolHint, toolSetupPath } from '@/lib/tool-status'
+import { toolAvailabilityPresentation } from '@/lib/status-semantics'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -121,7 +122,7 @@ export function ToolsMenu({
         className="w-[240px]"
       >
         {sessionScope ? <div className="px-2 py-2">{sessionScope}</div> : null}
-        <DropdownMenuLabel className="text-[11px] font-semibold tracking-[.04em] text-soft-foreground uppercase">
+        <DropdownMenuLabel className="text-xs font-semibold tracking-[.04em] text-soft-foreground uppercase">
           Installed tools
         </DropdownMenuLabel>
         {health.checks.map((check) =>
@@ -130,7 +131,7 @@ export function ToolsMenu({
         {forgeNote(health) ? (
           <>
             <DropdownMenuSeparator />
-            <p data-slot="forge-note" className="px-2 py-1.5 text-[11px] leading-snug text-muted-foreground">
+            <p data-slot="forge-note" className="px-2 py-1.5 text-xs leading-snug text-muted-foreground">
               {forgeNote(health)}
             </p>
           </>
@@ -157,6 +158,7 @@ export function ToolsMenu({
 /** A present tool: dot, mono name, right-aligned version. Informational, not interactive —
  *  there is nothing to do to a tool that works. */
 function AvailableToolRow({ check }: { check: BackendCheck }) {
+  const status = toolAvailabilityPresentation(check)
   return (
     <div
       data-slot="tool-row"
@@ -164,25 +166,36 @@ function AvailableToolRow({ check }: { check: BackendCheck }) {
       data-available="true"
       className="flex items-center gap-2 rounded-sm px-2 py-1.5"
     >
-      <StatusDot tone={toolTone(check)} />
+      <StatusDot tone={status.availability.tone} shape={status.availability.shape} />
       <span className="font-mono text-[13px] font-medium">{check.name}</span>
-      <span
-        data-slot="tool-version"
-        className="ml-auto font-mono text-[11px] font-medium text-muted-foreground tabular-nums"
-      >
-        {check.version ?? 'not found'}
-      </span>
+      {status.mode ? (
+        <span
+          data-slot="tool-dry-run"
+          title={status.rawVersion}
+          className="ml-auto shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+        >
+          {status.mode.label}
+        </span>
+      ) : (
+        <span
+          data-slot="tool-version"
+          className="ml-auto font-mono text-xs font-medium text-muted-foreground tabular-nums"
+        >
+          {status.version ?? status.availability.label}
+        </span>
+      )}
     </div>
   )
 }
 
 /**
- * A missing tool: red dot + "not found", the server's `hint` verbatim as the secondary line
- * (degradation doctrine — the server writes those for people), and "Set up →" into global
- * Settings → Agents. The whole row is the link, so the DropdownMenuItem closes the menu on navigation.
+ * A missing tool: canonical availability dot + "Not installed", the server's `hint` verbatim as
+ * the secondary line (degradation doctrine — the server writes those for people), and "Set up →"
+ * into global Settings → Agents.
  */
 function UnavailableToolRow({ check }: { check: BackendCheck }) {
   const hint = toolHint(check)
+  const status = toolAvailabilityPresentation(check)
   return (
     <DropdownMenuItem asChild>
       <RouterLink
@@ -193,23 +206,22 @@ function UnavailableToolRow({ check }: { check: BackendCheck }) {
         className="flex-col items-stretch gap-1"
       >
         <span className="flex items-center gap-2">
-          <StatusDot tone={toolTone(check)} />
+          <StatusDot tone={status.availability.tone} shape={status.availability.shape} />
           <span className="font-mono text-[13px] font-medium">{check.name}</span>
-          {/* Terse on purpose in the compact menu; /tools spells the same state "Not installed". */}
           <span
             data-slot="tool-version"
-            className="ml-auto font-mono text-[11px] font-medium text-muted-foreground"
+            className="ml-auto text-xs font-medium text-muted-foreground"
           >
-            not found
+            {status.availability.label}
           </span>
         </span>
         <span className="flex items-end justify-between gap-3 pl-[15px]">
           {hint ? (
-            <span data-slot="tool-hint" className="min-w-0 text-[11px] leading-snug text-muted-foreground">
+            <span data-slot="tool-hint" className="min-w-0 text-xs leading-snug text-muted-foreground">
               {hint}
             </span>
           ) : null}
-          <span data-slot="tool-setup" className="ml-auto shrink-0 text-[11px] font-semibold text-accent-text">
+          <span data-slot="tool-setup" className="ml-auto shrink-0 text-xs font-semibold text-accent-text">
             Set up →
           </span>
         </span>

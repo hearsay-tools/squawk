@@ -83,7 +83,7 @@ export function ActivityProjectGroups<T extends { projectId: string; projectName
         <div key={group.projectId} data-slot="activity-project-group" data-project={group.projectId} className="flex flex-col gap-2">
           <h3 className="flex items-center gap-2 text-[12.5px] font-semibold text-foreground">
             <span>{group.projectName}</span>
-            <span className="text-[11.5px] font-normal text-muted-foreground tabular-nums">{group.items.length} {countSuffix}</span>
+            <span className="text-xs font-normal text-muted-foreground tabular-nums">{group.items.length} {countSuffix}</span>
           </h3>
           {renderItems(group.items)}
         </div>
@@ -191,7 +191,7 @@ function DecisionRow({
       data-linked={linked ? 'true' : undefined}
       {...hoverHandlers(record.runId, onHover)}
       className={cn(
-        'relative grid min-w-0 grid-cols-1 items-center gap-3 rounded-xl border border-border border-l-[3px] bg-card px-4 py-3 transition-colors md:grid-cols-[minmax(0,1fr)_auto] md:gap-x-4',
+        'relative grid min-w-0 grid-cols-1 items-center gap-3 rounded-xl border border-card-edge border-l-[3px] bg-card px-4 py-3 shadow-card transition-colors md:grid-cols-[minmax(0,1fr)_auto] md:gap-x-4',
         LEFT_ACCENT[record.kind],
         selected && 'border-accent-text bg-accent-strong/[0.06]',
         linked && 'outline-2 outline-offset-1 outline-message-peer-accent',
@@ -209,7 +209,7 @@ function DecisionRow({
           </h3>
           <span
             data-slot="activity-project-badge"
-            className="inline-flex shrink-0 items-center rounded-md border border-border bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+            className="inline-flex shrink-0 items-center rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
           >
             {record.projectName}
           </span>
@@ -227,7 +227,7 @@ function DecisionRow({
           {record.blockingReason}
         </p>
         {meta || unblocks ? (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             {meta ? <span>{meta}</span> : null}
             {unblocks ? <span data-slot="activity-unblocks" className="font-medium text-message-peer-accent">· {unblocks}</span> : null}
           </div>
@@ -311,7 +311,7 @@ export function ActivityQueue({
         </h2>
         <span
           data-slot="activity-attention-count"
-          className="inline-flex items-center rounded-full bg-inbox-count px-2 py-0.5 text-[11.5px] font-semibold text-inbox-count-foreground tabular-nums"
+          className="inline-flex items-center rounded-full bg-inbox-count px-2 py-0.5 text-xs font-semibold text-inbox-count-foreground tabular-nums"
         >
           {items.length}
         </span>

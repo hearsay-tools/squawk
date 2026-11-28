@@ -11,7 +11,8 @@ import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { Link as RouterLink } from 'react-router'
-import { TOOL_SETTINGS_PATH, toolHint, toolSetupPath, toolStateLabel, toolTone } from '@/lib/tool-status'
+import { TOOL_SETTINGS_PATH, toolHint, toolSetupPath } from '@/lib/tool-status'
+import { toolAvailabilityPresentation } from '@/lib/status-semantics'
 import { githubRepoBase } from '@/lib/tasks-table'
 
 type HealthQuery = ReturnType<typeof useHealth>
@@ -29,7 +30,7 @@ function renderToolHint(raw: string): ReactNode {
     if (cliParts.length === 1) return normalized
     return cliParts.map((part, index) =>
       part === 'gh auth login' ? (
-        <code key={index} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11.5px] text-foreground">{part}</code>
+        <code key={index} className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">{part}</code>
       ) : (
         <span key={index}>{part}</span>
       ),
@@ -38,7 +39,7 @@ function renderToolHint(raw: string): ReactNode {
   return parts.map((part, index) => {
     if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
       return (
-        <code key={index} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11.5px] text-foreground">
+        <code key={index} className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
           {part.slice(1, -1)}
         </code>
       )
@@ -54,19 +55,15 @@ function toolDisplayName(name: string, runners: RunnersResponse | undefined): { 
   return entry ? { label: entry.displayName, isAgent: true } : { label: name, isAgent: false }
 }
 
-/** A dry-run server reports every agent CLI as `mock (HSQ_DRY_RUN=1)`. That is a mode, not a
- *  version, so the row says "Dry run" in a flat status tag and keeps the raw string in its tooltip. */
-const DRY_RUN_VERSION = /DRY_RUN=1\b/
-
-function ToolVersion({ version }: { version: string | undefined }) {
-  if (!version) return null
-  if (DRY_RUN_VERSION.test(version)) {
+function ToolVersion({ mode, version, rawVersion }: { mode: { label: string } | undefined; version: string | undefined; rawVersion: string | undefined }) {
+  if (mode) {
     return (
-      <span data-slot="tool-dry-run" title={version} className="shrink-0 rounded bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-        Dry run
+      <span data-slot="tool-dry-run" title={rawVersion} className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        {mode.label}
       </span>
     )
   }
+  if (!version) return null
   return <span className="min-w-0 break-words">· {version}</span>
 }
 
@@ -83,14 +80,14 @@ function AddProjectSection({ health, projects, repository, onAction }: {
 }) {
   const hasContext = Boolean(health.data?.repoRoot || repository || projects.data?.projectsDir)
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-card p-6 max-md:p-4" aria-labelledby="add-project-heading">
+    <section className="space-y-4 rounded-xl border border-card-edge bg-card p-6 shadow-card max-md:p-4" aria-labelledby="add-project-heading">
       <div>
         <h2 id="add-project-heading" className="text-base font-semibold text-foreground">Add project</h2>
         <p className="mt-1 text-[13px] leading-[1.5] text-muted-foreground">Start a new repository, open an existing local folder, or clone a GitHub repository.</p>
       </div>
       {hasContext ? (
         <div className="border-y border-border py-3.5">
-          <h3 className="mb-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Active project</h3>
+          <h3 className="mb-2.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Active project</h3>
           <dl className="space-y-2 text-[13px] leading-[1.5] text-muted-foreground">
             {health.data?.repoRoot ? <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-[160px_minmax(0,1fr)]"><dt className="font-medium text-foreground">Local folder</dt><dd className="min-w-0 font-mono text-xs break-all">{health.data.repo?.root ?? health.data.repoRoot}</dd></div> : null}
             {repository ? <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-[160px_minmax(0,1fr)]"><dt className="font-medium text-foreground">Repository</dt><dd className="min-w-0 font-mono text-xs break-all">{repository.replace(/^https:\/\//, '')}</dd></div> : null}
@@ -115,7 +112,7 @@ function ToolsDiagnosticsSection({ health, runners, copying, onCopy }: {
   onCopy: () => Promise<void>
 }) {
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-card p-6 max-md:p-4" aria-labelledby="tools-heading">
+    <section className="space-y-4 rounded-xl border border-card-edge bg-card p-6 shadow-card max-md:p-4" aria-labelledby="tools-heading">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 id="tools-heading" className="text-base font-semibold text-foreground">Tools diagnostics</h2>
@@ -125,22 +122,23 @@ function ToolsDiagnosticsSection({ health, runners, copying, onCopy }: {
           <RouterLink to={TOOL_SETTINGS_PATH} data-slot="tools-settings">Tool settings<ChevronRight className="size-3.5 shrink-0" aria-hidden="true" /></RouterLink>
         </Button>
       </div>
-      {health.isError ? <p role="alert" className="text-sm text-destructive">Could not refresh tool diagnostics. Recheck to retry.</p> : null}
+      {health.isError ? <p role="alert" className="text-sm text-semantic-red">Could not refresh tool diagnostics. Recheck to retry.</p> : null}
       {!health.data && !health.isError ? <p role="status" className="text-sm text-muted-foreground">Checking installed tools…</p> : null}
       {health.data ? <dl className="divide-y divide-border border-y border-border text-[13px] leading-[1.5] text-muted-foreground">
         {health.data.checks.map((check) => {
           const hint = toolHint(check)
           const tool = toolDisplayName(check.name, runners)
+          const status = toolAvailabilityPresentation(check)
           return <div key={check.name} data-slot="tool-row" data-tool={check.name} data-available={check.available} className="grid grid-cols-1 gap-x-4 gap-y-1 py-3 sm:grid-cols-[160px_minmax(0,1fr)] sm:items-center">
             <dt className="flex items-center gap-2.5">
-              <StatusDot tone={toolTone(check)} />
+              <StatusDot tone={status.availability.tone} shape={status.availability.shape} />
               {/* 14px semibold, as on the Settings agent cards: at 13px medium, Poppins merges the
                   dot of "i" into its stem and "Pi" reads as "PI". */}
               <span className={tool.isAgent ? 'text-[14px] font-semibold text-foreground' : 'font-mono text-[13px] font-semibold text-foreground'}>{tool.label}</span>
             </dt>
             <dd className="flex min-w-0 items-center gap-x-1.5 text-muted-foreground">
-              <span className="shrink-0">{toolStateLabel(check)}</span>
-              <ToolVersion version={check.version} />
+              <span className="shrink-0">{status.availability.label}</span>
+              <ToolVersion mode={status.mode} version={status.version} rawVersion={status.rawVersion} />
               {check.available ? null : (
                 <Button asChild variant="outline" size="sm" className={`${TOOL_ACTION_CLASS} ml-auto`}>
                   <RouterLink to={toolSetupPath(check.name)} data-slot="tool-setup">Set up<ChevronRight className="size-3.5 shrink-0" aria-hidden="true" /></RouterLink>

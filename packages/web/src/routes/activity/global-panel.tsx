@@ -21,7 +21,7 @@ import { useWaitHighlight } from './use-wait-highlight'
 const projectActivityPath = (projectId: string) => `/p/${encodeURIComponent(projectId)}/activity`
 const projectPath = (projectId: string) => `/p/${encodeURIComponent(projectId)}/`
 
-const PANEL = 'rounded-xl border border-border bg-card px-4 pt-3.5 pb-4'
+const PANEL = 'rounded-xl border border-card-edge bg-card shadow-card px-4 pt-3.5 pb-4'
 const HEADER_LINK = 'ml-auto inline-flex items-center text-[12px] text-accent-text hover:underline focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11'
 
 function PanelHeader({ project, headingId, detail, to, label }: { project: ActivityProject; headingId: string; detail: string; to: string; label: string }) {

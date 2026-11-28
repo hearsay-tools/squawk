@@ -69,7 +69,7 @@ export function PendingAskHeader({
       {stepped && mode === 'options' ? (
         <span
           data-slot="ask-step-indicator"
-          className="rounded-full bg-accent-strong/15 px-2 py-0.5 text-[11px] font-semibold text-foreground tabular-nums"
+          className="rounded-full bg-accent-strong/15 px-2 py-0.5 text-xs font-semibold text-foreground tabular-nums"
         >
           {stepLabel}
         </span>
@@ -176,8 +176,8 @@ export function DesktopStepPills({
                   : 'border-border bg-transparent text-muted-foreground hover:text-foreground',
             )}
           >
-            <span className="tabular-nums text-[11px] font-semibold">
-              {answered ? <CheckIcon aria-hidden="true" className="size-3 text-success" /> : `${index + 1}.`}
+            <span className="tabular-nums text-xs font-semibold">
+              {answered ? <CheckIcon aria-hidden="true" className="size-3 text-semantic-green" /> : `${index + 1}.`}
             </span>
             <span className="max-w-[140px] truncate">{question.header}</span>
           </button>
@@ -224,7 +224,7 @@ export function AskCommentStep({
   return (
     <div data-slot="ask-comment-step" className="flex flex-col gap-2.5">
       <div className="rounded-lg border border-border bg-card p-2.5">
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Selected answers
         </p>
         <ul className="flex flex-col gap-1">
@@ -239,7 +239,7 @@ export function AskCommentStep({
                 >
                   {question.header}
                 </button>
-                <span className={cn('min-w-0 truncate text-end', answered ? 'text-foreground' : 'text-danger')}>
+                <span className={cn('min-w-0 truncate text-end', answered ? 'text-foreground' : 'text-semantic-red')}>
                   {questionSummaryText(index, selections, otherAnswers)}
                 </span>
               </li>
@@ -532,7 +532,7 @@ export function AskDeliveryNotices({
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="text-xs text-danger">
+        <p role="alert" className="text-xs text-semantic-red">
           {error}
         </p>
       ) : null}

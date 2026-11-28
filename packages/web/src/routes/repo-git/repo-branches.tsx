@@ -148,13 +148,13 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
         <form data-slot="branch-create" className="mt-5 flex flex-col items-stretch gap-3" onSubmit={submitCreate}>
           <label htmlFor="new-branch-name" className="text-sm font-medium">Branch name</label>
           <p data-slot="branch-create-base" className="-mt-1 text-xs text-muted-foreground">
-            Create from <span className="font-mono text-[11px] text-foreground">{info.branch}</span>.
+            Create from <span className="font-mono text-xs text-foreground">{info.branch}</span>.
           </p>
           <Input
             id="new-branch-name"
             aria-label="New branch name"
             placeholder="new-branch-name"
-            className="h-11 bg-background placeholder:text-muted-foreground/70"
+            className="h-11 bg-background placeholder:text-soft-foreground"
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
           />
@@ -211,7 +211,7 @@ function PullRequestRow({ pr }: { pr: GithubItem }) {
   const inner = (
     <>
       <GitPullRequestIcon size={16} aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">#{pr.number}</span>
+      <span className="shrink-0 font-mono text-xs text-muted-foreground">#{pr.number}</span>
       <span className="min-w-0 flex-1 truncate text-[13px]">{pr.title}</span>
       {pr.checks ? <ChecksBadge checks={pr.checks} /> : null}
     </>
@@ -266,7 +266,7 @@ function BranchClassLabel({ entry }: { entry: RepoBranchEntry }) {
     <span
       data-slot="branch-class"
       className={cn(
-        'shrink-0 rounded-[4px] border px-1.5 py-px text-[11px] leading-4 font-medium',
+        'shrink-0 rounded-[4px] border px-1.5 py-px text-xs leading-4 font-medium',
         entry.class === 'active' ? 'border-status-running/40 text-status-running'
           : entry.class === 'not-landed' || entry.class === 'orphan' ? 'border-inbox-count-foreground/40 text-inbox-count-foreground'
           : 'border-border text-soft-foreground',

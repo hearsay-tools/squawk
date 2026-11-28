@@ -9,5 +9,10 @@ export const DESIGN_SAMPLES: Record<string, string> = {
   'no-dark-variant': 'dark:bg-surface',
   'fixture-serve-must-pin-cez-home': 'CEZ_DRY_RUN',
   'no-100vh': 'h-screen',
+  'no-micro-font-size': 'text-[11px]',
+  'no-undefined-warning-token': 'text-warning',
+  'no-raw-tailwind-palette-ink': 'text-red-700',
+  'no-text-opacity-modifier': 'text-foreground/80',
+  'no-dead-shadow-scale': 'shadow-2xl',
 };
 
