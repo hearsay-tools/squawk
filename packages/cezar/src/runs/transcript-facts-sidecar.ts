@@ -23,8 +23,7 @@ export function tempSidecarPath(path: string): string {
 }
 
 /** Worker side: write a temp file, then rename it over `path` unless the job was revoked. */
-export function commitSidecar(path: string, serialized: string, signal: Int32Array): SidecarCommit {
-  const tmp = tempSidecarPath(path);
+export function commitSidecar(path: string, serialized: string, signal: Int32Array, tmp = tempSidecarPath(path)): SidecarCommit {
   try {
     writeFileSync(tmp, serialized, { mode: 0o600 });
     if (Atomics.compareExchange(signal, COMMIT_SLOT, OPEN, RENAMING) !== OPEN) {

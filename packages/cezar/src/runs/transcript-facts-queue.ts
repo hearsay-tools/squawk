@@ -1,6 +1,7 @@
+import { rmSync } from 'node:fs';
 import { MessageChannel, receiveMessageOnPort, Worker, type MessagePort } from 'node:worker_threads';
 import { loadTranscriptFacts, type FactsLoadResult } from './transcript-facts-load.ts';
-import { RESULT_SLOT, revokeSidecar, SIGNAL_BYTES, type SidecarCommit } from './transcript-facts-sidecar.ts';
+import { RESULT_SLOT, revokeSidecar, SIGNAL_BYTES, tempSidecarPath, type SidecarCommit } from './transcript-facts-sidecar.ts';
 import type { FactsJobMessage, FactsJobReply } from './transcript-facts-worker.ts';
 
 export const REFRESH_FACTS = Symbol('transcript changed');
@@ -19,6 +20,8 @@ interface Job<T> {
   error?: Error | undefined;
   port?: MessagePort | undefined;
   signal?: Int32Array | undefined;
+  /** The temp file the worker writes this job's sidecar to. */
+  tmp?: string | undefined;
   timer?: NodeJS.Timeout;
 }
 
@@ -184,8 +187,10 @@ export class TranscriptFactsQueue<T> {
       job.signal = new Int32Array(new SharedArrayBuffer(SIGNAL_BYTES));
       port1.once('message', (reply: FactsJobReply) => this.complete(job, reply));
       job.timer = setTimeout(() => this.fail(new Error(`Transcript facts worker timed out for ${job.runId}`)), JOB_TIMEOUT_MS);
+      const sidecar = this.sidecarPath?.(job.runId);
+      job.tmp = sidecar && tempSidecarPath(sidecar);
       const message: FactsJobMessage = { dataDir: this.dataDir, runId: job.runId, port: port2,
-        signal: job.signal.buffer as SharedArrayBuffer, sidecar: this.sidecarPath?.(job.runId) };
+        signal: job.signal.buffer as SharedArrayBuffer, ...(sidecar ? { sidecar, tmp: job.tmp } : {}) };
       try { this.worker.postMessage(message, [port2]); } catch (error) { port2.close(); throw error; }
     } catch (error) { this.fail(error instanceof Error ? error : new Error(String(error))); }
   }
@@ -212,6 +217,7 @@ export class TranscriptFactsQueue<T> {
     job.port?.close();
     job.port = undefined;
     job.signal = undefined;
+    job.tmp = undefined;
     if (this.active === job) this.active = undefined;
   }
 
@@ -229,11 +235,17 @@ export class TranscriptFactsQueue<T> {
   private disposeWorker(exited = false): void {
     // Revoke before terminating: a terminated worker could leave a rename half-signalled.
     if (this.active?.signal) revokeSidecar(this.active.signal, !exited);
+    const tmp = this.active?.tmp;
     const worker = this.worker;
     const lifecycle = this.workerLifecycle;
     this.worker = undefined;
     this.workerLifecycle = undefined;
     if (!worker) return;
+    // Terminating mid-write leaves the job's temp file: remove it once the worker writes no more.
+    if (tmp) {
+      if (exited) removeTemp(tmp);
+      else worker.once('exit', () => removeTemp(tmp));
+    }
     if (lifecycle) {
       Atomics.store(lifecycle, 1, 1);
       if (Atomics.load(lifecycle, 0) === 0) {
@@ -256,4 +268,8 @@ export class TranscriptFactsQueue<T> {
     this.dispatch = undefined;
     for (const job of this.jobs.values()) this.settle(job, error);
   }
+}
+
+function removeTemp(path: string): void {
+  try { rmSync(path, { force: true }); } catch { /* removeHistory removes it with the run */ }
 }

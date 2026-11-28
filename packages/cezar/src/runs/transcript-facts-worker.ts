@@ -10,6 +10,8 @@ export interface FactsJobMessage {
   signal: SharedArrayBuffer;
   /** Where to commit the sidecar of a load that needs one. Absent for read-only indexes. */
   sidecar?: string | undefined;
+  /** The temp file to write first; the queue removes it if it stops the worker mid-write. */
+  tmp?: string | undefined;
 }
 export type FactsJobReply = { result: FactsLoadResult | undefined; sidecar?: SidecarCommit } | { error: string };
 
@@ -18,13 +20,13 @@ export type FactsJobReply = { result: FactsLoadResult | undefined; sidecar?: Sid
 const lifecycle = new Int32Array(workerData.lifecycle);
 Atomics.store(lifecycle, 0, 1);
 if (Atomics.load(lifecycle, 1) === 1) parentPort!.close();
-else parentPort!.on('message', ({ dataDir, runId, port, signal, sidecar }: FactsJobMessage) => {
+else parentPort!.on('message', ({ dataDir, runId, port, signal, sidecar, tmp }: FactsJobMessage) => {
   const slots = new Int32Array(signal);
   let reply: FactsJobReply;
   try {
     const result = loadTranscriptFacts(dataDir, runId);
     reply = { result, ...(sidecar && result?.needsWrite
-      ? { sidecar: commitSidecar(sidecar, JSON.stringify(result.facts), slots) } : {}) };
+      ? { sidecar: commitSidecar(sidecar, JSON.stringify(result.facts), slots, tmp) } : {}) };
   } catch (error) {
     reply = { error: String(error) };
   }

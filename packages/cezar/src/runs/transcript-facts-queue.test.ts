@@ -1,4 +1,5 @@
 import fs, { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { once } from 'node:events';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -285,6 +286,28 @@ it('a commit revoked before the worker renames leaves no sidecar or temp file', 
     expect(accepted).toEqual([{ written: false }]);
     expect(readdirSync(join(dir, 'runs'))).toEqual(['a.ndjson']);
   } finally { queue.stop(); }
+});
+
+it.each(['stop', 'forget'] as const)('%s removes the temp file of a write the worker could not finish', async (action) => {
+  seed('a');
+  let worker!: Worker;
+  let tmp: string | undefined;
+  const original = Worker.prototype.postMessage;
+  vi.spyOn(Worker.prototype, 'postMessage').mockImplementationOnce(function (this: Worker, message: FactsJobMessage, transfer) {
+    worker = this;
+    tmp = message.tmp;
+    original.call(this, message, transfer);
+  });
+  const reader = index();
+  const pending = Promise.allSettled([reader.ready('a')]);
+  await tick();
+  // What a worker stopped inside its write leaves behind.
+  writeFileSync(tmp!, '{"partial');
+  const exited = once(worker, 'exit');
+  if (action === 'stop') reader.stop(); else reader.forget('a');
+  await exited;
+  await pending;
+  expect(existsSync(tmp!)).toBe(false);
 });
 
 it('the worker commits a rebuilt sidecar that the main thread only records', async () => {
