@@ -122,7 +122,7 @@ describe('the board in motion', () => {
   it('bumps a chip whose count changed', () => {
     const motion = motionOf({ kind: 'chip-changed', chip: 'working', from: 0, to: 1 })
     render(<QueryClientProvider client={runnersClient}><MemoryRouter><SummaryChips summary={summarize([project({ tasks: [A] })])} tasksTo="/" bumps={motion.bumps} /></MemoryRouter></QueryClientProvider>)
-    expect(document.querySelector('[data-chip="working"] strong')?.classList.contains('activity-bump')).toBe(true)
-    expect(document.querySelector('[data-chip="queued"] strong')?.classList.contains('activity-bump')).toBe(false)
+    expect(document.querySelector('[data-chip="Working"] strong')?.classList.contains('activity-bump')).toBe(true)
+    expect(document.querySelector('[data-chip="Queued"] strong')?.classList.contains('activity-bump')).toBe(false)
   })
 })

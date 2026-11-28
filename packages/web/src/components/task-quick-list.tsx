@@ -628,7 +628,7 @@ function RunRow({
           />
         </div>
         {meta.references.length ? <span ref={setOverflowContainer} data-slot="protected-reference-overflow"
-          className={cn('shrink-0 self-end', inertReferences && '-my-1.5 self-center')} /> : null}
+          className={cn('shrink-0 self-end empty:hidden', inertReferences && '-my-1.5 self-center')} /> : null}
         {run.delegation?.role === 'worker' ? <span className="sr-only">Worker · {runStatusPresentation(run, attention).label}</span> : null}
         <RunRowActions
           run={run}

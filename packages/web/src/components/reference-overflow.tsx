@@ -184,8 +184,11 @@ export function ReferenceList({ references, maxVisible, taskTitle, projectId, ru
       let count = Math.min(maxVisible, references.length)
       // Cached intrinsic widths survive removing a chip; thresholds do not oscillate on resize.
       while (count > 0) {
-        const needed = references.slice(0, count).reduce((sum, reference) => sum + (widths.current.get(referenceKey(reference)) ?? 48) + 4, 0)
-          + (overflowContainer === undefined && count < references.length ? overflowWidth : 0)
+        const inlineOverflow = overflowContainer === undefined && count < references.length
+        const gaps = (inlineOverflow ? count : Math.max(0, count - 1)) * 4
+        const needed = references.slice(0, count).reduce((sum, reference) => sum + (widths.current.get(referenceKey(reference)) ?? 48), 0)
+          + gaps
+          + (inlineOverflow ? overflowWidth : 0)
         // Showing the last reference removes the protected overflow button. Its current width
         // must be returned to that candidate's budget, or a narrow row can stay stuck at +1.
         const reclaimed = count === references.length ? overflowContainer?.getBoundingClientRect().width ?? 0 : 0

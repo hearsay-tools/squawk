@@ -180,7 +180,7 @@ const board = () => {
     } : null,
     rail: [...document.querySelectorAll('[data-slot="activity-open-requests"] [data-slot="activity-request"]')]
       .map(entry => ({ id: entry.dataset.request, text: entry.textContent })),
-    openChip: document.querySelector('[data-slot="activity-chip"][data-chip="open requests"] strong')?.textContent ?? null,
+    openChip: document.querySelector('[data-slot="activity-chip"][data-chip="Open requests"] strong')?.textContent ?? null,
   };
 })()`
 }

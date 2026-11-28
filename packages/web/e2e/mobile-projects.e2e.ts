@@ -221,8 +221,14 @@ describe('phone Tools page (#621 follow-up)', () => {
           // Compare against the routed payload, not a fixed count: a CI runner may lack other tools too.
           page.rows.forEach((row, index) => {
             const check = health.checks[index]!
-            if (row.available === 'true') expect([row.tone, row.state?.startsWith('Installed'), row.setup]).toEqual(['success', true, null])
-            else expect([row.tone, row.state, row.hint]).toEqual(['danger', 'Not installed', shownHint(check.hint as string | undefined)])
+            const dryRun = typeof check.version === 'string' && /DRY_RUN=1\b/.test(check.version)
+            if (row.available === 'true') {
+              const expected = dryRun ? ['neutral', 'Simulated', null] : ['success', 'Installed', null]
+              expect([row.tone, row.state, row.setup]).toEqual(expected)
+            } else {
+              const expectedTone = check.name === 'git' ? 'danger' : 'neutral'
+              expect([row.tone, row.state, row.hint]).toEqual([expectedTone, 'Not installed', shownHint(check.hint as string | undefined)])
+            }
           })
           expect(page.rows[missing]!.hint).toBe('Install it and reload the cockpit.')
           expect(page.rows.filter((row) => row.setup !== null)).toHaveLength(health.checks.filter((check) => check.available !== true).length)

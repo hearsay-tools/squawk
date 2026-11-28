@@ -416,7 +416,7 @@ describe('tasks table overview', () => {
       const f = browser.waitForValue(facts(selector)) as PillFacts
       expect(f.dotShown, `${surface}: dot shown`).toBe(true)
       expect(f.tone, `${surface}: dot tone`).toBe('success')
-      expect(f.label, `${surface}: label`).toBe('done')
+      expect(f.label, `${surface}: label`).toBe('Done')
     }
     try {
       check('table', `${TABLE_ROW}[data-run-id="fix-done"] [data-slot="pill"]`)
