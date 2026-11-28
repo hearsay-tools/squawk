@@ -100,7 +100,7 @@ describe('task thread', () => {
         focusWithKeyboard(browser, link)
         browser.evaluate(`(() => {
           const target = document.querySelector(${JSON.stringify(link)})
-          const scroller = document.querySelector('[data-slot="main"]')
+          const scroller = document.querySelector('[data-slot="thread-transcript"]') ?? document.querySelector('[data-slot="main"]')
           scroller.scrollTop += target.getBoundingClientRect().top - 180
         })()`)
         const affordance = browser.evaluate(`(() => {
@@ -215,6 +215,7 @@ describe('task thread', () => {
   })
 
   it('serves and renders the agent screenshot the transcript persisted', () => {
+    browser.evaluate(`document.querySelector('[data-slot="thread-image"]')?.scrollIntoView({ block: 'center', behavior: 'instant' })`)
     browser.waitForFunction(`document.querySelector('[data-slot="thread-image"]')?.naturalWidth > 0`)
     expect(
       browser.evaluate(`document.querySelector('[data-slot="thread-image"]').getAttribute('src')`),

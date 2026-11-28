@@ -32,26 +32,49 @@ import { useFinishRun } from './use-finish-run'
  * gate never shows a second empty text box above the composer), Draft PR (`POST /pr`; 409 → the copyable `git merge` manual
  * fallback), and ✓ Accept (the shared finish action from use-finish-run.ts).
  */
-export function ReviewPanel({ run, projectId, onResolved }: { run: ApiRun; projectId?: string | undefined; onResolved?: (() => void) | undefined }) {
+export function ReviewGateBanner({
+  run,
+  projectId,
+  onResolved,
+}: {
+  run: ApiRun
+  projectId?: string | undefined
+  onResolved?: (() => void) | undefined
+}) {
+  return (
+    <div
+      data-slot="review-banner"
+      className="flex flex-col gap-2 rounded-xl border border-info/35 bg-info/10 px-3.5 py-2.5"
+    >
+      <div className="flex min-w-0 items-start gap-2.5">
+        <EyeIcon className="size-4 shrink-0 text-semantic-info" aria-hidden="true" />
+        <p className="min-w-0 break-words text-[13px] leading-relaxed">
+          <span className="font-semibold">Review the changes before anything lands.</span>{' '}
+          <span className="block text-muted-foreground">
+            Read the diff, send notes back, draft a PR — or accept. Nothing merges on its own.
+          </span>
+        </p>
+      </div>
+      <ReviewActions run={run} projectId={projectId} onResolved={onResolved} />
+    </div>
+  )
+}
+
+export function ReviewPanel({
+  run,
+  projectId,
+  onResolved,
+  showDiff = true,
+}: {
+  run: ApiRun
+  projectId?: string | undefined
+  onResolved?: (() => void) | undefined
+  showDiff?: boolean
+}) {
   return (
     <section data-slot="review-panel" aria-label="Review the changes" className="flex flex-col gap-2.5">
-      <div
-        data-slot="review-banner"
-        className="flex flex-col gap-2 rounded-md border border-info/35 bg-info/10 px-3.5 py-2"
-      >
-        <div className="flex min-w-0 items-start gap-2.5">
-          <EyeIcon className="size-4 shrink-0 text-semantic-info" aria-hidden="true" />
-          <p className="min-w-0 break-words text-[13px] leading-relaxed">
-            <span className="font-semibold">Review the changes before anything lands.</span>{' '}
-            <span className="block text-muted-foreground">
-              Read the diff, send notes back, draft a PR — or accept. Nothing merges on its own.
-            </span>
-          </p>
-        </div>
-        <ReviewActions run={run} projectId={projectId} onResolved={onResolved} />
-      </div>
-
-      <RunDiff runId={run.id} projectId={projectId} />
+      <ReviewGateBanner run={run} projectId={projectId} onResolved={onResolved} />
+      {showDiff ? <RunDiff runId={run.id} projectId={projectId} /> : null}
     </section>
   )
 }

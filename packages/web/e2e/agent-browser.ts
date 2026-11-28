@@ -1034,7 +1034,7 @@ export class AgentBrowser {
         for (const [y, edge] of [[box.top + 1, 'top'], [box.bottom - 1, 'bottom']]) {
           let hit = document.elementFromPoint(x, y);
           if (!hit || hit === target || target.contains(hit)) continue;
-          while (hit && !['fixed', 'sticky'].includes(getComputedStyle(hit).position)) hit = hit.parentElement;
+          while (hit && !['fixed', 'sticky'].includes(getComputedStyle(hit).position) && hit.dataset?.slot !== 'thread-jump') hit = hit.parentElement;
           if (!hit) continue;
           const obstacle = hit.getBoundingClientRect();
           delta = edge === 'top' ? box.top - obstacle.bottom - 1 : box.bottom - obstacle.top + 1;

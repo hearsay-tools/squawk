@@ -11,6 +11,7 @@ import { waitForSettledSample } from './visual-ready'
 import { assistantWidthExpression } from './transcript-measurements'
 import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './fixture-server'
 import { AgentBrowser, bootProjectId, squawkCli, fixtureServeEnv } from './agent-browser'
+import { dismissWithEscape } from './contrast'
 import { expectedRowCount, largeThreadEvents } from './fixtures/make-large-thread'
 import recordJson from './fixtures/thread-run.record.json'
 // fixture-server starts: 1
@@ -74,7 +75,7 @@ let bootProject: string
  *  every cockpit link is scoped, and every legacy flat URL redirects onto its scoped twin. */
 const scoped = (path: string) => `/p/${bootProject}${path}`
 
-const MAIN = `document.querySelector('[data-slot="main"]')`
+const MAIN = `document.querySelector('[data-slot="thread-transcript"]')`
 const nearBottom = `(() => { const m = ${MAIN}; return m.scrollHeight - m.scrollTop - m.clientHeight < 80 })()`
 const rowCount = () => browser.count('[data-slot="thread-row"]')
 const domSize = () => Number(browser.evaluate(`document.querySelectorAll('*').length`))
@@ -363,99 +364,46 @@ describe('thread virtualization on a 1,000-row transcript', () => {
   }, 90_000)
 })
 
-// hearsay-tools/cezarion#1601: the desktop dock is sticky, so an open Activity card covers the
-// transcript. It starts folded, folds while the reader scrolls up, and comes back on the way down.
-describe('Activity folds while reading up (#1601)', () => {
-  const SUMMARY = '[data-slot="run-activity-dock"] > button'
-  const expanded = `document.querySelector('${SUMMARY}')?.getAttribute('aria-expanded')`
-  /** Like parkAt, with the gesture's direction: positive `deltaY` reads down. The target is
-   *  resolved once, so a relative target does not move on with each retry. */
-  function readTo(target: string, deltaY: number) {
-    const top = Number(browser.evaluate(`(() => { const m = ${MAIN}; return Math.round(${target}) })()`))
-    browser.evaluate(`${MAIN}.dispatchEvent(new WheelEvent('wheel', { deltaY: ${deltaY}, bubbles: true }))`)
-    // Virtua can compensate after the first matching scrollTop and send a downward scroll
-    // that restores Activity. Hold the position AND extent while retrying the reader gesture.
-    browser.waitForStable(`(() => {
-      const m = ${MAIN}
-      const target = ${top}
-      if (Math.abs(m.scrollTop - target) > 50) {
-        m.dispatchEvent(new WheelEvent('wheel', { deltaY: ${deltaY}, bubbles: true }))
-        m.scrollTop = target
-        return false
+// hearsay-tools/squawk#4374: Activity lives in the header trigger (popover < 1600px, collapsible
+// right sidebar >= 1600px) so it never sits inside the bottom dock or covers reading history.
+describe('Activity header popover and ultra-wide sidebar (hearsay-tools/squawk#4374)', () => {
+  const TRIGGER = '[data-slot="run-activity-trigger"]'
+
+  it('opens Activity from the header on 1280px without shifting the transcript or bottom dock', () => {
+    browser.setViewport(1280, 900)
+    openThread()
+    const before = waitForSettledSample<{ dockTop: number; transcriptBottom: number; activityInDock: boolean }>(browser, `(() => {
+      const dock = document.querySelector('[data-slot="thread-dock"]')
+      const dockRect = dock.getBoundingClientRect()
+      const transcript = document.querySelector('[data-slot="thread-transcript"]').getBoundingClientRect()
+      return {
+        dockTop: Math.round(dockRect.top),
+        transcriptBottom: Math.round(transcript.bottom),
+        activityInDock: dock.querySelector('[data-slot="run-activity-dock"]') !== null,
       }
-      return { top: m.scrollTop, height: m.scrollHeight, viewport: m.clientHeight }
-    })()`, { holdMs: 200 })
-  }
-  /** The first transcript row under the sticky header, and where it sits. */
-  const anchor = `(() => {
-    const top = document.querySelector('[data-slot="run-header"]').getBoundingClientRect().bottom
-    const row = [...document.querySelectorAll('[data-slot="thread-row"]')].find(row => row.getBoundingClientRect().bottom > top)
-    return row ? row.dataset.rowKey + '@' + Math.round(row.getBoundingClientRect().top) : null
-  })()`
-  const toggle = (state: 'true' | 'false') => {
-    browser.click(SUMMARY)
-    browser.waitForFunction(`${expanded} === '${state}'`)
-  }
-
-  it('starts folded on desktop, folds an open card while reading up and restores it reading down', () => {
-    browser.setViewport(1280, 900)
-    openThread()
-    expect(browser.waitForValue(`${expanded} ?? null`)).toBe('false')
-    toggle('true')
-
-    readTo('m.scrollHeight - m.clientHeight - 3000', -120)
-    browser.waitForFunction(`${expanded} === 'false'`)
-    // Still at the bottom of the viewport, and the text under the reader did not move.
-    const folded = waitForSettledSample<{ atBottom: boolean; anchor: string }>(browser, `(() => {
-      const dock = document.querySelector('[data-slot="thread-dock"]').getBoundingClientRect()
-      return { atBottom: Math.abs(dock.bottom - ${MAIN}.getBoundingClientRect().bottom) < 2, anchor: ${anchor} }
     })()`)
-    expect(folded).toMatchObject({ atBottom: true })
-
-    readTo('m.scrollTop + 600', 120)
-    browser.waitForFunction(`${expanded} === 'true'`)
-    const restoredAt = waitForSettledSample<string>(browser, anchor)
-    // The restore grows the sticky dock over the transcript; the rows themselves stay put.
-    readTo('m.scrollTop - 600', -120)
-    browser.waitForFunction(`${expanded} === 'false'`)
-    expect(waitForSettledSample<string>(browser, anchor)).toBe(folded.anchor)
-    expect(restoredAt).not.toBeNull()
+    expect(before.activityInDock).toBe(false)
+    browser.click(TRIGGER)
+    browser.waitForFunction(`document.querySelector('[data-slot="run-activity-popover"] [data-slot="run-activity-dock"]') !== null`)
+    const after = waitForSettledSample<{ dockTop: number; transcriptBottom: number }>(browser, `(() => {
+      const dock = document.querySelector('[data-slot="thread-dock"]').getBoundingClientRect()
+      const transcript = document.querySelector('[data-slot="thread-transcript"]').getBoundingClientRect()
+      return { dockTop: Math.round(dock.top), transcriptBottom: Math.round(transcript.bottom) }
+    })()`)
+    expect(after).toEqual({ dockTop: before.dockTop, transcriptBottom: before.transcriptBottom })
+    dismissWithEscape(browser, { content: '[data-slot="run-activity-popover"]', focus: TRIGGER })
+    browser.setViewport(1440, 900)
   }, 90_000)
 
-  it('keeps a manual unfold open for the rest of the reading session', () => {
-    browser.setViewport(1280, 900)
+  it('renders a collapsible right-hand Activity sidebar on ultra-wide viewports (>= 1600px)', () => {
+    browser.setViewport(1720, 900)
     openThread()
-    toggle('true')
-    readTo('m.scrollHeight - m.clientHeight - 3000', -120)
-    browser.waitForFunction(`${expanded} === 'false'`)
-    expect(browser.waitForValue(`${expanded} ?? null`)).toBe('false')
-    toggle('true')
-    readTo('m.scrollTop - 600', -120)
-    readTo('m.scrollTop + 300', 120)
-    readTo('m.scrollTop - 600', -120)
-    expect(waitForSettledSample<string | null>(browser, `${expanded} ?? null`)).toBe('true')
-
-    // Jump to latest ends the session; the next upward read folds again.
-    browser.click('[data-slot="jump-to-latest"]')
-    browser.waitForFunction(nearBottom)
-    browser.waitForFunction(`document.querySelector('[data-slot="jump-to-latest"]') === null`)
-    expect(waitForSettledSample<string | null>(browser, `${expanded} ?? null`)).toBe('true')
-    readTo('m.scrollHeight - m.clientHeight - 3000', -120)
-    browser.waitForFunction(`${expanded} === 'false'`)
-  }, 90_000)
-
-  it('keeps a card folded before the read folded on the way back down', () => {
-    browser.setViewport(1280, 900)
-    openThread()
-    toggle('true')
-    readTo('m.scrollHeight - m.clientHeight - 3000', -120)
-    browser.waitForFunction(`${expanded} === 'false'`)
-    readTo('m.scrollTop + 600', 120)
-    browser.waitForFunction(`${expanded} === 'true'`)
-    toggle('false')
-    readTo('m.scrollTop - 600', -120)
-    readTo('m.scrollTop + 600', 120)
-    expect(waitForSettledSample<string | null>(browser, `${expanded} ?? null`)).toBe('false')
+    browser.waitForFunction(`document.querySelector('[data-slot="thread-activity-sidebar"] [data-slot="run-activity-dock"]') !== null`)
+    expect(browser.evaluate(`document.querySelector('${TRIGGER}')?.getAttribute('aria-expanded')`)).toBe('true')
+    browser.click(TRIGGER)
+    browser.waitForFunction(`document.querySelector('[data-slot="thread-activity-sidebar"]') === null`)
+    browser.click(TRIGGER)
+    browser.waitForFunction(`document.querySelector('[data-slot="thread-activity-sidebar"]') !== null`)
     browser.setViewport(1440, 900)
   }, 90_000)
 })
@@ -562,7 +510,7 @@ describe('phone viewports', () => {
     browser.evaluate(`document.documentElement.style.setProperty('--kb', '280px')`)
     browser.evaluate(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`)
     const reserved = waitForSettledSample(browser, `(() => {
-      const main = ${MAIN}.getBoundingClientRect();
+      const main = document.querySelector('[data-slot="main"]').getBoundingClientRect();
       const shellComposer = document.querySelector('[data-slot="main"] + [data-slot="composer"]');
       const reserve = shellComposer.getBoundingClientRect();
       return { mainBottom: main.bottom, reserveHeight: reserve.height, viewportHeight: innerHeight };
@@ -624,18 +572,18 @@ describe('tool cards remain below assistant messages after live appends', () => 
       window.__overlapKey = row.dataset.rowKey;
       window.__overlapIndex = [...row.querySelectorAll('[data-slot="tool-card"]')].indexOf(window.__overlapCard);
       window.__currentOverlapCard = () => document.querySelector('[data-row-key="' + CSS.escape(window.__overlapKey) + '"]')?.querySelectorAll('[data-slot="tool-card"]')[window.__overlapIndex];
-      window.__beforeOverlap = {top: document.querySelector('[data-slot="main"]').scrollTop, height: document.querySelector('[data-slot="main"]').scrollHeight, rowTop: row.getBoundingClientRect().top, rowKey: row.dataset.rowKey};
+      window.__beforeOverlap = {top: document.querySelector('[data-slot="thread-transcript"]').scrollTop, height: document.querySelector('[data-slot="thread-transcript"]').scrollHeight, rowTop: row.getBoundingClientRect().top, rowKey: row.dataset.rowKey};
       window.__overlapCard.querySelector('button').click();
     })()`)
     browser.waitForFunction(`window.__currentOverlapCard()?.dataset.state === 'open'`)
     assertSeparated()
     // Virtua can remount a measured row between interactions; address its stable key,
     // never dispatch a synthetic click to the detached DOM node from the previous frame.
-    writeFileSync(join(artifactsDir, `overlap-layout-${mode}-${width}.json`), JSON.stringify(browser.evaluate(`({ before: window.__beforeOverlap, top: document.querySelector('[data-slot="main"]').scrollTop, height: document.querySelector('[data-slot="main"]').scrollHeight, rows: [...document.querySelectorAll('[data-row-key]')].map(row => ({ key:row.dataset.rowKey, top:row.getBoundingClientRect().top, bottom:row.getBoundingClientRect().bottom })), connected: window.__overlapCard.isConnected })`), null, 2))
+    writeFileSync(join(artifactsDir, `overlap-layout-${mode}-${width}.json`), JSON.stringify(browser.evaluate(`({ before: window.__beforeOverlap, top: document.querySelector('[data-slot="thread-transcript"]').scrollTop, height: document.querySelector('[data-slot="thread-transcript"]').scrollHeight, rows: [...document.querySelectorAll('[data-row-key]')].map(row => ({ key:row.dataset.rowKey, top:row.getBoundingClientRect().top, bottom:row.getBoundingClientRect().bottom })), connected: window.__overlapCard.isConnected })`), null, 2))
     browser.waitForFunction(`(() => { const card = window.__currentOverlapCard(); if (!card || card.dataset.state !== 'open') return false; card.querySelector('button').click(); return true })()`)
     try { browser.waitForFunction(`window.__currentOverlapCard()?.dataset.state === 'closed'`) }
     catch (error) {
-      writeFileSync(join(artifactsDir, 'overlap-close-debug.json'), JSON.stringify(browser.evaluate(`({ connected: window.__overlapCard.isConnected, state: window.__overlapCard.dataset.state, row: window.__overlapCard.closest('[data-row-key]')?.dataset.rowKey, html: window.__overlapCard.outerHTML, scrollTop: document.querySelector('[data-slot="main"]').scrollTop })`), null, 2))
+      writeFileSync(join(artifactsDir, 'overlap-close-debug.json'), JSON.stringify(browser.evaluate(`({ connected: window.__overlapCard.isConnected, state: window.__overlapCard.dataset.state, row: window.__overlapCard.closest('[data-row-key]')?.dataset.rowKey, html: window.__overlapCard.outerHTML, scrollTop: document.querySelector('[data-slot="thread-transcript"]').scrollTop })`), null, 2))
       throw error
     }
     assertSeparated()

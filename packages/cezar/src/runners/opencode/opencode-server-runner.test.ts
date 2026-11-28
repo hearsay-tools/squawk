@@ -1113,6 +1113,40 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
     });
   });
 
+  it('preserves trailing additional comments in a native question reply', async () => {
+    await withSession({}, async ({ uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_comment', sessionID: 'ses_test' });
+      sendQuestion(mock, {
+        questions: [
+          {
+            header: 'Framework',
+            question: 'Which framework?',
+            options: [{ label: 'React' }, { label: 'Svelte' }],
+          },
+          {
+            header: 'Style',
+            question: 'Which style?',
+            options: [{ label: 'CSS' }, { label: 'Tailwind' }],
+          },
+        ],
+      }, 'tool_question_comment', 'pending');
+
+      await waitFor(() => uiEvents.some((event) => event.type === 'ask.requested'));
+      session.sendMessage([{
+        type: 'text',
+        text: 'Framework: React\nStyle: CSS\n\nAdditional comments:\nKeep the bundle small.',
+      }]);
+      await waitFor(() => mock.questionReplies.length === 1);
+      expect(mock.questionReplies).toEqual([
+        {
+          path: '/question/q_comment/reply',
+          body: { answers: [['React'], ['CSS', 'Additional comments:\nKeep the bundle small.']] },
+        },
+      ]);
+    });
+  });
+
   it('caps native question fields and options and uses plain text for the first answer', async () => {
     await withSession({}, async ({ uiEvents, mock, session }) => {
       await waitFor(() => mock.promptPosts.length === 1);

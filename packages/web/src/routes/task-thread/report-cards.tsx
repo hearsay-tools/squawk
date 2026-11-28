@@ -91,7 +91,10 @@ function ReportCard({ reference, messageKey }: { reference: ReportReference; mes
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
         event.preventDefault()
         onOpen?.(messageKey)
-        const reportScrollTop = state.reportScrollTop ?? document.querySelector<HTMLElement>('[data-slot="main"]')?.scrollTop
+        const reportScrollTop =
+          state.reportScrollTop ??
+          (document.querySelector<HTMLElement>('[data-slot="thread-transcript"]') ??
+            document.querySelector<HTMLElement>('[data-slot="main"]'))?.scrollTop
         void navigate(destination, { state: { ...state, reportScrollTop } })
       }}
       className={`inline-flex min-h-11 min-w-11 items-center self-start rounded-md border border-border px-3 text-sm active:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${metadata.isPending ? 'text-soft-foreground' : 'text-accent-text'}`}>Read report</Link>

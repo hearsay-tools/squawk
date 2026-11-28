@@ -117,7 +117,7 @@ type HistoryAnchor = {
   mountedRows: number
 }
 
-const MAIN = `document.querySelector('[data-slot="main"]')`
+const MAIN = `document.querySelector('[data-slot="thread-transcript"]')`
 
 function historyAnchorSample(rowExpr: string): string {
   return `(() => {
@@ -204,7 +204,7 @@ function parkAndSettleHistoryStart(): HistoryAnchor {
     window.__cezThreadScrollTo(0)
   })()`)
   browser.waitForValue(
-    `document.querySelector('[data-slot="main"]')?.scrollTop ?? null`,
+    `document.querySelector('[data-slot="thread-transcript"]')?.scrollTop ?? null`,
     (top): top is number => typeof top === 'number' && top <= 2,
   )
   return settleHistoryAnchor(`main.querySelector('[data-slot="thread-row"][data-row-key]')`)
@@ -228,7 +228,7 @@ function navigateAndSampleArrival(runId: string): ArrivalSample[] {
     let attempts = 0
     const sample = () => {
       attempts += 1
-      const main = document.querySelector('[data-slot="main"]')
+      const main = document.querySelector('[data-slot="thread-transcript"]')
       const destination = document.querySelector(
         ${JSON.stringify(`[data-route="task-thread"][data-run-id="${runId}"]`)},
       )
@@ -256,7 +256,7 @@ function navigateAndSampleArrival(runId: string): ArrivalSample[] {
 
 function parkCurrentThread(): number {
   return Number(browser.evaluate(`(() => {
-    const main = document.querySelector('[data-slot="main"]')
+    const main = document.querySelector('[data-slot="thread-transcript"]')
     main.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true }))
     main.scrollTop = Math.max(160, Math.round((main.scrollHeight - main.clientHeight) / 2))
     main.dispatchEvent(new Event('scroll', { bubbles: true }))
@@ -325,12 +325,15 @@ beforeEach(() => {
   waitUntilCockpitIdle()
   settleVisual(browser, '[data-slot="run-header"]', { idle: true })
   settleVisual(browser, '[data-slot="run-activity-dock"]', { idle: true })
+  browser.press('Escape')
+  browser.waitForFunction(`document.querySelector('[data-slot="run-activity-popover"]') === null`)
 })
 
 describe('progressive long-session history', () => {
   it('paints the current tail and docks without requesting an earlier page', () => {
     expect(Number(browser.evaluate(cursorRequestCount))).toBe(0)
-    // Both live in the one Session activity card now (#402): the section heads carry the meters,
+    openSessionActivity(browser)
+    // Both live in the one Session activity panel now (#402): the section heads carry the meters,
     // and the plan's own entries appear once its row is opened.
     expect(browser.text('[data-slot="run-activity-subagents"] [data-slot="run-activity-meta"]')).toBe('0 of 1 complete')
     // A programmatic toggle: this spec's thread is still settling into follow-tail, so a
@@ -396,10 +399,10 @@ describe('progressive long-session history', () => {
             return response;
           } finally { cycle.pending--; }
         };
-        const main = document.querySelector('[data-slot="main"]');
+        const main = document.querySelector('[data-slot="thread-transcript"]');
         main.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true }));
       })()`)
-      browser.waitForValue(`({ cycle: window.__historyCycle, pages: document.querySelector('[data-slot="history-boundary"]')?.dataset.retainedPages, top: document.querySelector('[data-slot="main"]')?.scrollTop, requests: ${cursorRequestCount} })`, (s: { cycle: { completed: number; pending: number }; pages: string }) => s.cycle.completed >= 1 && s.cycle.pending === 0 && s.pages === '3')
+      browser.waitForValue(`({ cycle: window.__historyCycle, pages: document.querySelector('[data-slot="history-boundary"]')?.dataset.retainedPages, top: document.querySelector('[data-slot="thread-transcript"]')?.scrollTop, requests: ${cursorRequestCount} })`, (s: { cycle: { completed: number; pending: number }; pages: string }) => s.cycle.completed >= 1 && s.cycle.pending === 0 && s.pages === '3')
       waitUntilCockpitIdle()
       const after = settleNamedHistoryAnchor(before.key)
       expect(Math.abs(after.top - before.top), JSON.stringify({ before, after })).toBeLessThan(2)
@@ -434,13 +437,13 @@ describe('progressive long-session history', () => {
     expect(Number(browser.evaluate(
       `document.querySelector('[data-slot="history-boundary"]')?.dataset.retainedPages`,
     ))).toBe(5)
-    browser.evaluate(`document.querySelector('[data-slot="main"]').scrollTop = 0`)
+    browser.evaluate(`document.querySelector('[data-slot="thread-transcript"]').scrollTop = 0`)
     browser.click('[data-slot="jump-to-latest"]')
     browser.waitForFunction(
       `document.querySelector('[data-slot="history-boundary"]')?.dataset.retainedPages === '1'`,
     )
     browser.waitForFunction(
-      `(() => { const m = document.querySelector('[data-slot="main"]'); return Math.abs(m.scrollHeight - m.clientHeight - m.scrollTop) < 2 })()`,
+      `(() => { const m = document.querySelector('[data-slot="thread-transcript"]'); return Math.abs(m.scrollHeight - m.clientHeight - m.scrollTop) < 2 })()`,
     )
     browser.waitForFunction(`document.querySelector('[data-slot="jump-to-latest"]') === null`)
     expect(browser.evaluate(`document.body.textContent.includes('goal achieved — session closed')`)).toBe(true)
@@ -450,13 +453,13 @@ describe('progressive long-session history', () => {
     // Establish the first run's departure state as a live-tail cache entry before warming
     // the second run.
     browser.evaluate(`(() => {
-      const main = document.querySelector('[data-slot="main"]')
+      const main = document.querySelector('[data-slot="thread-transcript"]')
       main.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true }))
       main.scrollTop = main.scrollHeight - main.clientHeight
       main.dispatchEvent(new Event('scroll', { bubbles: true }))
     })()`)
     browser.waitForFunction(
-      `(() => { const main = document.querySelector('[data-slot="main"]'); return main.scrollHeight - main.scrollTop - main.clientHeight < 80 })()`,
+      `(() => { const main = document.querySelector('[data-slot="thread-transcript"]'); return main.scrollHeight - main.scrollTop - main.clientHeight < 80 })()`,
     )
 
     // Warm both query caches first. The destination transcript, not a loading placeholder, is

@@ -181,8 +181,28 @@ function WorkerParentLink({ run, compact = false }: { run: ApiRun; compact?: boo
 /** #281: Archive out of the kebab row, into one fixed header slot on all four tabs, so switching
  *  between Session, Changes, Commits and Files never moves it. A blocker shows the same manual
  *  Archive control beside its reason instead. Phones keep it in the kebab. */
-function headerArchiveButton(run: ApiRun, flags: ReturnType<typeof runActionFlags>) {
-  return !run.archiveBlocker && flags.archive ? <ArchiveButton run={run} /> : null
+/** Desktop header status slot: either the Session tab's interactive Activity trigger or the static status pill. */
+function DesktopHeaderStatus({
+  isDesktop,
+  desktopActivitySlot,
+  attention,
+  statusLine,
+}: {
+  isDesktop: boolean
+  desktopActivitySlot: ReactNode | undefined
+  attention: ReturnType<typeof deriveAttention>
+  statusLine: ReturnType<typeof runStatusLine>
+}) {
+  if (isDesktop && desktopActivitySlot) return <>{desktopActivitySlot}</>
+  return (
+    <Pill dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="max-md:hidden">
+      {statusLineText(statusLine)}
+    </Pill>
+  )
+}
+
+function headerArchiveButton(run: ApiRun, flags: ReturnType<typeof runActionFlags>, isDesktop: boolean) {
+  return isDesktop && !run.archiveBlocker && flags.archive ? <ArchiveButton run={run} /> : null
 }
 
 function ArchivedPill({ archived, className }: { archived?: boolean | undefined; className?: string | undefined }) {
@@ -248,7 +268,10 @@ function RunTabs({ run, tab, activeItem, inlineItemTabs, overflowItemTabs, phone
       ref={tabRowRef}
       data-slot="run-tabs"
       data-phone-bar={phoneBar || undefined}
-      className="mt-3 flex flex-wrap items-end gap-1 border-b border-border md:mt-5 max-md:flex-nowrap max-md:overflow-x-auto max-md:border-b-0 max-md:shadow-[inset_0_-1px_0_var(--border)] max-md:gap-0 max-md:[&>*]:mb-0 max-md:[&>*]:shrink-0 max-md:[&>a]:min-h-11 max-md:[&>a]:px-3.5 max-md:[&>a]:text-[13.5px]"
+      className={cn(
+        'flex flex-wrap items-end gap-1 border-b border-border md:mt-5 max-md:flex-nowrap max-md:overflow-x-auto max-md:border-b-0 max-md:shadow-[inset_0_-1px_0_var(--border)] max-md:gap-0 max-md:[&>*]:mb-0 max-md:[&>*]:shrink-0 max-md:[&>a]:min-h-11 max-md:[&>a]:px-3.5 max-md:[&>a]:text-[13.5px]',
+        phoneBar ? 'mt-0' : 'mt-3',
+      )}
     >
       {/* Below md (hearsay-tools/cezarion#621): 13.5px labels and quiet counts, tabs spread across the row. The 44px
           floor stays — the touch-target sweep measures these links — so the design's 40px is the
@@ -309,6 +332,8 @@ export function RunHeader({
   run,
   tab = 'session',
   onMarkedUnread,
+  desktopActivitySlot,
+  mobileActivitySlot,
 }: {
   run: ApiRun
   tab?: RunTab
@@ -316,6 +341,10 @@ export function RunHeader({
    *  to suppress its auto-mark-read effect for the rest of the visit (#775). Optional because
    *  the three `task-git` tabs render this same header and run no such effect. */
   onMarkedUnread?: (() => void) | undefined
+  /** Replaces the desktop status pill on the Session tab with the interactive Activity trigger. */
+  desktopActivitySlot?: ReactNode | undefined
+  /** Renders the compact 44px mobile Activity strip in the Session header below the tabs. */
+  mobileActivitySlot?: ReactNode | undefined
 }) {
   const attention = deriveAttention(run)
   const flags = runActionFlags(run)
@@ -363,7 +392,7 @@ export function RunHeader({
     />
   )
 
-  const archiveButton = headerArchiveButton(run, flags)
+  const archiveButton = headerArchiveButton(run, flags, isDesktop)
 
   return (
     <ReferenceStatusProvider projectId={referenceProjectId} repoBase={repoBase} requests={referenceRequests}>
@@ -373,9 +402,9 @@ export function RunHeader({
       className={cn(
         // Pushed phone screen: the facet tabs sit directly under the shell's top bar (#621), so
         // the header has no top padding of its own there.
-        'relative z-20 bg-background px-4 md:px-9 md:pt-7',
+        'relative z-20 shrink-0 bg-background px-4 md:px-9 md:pt-7',
         phoneBar ? 'pt-0' : 'pt-[18px]',
-        tab === 'session' && 'sticky [inset-block-start:0]',
+        tab === 'session' && 'border-b border-border',
       )}
     >
       <AutoArchiveNote run={run} />
@@ -405,13 +434,15 @@ export function RunHeader({
               {sessionKindLabel(run.delegation)}
             </p>
             <EditableTitle run={run} />
-            {/* Desktop only: below md the header shows no status at all (#1333). */}
-            <Pill dot={attention.tone} shape={attention.shape} pulse={attention.pulse} className="max-md:hidden">
-              {statusLineText(statusLine)}
-            </Pill>
+            <DesktopHeaderStatus
+              isDesktop={isDesktop}
+              desktopActivitySlot={desktopActivitySlot}
+              attention={attention}
+              statusLine={statusLine}
+            />
             <ArchivedPill archived={run.archived} className="max-md:hidden" />
             <span className="ml-auto flex shrink-0 items-center gap-1 md:gap-2.5">
-              {isDesktop ? archiveButton : null}
+              {archiveButton}
               {previewToggle}
               <HandoffAction run={run} />
               {actionsKebab}
@@ -434,6 +465,8 @@ export function RunHeader({
           phoneBar={phoneBar}
           isDesktop={isDesktop}
         />
+
+        {!isDesktop ? mobileActivitySlot : null}
 
         {notesOpen ? <NotesPanel runId={run.id} onClose={() => setNotesOpen(false)} /> : null}
         {openChooser ? <OpenInMenuForRun run={run} canResume={runActionFlags(run).terminal} onResume={() => actions.terminal.mutate()} onClose={() => setOpenChooser(false)} /> : null}
@@ -743,21 +776,23 @@ function NotesPanel({ runId, onClose }: { runId: string; onClose: () => void }) 
   return (
     <div
       data-slot="notes-panel"
-      className="my-5 rounded-xl border border-border bg-card p-6"
+      className="my-5 flex max-h-[min(45dvh,420px)] flex-col overflow-hidden rounded-xl border border-border bg-card p-6"
     >
-      <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-lg font-medium">Notes / handoff</h2><Button variant="ghost" size="icon" aria-label="Close notes" onClick={onClose}><XIcon /></Button></div>
-      {handoff.isPending ? (
-        <p className="text-xs text-soft-foreground">Loading notes…</p>
-      ) : handoff.isError ? (
-        <p className="text-xs text-danger">{handoff.error.message}</p>
-      ) : handoff.data.trim().length > 0 ? (
-        <TaskFileScope runId={runId}><Markdown>{handoff.data}</Markdown></TaskFileScope>
-      ) : (
-        <p className="text-xs text-soft-foreground">
-          No notes yet — the handoff file is seeded when the task starts.
-        </p>
-      )}
-      <div className="mt-4 flex gap-3"><Button variant="outline" disabled={!handoff.data?.trim()} onClick={() => void copyToClipboard(handoff.data ?? '', 'Notes copied')}>Copy notes</Button><Button variant="outline" onClick={onClose}>Close</Button></div>
+      <div className="mb-4 flex shrink-0 items-center justify-between gap-3"><h2 className="text-lg font-medium">Notes / handoff</h2><Button variant="ghost" size="icon" aria-label="Close notes" onClick={onClose}><XIcon /></Button></div>
+      <div data-slot="notes-panel-body" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {handoff.isPending ? (
+          <p className="text-xs text-soft-foreground">Loading notes…</p>
+        ) : handoff.isError ? (
+          <p className="text-xs text-danger">{handoff.error.message}</p>
+        ) : handoff.data.trim().length > 0 ? (
+          <TaskFileScope runId={runId}><Markdown>{handoff.data}</Markdown></TaskFileScope>
+        ) : (
+          <p className="text-xs text-soft-foreground">
+            No notes yet — the handoff file is seeded when the task starts.
+          </p>
+        )}
+      </div>
+      <div className="mt-4 flex shrink-0 gap-3"><Button variant="outline" disabled={!handoff.data?.trim()} onClick={() => void copyToClipboard(handoff.data ?? '', 'Notes copied')}>Copy notes</Button><Button variant="outline" onClick={onClose}>Close</Button></div>
     </div>
   )
 }

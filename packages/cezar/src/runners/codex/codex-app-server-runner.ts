@@ -1,6 +1,6 @@
 import { codexTurnStartExtras } from './codex-turn-config.ts';
 export { reasoningSummary, codexTurnStartExtras } from './codex-turn-config.ts';
-import { openingInput, skillOf, validSkillMessage, uiAskQuestions, parseAskRequest, summarizeRunnerStderr, prependSystemPrompt, SessionEndedBeforeAcknowledgement, trackChildExit, codexToolGrantFields, signalSession, afterExitDrain, AUTO_END_DELAY_MS, exitDrainBudget, DEFAULT_RUNNER_TIMINGS, readNdjson, V1TextCoalescer, InputSubmissions } from '@hearsay-tools/squawk/plugin/runtime';
+import { openingInput, skillOf, validSkillMessage, uiAskQuestions, summarizeRunnerStderr, prependSystemPrompt, SessionEndedBeforeAcknowledgement, trackChildExit, codexToolGrantFields, signalSession, afterExitDrain, AUTO_END_DELAY_MS, exitDrainBudget, DEFAULT_RUNNER_TIMINGS, readNdjson, V1TextCoalescer, InputSubmissions } from '@hearsay-tools/squawk/plugin/runtime';
 import { productEnv, type AskQuestion, type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentSession, type AgentToolCallRecord, type ContentBlock, type SessionOptions, type InputDelivery } from '@hearsay-tools/squawk/plugin';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -12,6 +12,7 @@ import { codexStreamError } from './codex-stream-error.ts';
 import { codexTurnOutcome } from './codex-turn-outcome.ts';
 import { codexNetworkIsRestricted, codexMinimalSandbox, codexPermissionOverrides } from './codex-permissions.ts';
 import { codexApproval, isCodexApprovalRequest, type CodexApproval } from './codex-approvals.ts';
+import { codexAskQuestions, userInputAnswers } from './codex-questions.ts';
 import { codexThreadConfig } from './codex-thread-config.ts';
 import {
   CodexAppServerRpc,
@@ -1113,44 +1114,6 @@ const STREAM_PROGRESS_DELTAS = new Set([
   'item/agentMessage/delta', 'item/reasoning/textDelta', 'item/reasoning/summaryDelta',
   'item/reasoning/summaryTextDelta', 'item/commandExecution/outputDelta',
 ]);
-
-function codexAskQuestions(value: unknown): AskQuestion[] | null {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 4) return null;
-  const questions: unknown[] = [];
-  for (const raw of value) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-    const question = raw as Record<string, unknown>;
-    if (question.isSecret === true) return null;
-    const id = stringField(question, 'id');
-    const header = stringField(question, 'header');
-    const prompt = stringField(question, 'question');
-    if (!id || !header || !prompt || !Array.isArray(question.options)) return null;
-    const options = question.options.map((option) => {
-      if (!option || typeof option !== 'object' || Array.isArray(option)) return null;
-      const record = option as Record<string, unknown>;
-      const label = stringField(record, 'label');
-      const description = stringField(record, 'description');
-      return label ? { label, ...(description ? { description } : {}) } : null;
-    }).filter((option): option is { label: string; description?: string } => option !== null);
-    questions.push({ id, header, question: prompt, options, multiSelect: false });
-  }
-  return parseAskRequest({ questions })?.questions ?? null;
-}
-
-function userInputAnswers(questions: AskQuestion[], text: string): Record<string, { answers: string[] }> {
-  const lines = text.split(/\r?\n/);
-  const hasStructuredAnswer = questions.some((question) => lines.some((line) => line.startsWith(`${question.header}:`)));
-  const answers: Record<string, { answers: string[] }> = {};
-  for (const [index, question] of questions.entries()) {
-    const prefix = `${question.header}:`;
-    const matching = lines.find((line) => line.startsWith(prefix));
-    const raw = matching?.slice(prefix.length).trim() ?? (!hasStructuredAnswer && index === 0 ? text.trim() : '');
-    answers[question.id ?? String(index)] = {
-      answers: raw === '' ? [] : raw.split(',').map((answer) => answer.trim()).filter(Boolean),
-    };
-  }
-  return answers;
-}
 
 /** ThreadItem `type`s that are conversation text, not tool activity. */
 const NON_TOOL_ITEMS = new Set(['agentMessage', 'userMessage', 'reasoning', 'plan']);

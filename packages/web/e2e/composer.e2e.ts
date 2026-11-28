@@ -79,7 +79,13 @@ beforeEach(async () => {
   await waitForStatus(baseUrl, runId, ['waiting'])
 
   browser.goto(`${baseUrl}/tasks/${runId}`)
-  browser.waitForFunction(`document.querySelector('[data-slot="composer"] textarea') !== null`)
+  browser.waitForFunction(`document.querySelector('[data-slot="composer"] textarea') !== null && window.__cezIdle === true`)
+  // When the dry-run no-wait nudge parks on a structured question card, switch the unified
+  // decision surface into free-text reply mode so the live composer is open for input.
+  if (browser.count('[data-slot="ask-mode-reply"]') > 0) {
+    browser.click('[data-slot="ask-mode-reply"]')
+    browser.waitForFunction(`document.querySelector('[data-slot="thread-composer-slot"]:not([hidden]) textarea') !== null`)
+  }
 }, 180_000)
 
 function startDictation() {
@@ -141,7 +147,11 @@ describe('the thread composer against a live waiting session', () => {
     ).toBe('Please run /lint-fix')
     await waitForStatus(baseUrl, runId, ['waiting'])
     // The agent's answer to our message rendered — the round trip is complete.
-    browser.waitForFunction(`document.querySelector('[data-slot="paused-hint"]') !== null`)
+    browser.waitForFunction(`document.querySelector('[data-slot="paused-hint"]') !== null && window.__cezIdle === true`)
+    if (browser.count('[data-slot="ask-mode-reply"]') > 0 && browser.count('[data-slot="thread-composer-slot"]:not([hidden])') === 0) {
+      browser.click('[data-slot="ask-mode-reply"]')
+      browser.waitForFunction(`document.querySelector('[data-slot="thread-composer-slot"]:not([hidden]) textarea') !== null`)
+    }
     // Finish eligibility arrives on a later detail response than the paused hint.
     // Wait for its final footer before targeting the adjacent dictation button.
     browser.waitForFunction(`document.querySelector('[data-slot="composer-finish"]')?.disabled === false`)

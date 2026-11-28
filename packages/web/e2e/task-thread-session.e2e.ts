@@ -117,15 +117,17 @@ describe('task thread', () => {
     // The turn-2 snapshot won (turn 1 said 0/4 with "Read README and docs" in progress).
     expect(browser.text('[data-slot="run-activity-plan"] [data-slot="run-activity-meta"]')).toBe('2 of 4 complete')
 
-    // It sits in the dock region above the composer area, not in the thread flow.
-    expect(browser.evaluate(`document.querySelector('[data-slot="thread-dock"] [data-slot="run-activity-plan"]') !== null`)).toBe(true)
+    // It sits in the header Activity panel, not in the bottom decision zone or transcript flow.
+    expect(browser.evaluate(`document.querySelector('[data-slot="run-activity-dock"] [data-slot="run-activity-plan"]') !== null`)).toBe(true)
+    expect(browser.evaluate(`document.querySelector('[data-slot="thread-dock"] [data-slot="run-activity-plan"]') === null`)).toBe(true)
+    browser.press('Escape')
   })
 
-  it('shows the auto-summary title and the done pill in the header', () => {
+  it('shows the auto-summary title and the activity status pill in the header', () => {
     expect(browser.evaluate(`document.querySelector('[data-route="task-thread"] h1').textContent`)).toBe(
       'Explain what cezar does',
     )
-    expect(browser.evaluate(`document.querySelector('[data-slot="pill"]').textContent`)).toBe('Done')
+    expect(browser.evaluate(`document.querySelector('[data-slot="pill"]').textContent`)).toBe('Incomplete')
     // The #381 money shot: tool cards (one expanded) + markdown + image, desktop width.
     browser.screenshot(`${artifactsDir}/thread-desktop.png`)
   })
@@ -167,7 +169,7 @@ describe('task thread', () => {
     } finally {
       restoreContrastQaDefaults(browser)
       browser.goto(`${baseUrl}${scoped(`/tasks/${RUN_ID}`)}`)
-      browser.waitForFunction(`document.querySelector('[data-slot="run-activity-dock"]') !== null`)
+      browser.waitForFunction(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}') !== null`)
     }
   })
 
@@ -197,7 +199,7 @@ describe('task thread', () => {
     } finally {
       restoreContrastQaDefaults(browser)
       browser.goto(`${baseUrl}${scoped(`/tasks/${RUN_ID}`)}`)
-      browser.waitForFunction(`document.querySelector('[data-slot="run-activity-dock"]') !== null`)
+      browser.waitForFunction(`document.querySelector('${SESSION_ACTIVITY_SUMMARY}') !== null`)
     }
   })
 
@@ -311,6 +313,7 @@ describe('task thread', () => {
       browser.waitForFunction(`document.querySelector('${pin}').getAttribute('aria-checked') === '${!wasPinned}'`)
       browser.press('Escape')
       browser.waitForFunction(`document.querySelector('[data-slot="run-actions-menu"]') === null`)
+      openSessionActivity(browser)
       expect(workspaceOpen()).toBe(true)
       expect(waitForSettledSample(browser, `document.documentElement.scrollWidth <= innerWidth`)).toBe(true)
     }

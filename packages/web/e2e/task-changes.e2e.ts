@@ -99,7 +99,7 @@ afterAll(async () => {
 describe('the Changes tab against a live dry run', () => {
   it('the Session header tab navigates to /changes: tree, toolbar and the real diff', () => {
     browser.goto(`${baseUrl}${scoped(`/tasks/${runId}`)}`)
-    browser.waitForFunction(`document.querySelector('[data-slot="review-panel"] [data-slot="diff-file"]') !== null`)
+    browser.waitForFunction(`document.querySelector('[data-slot="review-panel"]') !== null && document.querySelector('[data-slot="diff-file"]') !== null`)
     browser.evaluate(`document.fonts.ready.then(() => true)`)
     // Thread arrival intentionally follows the tail. A real upward navigation key releases it;
     // click's programmatic scrollIntoView alone is not reader intent and can be re-pinned.
