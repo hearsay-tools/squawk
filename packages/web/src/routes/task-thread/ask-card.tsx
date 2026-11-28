@@ -71,6 +71,8 @@ export function AskCard({
   renderFreeTextReply,
   onStop,
   stopping = false,
+  onFinish,
+  finishing = false,
   mode,
   onModeChange,
   hideReplyBody = false,
@@ -88,8 +90,11 @@ export function AskCard({
   /** Shared composer rendered inside the embedded free-text reply mode. */
   renderFreeTextReply?: ((props: FreeTextReplyRenderProps) => ReactNode) | undefined
   /** Optional Stop action kept reachable while a pending ask waits for a reply. */
-  onStop?: (() => void) | undefined
+  onStop?: (() => void | Promise<unknown>) | undefined
   stopping?: boolean | undefined
+  /** Optional Finish action kept reachable in Options mode when the waiting run can close cleanly. */
+  onFinish?: (() => void | Promise<unknown>) | undefined
+  finishing?: boolean | undefined
   /** Controlled Options / Write a reply mode for hosts keeping a persistent composer mounted. */
   mode?: 'options' | 'reply' | undefined
   onModeChange?: ((next: 'options' | 'reply') => void) | undefined
@@ -136,6 +141,8 @@ export function AskCard({
         renderFreeTextReply={renderFreeTextReply}
         onStop={onStop}
         stopping={stopping}
+        onFinish={onFinish}
+        finishing={finishing}
         controlledMode={mode}
         onModeChange={onModeChange}
         hideReplyBody={hideReplyBody}
@@ -430,12 +437,66 @@ interface PendingAskProps {
   onShowOrigin: (() => void) | undefined
   onAnswered: (() => void) | undefined
   renderFreeTextReply: ((props: FreeTextReplyRenderProps) => ReactNode) | undefined
-  onStop: (() => void) | undefined
+  onStop: (() => void | Promise<unknown>) | undefined
   stopping: boolean
+  onFinish: (() => void | Promise<unknown>) | undefined
+  finishing: boolean
   controlledMode: 'options' | 'reply' | undefined
   onModeChange: ((next: 'options' | 'reply') => void) | undefined
   hideReplyBody: boolean
   delivery: AskAnswerDelivery | undefined
+}
+
+function PendingAskSecondaryActions({
+  onFinish,
+  finishing,
+  onStop,
+  stopping,
+  onActionError,
+}: {
+  onFinish: (() => void | Promise<unknown>) | undefined
+  finishing: boolean
+  onStop: (() => void | Promise<unknown>) | undefined
+  stopping: boolean
+  onActionError: (message: string | undefined) => void
+}) {
+  if (!onFinish && !onStop) return null
+  const runAction = (action: () => void | Promise<unknown>) => {
+    onActionError(undefined)
+    void Promise.resolve(action()).catch((err: unknown) => {
+      onActionError(err instanceof Error ? err.message : String(err))
+    })
+  }
+  return (
+    <>
+      {onFinish ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-slot="ask-finish"
+          disabled={finishing || stopping}
+          title="Close the session and mark this task done"
+          className="min-h-11 min-w-11 px-3 md:min-h-8 md:min-w-0"
+          onClick={() => runAction(onFinish)}
+        >
+          {finishing ? 'Finishing…' : 'Finish'}
+        </Button>
+      ) : null}
+      {onStop ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={stopping || finishing}
+          className="min-h-11 min-w-11 px-3 md:min-h-8 md:min-w-0"
+          onClick={() => runAction(onStop)}
+        >
+          {stopping ? 'Stopping…' : 'Stop'}
+        </Button>
+      ) : null}
+    </>
+  )
 }
 
 /** The unanswered card: stepped multi-question options, optional comment step, and unified free-text mode. */
@@ -460,30 +521,30 @@ function PendingAskContent({
   renderFreeTextReply,
   onStop,
   stopping,
+  onFinish,
+  finishing,
   controlledMode,
   onModeChange,
   hideReplyBody,
   delivery,
 }: Omit<PendingAskProps, 'delivery'> & { delivery: AskAnswerDelivery }) {
   const state = usePendingAskState(ask, delivery, controlledMode, onModeChange, onAnswered)
+  const [actionError, setActionError] = useState<string | undefined>(undefined)
   const contextButtonRef = useRef<HTMLButtonElement>(null)
   const resuming = state.delivery.mode === 'resume'
   const showModeSwitch = surface === 'decision-zone' || renderFreeTextReply !== undefined
   const hasSheetContext = surface === 'decision-zone' && Boolean(ask.context)
   const hasComment = state.additionalComment.trim() !== ''
   const replyDockedOutside = state.mode === 'reply' && hideReplyBody
-  const stopControl = onStop ? (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      disabled={stopping}
-      className="min-h-11 min-w-11 px-3 md:min-h-8 md:min-w-0"
-      onClick={onStop}
-    >
-      {stopping ? 'Stopping…' : 'Stop'}
-    </Button>
-  ) : undefined
+  const stopControl = (
+    <PendingAskSecondaryActions
+      onFinish={onFinish}
+      finishing={finishing}
+      onStop={onStop}
+      stopping={stopping}
+      onActionError={setActionError}
+    />
+  )
 
   return (
     <div
@@ -541,7 +602,7 @@ function PendingAskContent({
             <AskDeliveryNotices
               blockedBy={state.delivery.blockedBy}
               reason={state.delivery.reason}
-              error={state.delivery.error}
+              error={state.delivery.error ?? actionError}
             />
           </div>
         </>

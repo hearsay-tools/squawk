@@ -225,7 +225,11 @@ for (const width of [320, 360]) for (const theme of ['light', 'dark']) {
       const r = link.getBoundingClientRect(), title = document.querySelector('[data-slot="mobile-run-title"] h1');
       const controls = [...document.querySelectorAll('[data-slot="mobile-top-bar"] a, [data-slot="mobile-top-bar"] button')];
       return { scroll: transcript.scrollTop, bottomGap: transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight,
-        tabsVisible: document.querySelector('[data-slot="run-tabs"]').getBoundingClientRect().top >= main.getBoundingClientRect().top - 0.5,
+        tabsVisible: (() => {
+          const tabs = document.querySelector('[data-slot="run-tabs"]').getBoundingClientRect();
+          const m = main.getBoundingClientRect();
+          return tabs.top >= m.top - 0.5 && tabs.bottom <= m.bottom + 0.5;
+        })(),
         visible: r.top >= 0 && r.bottom <= innerHeight, height: r.height, width: r.width,
         hit: link.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)),
         controls: controls.map(el => { const b = el.getBoundingClientRect(); return { name: el.getAttribute('aria-label'), x: b.x, right: b.right, height: b.height }; }),

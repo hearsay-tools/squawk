@@ -21,10 +21,22 @@ export function firstAnswerControl(card: HTMLElement): HTMLElement {
   return card
 }
 
+/** Resolve the active answer control for a pinned ask card across Options and Write a reply modes. */
+function activeAskControl(card: HTMLElement, root?: HTMLElement): HTMLElement {
+  if (card.dataset.askMode === 'reply') {
+    const scope = root ?? card.closest<HTMLElement>('[data-slot="thread-dock"]') ?? document
+    const replyInput = scope.querySelector<HTMLElement>(
+      '[data-slot="thread-composer-slot"]:not([hidden]) textarea:not(:disabled)',
+    )
+    if (replyInput) return replyInput
+  }
+  return firstAnswerControl(card)
+}
+
 /** The pinned card's first answer control under `root`, or null while it is not mounted. */
 export function pinnedAnswerControl(root: HTMLElement): HTMLElement | null {
   const card = root.querySelector<HTMLElement>('[data-slot="ask-card"][data-pinned="true"]')
-  return card ? firstAnswerControl(card) : null
+  return card ? activeAskControl(card, root) : null
 }
 
 /**
@@ -40,7 +52,7 @@ export function pinnedAskFocus(askId: string, stillPending: () => boolean) {
     if (row) return pinnedAnswerControl(row)
     const card = [...root.querySelectorAll<HTMLElement>('[data-slot="ask-card"][data-pinned="true"]')]
       .find((el) => el.dataset.askId === askId)
-    return card ? firstAnswerControl(card) : null
+    return card ? activeAskControl(card, root) : null
   }
 }
 

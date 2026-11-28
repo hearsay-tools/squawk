@@ -154,7 +154,7 @@ export function DesktopStepPills({
   return (
     <div
       data-slot="ask-step-pills"
-      role="tablist"
+      role="group"
       aria-label="Question steps"
       className="hidden shrink-0 flex-wrap items-center gap-1.5 border-b border-border/60 px-3 py-1.5 md:flex"
     >
@@ -165,8 +165,7 @@ export function DesktopStepPills({
           <button
             key={question.id ?? index}
             type="button"
-            role="tab"
-            aria-selected={active}
+            aria-current={active ? 'step' : undefined}
             onClick={() => onSelectStep(index)}
             className={cn(
               'inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring',
@@ -186,8 +185,7 @@ export function DesktopStepPills({
       })}
       <button
         type="button"
-        role="tab"
-        aria-selected={stepIndex === commentStepIndex}
+        aria-current={stepIndex === commentStepIndex ? 'step' : undefined}
         onClick={() => onSelectStep(commentStepIndex)}
         className={cn(
           'inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring',

@@ -166,6 +166,8 @@ export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
             onShowOrigin={onShowOrigin}
             onStop={canStop ? stopAction.stop : undefined}
             stopping={stopAction.stopping}
+            onFinish={offersComposerFinish(run) ? () => finishAction.mutateAsync() : undefined}
+            finishing={finishAction.isPending}
           />
         ) : isReviewGate ? (
           <ReviewPanel run={run} showDiff={false} />
@@ -186,6 +188,7 @@ export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
             thread={thread}
             canStop={canStop}
             hasPendingAsk={hasPendingAsk}
+            composerHidden={composerHidden}
             optionDeliveryPending={optionDeliveryPending}
             onComposerPendingChange={setComposerPending}
             stopAction={stopAction}
@@ -312,6 +315,7 @@ type ThreadComposerProps = Pick<
 > & {
   canStop: boolean
   hasPendingAsk: boolean
+  composerHidden: boolean
   optionDeliveryPending: boolean
   onComposerPendingChange: (pending: boolean) => void
 }
@@ -352,7 +356,7 @@ function resolveComposerDelivery(props: ThreadComposerProps) {
 
 function ThreadComposer(props: ThreadComposerProps) {
   const {
-    run, thread, canStop, hasPendingAsk, onComposerPendingChange, stopAction, finishAction, attention,
+    run, thread, canStop, hasPendingAsk, composerHidden, onComposerPendingChange, stopAction, finishAction, attention,
     needsAnswer, continuable, continueAction, providerBlocked,
   } = props
   const delivery = resolveComposerDelivery(props)
@@ -394,7 +398,7 @@ function ThreadComposer(props: ThreadComposerProps) {
       emptySubmitLabel={allowEmpty ? 'Continue' : undefined}
       placeholder={delivery.placeholder}
       autocompleteSkills
-      quickReplies
+      quickReplies={!composerHidden}
       getMentionCandidates={() => threadFilePaths(thread)}
     />
   )

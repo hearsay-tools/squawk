@@ -551,6 +551,49 @@ describe('ThreadView', () => {
     expect(messagePosts).toBe(1)
   })
 
+  it('disables Alt+C quick-reply shortcuts while Composer is hidden in Options mode and reports Stop failures inline', async () => {
+    const askThread = reduceThread([
+      ...EVENTS,
+      line(10, 'ask.requested', {
+        requestId: 'shortcut-ask',
+        questions: [{ header: 'Choice', question: 'Pick a path?', options: [{ label: 'Alpha' }, { label: 'Beta' }] }],
+      }),
+    ])
+    renderView(<ThreadView run={run('waiting', { waits: [openHumanWait(10)], finishBlocked: null } as unknown as Partial<ApiRun>)} thread={askThread} />)
+    const baseFetch = vi.mocked(fetch).getMockImplementation()!
+    let messagePosts = 0
+    vi.mocked(fetch).mockImplementation((input, init) => {
+      const path = String(input)
+      if (path.endsWith('/messages') && init?.method === 'POST') {
+        messagePosts += 1
+        return Promise.resolve(new Response(JSON.stringify({ delivered: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      if (path.endsWith('/cancel') && init?.method === 'POST') {
+        return Promise.resolve(new Response(JSON.stringify({ error: 'Cancel refused by server' }), { status: 500, headers: { 'content-type': 'application/json' } }))
+      }
+      return baseFetch(input, init)
+    })
+
+    // Options mode exposes Finish when offersComposerFinish allows it and suppresses hidden Composer quick replies.
+    expect(screen.getByRole('button', { name: 'Finish' })).toBeTruthy()
+    fireEvent.keyDown(window, { altKey: true, code: 'KeyC' })
+    expect(messagePosts).toBe(0)
+
+    // Clicking Stop on a failing cancel request surfaces the server error inline in the ask card.
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Cancel refused by server')
+
+    // In Write a reply mode, Go to the question focuses the visible reply textarea.
+    fireEvent.click(screen.getByRole('button', { name: 'Write a reply' }))
+    const replyTextarea = screen.getByRole('textbox', { name: 'Reply to the agent' }) as HTMLTextAreaElement
+    await waitFor(() => expect(replyTextarea.disabled).toBe(false))
+    const goToButton = document.querySelector<HTMLButtonElement>('[data-slot="ask-go-to-question"]')
+    if (goToButton) {
+      fireEvent.click(goToButton)
+      expect(document.activeElement).toBe(replyTextarea)
+    }
+  })
+
   it('closed but resumable → the action row holds exactly Continue; Archive stays in the header (#281)', async () => {
     const steps = [
       { id: 'task', name: 'Do the task', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0, sessionId: 's-1' },

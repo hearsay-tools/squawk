@@ -205,9 +205,10 @@
     --thread-footer-limit: min(50dvh, calc(var(--thread-viewport-height, 100dvh) - var(--thread-header-height, 0px) - 180px));
   }
   /* When the mobile soft keyboard (--kb) or a short landscape viewport shrinks main below 420px,
-   * yield secondary header/status rows and the transcript reserve so answer textareas and submit
-   * buttons remain visible and clickable without clipping (hearsay-tools/squawk#4374). */
-  [data-route='task-thread'][data-compact-viewport='true'] [data-slot='run-activity-trigger-mobile'],
+   * release the transcript reserve and secondary ask/status labels so answer textareas and submit
+   * buttons remain visible without clipping. Hide the mobile Activity strip only while the soft
+   * keyboard is open so short landscape viewports without a keyboard keep Activity reachable. */
+  [data-route='task-thread'][data-compact-viewport='true'][data-keyboard-open='true'] [data-slot='run-activity-trigger-mobile'],
   [data-route='task-thread'][data-compact-viewport='true'] [data-slot='paused-hint'],
   [data-route='task-thread'][data-compact-viewport='true'] [data-slot='ask-header'] > span:first-child,
   [data-route='task-thread'][data-compact-viewport='true'] [data-slot='ask-hint'] {
