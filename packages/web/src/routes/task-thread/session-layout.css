@@ -36,7 +36,7 @@
   min-block-size: 0;
   overflow-y: auto;
   overscroll-behavior-block: contain;
-  scroll-padding-block: 12px;
+  scroll-padding-block: 12px 56px;
 }
 
 /* Ultra-wide Activity sidebar (>= 1600px when preview/report split is closed). */
@@ -93,9 +93,20 @@
 /* Bound the fixed decision zone so the scrollable transcript always keeps reading room,
  * and keep submit bars pinned while internal question/draft bodies scroll inside. */
 [data-route='task-thread'] [data-slot='thread-footer-content'] {
-  --thread-footer-limit: min(58dvh, calc(var(--thread-viewport-height, 100dvh) - var(--thread-header-height, 0px) - 96px));
+  --thread-footer-limit: min(60dvh, calc(var(--thread-viewport-height, 100dvh) - var(--thread-header-height, 0px) - var(--spacing) * 5.5));
   max-block-size: var(--thread-footer-limit);
   min-block-size: 0;
+  min-inline-size: 0;
+}
+[data-route='task-thread'] [data-slot='thread-footer-content'] > :not([data-slot='thread-composer-slot']):not(:has([data-slot='ask-card'])):not([data-slot='review-panel']) {
+  flex-shrink: 0;
+}
+[data-route='task-thread'] [data-slot='thread-footer-content'] > :has([data-slot='ask-card']) {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-block-size: 0;
+  min-inline-size: 0;
 }
 
 [data-route='task-thread'] [data-slot='thread-footer-content'] [data-slot='thread-composer-slot'] {
@@ -103,6 +114,8 @@
   flex-direction: column;
   flex: 0 1 auto;
   min-block-size: 0;
+  min-inline-size: 0;
+  inline-size: 100%;
 }
 [data-route='task-thread'] [data-slot='thread-footer-content'] [data-slot='thread-composer-slot'][hidden] {
   display: none;
@@ -110,8 +123,11 @@
 [data-route='task-thread'] [data-slot='thread-footer-content'] [data-slot='composer'] {
   display: flex;
   flex-direction: column;
+  flex: 0 1 auto;
   min-block-size: 0;
-  max-block-size: var(--thread-footer-limit);
+  max-block-size: calc(var(--thread-footer-limit) - 24px);
+  min-inline-size: 0;
+  inline-size: 100%;
 }
 [data-route='task-thread'] [data-slot='composer-editor'] { display: flex; flex-direction: column; min-block-size: 0; overflow-y: auto; }
 [data-route='task-thread'] [data-slot='composer-editor'] > textarea { min-block-size: 44px; flex-shrink: 1; }
@@ -169,8 +185,9 @@
   .session-engine-controls [data-slot='follow-up-model-pill'] { grid-column: 1 / -1; grid-row: 2; }
   .session-engine-controls [data-slot='follow-up-effort-pill'] { grid-column: 2; grid-row: 1; }
   .task-open-targets { align-items: flex-start; flex-direction: column; }
+  .session-composer [data-slot='composer-toolbar'] { padding-block: 0 8px; }
   [data-route='task-thread'] [data-slot='thread-footer-content'] {
-    --thread-footer-limit: min(64dvh, calc(var(--thread-viewport-height, 100dvh) - var(--thread-header-height, 0px) - 80px));
+    --thread-footer-limit: min(50dvh, calc(var(--thread-viewport-height, 100dvh) - var(--thread-header-height, 0px) - 180px));
   }
 }
 

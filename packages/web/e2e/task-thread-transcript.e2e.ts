@@ -215,6 +215,7 @@ describe('task thread', () => {
   })
 
   it('serves and renders the agent screenshot the transcript persisted', () => {
+    browser.evaluate(`document.querySelector('[data-slot="thread-image"]')?.scrollIntoView({ block: 'center', behavior: 'instant' })`)
     browser.waitForFunction(`document.querySelector('[data-slot="thread-image"]')?.naturalWidth > 0`)
     expect(
       browser.evaluate(`document.querySelector('[data-slot="thread-image"]').getAttribute('src')`),

@@ -63,7 +63,7 @@ export function PendingAskHeader({
   return (
     <div
       data-slot="ask-header"
-      className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/70 px-3 py-2"
+      className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/70 px-2.5 py-1.5 md:px-3 md:py-2"
     >
       <span className="text-xs font-semibold text-link-foreground">Needs your answer</span>
       {stepped && mode === 'options' ? (
@@ -109,7 +109,7 @@ export function PendingAskHeader({
                 'min-h-11 rounded-md px-2.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring md:min-h-7',
                 mode === 'options'
                   ? 'bg-accent-strong text-accent-strong-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
+                  : 'text-foreground hover:bg-muted/60',
               )}
             >
               Options
@@ -123,7 +123,7 @@ export function PendingAskHeader({
                 'min-h-11 rounded-md px-2.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring md:min-h-7',
                 mode === 'reply'
                   ? 'bg-accent-strong text-accent-strong-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
+                  : 'text-foreground hover:bg-muted/60',
               )}
             >
               Write a reply
@@ -598,6 +598,7 @@ export function AskContextSheet({
           event.preventDefault()
           if (closingToOriginRef.current) {
             closingToOriginRef.current = false
+            onShowOrigin?.()
             return
           }
           returnFocusRef?.current?.focus()

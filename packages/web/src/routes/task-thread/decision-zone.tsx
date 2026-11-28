@@ -81,7 +81,7 @@ export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
       data-slot="thread-dock"
       data-pending-ask={needsAnswer || undefined}
       data-decision-mode={hasPendingAsk ? 'ask' : isReviewGate ? 'review' : 'composer'}
-      className="relative z-10 shrink-0 bg-background pt-2 pb-2 md:pt-2.5 md:pb-4"
+      className="relative z-10 shrink-0 bg-background py-1.5 md:pt-2.5 md:pb-4"
     >
       {scroll.pillVisible ? (
         <div data-slot="thread-jump" className="pointer-events-none z-30 flex justify-center">
@@ -92,10 +92,25 @@ export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
       <div
         data-slot="thread-footer-content"
         className={cn(
-          'mx-auto flex w-full max-w-[var(--measure)] flex-col px-[14px] md:px-16',
+          'mx-auto flex w-full min-w-0 max-w-[var(--measure)] flex-col px-[14px] md:px-16',
           unifiedReplyActive ? 'gap-0' : 'gap-1.5 md:gap-2',
         )}
       >
+        {!isReviewGate ? (
+          <>
+            <AutoResumeHint run={run} />
+            <DecisionStatusLine
+              run={run}
+              sessionOpen={sessionOpen}
+              attention={attention}
+              queued={queued}
+              continuable={continuable}
+              startsNewConversation={continueAction.startsNewConversation}
+              removedRunnerNotice={removedRunnerNotice}
+            />
+          </>
+        ) : null}
+
         {hasPendingAsk ? (
           <AskCard
             key={pinnedAsk.id}
@@ -111,25 +126,13 @@ export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
           />
         ) : isReviewGate ? (
           <ReviewPanel run={run} showDiff={false} />
-        ) : (
-          <>
-            <AutoResumeHint run={run} />
-            <DecisionStatusLine
-              run={run}
-              sessionOpen={sessionOpen}
-              attention={attention}
-              queued={queued}
-              continuable={continuable}
-              startsNewConversation={continueAction.startsNewConversation}
-              removedRunnerNotice={removedRunnerNotice}
-            />
-          </>
-        )}
+        ) : null}
 
         <div
           data-slot="thread-composer-slot"
           hidden={composerHidden}
           className={cn(
+            'min-w-0 w-full',
             composerHidden && 'hidden',
             unifiedReplyActive &&
               'rounded-b-xl border border-t-0 border-accent-strong/30 bg-accent-strong/[0.04] p-2.5 [html:not(.light)_&]:bg-card',
@@ -309,7 +312,7 @@ function ThreadComposer(props: ThreadComposerProps) {
       {...threadSkillContext(run, continuable, continueAction)}
       onStop={canStop ? stopAction.stop : undefined}
       onFinish={
-        !hasPendingAsk && offersComposerFinish(run)
+        offersComposerFinish(run)
           ? () => finishAction.mutateAsync().catch(() => undefined)
           : undefined
       }

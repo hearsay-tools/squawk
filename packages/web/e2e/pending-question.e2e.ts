@@ -179,6 +179,9 @@ describe.each([
     openTask(width, height, query)
     browser.click('[data-slot="ask-show-context"]')
     browser.waitForFunction(`document.querySelector('[data-slot="ask-context-sheet"] [data-slot="ask-context"]') !== null`)
+    browser.waitForFunction(
+      `Math.abs(document.querySelector('[data-slot="ask-context-sheet"]').getBoundingClientRect().right - window.innerWidth) < 2`,
+    )
     const context = browser.evaluate(`(() => {
       const region = document.querySelector('[data-slot="ask-context-sheet"] [data-slot="ask-context"]')
       return { content: region.scrollHeight, text: region.textContent }

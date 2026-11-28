@@ -192,7 +192,7 @@ for (const [width, height] of [[1440, 900], [360, 640]]) for (const theme of ['l
     browser.screenshot(join(artifacts, `worker-parent-${width}-${theme}.png`), { viewport: true })
     browser.click(parentLink)
     browser.waitForFunction(`location.pathname === '${route(parentId)}'`)
-    reveal('Relationship parent')
+    reveal('Relationship parent with 32 workers')
     browser.waitForFunction(`document.querySelector('[data-slot="run-activity-workers"]') !== null`)
   }, 120_000)
 }

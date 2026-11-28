@@ -258,7 +258,10 @@ function RunTabs({ run, tab, activeItem, inlineItemTabs, overflowItemTabs, phone
       ref={tabRowRef}
       data-slot="run-tabs"
       data-phone-bar={phoneBar || undefined}
-      className="mt-3 flex flex-wrap items-end gap-1 border-b border-border md:mt-5 max-md:flex-nowrap max-md:overflow-x-auto max-md:border-b-0 max-md:shadow-[inset_0_-1px_0_var(--border)] max-md:gap-0 max-md:[&>*]:mb-0 max-md:[&>*]:shrink-0 max-md:[&>a]:min-h-11 max-md:[&>a]:px-3.5 max-md:[&>a]:text-[13.5px]"
+      className={cn(
+        'flex flex-wrap items-end gap-1 border-b border-border md:mt-5 max-md:flex-nowrap max-md:overflow-x-auto max-md:border-b-0 max-md:shadow-[inset_0_-1px_0_var(--border)] max-md:gap-0 max-md:[&>*]:mb-0 max-md:[&>*]:shrink-0 max-md:[&>a]:min-h-11 max-md:[&>a]:px-3.5 max-md:[&>a]:text-[13.5px]',
+        phoneBar ? 'mt-0' : 'mt-3',
+      )}
     >
       {/* Below md (hearsay-tools/cezarion#621): 13.5px labels and quiet counts, tabs spread across the row. The 44px
           floor stays — the touch-target sweep measures these links — so the design's 40px is the

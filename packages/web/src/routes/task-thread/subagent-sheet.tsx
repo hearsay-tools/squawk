@@ -27,6 +27,8 @@ export function SubagentSheet({
   agent,
   entries,
   onClose,
+  onBeforeOpenReport,
+  onRestoreAgentFocus,
   taskTitles,
   recipientBackends,
 }: {
@@ -38,6 +40,10 @@ export function SubagentSheet({
   /** That agent's child entries, in event order (`subagentEntries`). */
   entries: ThreadEntry[]
   onClose: () => void
+  /** Called right before navigating into a report reader from inside the sheet. */
+  onBeforeOpenReport?: (() => void) | undefined
+  /** Restores focus to the agent row (reopening the Activity popover when needed) when the report closes. */
+  onRestoreAgentFocus?: ((agentId: string) => void) | undefined
   taskTitles?: TaskTitleMap | undefined
   recipientBackends?: RecipientBackendMap | undefined
 }) {
@@ -48,12 +54,18 @@ export function SubagentSheet({
     return () => { restoreCleanup.current?.() }
   }, [registry, runId])
   const openReport = (messageKey: string) => {
-    const trigger = [...document.querySelectorAll<HTMLButtonElement>('[data-agent-id]')].find(button => button.dataset.agentId === agent?.id)
+    const agentId = agent?.id
+    const trigger = [...document.querySelectorAll<HTMLButtonElement>('[data-agent-id]')].find(button => button.dataset.agentId === agentId)
     restoreCleanup.current?.()
     restoreCleanup.current = registry?.registerOpener(messageKey, () => {
+      if (agentId && onRestoreAgentFocus) {
+        onRestoreAgentFocus(agentId)
+        return
+      }
       trigger?.focus({ preventScroll: true })
     })
     openingReport.current = true
+    onBeforeOpenReport?.()
     onClose()
   }
   return (

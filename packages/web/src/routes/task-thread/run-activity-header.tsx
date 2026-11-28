@@ -23,6 +23,10 @@ export interface ThreadActivityProps {
   mode: 'popover' | 'sidebar'
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Keep the popover open while a child sheet (SubagentSheet) owns focus above it. */
+  keepOpen?: boolean | undefined
+  /** Optional custom auto-focus handler when the popover opens (e.g., restoring focus to a subagent row). */
+  onOpenAutoFocus?: ((event: Event) => void) | undefined
 }
 
 function useHeaderActivityFacts(run: ApiRun, thread: ThreadState, currentThread: ThreadState, currentComplete: boolean) {
@@ -74,15 +78,23 @@ function ActivityPopover({
   contentClassName: string
   children: ReactNode
 }) {
-  const { run, thread, currentThread, currentComplete, onOpenWorker, open, onOpenChange } = props
+  const { run, thread, currentThread, currentComplete, onOpenWorker, open, onOpenChange, keepOpen = false, onOpenAutoFocus } = props
+  const suppressWhileChildOpen = (event: Event) => {
+    if (keepOpen) event.preventDefault()
+  }
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
+    <Popover open={open} onOpenChange={(next) => { if (!next && keepOpen) return; onOpenChange(next) }}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent
         align={align}
         sideOffset={sideOffset}
         data-slot="run-activity-popover"
         className={contentClassName}
+        onOpenAutoFocus={onOpenAutoFocus}
+        onInteractOutside={suppressWhileChildOpen}
+        onPointerDownOutside={suppressWhileChildOpen}
+        onFocusOutside={suppressWhileChildOpen}
+        onEscapeKeyDown={suppressWhileChildOpen}
       >
         <RunActivityDock
           presentation="panel"
@@ -90,10 +102,7 @@ function ActivityPopover({
           thread={thread}
           currentThread={currentThread}
           currentComplete={currentComplete}
-          onOpenWorker={(id) => {
-            onOpenChange(false)
-            onOpenWorker(id)
-          }}
+          onOpenWorker={onOpenWorker}
         />
       </PopoverContent>
     </Popover>
@@ -120,7 +129,7 @@ export function DesktopActivityHeaderControl(props: ThreadActivityProps) {
       aria-label={label}
       onClick={mode === 'sidebar' ? () => onOpenChange(!open) : undefined}
       className={cn(
-        'hidden min-h-9 max-w-full shrink-0 items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-[12px] font-medium text-foreground shadow-xs transition-colors md:inline-flex',
+        'hidden min-h-9 min-w-0 max-w-full shrink items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-[12px] font-medium text-foreground shadow-xs transition-colors md:inline-flex',
         'pointer-hover:bg-muted/60 active:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
         open && 'border-accent-strong/60',
       )}
@@ -132,7 +141,7 @@ export function DesktopActivityHeaderControl(props: ThreadActivityProps) {
         </span>
       </span>
       {facts.activeStepName ? (
-        <span className="hidden max-w-[140px] truncate text-muted-foreground lg:inline">· {facts.activeStepName}</span>
+        <span className="hidden max-w-[140px] truncate text-muted-foreground xl:inline">· {facts.activeStepName}</span>
       ) : null}
       {facts.workerCount > 0 ? (
         <span data-slot="activity-workers-badge" className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground tabular-nums">

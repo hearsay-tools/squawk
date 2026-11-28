@@ -142,6 +142,28 @@ describe('run-activity-header (hearsay-tools/squawk#4374)', () => {
     expect(document.querySelector('[data-slot="run-activity-status"]')?.textContent).toBe('Incomplete')
   })
 
+  it('keeps the Activity popover open while a child subagent sheet owns focus (keepOpen)', () => {
+    const onOpenChange = vi.fn()
+    const onOpenWorker = vi.fn()
+    const thread = reduceThread(subagentEvents)
+    render(wrap(
+      <DesktopActivityHeaderControl
+        run={makeRun()}
+        thread={thread}
+        currentThread={thread}
+        currentComplete
+        onOpenWorker={onOpenWorker}
+        mode="popover"
+        open
+        keepOpen
+        onOpenChange={onOpenChange}
+      />,
+    ))
+    expect(document.querySelector('[data-slot="run-activity-popover"]')).not.toBeNull()
+    fireEvent.keyDown(document.querySelector('[data-slot="run-activity-popover"]')!, { key: 'Escape' })
+    expect(onOpenChange).not.toHaveBeenCalledWith(false)
+  })
+
   it('renders mobile 44px Activity strip without a desktop pill slot', () => {
     const thread = reduceThread(subagentEvents)
     render(wrap(

@@ -200,7 +200,31 @@ export function ThreadView({
   const needsAnswer = transcriptAsk || asksQuestion(run)
   const { hasContinuation, continuable } = threadContinuation(sessionOpen, queued, continueAction)
 
-  const { openAgentId, setOpenAgentId, activityMode, activityOpen, setActivityOpen, showActivitySidebar } = useThreadChromeState(run.id)
+  const {
+    openAgentId, setOpenAgentId, activityMode, activityOpen, setActivityOpen,
+    showActivitySidebar, closeActivityPopover,
+  } = useThreadChromeState(run.id)
+  const pendingAgentFocusRef = useRef<string | undefined>(undefined)
+  const restoreAgentFocus = useCallback((agentId: string) => {
+    const existing = [...document.querySelectorAll<HTMLButtonElement>('[data-agent-id]')]
+      .find(button => button.dataset.agentId === agentId)
+    if (existing) {
+      existing.focus({ preventScroll: true })
+      return
+    }
+    pendingAgentFocusRef.current = agentId
+    setActivityOpen(true)
+  }, [setActivityOpen])
+  const handleActivityPopoverAutoFocus = useCallback((event: Event) => {
+    const agentId = pendingAgentFocusRef.current
+    if (!agentId) return
+    pendingAgentFocusRef.current = undefined
+    const target = [...document.querySelectorAll<HTMLButtonElement>('[data-agent-id]')]
+      .find(button => button.dataset.agentId === agentId)
+    if (!target) return
+    event.preventDefault()
+    target.focus({ preventScroll: true })
+  }, [])
   const { openAgent, openAgentChildren } = useOpenSubagent(openAgentId, currentThread, thread, runIsTerminal)
   const sendMessage = useSendMessage(run.id)
   const reply = useAskAnswer(run)
@@ -274,6 +298,8 @@ export function ThreadView({
     mode: activityMode,
     open: activityOpen,
     onOpenChange: setActivityOpen,
+    keepOpen: openAgentId !== undefined,
+    onOpenAutoFocus: handleActivityPopoverAutoFocus,
   }
 
   return (
@@ -364,6 +390,8 @@ export function ThreadView({
         entries={openAgentChildren}
         taskTitles={taskTitles}
         recipientBackends={recipientBackends}
+        onBeforeOpenReport={closeActivityPopover}
+        onRestoreAgentFocus={restoreAgentFocus}
         onClose={() => setOpenAgentId(undefined)}
       />
     </ReadingPage>
@@ -424,7 +452,8 @@ function useThreadChromeState(runId: string) {
   const activityOpen = activityMode === 'sidebar' ? activitySidebarOpen : activityPopoverOpen
   const setActivityOpen = activityMode === 'sidebar' ? setActivitySidebarOpen : setActivityPopoverOpen
   const showActivitySidebar = activityMode === 'sidebar' && activitySidebarOpen
-  return { openAgentId, setOpenAgentId, activityMode, activityOpen, setActivityOpen, showActivitySidebar }
+  const closeActivityPopover = useCallback(() => setActivityPopoverOpen(false), [])
+  return { openAgentId, setOpenAgentId, activityMode, activityOpen, setActivityOpen, showActivitySidebar, closeActivityPopover }
 }
 
 function useQueuedMessageActions(
