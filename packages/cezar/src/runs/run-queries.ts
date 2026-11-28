@@ -503,7 +503,17 @@ export class RunQueriesTopic implements RunQueries, RunFamilyReads {
 
   /** Indexed family enumeration, including members not yet flushed to SQLite. */
   listFamilyRunIds(rootId: string): string[] {
-    const ids = new Set([rootId, ...(this.db?.listIdsByParent(rootId) ?? [])]);
+    return this.familyRunIds(rootId, this.db?.listIdsByParent(rootId) ?? []);
+  }
+
+  /** `listFamilyRunIds` of each root, with one SQLite read for all of them. */
+  listFamiliesRunIds(rootIds: readonly string[]): string[][] {
+    const stored = this.db?.listIdsByParents() ?? new Map<string, string[]>();
+    return rootIds.map(rootId => this.familyRunIds(rootId, stored.get(rootId) ?? []));
+  }
+
+  private familyRunIds(rootId: string, stored: readonly string[]): string[] {
+    const ids = new Set([rootId, ...stored]);
     for (const [id, run] of this.held) {
       if (familyRootOf(run) === rootId) ids.add(id);
       else if (id !== rootId) ids.delete(id);

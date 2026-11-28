@@ -217,6 +217,27 @@ describe('off-loop store readiness (hearsay-tools/cezarion#906)', () => {
     for (const id of ids) expect(existsSync(historyPaths(dir, id).facts)).toBe(true);
   });
 
+  it('lists every conversation family with one read, as the per-root listing does (hearsay-tools/squawk#3355)', async () => {
+    const { dir, store } = openStore();
+    const families = [seedSettledFamily(store, dir), seedSettledFamily(store, dir)];
+    for (const { parentId } of families) {
+      store.updateRun(parentId, { delegation: { role: 'root', permissions: [], receipts: [], conversation: { messages: [], outcomes: [] } } });
+    }
+    const roots = [...families.map(family => family.parentId), 'no-such-root'];
+    // Held records and SQLite rows both count.
+    expect(store.queries.listFamiliesRunIds(roots)).toEqual(roots.map(root => store.queries.listFamilyRunIds(root)));
+    store.close(); stores.pop();
+    const perRoot = vi.spyOn(RunQueriesTopic.prototype, 'listFamilyRunIds');
+    const bulk = vi.spyOn(RunQueriesTopic.prototype, 'listFamiliesRunIds');
+    const reopened = RunStore.open(dir); stores.push(reopened);
+    await reopened.transcriptFacts.factsWarmIdle();
+    expect(bulk).toHaveBeenCalledOnce();
+    expect(bulk.mock.calls[0]![0]).toEqual(expect.arrayContaining(families.map(family => family.parentId)));
+    expect(perRoot).not.toHaveBeenCalled();
+    expect(reopened.queries.listFamiliesRunIds(roots)).toEqual([
+      [families[0]!.parentId, families[0]!.workerId], [families[1]!.parentId, families[1]!.workerId], ['no-such-root']]);
+  });
+
   it('enumerates a large store across event-loop turns, after open, and skips runs deleted meanwhile (hearsay-tools/cezarion#949)', async () => {
     const { dir, store } = openStore();
     const family = seedSettledFamily(store, dir);
