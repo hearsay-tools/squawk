@@ -489,6 +489,23 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
       }
     });
 
+    it('reports an unregistered standalone Git repo at the worktree path as invalid', async () => {
+      const id = await seed(randomUUID(), 'done', '2026-07-01T00:00:00Z');
+      const wtPath = store.getRun(id)!.worktreePath!;
+      await run('git', ['worktree', 'remove', '--force', wtPath], { cwd: repoRoot });
+      mkdirSync(wtPath, { recursive: true });
+      await run('git', ['init', '-b', 'main'], { cwd: wtPath });
+      writeFileSync(join(wtPath, 'standalone.txt'), 'separate repo\n');
+      await run('git', ['add', '-A'], { cwd: wtPath });
+      await run('git', [...GIT_ID, 'commit', '-q', '-m', 'standalone commit'], { cwd: wtPath });
+
+      const listed = Object.fromEntries((await getWorktrees()).worktrees.map((w) => [w.runId, w]));
+      expect(listed[id]!.reclaimBlocker).toEqual({ kind: 'invalid' });
+      const res = await reclaimOne(id);
+      expect(res.status).toBe(409);
+      expect(((await res.json()) as { error: string }).error).toContain('not a registered Git worktree');
+    });
+
     it('still reclaims a checkout whose only extra files are ignored build output', async () => {
       const id = await seed(randomUUID(), 'done', '2026-07-01T00:00:00Z');
       const path = store.getRun(id)!.worktreePath!;

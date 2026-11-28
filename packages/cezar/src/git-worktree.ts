@@ -489,6 +489,11 @@ export async function inspectWorktreeReclaimBlocker(
 ): Promise<WorktreeReclaimBlocker | null> {
   if (!existsSync(worktreePath)) return null;
   if (!(await isWorktreeRoot(worktreePath, git))) return { kind: 'invalid' };
+  const target = canonicalPath(worktreePath);
+  const registered = await registeredWorktrees(repoRoot);
+  if (target === canonicalPath(repoRoot) || !registered.some((item) => canonicalPath(item.path) === target)) {
+    return { kind: 'invalid' };
+  }
   const head = await git(worktreePath, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
   const sha = head.stdout.trim();
   if (!head.ok || !sha) return { kind: 'invalid' };
