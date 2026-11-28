@@ -100,6 +100,40 @@ function stageGutterAttrs(gutterWidth: number): {
   }
 }
 
+function useAttentionAnnouncement(attention: readonly DecisionRecord[]): string | undefined {
+  const [announcement, setAnnouncement] = React.useState<string | undefined>(undefined)
+  const seenAttentionRef = React.useRef<Set<string> | undefined>(undefined)
+  const lastAnnouncementRef = React.useRef<string | undefined>(undefined)
+  const pendingTimerRef = React.useRef<number | undefined>(undefined)
+
+  React.useEffect(() => {
+    const nextMessage = newAttentionAnnouncement(seenAttentionRef.current, attention)
+    seenAttentionRef.current = new Set(attention.map((item) => item.runId))
+    if (!nextMessage) return
+    if (pendingTimerRef.current !== undefined) {
+      window.clearTimeout(pendingTimerRef.current)
+      pendingTimerRef.current = undefined
+    }
+    if (lastAnnouncementRef.current !== nextMessage) {
+      lastAnnouncementRef.current = nextMessage
+      setAnnouncement(nextMessage)
+      return
+    }
+    setAnnouncement('')
+    pendingTimerRef.current = window.setTimeout(() => {
+      pendingTimerRef.current = undefined
+      lastAnnouncementRef.current = nextMessage
+      setAnnouncement(nextMessage)
+    }, 0)
+  }, [attention])
+
+  React.useEffect(() => () => {
+    if (pendingTimerRef.current !== undefined) window.clearTimeout(pendingTimerRef.current)
+  }, [])
+
+  return announcement
+}
+
 function restoreTriageFocus(
   trigger: HTMLButtonElement | null,
   stage: HTMLDivElement | null,
@@ -131,8 +165,6 @@ export function ActivitySupervisionView({
   const [selectedRef, setSelectedRef] = React.useState<SelectedTriageRef | null>(null)
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const [hover, setHover] = React.useState<{ pointer?: string; focus?: string }>({})
-  const [announcement, setAnnouncement] = React.useState<string | undefined>(undefined)
-  const seenAttentionRef = React.useRef<Set<string> | undefined>(undefined)
 
   const index = React.useMemo(() => combinedIndex(projects), [projects])
   const indexByProject = React.useMemo(
@@ -148,13 +180,8 @@ export function ActivitySupervisionView({
     [projects],
   )
   const { attention, working } = React.useMemo(() => partitionActivity(projects), [projects])
-
   // Announce newly arriving Attention items without moving selection or scroll.
-  React.useEffect(() => {
-    const nextMessage = newAttentionAnnouncement(seenAttentionRef.current, attention)
-    seenAttentionRef.current = new Set(attention.map((item) => item.runId))
-    if (nextMessage) setAnnouncement(nextMessage)
-  }, [attention])
+  const announcement = useAttentionAnnouncement(attention)
 
   const openRequests = React.useMemo(() => projects.flatMap((project) => project.requests), [projects])
   const openWaits = React.useMemo(() => projects.flatMap((project) => peerWaits(project.tasks)), [projects])

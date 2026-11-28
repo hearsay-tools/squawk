@@ -332,7 +332,11 @@ function DrawerContentBody({
       </div>
     )
   }
-  const run = runQuery.data
+  // Never expose a cached pre-reconcile finishBlocked verdict while a mount or live refetch is
+  // still in flight; an undefined verdict hides Finish and Accept until the fresh record arrives.
+  const run = runQuery.isFetching && runQuery.data.finishBlocked !== undefined
+    ? { ...runQuery.data, finishBlocked: undefined }
+    : runQuery.data
   if (record.kind === 'answer') return <AskDrawerBody record={record} run={run} onResolved={onResolved} />
   if (record.kind === 'review') return <ReviewPanel run={run} projectId={record.projectId} onResolved={onResolved} />
   if (record.kind === 'failed') return <FailedDrawerBody record={record} run={run} onResolved={onResolved} />

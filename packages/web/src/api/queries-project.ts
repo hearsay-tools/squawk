@@ -28,10 +28,10 @@ export function useWorkflows() {
   })
 }
 
-export function useRepo() {
+export function useRepo(projectId?: string) {
   return useQuery({
-    queryKey: queryKeys.repo,
-    queryFn: ({ signal }) => getRepo({ signal }),
+    queryKey: projectId ? ([projectId, 'repo'] as const) : queryKeys.repo,
+    queryFn: ({ signal }) => getRepo({ signal }, projectId),
   })
 }
 

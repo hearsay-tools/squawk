@@ -26,65 +26,49 @@ const ASK_RUN_ID = 'run-ask-1'
 const REVIEW_RUN_ID = 'run-rev-1'
 const FAILED_RUN_ID = 'run-fail-1'
 
+const MOCK_ROUTES: Record<string, () => Response> = {
+  'GET /api/v1/providers/status': () => jsonResponse({ claude: { installed: true, authenticated: true } }),
+  'GET /api/v1/accounts': () => jsonResponse({ accounts: [] }),
+  'GET /api/v1/p/acme/config': () => jsonResponse({ defaultRunner: 'claude' }),
+  'GET /api/v1/p/acme/repo': () => jsonResponse({ info: { root: '/tmp/acme' } }),
+  [`GET /api/v1/p/acme/runs/${ASK_RUN_ID}`]: () => jsonResponse({
+    id: ASK_RUN_ID, title: 'Webhook idempotency', task: 'Webhook', workflow: 'quick-task',
+    runner: 'claude', status: RUN_STATUS.waiting, createdAt: iso(-60_000), tokensUsed: 0, steps: [],
+    sessionActive: true, finishBlocked: null,
+  }),
+  [`GET /api/v1/p/acme/runs/${ASK_RUN_ID}/history-context`]: () => jsonResponse({
+    asOfSeq: 5,
+    contextEvents: [{
+      seq: 5, ts: iso(-30_000), type: 'ask.requested', requestId: 'ask-req-1',
+      context: 'Stripe retries duplicate webhook events.',
+      questions: [{ header: 'HTTP status', question: 'Return 200 or 409?', options: [{ label: '200 OK' }, { label: '409 Conflict' }] }],
+    }],
+  }),
+  [`POST /api/v1/p/acme/runs/${ASK_RUN_ID}/messages`]: () => jsonResponse({ ok: true }),
+  [`GET /api/v1/p/acme/runs/${REVIEW_RUN_ID}`]: () => jsonResponse({
+    id: REVIEW_RUN_ID, title: 'Fix drawer padding', task: 'Fix drawer padding', workflow: 'quick-task',
+    runner: 'claude', status: RUN_STATUS.review, createdAt: iso(-90_000), tokensUsed: 0, steps: [],
+    sessionActive: false, finishBlocked: null,
+  }),
+  [`GET /api/v1/p/acme/runs/${REVIEW_RUN_ID}/diff`]: () =>
+    new Response('diff --git a/a.ts b/a.ts\n+const ok = true\n', { status: 200, headers: { 'content-type': 'text/plain' } }),
+  [`POST /api/v1/p/acme/runs/${REVIEW_RUN_ID}/finish`]: () => jsonResponse({ ok: true }),
+  [`GET /api/v1/p/acme/runs/${FAILED_RUN_ID}`]: () => jsonResponse({
+    id: FAILED_RUN_ID, title: 'Sync OpenAPI docs', task: 'Sync docs', workflow: 'quick-task',
+    runner: 'claude', status: RUN_STATUS.failed, error: 'Schema mismatch at /v1/activity',
+    createdAt: iso(-120_000), tokensUsed: 0, steps: [], sessionActive: false, finishBlocked: null,
+  }),
+  [`POST /api/v1/p/acme/runs/${FAILED_RUN_ID}/archive`]: () => jsonResponse({ id: FAILED_RUN_ID, archived: true }),
+}
+
 function mockApi() {
   const calls: string[] = []
   fetchMock.mockImplementation(async (input, init) => {
-    const url = new URL(String(input), 'http://cockpit.test')
-    const path = url.pathname
-    calls.push(`${init?.method ?? 'GET'} ${path}`)
-    if (path === '/api/v1/providers/status') {
-      return jsonResponse({ claude: { installed: true, authenticated: true } })
-    }
-    if (path === '/api/v1/accounts') {
-      return jsonResponse({ accounts: [] })
-    }
-    if (path === '/api/v1/p/acme/config') {
-      return jsonResponse({ defaultRunner: 'claude' })
-    }
-    if (path === `/api/v1/p/acme/runs/${ASK_RUN_ID}`) {
-      return jsonResponse({
-        id: ASK_RUN_ID, title: 'Webhook idempotency', task: 'Webhook', workflow: 'quick-task',
-        runner: 'claude', status: RUN_STATUS.waiting, createdAt: iso(-60_000), tokensUsed: 0, steps: [],
-        sessionActive: true, finishBlocked: null,
-      })
-    }
-    if (path === `/api/v1/p/acme/runs/${ASK_RUN_ID}/history-context`) {
-      return jsonResponse({
-        asOfSeq: 5,
-        contextEvents: [{
-          seq: 5, ts: iso(-30_000), type: 'ask.requested', requestId: 'ask-req-1',
-          context: 'Stripe retries duplicate webhook events.',
-          questions: [{ header: 'HTTP status', question: 'Return 200 or 409?', options: [{ label: '200 OK' }, { label: '409 Conflict' }] }],
-        }],
-      })
-    }
-    if (path === `/api/v1/p/acme/runs/${ASK_RUN_ID}/messages` && init?.method === 'POST') {
-      return jsonResponse({ ok: true })
-    }
-    if (path === `/api/v1/p/acme/runs/${REVIEW_RUN_ID}`) {
-      return jsonResponse({
-        id: REVIEW_RUN_ID, title: 'Fix drawer padding', task: 'Fix drawer padding', workflow: 'quick-task',
-        runner: 'claude', status: RUN_STATUS.review, createdAt: iso(-90_000), tokensUsed: 0, steps: [],
-        sessionActive: false, finishBlocked: null,
-      })
-    }
-    if (path === `/api/v1/p/acme/runs/${REVIEW_RUN_ID}/diff`) {
-      return new Response('diff --git a/a.ts b/a.ts\n+const ok = true\n', { status: 200, headers: { 'content-type': 'text/plain' } })
-    }
-    if (path === `/api/v1/p/acme/runs/${REVIEW_RUN_ID}/finish` && init?.method === 'POST') {
-      return jsonResponse({ ok: true })
-    }
-    if (path === `/api/v1/p/acme/runs/${FAILED_RUN_ID}`) {
-      return jsonResponse({
-        id: FAILED_RUN_ID, title: 'Sync OpenAPI docs', task: 'Sync docs', workflow: 'quick-task',
-        runner: 'claude', status: RUN_STATUS.failed, error: 'Schema mismatch at /v1/activity',
-        createdAt: iso(-120_000), tokensUsed: 0, steps: [], sessionActive: false, finishBlocked: null,
-      })
-    }
-    if (path === `/api/v1/p/acme/runs/${FAILED_RUN_ID}/archive` && init?.method === 'POST') {
-      return jsonResponse({ id: FAILED_RUN_ID, archived: true })
-    }
-    return jsonResponse({ error: `unexpected ${path}` }, 404)
+    const path = new URL(String(input), 'http://cockpit.test').pathname
+    const key = `${init?.method ?? 'GET'} ${path}`
+    calls.push(key)
+    const handler = MOCK_ROUTES[key]
+    return handler ? handler() : jsonResponse({ error: `unexpected ${path}` }, 404)
   })
   return calls
 }

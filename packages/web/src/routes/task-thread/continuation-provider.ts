@@ -89,7 +89,7 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
   const needsConfig = (untouched && !run.runner) || removed
   // A continuation sends no account: each runner counts when the account the server will continue
   // it on is signed in, not only the default one (hearsay-tools/squawk#4116).
-  const availability = useRunnerAvailability()
+  const availability = useRunnerAvailability(projectId)
   const isWorker = run.delegation?.role === 'worker'
   const storedDefault = config.data?.defaultRunner
   const fallback = planRunner(storedDefault, runnerIds(registered.data)) ?? storedDefault
