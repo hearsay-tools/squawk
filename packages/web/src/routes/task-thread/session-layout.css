@@ -43,6 +43,15 @@
   overscroll-behavior-block: contain;
   scroll-padding-block: 12px 56px;
 }
+[data-route='task-thread'] [data-slot='thread-transcript']:focus-visible {
+  outline: 2px solid var(--link-foreground);
+  outline-offset: -2px;
+}
+@media (forced-colors: active) {
+  [data-route='task-thread'] [data-slot='thread-transcript']:focus-visible {
+    outline-color: Highlight;
+  }
+}
 
 /* Ultra-wide Activity sidebar (>= 1600px when preview/report split is closed). */
 [data-route='task-thread'] [data-slot='thread-activity-sidebar'] {

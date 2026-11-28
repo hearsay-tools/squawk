@@ -152,7 +152,8 @@ export function useAskAnswer(run: ApiRun, projectId?: string): AskAnswerDelivery
     // Defense in depth — every entry point is already disabled while blocked, and the card
     // renders `reason` on its own, so repeating it as an error would say the same thing twice.
     // The REASON still comes back, for the caller that has no `reason` on screen to repeat.
-    if (blockedBy || deliveringRef.current) return reason
+    if (blockedBy) return reason
+    if (deliveringRef.current) return 'An answer is already being sent.'
     deliveringRef.current = true
     setDelivering(true)
     setError(undefined)

@@ -503,6 +503,54 @@ describe('ThreadView', () => {
     expect(screen.getByLabelText('Remove notes.png')).toBeTruthy()
   })
 
+  it('exposes the transcript scrollport as a keyboard-focusable region', () => {
+    renderView(<ThreadView run={run('running')} thread={reduceThread(EVENTS)} />)
+    const scrollport = screen.getByRole('region', { name: 'Session transcript' })
+    expect(scrollport.dataset.slot).toBe('thread-transcript')
+    expect(scrollport.tabIndex).toBe(0)
+  })
+
+  it('disables unified free-text reply sends while an option answer is in flight', async () => {
+    let resolveMessage: ((response: Response) => void) | undefined
+    const askThread = reduceThread([
+      ...EVENTS,
+      line(10, 'ask.requested', {
+        requestId: 'inflight-ask',
+        questions: [{ header: 'Choice', question: 'Pick a path?', options: [{ label: 'Alpha' }, { label: 'Beta' }] }],
+      }),
+    ])
+    renderView(<ThreadView run={run('waiting', { waits: [openHumanWait(10)] } as unknown as Partial<ApiRun>)} thread={askThread} />)
+    const baseFetch = vi.mocked(fetch).getMockImplementation()!
+    let messagePosts = 0
+    vi.mocked(fetch).mockImplementation((input, init) => {
+      if (String(input).endsWith('/messages') && init?.method === 'POST') {
+        messagePosts += 1
+        return new Promise<Response>((resolve) => {
+          resolveMessage = resolve
+        })
+      }
+      return baseFetch(input, init)
+    })
+
+    // Wait for provider status so the option chip is interactive, then trigger an in-flight option send.
+    const alpha = screen.getByRole('button', { name: 'Alpha' }) as HTMLButtonElement
+    await waitFor(() => expect(alpha.disabled).toBe(false))
+    fireEvent.click(alpha)
+    await waitFor(() => expect(messagePosts).toBe(1))
+
+    // Switching to Write a reply while the option answer is pending keeps the composer disabled.
+    fireEvent.click(screen.getByRole('button', { name: 'Write a reply' }))
+    const textarea = screen.getByRole('textbox', { name: 'Reply to the agent' }) as HTMLTextAreaElement
+    expect(textarea.disabled).toBe(true)
+
+    // Settling the option request unlocks the shared delivery state without a second POST.
+    await act(async () => {
+      resolveMessage?.(new Response(JSON.stringify({ delivered: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    })
+    await waitFor(() => expect(textarea.disabled).toBe(false))
+    expect(messagePosts).toBe(1)
+  })
+
   it('closed but resumable → the action row holds exactly Continue; Archive stays in the header (#281)', async () => {
     const steps = [
       { id: 'task', name: 'Do the task', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0, sessionId: 's-1' },

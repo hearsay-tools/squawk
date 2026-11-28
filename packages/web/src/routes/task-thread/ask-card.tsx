@@ -7,7 +7,7 @@ import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 import { useUnsentDraft } from '@/lib/version-reload'
 
-import { useAskAnswer } from './ask-answer'
+import { useAskAnswer, type AskAnswerDelivery } from './ask-answer'
 import { AskAnswers } from './ask-answers'
 import {
   AskCommentStep,
@@ -72,6 +72,7 @@ export function AskCard({
   mode,
   onModeChange,
   hideReplyBody = false,
+  delivery,
   surface = 'transcript',
 }: {
   ask: ThreadAsk
@@ -88,6 +89,8 @@ export function AskCard({
   onModeChange?: ((next: 'options' | 'reply') => void) | undefined
   /** Omit inner reply body when the host renders its persistent composer directly beneath the header. */
   hideReplyBody?: boolean | undefined
+  /** Optional shared delivery hook so option clicks and the reply composer share one in-flight guard. */
+  delivery?: AskAnswerDelivery | undefined
   /** `decision-zone` pins the card at the viewport bottom and opens context in a sheet. */
   surface?: 'transcript' | 'decision-zone' | undefined
 }) {
@@ -128,6 +131,7 @@ export function AskCard({
         controlledMode={mode}
         onModeChange={onModeChange}
         hideReplyBody={hideReplyBody}
+        delivery={delivery}
       />
     </div>
   )
@@ -248,11 +252,10 @@ function RoutedAsk({
 
 function usePendingAskState(
   ask: ThreadAsk,
-  run: ApiRun,
+  delivery: AskAnswerDelivery,
   controlledMode?: 'options' | 'reply',
   onModeChange?: (next: 'options' | 'reply') => void,
 ) {
-  const delivery = useAskAnswer(run)
   const blocked = delivery.blockedBy !== undefined
   const questions = ask.questions
   const stepped = questions.length > 1
@@ -405,19 +408,7 @@ function PendingAskBody({
   )
 }
 
-/** The unanswered card: stepped multi-question options, optional comment step, and unified free-text mode. */
-function PendingAsk({
-  ask,
-  run,
-  surface,
-  onShowOrigin,
-  renderFreeTextReply,
-  onStop,
-  stopping,
-  controlledMode,
-  onModeChange,
-  hideReplyBody,
-}: {
+interface PendingAskProps {
   ask: ThreadAsk
   run: ApiRun
   surface: 'transcript' | 'decision-zone'
@@ -428,8 +419,36 @@ function PendingAsk({
   controlledMode: 'options' | 'reply' | undefined
   onModeChange: ((next: 'options' | 'reply') => void) | undefined
   hideReplyBody: boolean
-}) {
-  const state = usePendingAskState(ask, run, controlledMode, onModeChange)
+  delivery: AskAnswerDelivery | undefined
+}
+
+/** The unanswered card: stepped multi-question options, optional comment step, and unified free-text mode. */
+function PendingAsk(props: PendingAskProps) {
+  if (props.delivery !== undefined) {
+    return <PendingAskContent {...props} delivery={props.delivery} />
+  }
+  return <PendingAskOwnDelivery {...props} />
+}
+
+function PendingAskOwnDelivery(props: Omit<PendingAskProps, 'delivery'>) {
+  const delivery = useAskAnswer(props.run)
+  return <PendingAskContent {...props} delivery={delivery} />
+}
+
+function PendingAskContent({
+  ask,
+  run,
+  surface,
+  onShowOrigin,
+  renderFreeTextReply,
+  onStop,
+  stopping,
+  controlledMode,
+  onModeChange,
+  hideReplyBody,
+  delivery,
+}: Omit<PendingAskProps, 'delivery'> & { delivery: AskAnswerDelivery }) {
+  const state = usePendingAskState(ask, delivery, controlledMode, onModeChange)
   const contextButtonRef = useRef<HTMLButtonElement>(null)
   const resuming = state.delivery.mode === 'resume'
   const showModeSwitch = surface === 'decision-zone' || renderFreeTextReply !== undefined

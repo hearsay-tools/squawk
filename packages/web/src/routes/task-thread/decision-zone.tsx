@@ -45,6 +45,37 @@ export interface ThreadDecisionZoneProps {
   removedRunnerNotice: string | undefined
 }
 
+function resolveDecisionZoneView({
+  pinnedAskId,
+  runStatus,
+  askModeState,
+  replyPending,
+  composerPending,
+}: {
+  pinnedAskId: string | undefined
+  runStatus: ApiRun['status']
+  askModeState: { askId: string | undefined; mode: 'options' | 'reply' }
+  replyPending: boolean
+  composerPending: boolean
+}) {
+  const hasPendingAsk = pinnedAskId !== undefined
+  const isReviewGate = !hasPendingAsk && runStatus === 'review'
+  const askMode: 'options' | 'reply' = askModeState.askId === pinnedAskId ? askModeState.mode : 'options'
+  const unifiedReplyActive = hasPendingAsk && askMode === 'reply'
+  const composerHidden = isReviewGate || (hasPendingAsk && askMode === 'options')
+  const optionDeliveryPending = hasPendingAsk && replyPending && !composerPending
+  const decisionMode = hasPendingAsk ? 'ask' : isReviewGate ? 'review' : 'composer'
+  return {
+    hasPendingAsk,
+    isReviewGate,
+    askMode,
+    decisionMode,
+    unifiedReplyActive,
+    composerHidden,
+    optionDeliveryPending,
+  }
+}
+
 /**
  * Region 2 of the task thread (hearsay-tools/squawk#4374): fixed bottom decision zone
  * rendering the single active human action for the current task state — pending ask (with
@@ -63,24 +94,35 @@ export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
 
   const workersLive = useWorkersLive(run)
   const canStop = runActionFlags(run, workersLive).cancel
-  const hasPendingAsk = pinnedAsk !== undefined
-  const isReviewGate = !hasPendingAsk && run.status === 'review'
 
   const [askModeState, setAskModeState] = useState<{ askId: string | undefined; mode: 'options' | 'reply' }>({
     askId: pinnedAsk?.id,
     mode: 'options',
   })
-  const askMode = askModeState.askId === pinnedAsk?.id ? askModeState.mode : 'options'
+  const [composerPending, setComposerPending] = useState(false)
   const setAskMode = (mode: 'options' | 'reply') => setAskModeState({ askId: pinnedAsk?.id, mode })
 
-  const unifiedReplyActive = hasPendingAsk && askMode === 'reply'
-  const composerHidden = isReviewGate || (hasPendingAsk && askMode === 'options')
+  const {
+    hasPendingAsk,
+    isReviewGate,
+    askMode,
+    decisionMode,
+    unifiedReplyActive,
+    composerHidden,
+    optionDeliveryPending,
+  } = resolveDecisionZoneView({
+    pinnedAskId: pinnedAsk?.id,
+    runStatus: run.status,
+    askModeState,
+    replyPending: reply.isPending,
+    composerPending,
+  })
 
   return (
     <div
       data-slot="thread-dock"
       data-pending-ask={needsAnswer || undefined}
-      data-decision-mode={hasPendingAsk ? 'ask' : isReviewGate ? 'review' : 'composer'}
+      data-decision-mode={decisionMode}
       className="relative z-10 shrink-0 bg-background py-1.5 md:pt-2.5 md:pb-4"
     >
       {scroll.pillVisible ? (
@@ -111,7 +153,7 @@ export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
           </>
         ) : null}
 
-        {hasPendingAsk ? (
+        {pinnedAsk !== undefined ? (
           <AskCard
             key={pinnedAsk.id}
             ask={{ ...pinnedAsk, placement: 'pinned' }}
@@ -120,6 +162,7 @@ export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
             mode={askMode}
             onModeChange={setAskMode}
             hideReplyBody
+            delivery={reply}
             onShowOrigin={onShowOrigin}
             onStop={canStop ? stopAction.stop : undefined}
             stopping={stopAction.stopping}
@@ -143,6 +186,8 @@ export function ThreadDecisionZone(props: ThreadDecisionZoneProps) {
             thread={thread}
             canStop={canStop}
             hasPendingAsk={hasPendingAsk}
+            optionDeliveryPending={optionDeliveryPending}
+            onComposerPendingChange={setComposerPending}
             stopAction={stopAction}
             finishAction={finishAction}
             attention={attention}
@@ -267,10 +312,12 @@ type ThreadComposerProps = Pick<
 > & {
   canStop: boolean
   hasPendingAsk: boolean
+  optionDeliveryPending: boolean
+  onComposerPendingChange: (pending: boolean) => void
 }
 
 function resolveComposerDelivery(props: ThreadComposerProps) {
-  const { run, hasPendingAsk, continuable, continueAction, queued, sendMessage, reply, providerBlocked, providerReason, sessionOpen } = props
+  const { run, hasPendingAsk, optionDeliveryPending, continuable, continueAction, queued, sendMessage, reply, providerBlocked, providerReason, sessionOpen } = props
   const sendViaAskReply = async (text: string, images: Parameters<typeof reply.send>[1]) => {
     // Share the ask card's idle-close recovery. The composer clears its draft
     // only on success, so convert the hook's returned failure to a rejection.
@@ -281,8 +328,12 @@ function resolveComposerDelivery(props: ThreadComposerProps) {
     return {
       onSubmit: sendViaAskReply,
       pendingLabel: reply.mode === 'resume' ? 'Continuing…' : 'Sending…',
-      disabled: providerBlocked || reply.blockedBy !== undefined,
-      disabledReason: providerBlocked ? providerReason : reply.reason,
+      disabled: providerBlocked || reply.blockedBy !== undefined || optionDeliveryPending,
+      disabledReason: providerBlocked
+        ? providerReason
+        : optionDeliveryPending
+          ? 'Sending your answer…'
+          : reply.reason,
       placeholder: 'Reply — / for skills, @ for files…',
     }
   }
@@ -301,7 +352,7 @@ function resolveComposerDelivery(props: ThreadComposerProps) {
 
 function ThreadComposer(props: ThreadComposerProps) {
   const {
-    run, thread, canStop, hasPendingAsk, stopAction, finishAction, attention,
+    run, thread, canStop, hasPendingAsk, onComposerPendingChange, stopAction, finishAction, attention,
     needsAnswer, continuable, continueAction, providerBlocked,
   } = props
   const delivery = resolveComposerDelivery(props)
@@ -310,6 +361,7 @@ function ThreadComposer(props: ThreadComposerProps) {
   return (
     <Composer
       {...threadSkillContext(run, continuable, continueAction)}
+      onPendingChange={onComposerPendingChange}
       onStop={canStop ? stopAction.stop : undefined}
       onFinish={
         offersComposerFinish(run)

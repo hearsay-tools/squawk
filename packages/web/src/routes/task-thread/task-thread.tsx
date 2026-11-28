@@ -321,7 +321,12 @@ export function ThreadView({
 
       <div data-slot="thread-workspace">
         <div data-slot="thread-main">
-          <div data-slot="thread-transcript">
+          <div
+            data-slot="thread-transcript"
+            role="region"
+            aria-label="Session transcript"
+            tabIndex={0}
+          >
             <ThreadTranscript
               run={run}
               thread={thread}

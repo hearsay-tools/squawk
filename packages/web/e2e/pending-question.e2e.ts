@@ -182,10 +182,16 @@ describe.each([
     browser.waitForFunction(
       `Math.abs(document.querySelector('[data-slot="ask-context-sheet"]').getBoundingClientRect().right - window.innerWidth) < 2`,
     )
-    const context = browser.evaluate(`(() => {
-      const region = document.querySelector('[data-slot="ask-context-sheet"] [data-slot="ask-context"]')
-      return { content: region.scrollHeight, text: region.textContent }
-    })()`) as { content: number; text: string }
+    const context = waitForSettledSample<{ content: number; text: string }>(
+      browser,
+      `(() => {
+        const region = document.querySelector('[data-slot="ask-context-sheet"] [data-slot="ask-context"]')
+        if (!region) return null
+        return { content: region.scrollHeight, text: region.textContent ?? '' }
+      })()`,
+      () => true,
+      '[data-slot="ask-context-sheet"] [data-slot="ask-context"]',
+    )
     expect(context.text).toContain('Context paragraph 1:')
     expect(context.text).toContain('Context paragraph 40:')
     expect(context.content).toBeGreaterThan(height)
