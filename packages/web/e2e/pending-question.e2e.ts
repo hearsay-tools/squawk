@@ -241,7 +241,7 @@ describe.each([
     expect(box.h).toBeGreaterThanOrEqual(44)
     for (const theme of ['dark', 'light'] as const) {
       browser.evaluate(`document.documentElement.classList.toggle('light', ${theme === 'light'})`)
-      const sample = browser.waitForValue<ContrastSample>(contrastSampleExpression(marker), (value) => value !== null)
+      const sample = waitForSettledSample<ContrastSample>(browser, contrastSampleExpression(marker), (value) => value !== null, marker)
       expect(sample.ratio, `marker link in ${theme}`).toBeGreaterThanOrEqual(4.5)
     }
     browser.evaluate(`document.documentElement.classList.remove('light')`)
@@ -262,7 +262,7 @@ describe.each([
       }
       for (const theme of ['dark', 'light'] as const) {
         browser.evaluate(`document.documentElement.classList.toggle('light', ${theme === 'light'})`)
-        const sample = browser.waitForValue<ContrastSample>(contrastSampleExpression(selector), (value) => value !== null)
+        const sample = waitForSettledSample<ContrastSample>(browser, contrastSampleExpression(selector), (value) => value !== null, selector)
         expect(sample.ratio, `${selector} in ${theme}`).toBeGreaterThanOrEqual(4.5)
       }
       browser.evaluate(`document.documentElement.classList.remove('light')`)
@@ -304,6 +304,10 @@ describe('reopening and reduced motion', () => {
       browser.evaluate(`(() => { const btn = ${otherBtn}; btn.scrollIntoView({ block: 'center', behavior: 'instant' }); btn.click(); })()`)
       browser.waitForFunction(`document.querySelector('${PINNED} textarea') !== null`)
       browser.evaluate(`document.querySelector('${PINNED} textarea')?.scrollIntoView({ block: 'nearest', behavior: 'instant' })`)
+      browser.fill(`${PINNED} textarea`, 'Custom mobile answer')
+      browser.waitForFunction(
+        `[...document.querySelectorAll('${PINNED} [data-slot="ask-footer"] button')].some((el) => el.textContent?.includes('Send answer') && !el.disabled)`,
+      )
       const state = waitForSettledSample<{
         textareaHeight: number
         textareaHit: boolean

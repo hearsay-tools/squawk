@@ -91,7 +91,7 @@ export function PreviewSplit({ run, state, children, report }: { run: ApiRun | u
       data-slot="task-split"
       data-pane={showPane ? 'open' : 'closed'}
       data-takeover={paneInFront ? '' : undefined}
-      className="preview-split flex min-h-full"
+      className="preview-split flex min-h-full w-full min-w-0"
       style={style}
     >
       <div

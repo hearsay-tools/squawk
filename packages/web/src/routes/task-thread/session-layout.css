@@ -4,12 +4,15 @@
  * The shared --measure preference remains independent of density and theme. */
 
 [data-slot='main']:has([data-route='task-thread']) {
-  overflow-y: clip;
+  min-inline-size: 0;
+  min-block-size: 0;
+  overflow: hidden;
 }
 
 [data-route='task-thread'] {
   block-size: 100%;
   min-block-size: 0;
+  min-inline-size: 0;
   overflow: clip;
 }
 
@@ -34,6 +37,8 @@
 [data-route='task-thread'] [data-slot='thread-transcript'] {
   flex: 1 1 0;
   min-block-size: 0;
+  min-inline-size: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-block: contain;
   scroll-padding-block: 12px 56px;
@@ -195,6 +200,7 @@
    * buttons remain visible and clickable without clipping (hearsay-tools/squawk#4374). */
   [data-route='task-thread'][data-compact-viewport='true'] [data-slot='run-activity-trigger-mobile'],
   [data-route='task-thread'][data-compact-viewport='true'] [data-slot='paused-hint'],
+  [data-route='task-thread'][data-compact-viewport='true'] [data-slot='ask-header'] > span:first-child,
   [data-route='task-thread'][data-compact-viewport='true'] [data-slot='ask-hint'] {
     display: none;
   }
@@ -203,7 +209,7 @@
     padding-block: 4px;
   }
   [data-route='task-thread'][data-compact-viewport='true'] [data-slot='thread-footer-content'] {
-    --thread-footer-limit: calc(var(--thread-viewport-height, 100dvh) - var(--thread-header-height, 0px) - 12px);
+    --thread-footer-limit: calc(var(--thread-viewport-height, 100dvh) - var(--thread-header-height, 0px) - 24px);
   }
   [data-route='task-thread'][data-compact-viewport='true'] [data-slot='thread-dock'] [data-slot='ask-card'],
   [data-route='task-thread'][data-compact-viewport='true'] [data-slot='thread-footer-content'] [data-slot='composer'] {
