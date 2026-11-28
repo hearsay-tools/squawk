@@ -12,6 +12,7 @@ import { scopeTo, useActiveProjectId, useNavigate } from '@/lib/project-router'
 import type { ProjectListEntry, RunIndexEntry, RunSummary } from '@open-mercato/cezar-api-client'
 import { visibleNavItems } from '@/components/nav-items'
 import { automationsAvailable } from '@/lib/capabilities'
+import { RelativeTime } from '@/components/data-primitives'
 import { StatusDot } from '@/components/status-dot'
 import { NEXT_THEME } from '@/components/theme-toggle'
 import { useTheme } from '@/components/theme-provider'
@@ -27,7 +28,6 @@ import {
 import { deriveAttention } from '@/lib/attention'
 import { runStatusPresentation } from '@/lib/status-semantics'
 import { OPEN_COMMAND_PALETTE_EVENT } from '@/lib/command-palette-events'
-import { shortAge } from '@/lib/format'
 import { orderProjects as orderRegistry } from '@/lib/project-order'
 import { isUnread } from '@/lib/read-state'
 import { orderSkillsByUsage } from '@/lib/skills'
@@ -398,9 +398,7 @@ function TaskItem({
           {projectName}
         </span>
       ) : null}
-      <span className="shrink-0 text-xs text-soft-foreground tabular-nums">
-        {shortAge(task.finishedAt ?? task.createdAt, now)}
-      </span>
+      <RelativeTime iso={task.finishedAt ?? task.createdAt} now={now} className="shrink-0 text-xs text-soft-foreground" />
     </CommandItem>
   )
 }

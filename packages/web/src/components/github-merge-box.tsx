@@ -12,6 +12,7 @@ import type {
   GithubPrMergeState,
   GithubPrMergeStateResponse,
 } from '@open-mercato/cezar-api-client'
+import { shortSha } from '@/components/data-primitives'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -190,7 +191,7 @@ function GithubMergeBoxBody({
           </Button>
         </div>
         <p className="mt-1 font-mono text-xs text-soft-foreground">
-          {state.headRef} ({state.headSha.slice(0, 7)}) → {state.baseRef}
+          {state.headRef} ({shortSha(state.headSha)}) → {state.baseRef}
         </p>
         <ul className="mt-3 space-y-2 text-xs">
           <li className="flex items-center gap-2">

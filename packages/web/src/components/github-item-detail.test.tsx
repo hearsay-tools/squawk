@@ -289,7 +289,7 @@ describe('merge requirements in the detail', () => {
   it('shows an empty check list and the abbreviated branch head', async () => {
     renderDetail(PR_42, vi.fn())
     await screen.findByText('No checks configured')
-    expect(screen.getByText('feat/share (0123456) → main')).toBeTruthy()
+    expect(screen.getByText('feat/share (01234567) → main')).toBeTruthy()
     expect(screen.queryByText(/Passing checks do not establish merge readiness/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Run agent on this PR' })).toBeNull()
   })

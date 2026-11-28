@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { historyPaths } from './history-file.ts';
 import { TranscriptFactsQueue } from './transcript-facts-queue.ts';
 import { RunQueriesTopic } from './run-queries.ts';
-import { RunStore } from './store.ts';
+import { RunStore, type RunRecord } from './store.ts';
 import { countTranscriptReads, restoreTranscriptReads } from './transcript-reads.testkit.ts';
 import { seedSettledFamily } from '../workflows/delegation-reconcile.testkit.ts';
 import { setRunStatus, hasPendingAsk } from './run-store.testkit.ts';
@@ -215,6 +215,40 @@ describe('off-loop store readiness (hearsay-tools/cezarion#906)', () => {
     await reopened.transcriptFacts.factsWarmIdle();
     expect(completed).toEqual([live.parentId, live.workerId, historical.parentId, historical.workerId, other.id]);
     for (const id of ids) expect(existsSync(historyPaths(dir, id).facts)).toBe(true);
+  });
+
+  it('lists every conversation family with one read, as the per-root listing does (hearsay-tools/squawk#3355)', async () => {
+    const { dir, store } = openStore();
+    // Each seeded parent is a conversation root (it holds a committed conversation).
+    const families = [seedSettledFamily(store, dir), seedSettledFamily(store, dir)];
+    const roots = [...families.map(family => family.parentId), 'no-such-root'];
+    // Held records and SQLite rows both count.
+    expect(store.queries.listFamiliesRunIds(roots)).toEqual(roots.map(root => store.queries.listFamilyRunIds(root)));
+    store.close(); stores.pop();
+    const perRoot = vi.spyOn(RunQueriesTopic.prototype, 'listFamilyRunIds');
+    const bulk = vi.spyOn(RunQueriesTopic.prototype, 'listFamiliesRunIds');
+    const reopened = RunStore.open(dir); stores.push(reopened);
+    await reopened.transcriptFacts.factsWarmIdle();
+    expect(bulk).toHaveBeenCalledOnce();
+    expect(bulk.mock.calls[0]![0]).toEqual(expect.arrayContaining(families.map(family => family.parentId)));
+    expect(perRoot).not.toHaveBeenCalled();
+    expect(reopened.queries.listFamiliesRunIds(roots)).toEqual([
+      [families[0]!.parentId, families[0]!.workerId], [families[1]!.parentId, families[1]!.workerId], ['no-such-root']]);
+  });
+
+  it('family listings let held records move workers and drop deleted runs, one root or many', () => {
+    const { dir, store } = openStore();
+    const [a, b] = [seedSettledFamily(store, dir), seedSettledFamily(store, dir)];
+    store.persistence.flush();
+    // A held record ahead of its row moves worker a to root b; worker b awaits deletion.
+    const held = Reflect.get(store, 'held') as Map<string, RunRecord>;
+    const moved = store.getRun(a.workerId)!;
+    if (moved.delegation?.role !== 'worker') throw new Error('expected worker');
+    held.set(a.workerId, { ...moved, delegation: { ...moved.delegation, parentRunId: b.parentId } });
+    (Reflect.get(store, 'deleted') as Set<string>).add(b.workerId);
+    const expected = [[a.parentId], [b.parentId, a.workerId]];
+    expect([a.parentId, b.parentId].map(root => store.queries.listFamilyRunIds(root))).toEqual(expected);
+    expect(store.queries.listFamiliesRunIds([a.parentId, b.parentId])).toEqual(expected);
   });
 
   it('enumerates a large store across event-loop turns, after open, and skips runs deleted meanwhile (hearsay-tools/cezarion#949)', async () => {

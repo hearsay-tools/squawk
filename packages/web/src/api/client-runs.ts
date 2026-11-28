@@ -365,10 +365,13 @@ export async function archiveFinished(
 }
 
 /** "Mark all read": stamp every currently-unread finished run in one call. */
-export async function markAllRunsSeen(automation?: boolean): Promise<MarkAllReadResponse> {
+export async function markAllRunsSeen(
+  automation?: boolean,
+  address: { projectId: string } = { projectId: queryScope() },
+): Promise<MarkAllReadResponse> {
   return unwrap(
     await cez.api.v1.p[':projectId'].runs['read-all'].$post({
-      param: { projectId: queryScope() },
+      param: { projectId: address.projectId },
       // `automation` narrows the sweep to one origin (hearsay-tools/cezarion#1616); absent is all.
       json: automation !== undefined ? { automation } : {},
     }),

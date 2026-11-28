@@ -208,7 +208,7 @@ describe('TasksOverview — the table', () => {
     // Status | Task | Workflow | Branch | ± | PR | IN/OUT | Cost | CPU | Mem | Started
     expect(cellsOf('full')).toEqual([
       'Needs review',
-      'Structured changes endpointDirect task',
+      'Structured changes endpoint',
       'feat',
       'cez/8f31ab02',
       '+128 −14', // the ± column (R2 #389) — adds and dels, the mockup's pair
@@ -222,7 +222,7 @@ describe('TasksOverview — the table', () => {
     // No branch, no PR, no diff recorded, no cost yet — dashes, not zeros (a pre-R2 record has
     // no diffStat, and `+0 −0` would claim a measurement that never happened). Started falls
     // back to createdAt.
-    expect(cellsOf('bare')).toEqual(['Needs you', 'Bare minimumDirect task', 'default', '—', '—', '—', '— / —', '—', '—', '—', '26m'])
+    expect(cellsOf('bare')).toEqual(['Needs you', 'Bare minimum', 'default', '—', '—', '—', '— / —', '—', '—', '—', '26m'])
     const diff = tableRow('full')?.querySelector('[data-slot="diff-stat"]')
     expect(diff?.getAttribute('title')).toBe('+128 −14 across 6 files')
     // Nothing was narrowed here, so nothing claims it was (#751).
@@ -268,7 +268,7 @@ describe('TasksOverview — the table', () => {
     expect(headers).toEqual(['Status', 'Task', 'Workflow', 'Branch', '±', 'Ref', 'CPU', 'Mem', 'Started'])
     expect(cellsOf('hidden')).toEqual([
       'Done',
-      'Hidden metricsDirect task',
+      'Hidden metrics',
       'default',
       '—',
       '—',
@@ -408,12 +408,12 @@ describe('TasksOverview — the table', () => {
     setOverviewDesktop(false)
     const mobile = card('visibility') as HTMLElement
     expect(mobile.textContent).not.toContain('184.7k')
-    fireEvent.click(within(mobile).getByRole('button', { name: 'Show resources' }))
-    const cardText = mobile.textContent ?? ''
+    fireEvent.click(within(mobile).getByRole('button', { name: /^Usage and telemetry for / }))
+    const popoverText = document.querySelector('[data-slot="task-telemetry-popover"]')?.textContent ?? ''
     expect(rowText.includes('184.7k / 2.4k')).toBe(tokens)
-    expect(cardText.includes('IN 184.7k · OUT 2.4k')).toBe(tokens)
+    expect(popoverText.includes('IN 184.7k · OUT 2.4k')).toBe(tokens)
     expect(rowText.includes('$0.31')).toBe(cost)
-    expect(cardText.includes('$0.31')).toBe(cost)
+    expect(popoverText.includes('$0.31')).toBe(cost)
   })
 
   it('shows the auto-summary title once a turn produced one, falling back to the raw title', () => {
@@ -874,8 +874,8 @@ describe('TasksOverview — mobile cards and FAB', () => {
 
     expect(tableRow('folded-mobile')).toBeNull()
     expect(card('folded-mobile')?.textContent).toContain('autofix')
-    fireEvent.click(within(card('folded-mobile') as HTMLElement).getByRole('button', { name: 'Show resources' }))
-    expect(card('folded-mobile')?.textContent).toContain('feat/mobile-stays')
+    fireEvent.click(within(card('folded-mobile') as HTMLElement).getByRole('button', { name: /^Usage and telemetry for / }))
+    expect(document.querySelector('[data-slot="task-telemetry-popover"]')?.textContent).toContain('feat/mobile-stays')
   })
 
   it('renders the same runs as cards, in the same order', () => {
@@ -925,12 +925,13 @@ describe('TasksOverview — mobile cards and FAB', () => {
     )
     expect(c.textContent).toContain('feat')
     expect(c.textContent).not.toContain('cez/8f31ab02')
-    fireEvent.click(within(c).getByRole('button', { name: 'Show resources' }))
-    expect(c.textContent).toContain('cez/8f31ab02')
+    fireEvent.click(within(c).getByRole('button', { name: 'Usage and telemetry for Structured changes endpoint' }))
+    const popover = document.querySelector('[data-slot="task-telemetry-popover"]') as HTMLElement
+    expect(popover.textContent).toContain('cez/8f31ab02')
     // The meta row carries the diff pair, like the mockup card (branch · ± · tokens).
     expect(c.querySelector('[data-slot="diff-stat"]')?.textContent).toBe('+128 −14')
-    expect(c.textContent).toContain('IN 184.7k · OUT 2.4k')
-    expect(c.textContent).toContain('$0.31')
+    expect(popover.textContent).toContain('IN 184.7k · OUT 2.4k')
+    expect(popover.textContent).toContain('$0.31')
     expect(c.textContent).toContain('40m') // Started age, matching the desktop summary.
     expect(c.querySelector('[data-slot="pr-chip"]')?.getAttribute('href')).toBe('https://github.com/o/r/pull/402')
   })
@@ -970,9 +971,10 @@ describe('TasksOverview — mobile cards and FAB', () => {
       ],
     })
     const hidden = card('hidden-card') as HTMLElement
-    fireEvent.click(within(hidden).getByRole('button', { name: 'Show resources' }))
-    expect(hidden.textContent).not.toContain('184.7k')
-    expect(hidden.textContent).toContain('cez/hidden')
+    fireEvent.click(within(hidden).getByRole('button', { name: /^Usage and telemetry for / }))
+    const popover = document.querySelector('[data-slot="task-telemetry-popover"]') as HTMLElement
+    expect(popover.textContent).not.toContain('184.7k')
+    expect(popover.textContent).toContain('cez/hidden')
     expect(hidden.querySelector('[data-slot="diff-stat"]')?.textContent).toBe('+2 −1')
   })
 
@@ -1012,48 +1014,53 @@ it('hides owned worker rows without changing ordinary titles', () => {
 })
 
 describe('design frame 4 task summary', () => {
-  it('shows the Pull request column only while an open group has a reference, and names the columns once', () => {
+  it('shows the Reference column only while an open group has a reference, and names the columns once', () => {
     const headers = (table: Element) => [...table.querySelectorAll('[role=columnheader]')].map((cell) => cell.textContent)
-    const { unmount } = renderOverview({ runs: [run({ id: 'plain', title: 'No reference' })] }, false)
-    expect(headers(document.querySelector('[data-slot="tasks-summary"]')!)).toEqual(['Task', 'Workflow', 'Changes', 'Started'])
+    const { unmount } = renderOverview({ runs: [run({ id: 'plain', title: 'No reference' })], expandedColumns: {} }, false)
+    expect(headers(document.querySelector('[data-slot="tasks-summary"]')!)).toEqual(['Task', 'Workflow', 'Changes', 'Usage', 'Started'])
     unmount()
-    renderOverview({ runs: [run({ id: 'with-issue', title: 'Has an issue', issueNumber: 554, status: RUN_STATUS.running }), run({ id: 'finished', title: 'Finished', status: RUN_STATUS.done })] }, false)
+    renderOverview({ runs: [run({ id: 'with-issue', title: 'Has an issue', issueNumber: 554, status: RUN_STATUS.running }), run({ id: 'finished', title: 'Finished', status: RUN_STATUS.done })], expandedColumns: {} }, false)
     const tables = [...document.querySelectorAll('[data-slot="tasks-summary"]')]
     expect(tables.length).toBeGreaterThan(1)
     // Every group keeps the same columns; only the first shows their names.
-    for (const table of tables) expect(headers(table)).toEqual(['Task', 'Workflow', 'Changes', 'Pull request', 'Started'])
-    expect(tables.map((table) => table.querySelector('[data-slot="task-summary-head"]')!.classList.contains('sr-only'))).toEqual([false, ...tables.slice(1).map(() => true)])
+    for (const table of tables) expect(headers(table)).toEqual(['Task', 'Workflow', 'Changes', 'Reference', 'Usage', 'Started'])
+    expect(tables.map((table) => table.querySelector('[data-slot="task-table-head"]')!.classList.contains('sr-only'))).toEqual([false, ...tables.slice(1).map(() => true)])
   })
 
-  it('keeps the status and the origin on one meta line under the title', () => {
-    renderOverview({ runs: [run({ id: 'meta', title: 'Compact row' })] }, false)
+  it('keeps the status pill on the meta line under the title without Direct task noise', () => {
+    renderOverview({ runs: [run({ id: 'meta', title: 'Compact row' })], expandedColumns: {} }, false)
     const line = document.querySelector('[data-slot="task-summary-row"] [data-slot="task-meta-line"]') as HTMLElement
     expect(line.querySelector('[data-slot="pill"]')).not.toBeNull()
-    expect(line.querySelector('[data-slot="task-origin"]')?.textContent).toBe('Direct task')
+    expect(line.textContent).not.toContain('Direct task')
   })
 
-  it('starts with the summary columns and reveals live resource facts without navigation', () => {
-    renderOverview({ runs: [run({ id: 'summary', title: 'Review layout', inputTokens: 123, outputTokens: 45, costUsd: 0.2, peakRssBytes: 1024 ** 3 })] }, false)
+  it('starts with the unified summary columns and reveals live resource facts via the explicit Usage trigger', () => {
+    renderOverview({ runs: [run({ id: 'summary', title: 'Review layout', inputTokens: 123, outputTokens: 45, costUsd: 0.2, peakRssBytes: 1024 ** 3 })], expandedColumns: {} }, false)
     const summary = document.querySelector('[data-slot="tasks-summary"]') as HTMLElement
-    expect([...summary.querySelectorAll('[role=columnheader]')].map((cell) => cell.textContent)).toEqual(['Task', 'Workflow', 'Changes', 'Started'])
+    expect([...summary.querySelectorAll('[role=columnheader]')].map((cell) => cell.textContent)).toEqual(['Task', 'Workflow', 'Changes', 'Usage', 'Started'])
     expect(document.querySelector('[data-slot="tasks-table"]')).toBeNull()
-    const toggle = within(summary).getByRole('button', { name: 'Show resources for Review layout' })
+    expect(document.querySelector('[data-slot="tasks-resource-note"]')).toBeNull()
+    const toggle = within(summary).getByRole('button', { name: 'Usage and telemetry for Review layout' })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    expect(within(summary).getByText('Tokens in / out')).toBeTruthy()
-    expect(within(summary).getByText('Memory')).toBeTruthy()
+    const popover = document.querySelector('[data-slot="task-telemetry-popover"]') as HTMLElement
+    expect(within(popover).getByText('Tokens IN / OUT')).toBeTruthy()
+    expect(within(popover).getByText('Memory')).toBeTruthy()
     expect(location()).toBe('/')
     fireEvent.click(toggle)
-    expect(within(summary).queryByText('Memory')).toBeNull()
+    expect(document.querySelector('[data-slot="task-telemetry-popover"]')).toBeNull()
   })
-  it('withholds capability-hidden tokens and cost in expanded resources', () => {
-    renderOverview({ runs: [run({ title: 'Private metrics' })], showTokens: false, showCost: false }, false)
-    fireEvent.click(screen.getByRole('button', { name: 'Show resources for Private metrics' }))
-    const summary = document.querySelector('[data-slot="tasks-summary"]') as HTMLElement
-    expect(within(summary).queryByText('Tokens in / out')).toBeNull()
-    expect(within(summary).queryByText('Cost')).toBeNull()
-    expect(within(summary).getByText('CPU')).toBeTruthy()
+  it('withholds capability-hidden tokens and cost in the Usage button and telemetry popover', () => {
+    renderOverview({ runs: [run({ title: 'Private metrics', inputTokens: 120_000, outputTokens: 5_000, costUsd: 0.42 })], showTokens: false, showCost: false, expandedColumns: {} }, false)
+    const trigger = screen.getByRole('button', { name: 'Usage and telemetry for Private metrics' })
+    expect(trigger.textContent).not.toContain('125.0k')
+    expect(trigger.textContent).not.toContain('$0.42')
+    fireEvent.click(trigger)
+    const popover = document.querySelector('[data-slot="task-telemetry-popover"]') as HTMLElement
+    expect(within(popover).queryByText('Tokens IN / OUT')).toBeNull()
+    expect(within(popover).queryByText('Cost')).toBeNull()
+    expect(within(popover).getByText('CPU')).toBeTruthy()
   })
 })
 
@@ -1064,12 +1071,12 @@ it('opens the full resource table and exposes saved column choices', () => {
   expect(screen.getByRole('checkbox', { name: 'Branch' })).not.toBeNull()
 })
 
-it('expands real mobile resource facts without opening a task', () => {
+it('opens mobile telemetry facts without navigating away from the task list', () => {
   renderOverview({ runs: [run({ id: 'mobile-resource', title: 'Mobile resource', peakRssBytes: 1024 ** 3 })] })
   setOverviewDesktop(false)
   const mobile = card('mobile-resource') as HTMLElement
-  fireEvent.click(within(mobile).getByRole('button', { name: 'Show resources' }))
-  expect(within(mobile).getByText('Memory')).not.toBeNull()
+  fireEvent.click(within(mobile).getByRole('button', { name: 'Usage and telemetry for Mobile resource' }))
+  expect(within(document.querySelector('[data-slot="task-telemetry-popover"]') as HTMLElement).getByText('Memory')).not.toBeNull()
   expect(location()).toBe('/')
 })
 
@@ -1119,24 +1126,17 @@ it('mounts one row representation and switches it on a live md resize', () => {
 })
 
 
-it('keeps expanded resources and their focused control across a breakpoint flip', () => {
+it('keeps focused Usage control across a breakpoint flip', () => {
   setOverviewDesktop(true)
-  renderOverview({ runs: [run({ id: 'restore', title: 'Keep resources' })] }, false)
-  const toggle = screen.getByRole('button', { name: 'Show resources for Keep resources' })
+  renderOverview({ runs: [run({ id: 'restore', title: 'Keep resources' })], expandedColumns: {} }, false)
+  const toggle = screen.getByRole('button', { name: 'Usage and telemetry for Keep resources' })
   toggle.focus()
-  fireEvent.click(toggle)
   setOverviewDesktop(false)
-  const mobile = screen.getByRole('button', { name: 'Hide resources' })
+  const mobile = screen.getByRole('button', { name: 'Usage and telemetry for Keep resources' })
   expect(document.activeElement).toBe(mobile)
-  expect(mobile.getAttribute('aria-expanded')).toBe('true')
   setOverviewDesktop(true)
-  const desktop = screen.getByRole('button', { name: 'Hide resources for Keep resources' })
+  const desktop = screen.getByRole('button', { name: 'Usage and telemetry for Keep resources' })
   expect(document.activeElement).toBe(desktop)
-  expect(desktop.getAttribute('aria-expanded')).toBe('true')
-  const open = screen.getByRole('link', { name: 'Open task: Keep resources' })
-  open.focus()
-  setOverviewDesktop(false)
-  expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Open task: Keep resources' }))
 })
 
 it.each([false, true])('restores an unsaved title draft and editor focus after desktop to phone to desktop (detailed=%s)', (detailed) => {
@@ -1159,8 +1159,8 @@ it.each([false, true])('restores an unsaved title draft and editor focus after d
 
 it('does not restore a row control after the user blurs it before a breakpoint flip', async () => {
   setOverviewDesktop(true)
-  renderOverview({ runs: [run({ id: 'blurred', title: 'Leave focus' })] }, false)
-  const toggle = screen.getByRole('button', { name: 'Show resources for Leave focus' })
+  renderOverview({ runs: [run({ id: 'blurred', title: 'Leave focus' })], expandedColumns: {} }, false)
+  const toggle = screen.getByRole('button', { name: 'Usage and telemetry for Leave focus' })
   toggle.focus()
   await act(async () => { toggle.blur() })
   expect(document.activeElement).toBe(document.body)
@@ -1170,19 +1170,15 @@ it('does not restore a row control after the user blurs it before a breakpoint f
   expect(document.activeElement).toBe(document.body)
 })
 
-it('counts expanded preview rows and gives each row a correct table index', () => {
-  renderOverview({ runs: [run({ id: 'first-summary', title: 'First summary' }), run({ id: 'second-summary', title: 'Second summary' })] }, false)
+it('gives each unified summary row a correct table index without inserting sub-rows on telemetry open', () => {
+  renderOverview({ runs: [run({ id: 'first-summary', title: 'First summary' }), run({ id: 'second-summary', title: 'Second summary' })], expandedColumns: {} }, false)
   const table = document.querySelector('[data-slot="tasks-summary"] [role="table"]')!
   expect(table.getAttribute('aria-rowcount')).toBe('3')
   const firstRow = table.querySelector('[data-slot="task-summary-row"]')!
-  fireEvent.click(within(firstRow as HTMLElement).getByRole('button', { name: /^Show resources/ }))
-  const rows = [...table.querySelectorAll('[role="row"]')]
-  expect(table.getAttribute('aria-rowcount')).toBe('4')
-  expect(rows.map(row => row.getAttribute('aria-rowindex'))).toEqual(['1', '2', '3', '4'])
-  expect(rows[1]!.querySelectorAll('[role="cell"]')).toHaveLength(4)
-  expect(rows[2]!.querySelectorAll('[role="cell"]')).toHaveLength(1)
-  expect(rows[2]!.querySelector('[role="cell"]')!.getAttribute('aria-colspan')).toBe('4')
-  fireEvent.click(within(firstRow as HTMLElement).getByRole('button', { name: /^Hide resources/ }))
+  fireEvent.click(within(firstRow as HTMLElement).getByRole('button', { name: /^Usage and telemetry for / }))
+  expect(document.querySelector('[data-slot="task-telemetry-popover"]')).not.toBeNull()
   expect(table.getAttribute('aria-rowcount')).toBe('3')
-  expect([...table.querySelectorAll('[role="row"]')].map(row => row.getAttribute('aria-rowindex'))).toEqual(['1', '2', '3'])
+  const rows = [...table.querySelectorAll('[role="row"]')]
+  expect(rows.map((row) => row.getAttribute('aria-rowindex'))).toEqual(['1', '2', '3'])
+  expect(rows[1]!.querySelectorAll('[role="cell"]')).toHaveLength(5)
 })

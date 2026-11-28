@@ -356,6 +356,7 @@ export class RunDatabase {
       listByParent: `SELECT ${ROW_COLUMNS} FROM runs WHERE parent_run_id = ? ${NEWEST_FIRST}`,
       listWorkerIds: 'SELECT id FROM runs WHERE parent_run_id IS NOT NULL',
       listIdsByParent: 'SELECT id FROM runs WHERE parent_run_id = ?',
+      listParentLinks: 'SELECT id, parent_run_id FROM runs WHERE parent_run_id IS NOT NULL',
       findByClientRequestId: `SELECT ${ROW_COLUMNS} FROM runs WHERE client_request_id = ? LIMIT 1`,
       listWithWorktree: `SELECT ${ROW_COLUMNS} FROM runs WHERE worktree_path IS NOT NULL ORDER BY coalesce(finished_at, created_at) DESC, created_at DESC, seq`,
       findResourceHolders: 'SELECT id FROM runs WHERE branch = :branch UNION SELECT id FROM runs WHERE worktree_path = :worktreePath',
@@ -553,6 +554,11 @@ export class RunDatabase {
   /** The ids of one parent's workers, in no particular order, without reading their records. */
   listIdsByParent(parentId: string): string[] {
     return this.run(() => this.statements.listIdsByParent.all(parentId)).map((row) => row.id as string);
+  }
+
+  /** Every worker's id and parent in one read: `listIdsByParent` for all parents at once. */
+  listParentLinks(): Array<{ id: string; parentId: string }> {
+    return this.run(() => this.statements.listParentLinks.all()).map((row) => ({ id: row.id as string, parentId: row.parent_run_id as string }));
   }
 
   /** The roots whose conversation names `memberId` as a sender or recipient, newest first; with no

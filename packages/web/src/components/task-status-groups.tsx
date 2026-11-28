@@ -1,6 +1,7 @@
 import * as React from 'react'
 
 import { useTaskPreviewHandoff } from '@/api/queries'
+import { Count } from '@/components/data-primitives'
 import { ChevronDownIcon, ChevronRightIcon } from '@/components/design-icons'
 import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
@@ -24,14 +25,24 @@ export function OriginFilter({
   counts,
   automations,
   onChange,
+  compact = false,
 }: {
   origin: TaskOrigin
   counts: Record<TaskOrigin, number>
   automations: boolean
   onChange: (origin: TaskOrigin) => void
+  compact?: boolean
 }) {
   return (
-    <div role="group" aria-label="Task origin" data-slot="origin-filter" className="flex flex-wrap items-center gap-1.5">
+    <div
+      role="group"
+      aria-label="Task origin"
+      data-slot="origin-filter"
+      className={cn(
+        'flex flex-wrap items-center',
+        compact ? 'inline-flex rounded-md border border-border bg-card p-0.5 gap-0.5' : 'gap-1.5',
+      )}
+    >
       {taskOrigins(automations).map((option) => {
         const pressed = option.value === origin
         return (
@@ -42,12 +53,14 @@ export function OriginFilter({
             aria-pressed={pressed}
             onClick={() => onChange(option.value)}
             className={cn(
-              'inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border px-3 text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground',
-              pressed && 'border-accent-strong bg-accent-strong/10 text-accent-text',
+              compact
+                ? 'inline-flex min-h-11 items-center gap-1 rounded-sm px-2.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground md:min-h-0 md:h-8'
+                : 'inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border px-3 text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link-foreground',
+              pressed && (compact ? 'bg-accent-strong/15 text-accent-text' : 'border-accent-strong bg-accent-strong/10 text-accent-text'),
             )}
           >
             {option.label}{' '}
-            <span className="tabular-nums">{counts[option.value]}</span>
+            <Count value={counts[option.value]} />
           </button>
         )
       })}
@@ -60,11 +73,11 @@ export function OriginFilter({
  * from `md`: on a phone each heading toggles its own group, and the first task stays above the
  * fold.
  */
-export function GroupFoldControls({ onExpand, onCollapse }: { onExpand: () => void; onCollapse: () => void }) {
+export function GroupFoldControls({ onExpand, onCollapse, compact = false }: { onExpand: () => void; onCollapse: () => void; compact?: boolean }) {
   return (
-    <div data-slot="group-fold-controls" className="hidden flex-wrap items-center gap-2 md:ml-auto md:flex">
-      <Button type="button" variant="ghost" className="min-h-11" data-action="expand-groups" onClick={onExpand}>Expand groups</Button>
-      <Button type="button" variant="ghost" className="min-h-11" data-action="collapse-groups" onClick={onCollapse}>Collapse groups</Button>
+    <div data-slot="group-fold-controls" className={cn('hidden flex-wrap items-center gap-1 md:flex', !compact && 'md:ml-auto md:gap-2')}>
+      <Button type="button" variant="ghost" size={compact ? 'sm' : 'default'} className={compact ? 'h-9 px-2 text-xs text-muted-foreground' : 'min-h-11'} data-action="expand-groups" onClick={onExpand}>Expand groups</Button>
+      <Button type="button" variant="ghost" size={compact ? 'sm' : 'default'} className={compact ? 'h-9 px-2 text-xs text-muted-foreground' : 'min-h-11'} data-action="collapse-groups" onClick={onCollapse}>Collapse groups</Button>
     </div>
   )
 }
@@ -146,7 +159,7 @@ export function StatusGroupSection({
           <Disclosure className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <StatusDot tone={tone} role="img" aria-label={headingDotLabel(label, tone)} title={headingDotLabel(label, tone)} />
           <span>{label}</span>{' '}
-          <span className="font-normal tabular-nums text-muted-foreground">{count}</span>
+          <Count value={count} className="font-normal text-muted-foreground" />
         </button>
       </h2>
       <div id={`${id}-rows`} hidden={collapsed}>

@@ -4,13 +4,13 @@ import { useState } from 'react'
 import { deleteRepoBranches } from '@/api/client'
 import { queryKeys, useRepoBranches } from '@/api/queries'
 import type { RepoBranchEntry } from '@open-mercato/cezar-api-client'
+import { Path, RelativeTime } from '@/components/data-primitives'
 import { ChevronRightIcon, Trash2Icon } from '@/components/design-icons'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toast } from '@/components/ui/toaster'
-import { shortAge } from '@/lib/format'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 
@@ -153,7 +153,7 @@ function BranchGroup({ kind, title, hint, rows, open, onToggle }: {
         <ul id={listId} aria-label={title} className="flex flex-col pb-[6px]">
           {rows.map((entry) => (
             <li key={entry.name} data-slot="cleanup-branch-row" data-branch={entry.name} className="flex min-h-[32px] items-center gap-[10px] px-[14px] pl-[26px] text-xs">
-              <span className="shrink-0 font-mono text-muted-foreground">{entry.name}</span>
+              <Path value={entry.name} className="shrink-0 text-muted-foreground" />
               {entry.runId ? (
                 <Link to={`/tasks/${entry.runId}`} className="min-w-0 flex-1 truncate text-soft-foreground underline-offset-2 hover:text-foreground hover:underline">
                   {entry.title ?? 'Open the task'}
@@ -162,7 +162,7 @@ function BranchGroup({ kind, title, hint, rows, open, onToggle }: {
                 <span className="min-w-0 flex-1 truncate text-soft-foreground">{entry.lastCommit.subject}</span>
               )}
               {entry.pr ? <span className="shrink-0 text-soft-foreground">PR #{entry.pr.number}</span> : null}
-              <span className="shrink-0 tabular-nums text-soft-foreground">{shortAge(entry.lastCommit.at)}</span>
+              <RelativeTime iso={entry.lastCommit.at} className="shrink-0 text-soft-foreground" />
             </li>
           ))}
         </ul>
