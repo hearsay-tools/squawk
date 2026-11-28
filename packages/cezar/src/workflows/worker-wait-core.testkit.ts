@@ -20,11 +20,11 @@ import { scopeFixtureProcesses } from '../delegation/process-scope.testkit.ts';
 import { ABSENT_PROCESS_PID } from '../delegation/process-enumeration.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { afterEach, beforeEach, expect, onTestFailed, onTestFinished, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, expect, onTestFailed, onTestFinished, vi } from 'vitest';
 import { workerWaitRequestSchema, type WorkerOperation } from '@open-mercato/cezar-contract/delegation';
 import { RunStore } from '../runs/store.ts';
 import { formatTimeline, terminal, until, waitOf, workerEntryOf } from './worker-wait-timeline.testkit.ts';
@@ -114,20 +114,33 @@ export function track() {
  * its process-holder scans, most of a waits cell's cleanup (hearsay-tools/cezarion#1665).
  */
 export function useWorkerWaitFixture(options: { processScope?: false; nudgeReply?: 'card' | 'plain'; mockNotes?: true; unreadInputGraceMs?: number; subagentGraceMs?: number; subagentDeadlineMs?: number; acquireCiResources?: (workspace: object) => CiResources } = {}): void {
+  // One scratch repository per suite, copied into each case: four Git spawns fewer per case
+  // (hearsay-tools/squawk#4430). Each case still gets its own copy, store and manager. The
+  // suite's Node children (native mocks, the worktree lock keeper) share one compile cache.
+  let repository: string | undefined;
+  let compileCache: string | undefined;
+  beforeAll(() => {
+    compileCache = mkdtempSync(join(tmpdir(), 'cez-worker-wait-compile-'));
+    repository = mkdtempSync(join(tmpdir(), 'cez-worker-wait-repo-'));
+    execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: repository });
+    execFileSync('git', ['config', 'gc.auto', '0'], { cwd: repository });
+    execFileSync('git', ['config', 'maintenance.auto', 'false'], { cwd: repository });
+    execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@local', 'commit', '--allow-empty', '-qm', 'base'], { cwd: repository });
+  });
+  afterAll(() => {
+    for (const dir of [repository, compileCache]) if (dir) rmSync(dir, { recursive: true, force: true });
+  });
   beforeEach(() => {
     ciResources = options.acquireCiResources ?? acquireInertCiResources;
     // Native mock children belong to this fixture; specialized holder tests supply their own scope.
     if (options.processScope !== false) onTestFinished(scopeFixtureProcesses());
     saved = { ...process.env }; began = performance.now(); checkpoints = []; failureState = undefined; checkpoint('setup');
     onTestFailed(() => console.error('WORKER_WAIT_FAILURE_STATE', JSON.stringify(failureState ?? captureState())));
-    process.env.CEZ_DRY_RUN = '1'; process.env.CEZ_AUTONAME = '0';
+    process.env.CEZ_DRY_RUN = '1'; process.env.CEZ_AUTONAME = '0'; process.env.NODE_COMPILE_CACHE = compileCache!;
     if (options.nudgeReply === 'card') delete process.env.CEZ_MOCK_NUDGE_REPLY; else process.env.CEZ_MOCK_NUDGE_REPLY = 'plain';
     if (options.mockNotes) delete process.env.CEZ_MOCK_NOTES; else process.env.CEZ_MOCK_NOTES = '0';
     root = mkdtempSync(join(tmpdir(), 'cez-worker-wait-'));
-    execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root });
-    execFileSync('git', ['config', 'gc.auto', '0'], { cwd: root });
-    execFileSync('git', ['config', 'maintenance.auto', 'false'], { cwd: root });
-    execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@local', 'commit', '--allow-empty', '-qm', 'base'], { cwd: root });
+    cpSync(repository!, root, { recursive: true });
     work = new TrackedWork(); toolGenerations.clear();
     semaphore = new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 1 } });
     store = RunStore.open(join(root, '.ai/cezar'), { keepLive: true });
