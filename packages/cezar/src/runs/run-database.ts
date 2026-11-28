@@ -556,16 +556,9 @@ export class RunDatabase {
     return this.run(() => this.statements.listIdsByParent.all(parentId)).map((row) => row.id as string);
   }
 
-  /** `listIdsByParent` for every parent at once: one read instead of one per parent. */
-  listIdsByParents(): Map<string, string[]> {
-    const byParent = new Map<string, string[]>();
-    for (const row of this.run(() => this.statements.listParentLinks.all())) {
-      const parent = row.parent_run_id as string;
-      const ids = byParent.get(parent);
-      if (ids) ids.push(row.id as string);
-      else byParent.set(parent, [row.id as string]);
-    }
-    return byParent;
+  /** Every worker's id and parent in one read: `listIdsByParent` for all parents at once. */
+  listParentLinks(): Array<{ id: string; parentId: string }> {
+    return this.run(() => this.statements.listParentLinks.all()).map((row) => ({ id: row.id as string, parentId: row.parent_run_id as string }));
   }
 
   /** The roots whose conversation names `memberId` as a sender or recipient, newest first; with no

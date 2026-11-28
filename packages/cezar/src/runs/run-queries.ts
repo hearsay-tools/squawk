@@ -509,7 +509,12 @@ export class RunQueriesTopic implements RunQueries, RunFamilyReads {
   /** `listFamilyRunIds` of each root, with one SQLite read and one pass over held records for
    *  all of them: the cost grows with roots plus records, not roots times held records. */
   listFamiliesRunIds(rootIds: readonly string[]): string[][] {
-    const stored = this.db?.listIdsByParents() ?? new Map<string, string[]>();
+    const stored = new Map<string, string[]>();
+    for (const { id, parentId } of this.db?.listParentLinks() ?? []) {
+      const ids = stored.get(parentId);
+      if (ids) ids.push(id);
+      else stored.set(parentId, [id]);
+    }
     const held = this.heldFamilies();
     return rootIds.map(rootId => this.familyRunIds(rootId, stored.get(rootId) ?? [], held));
   }
