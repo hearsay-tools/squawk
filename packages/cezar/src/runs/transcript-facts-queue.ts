@@ -1,5 +1,7 @@
+import { rmSync } from 'node:fs';
 import { MessageChannel, receiveMessageOnPort, Worker, type MessagePort } from 'node:worker_threads';
 import { loadTranscriptFacts, type FactsLoadResult } from './transcript-facts-load.ts';
+import { RESULT_SLOT, revokeSidecar, SIGNAL_BYTES, tempSidecarPath, type SidecarCommit } from './transcript-facts-sidecar.ts';
 import type { FactsJobMessage, FactsJobReply } from './transcript-facts-worker.ts';
 
 export const REFRESH_FACTS = Symbol('transcript changed');
@@ -18,6 +20,8 @@ interface Job<T> {
   error?: Error | undefined;
   port?: MessagePort | undefined;
   signal?: Int32Array | undefined;
+  /** The temp file the worker writes this job's sidecar to. */
+  tmp?: string | undefined;
   timer?: NodeJS.Timeout;
 }
 
@@ -34,8 +38,10 @@ export class TranscriptFactsQueue<T> {
 
   constructor(
     private readonly dataDir: string,
-    private readonly accept: (runId: string, loaded: FactsLoadResult | undefined, serialized?: string) => T | typeof REFRESH_FACTS,
+    private readonly accept: (runId: string, loaded: FactsLoadResult | undefined, sidecar?: SidecarCommit) => T | typeof REFRESH_FACTS,
     private readonly cached?: (runId: string) => T | undefined,
+    /** Where the worker commits the sidecar of a load that needs one; absent: it commits none. */
+    private readonly sidecarPath?: (runId: string) => string,
   ) {}
 
   has(runId: string): boolean { return this.jobs.has(runId); }
@@ -75,7 +81,7 @@ export class TranscriptFactsQueue<T> {
       if (this.jobs.get(runId) !== job) break;
       const active = this.active!;
       const remaining = deadline - Date.now();
-      if (remaining <= 0 || Atomics.wait(active.signal!, 0, 0, remaining) === 'timed-out') {
+      if (remaining <= 0 || Atomics.wait(active.signal!, RESULT_SLOT, 0, remaining) === 'timed-out') {
         this.fail(new Error(`Transcript facts worker timed out for ${runId}`));
         break;
       }
@@ -88,6 +94,11 @@ export class TranscriptFactsQueue<T> {
     }
     if (job.error) throw job.error;
     return job.value as T;
+  }
+
+  /** The caller writes this run's sidecar itself: the active worker job must not overwrite it. */
+  revoke(runId: string): void {
+    if (this.active?.runId === runId && this.active.signal) revokeSidecar(this.active.signal);
   }
 
   forget(runId: string): void {
@@ -156,9 +167,9 @@ export class TranscriptFactsQueue<T> {
     const lifecycle = new Int32Array(new SharedArrayBuffer(8));
     const worker = new Worker(url, { execArgv: [], workerData: { lifecycle: lifecycle.buffer } });
     this.workerLifecycle = lifecycle;
-    worker.on('error', (error) => { if (this.worker === worker) this.fail(error); });
+    worker.on('error', (error) => { if (this.worker === worker) this.fail(error, true); });
     worker.on('exit', (code) => {
-      if (this.worker === worker) this.fail(new Error(`Transcript facts worker exited (${code})`));
+      if (this.worker === worker) this.fail(new Error(`Transcript facts worker exited (${code})`), true);
     });
     return worker;
   }
@@ -173,10 +184,13 @@ export class TranscriptFactsQueue<T> {
       this.worker ??= this.createWorker();
       const { port1, port2 } = new MessageChannel();
       job.port = port1;
-      job.signal = new Int32Array(new SharedArrayBuffer(4));
+      job.signal = new Int32Array(new SharedArrayBuffer(SIGNAL_BYTES));
       port1.once('message', (reply: FactsJobReply) => this.complete(job, reply));
       job.timer = setTimeout(() => this.fail(new Error(`Transcript facts worker timed out for ${job.runId}`)), JOB_TIMEOUT_MS);
-      const message: FactsJobMessage = { dataDir: this.dataDir, runId: job.runId, port: port2, signal: job.signal.buffer as SharedArrayBuffer };
+      const sidecar = this.sidecarPath?.(job.runId);
+      job.tmp = sidecar && tempSidecarPath(sidecar);
+      const message: FactsJobMessage = { dataDir: this.dataDir, runId: job.runId, port: port2,
+        signal: job.signal.buffer as SharedArrayBuffer, ...(sidecar ? { sidecar, tmp: job.tmp } : {}) };
       try { this.worker.postMessage(message, [port2]); } catch (error) { port2.close(); throw error; }
     } catch (error) { this.fail(error instanceof Error ? error : new Error(String(error))); }
   }
@@ -185,7 +199,7 @@ export class TranscriptFactsQueue<T> {
     if (this.jobs.get(job.runId) !== job) return;
     if ('error' in reply) { this.fail(new Error(reply.error)); return; }
     try {
-      const value = this.accept(job.runId, reply.result, reply.serialized);
+      const value = this.accept(job.runId, reply.result, reply.sidecar);
       if (value === REFRESH_FACTS) {
         this.release(job);
         if (job.attempts >= MAX_ATTEMPTS) {
@@ -203,6 +217,7 @@ export class TranscriptFactsQueue<T> {
     job.port?.close();
     job.port = undefined;
     job.signal = undefined;
+    job.tmp = undefined;
     if (this.active === job) this.active = undefined;
   }
 
@@ -216,12 +231,21 @@ export class TranscriptFactsQueue<T> {
     this.schedule();
   }
 
-  private disposeWorker(): void {
+  /** `exited`: the worker already stopped on its own ('error' or 'exit'). */
+  private disposeWorker(exited = false): void {
+    // Revoke before terminating: a terminated worker could leave a rename half-signalled.
+    if (this.active?.signal) revokeSidecar(this.active.signal, !exited);
+    const tmp = this.active?.tmp;
     const worker = this.worker;
     const lifecycle = this.workerLifecycle;
     this.worker = undefined;
     this.workerLifecycle = undefined;
     if (!worker) return;
+    // Terminating mid-write leaves the job's temp file: remove it once the worker writes no more.
+    if (tmp) {
+      if (exited) removeTemp(tmp);
+      else worker.once('exit', () => removeTemp(tmp));
+    }
     if (lifecycle) {
       Atomics.store(lifecycle, 1, 1);
       if (Atomics.load(lifecycle, 0) === 0) {
@@ -238,10 +262,14 @@ export class TranscriptFactsQueue<T> {
     void worker.terminate().catch(() => undefined);
   }
 
-  private fail(error: Error): void {
-    this.disposeWorker();
+  private fail(error: Error, exited = false): void {
+    this.disposeWorker(exited);
     if (this.dispatch) clearImmediate(this.dispatch);
     this.dispatch = undefined;
     for (const job of this.jobs.values()) this.settle(job, error);
   }
+}
+
+function removeTemp(path: string): void {
+  try { rmSync(path, { force: true }); } catch { /* removeHistory removes it with the run */ }
 }
