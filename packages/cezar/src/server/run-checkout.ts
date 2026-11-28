@@ -6,7 +6,7 @@ import { fallbackProjectWriteError } from '../project-paths.ts';
 import { rematerializeReclaimedWorktree } from '../runs/retention.ts';
 import { hostsLiveSharedWorker, SHARED_HOST_REFUSAL } from '../runs/shared-hosts.ts';
 import { supervisedWorkers } from '../runs/supervised.ts';
-import { getStatus } from './git.ts';
+import { inspectWorktreeReclaimBlocker } from '../git-worktree.ts';
 import { existsSync } from 'node:fs';
 import { autosaveCleanupBlocker } from '../autosave-cleanup.ts';
 import type { RunManager } from '../workflows/run.ts';
@@ -198,12 +198,21 @@ function removeCheckout({ store, manager }: RunCheckoutHost, id: string, options
 }
 
 /** Reclaim calls this only after reclaimWorktree(...).finally(release) settles. */
-export async function reclaimCheckoutError(run: RunRecord): Promise<string> {
-  // Reclaim keeps only what is committed, so it leaves a dirty checkout alone; say which case this was.
-  const dirty = run.worktreePath && existsSync(run.worktreePath) ? (await getStatus(run.worktreePath).catch(() => [])).length : 0;
-  return dirty > 0
-    ? `the worktree has ${dirty} uncommitted file${dirty === 1 ? '' : 's'} that exist nowhere else — commit or discard them first`
-    : 'the worktree directory could not be removed';
+export async function reclaimCheckoutError(repoRoot: string, run: RunRecord): Promise<string> {
+  // Reclaim keeps only what is committed, so it leaves a dirty or detached checkout alone; say which case this was.
+  if (!run.worktreePath || !existsSync(run.worktreePath)) return 'the worktree directory could not be removed';
+  const blocker = await inspectWorktreeReclaimBlocker(repoRoot, run.worktreePath).catch(() => null);
+  if (blocker?.kind === 'dirty') {
+    const n = blocker.uncommittedFiles;
+    return `the worktree has ${n} uncommitted file${n === 1 ? '' : 's'} that exist nowhere else — commit or discard them first`;
+  }
+  if (blocker?.kind === 'detached-head') {
+    return 'the worktree is on a detached HEAD whose commit is on no branch — save it to a branch or discard it first';
+  }
+  if (blocker?.kind === 'invalid') {
+    return 'the directory is not a registered Git worktree — inspect or discard it first';
+  }
+  return 'the worktree directory could not be removed';
 }
 
 function openCheckout({ root, store }: RunCheckoutHost, id: string): CheckoutRefusal | OpenHandle {

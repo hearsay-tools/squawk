@@ -6,7 +6,9 @@ export const gitCommitSchema = z.object({
   message: z.string().trim().min(1, 'must not be empty').max(5_000),
 });
 
-export const reclaimBodySchema = z.object({}).passthrough();
+export const reclaimBodySchema = z.object({
+  discardWork: z.boolean().optional(),
+});
 
 // Repo view branch actions: switch to an existing branch, or create one
 // (from `from` or HEAD) and switch. Predictable git failures — invalid

@@ -30,7 +30,7 @@ import { forgetRepoRead, readRepoRefs } from './repo-read-cache.ts';
 import { reclaimCheckoutError, runCheckout } from './run-checkout.ts';
 import type { ProjectApiEnv } from './server-types.ts';
 import { jsonZodValidator, paramZodValidator, queryZodValidator } from './validators.ts';
-import { cachedWorktreeSizeBytes } from './worktree-size-cache.ts';
+import { cachedWorktreeSizeBytes, queuedWorktreeReclaimBlocker } from './worktree-size-cache.ts';
 
 export interface OpenTargetsRouteDeps {
   capabilities: () => Capabilities;
@@ -79,16 +79,25 @@ export function createWorktreesRoutes(deps: WorktreesRouteDeps) {
       const workersOf = memoizeRead((id) => store.queries.listWorkersOf(id));
       const pastKeep = new Set(selectReclaimableWorktrees(withWorktree, keep, getRun, workersOf));
       const worktrees = await Promise.all(
-        runs.map(async (r) => ({
-          runId: r.id,
-          title: r.title ?? r.id,
-          status: r.status,
-          branch: r.branch ?? null,
-          sizeBytes: await cachedWorktreeSizeBytes(r.worktreePath as string),
-          finishedAt: r.finishedAt ?? null,
-          reclaimable: isReclaimable(r, getRun, workersOf),
-          pastKeep: pastKeep.has(r.id),
-        })),
+        runs.map(async (r) => {
+          const reclaimable = isReclaimable(r, getRun, workersOf);
+          const worktreePath = r.worktreePath as string;
+          const [sizeBytes, reclaimBlocker] = await Promise.all([
+            cachedWorktreeSizeBytes(worktreePath),
+            reclaimable ? queuedWorktreeReclaimBlocker(repoRoot, worktreePath) : Promise.resolve(null),
+          ]);
+          return {
+            runId: r.id,
+            title: r.title ?? r.id,
+            status: r.status,
+            branch: r.branch ?? null,
+            sizeBytes,
+            finishedAt: r.finishedAt ?? null,
+            reclaimable,
+            pastKeep: pastKeep.has(r.id),
+            reclaimBlocker,
+          };
+        }),
       );
       const totalBytes = worktrees.some((w) => w.sizeBytes === null)
         ? null
@@ -98,9 +107,11 @@ export function createWorktreesRoutes(deps: WorktreesRouteDeps) {
 
     .post('/worktrees/reclaim', jsonZodValidator(() => reclaimBodySchema, { absent: ({}), message: 'invalid body' }), async (c) => {
       const { root: repoRoot, store, manager } = c.get('project');
+      const { discardWork } = c.req.valid('json');
       const reclaimed = await reclaimWorktrees(repoRoot, store, await resolveWorktreeRetention(repoRoot, deps.home), {
         claim: (run) => manager.claimWorktreeReclaim(run.id),
         previewHost: deps.previewHost,
+        discardWork,
       });
       if (reclaimed.length > 0) {
         forgetRepoBranches(repoRoot);
@@ -109,24 +120,33 @@ export function createWorktreesRoutes(deps: WorktreesRouteDeps) {
       return c.json({ reclaimed });
     })
 
-    .post('/worktrees/:runId/reclaim', paramZodValidator(reclaimRunParamsSchema), async (c) => {
-      const { root: repoRoot, store } = c.get('project');
-      const checkout = runCheckout(c.get('project'), c.req.valid('param').runId, 'remove', {
-        claim: 'reclaim',
-        checksActive: false,
-        deletion: 'inline',
-        nullClaimError: 'this worktree is in use or already reclaimed — only a finished task\'s worktree can be reclaimed',
-      });
-      if ('status' in checkout) return c.json(checkout.body, checkout.status);
-      const { run, release } = checkout;
-      const worktreeReclaimedAt = await reclaimWorktree(repoRoot, store, run, { previewHost: deps.previewHost }).finally(release);
-      if (!worktreeReclaimedAt) {
-        return c.json({ error: await reclaimCheckoutError(run) }, 409);
-      }
-      forgetRepoBranches(repoRoot);
-      forgetRepoRead(repoRoot);
-      return c.json({ runId: run.id, worktreeReclaimedAt });
-    });
+    .post(
+      '/worktrees/:runId/reclaim',
+      paramZodValidator(reclaimRunParamsSchema),
+      jsonZodValidator(() => reclaimBodySchema, { absent: ({}), message: 'invalid body' }),
+      async (c) => {
+        const { root: repoRoot, store } = c.get('project');
+        const { discardWork } = c.req.valid('json');
+        const checkout = runCheckout(c.get('project'), c.req.valid('param').runId, 'remove', {
+          claim: 'reclaim',
+          checksActive: false,
+          deletion: 'inline',
+          nullClaimError: 'this worktree is in use or already reclaimed — only a finished task\'s worktree can be reclaimed',
+        });
+        if ('status' in checkout) return c.json(checkout.body, checkout.status);
+        const { run, release } = checkout;
+        const worktreeReclaimedAt = await reclaimWorktree(repoRoot, store, run, {
+          previewHost: deps.previewHost,
+          discardWork,
+        }).finally(release);
+        if (!worktreeReclaimedAt) {
+          return c.json({ error: await reclaimCheckoutError(repoRoot, run) }, 409);
+        }
+        forgetRepoBranches(repoRoot);
+        forgetRepoRead(repoRoot);
+        return c.json({ runId: run.id, worktreeReclaimedAt });
+      },
+    );
 }
 
 export interface RepoRouteDeps {

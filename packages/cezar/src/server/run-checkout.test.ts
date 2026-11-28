@@ -8,11 +8,11 @@ import { RUN_IN_USE_ELSEWHERE } from '../runs/run-claims-topic.ts';
 import { autosaveCleanupBlocker } from '../autosave-cleanup.ts';
 import { fallbackProjectWriteError } from '../project-paths.ts';
 import { rematerializeReclaimedWorktree } from '../runs/retention.ts';
-import { getStatus } from './git.ts';
+import { inspectWorktreeReclaimBlocker } from '../git-worktree.ts';
 import { preparePublishCheckout, reclaimCheckoutError, runCheckout, type RunCheckoutHost } from './run-checkout.ts';
 
 vi.mock('../runs/retention.ts', () => ({ rematerializeReclaimedWorktree: vi.fn() }));
-vi.mock('./git.ts', () => ({ getStatus: vi.fn() }));
+vi.mock('../git-worktree.ts', () => ({ inspectWorktreeReclaimBlocker: vi.fn() }));
 vi.mock('../autosave-cleanup.ts', () => ({ autosaveCleanupBlocker: vi.fn() }));
 
 const root = mkdtempSync(join(tmpdir(), 'cez-run-checkout-'));
@@ -341,30 +341,32 @@ describe('publish preparation under the caller claim', () => {
 
 describe('reclaim failure detail after release', () => {
   it.each([
-    { count: 0, error: 'the worktree directory could not be removed' },
-    { count: 1, error: 'the worktree has 1 uncommitted file that exist nowhere else — commit or discard them first' },
-    { count: 2, error: 'the worktree has 2 uncommitted files that exist nowhere else — commit or discard them first' },
-  ])('reports $count dirty files after the caller releases', async ({ count, error }) => {
+    { blocker: null, error: 'the worktree directory could not be removed' },
+    { blocker: { kind: 'dirty' as const, uncommittedFiles: 1, detachedHead: false }, error: 'the worktree has 1 uncommitted file that exist nowhere else — commit or discard them first' },
+    { blocker: { kind: 'dirty' as const, uncommittedFiles: 2, detachedHead: false }, error: 'the worktree has 2 uncommitted files that exist nowhere else — commit or discard them first' },
+    { blocker: { kind: 'detached-head' as const }, error: 'the worktree is on a detached HEAD whose commit is on no branch — save it to a branch or discard it first' },
+    { blocker: { kind: 'invalid' as const }, error: 'the directory is not a registered Git worktree — inspect or discard it first' },
+  ])('reports $error after the caller releases', async ({ blocker, error }) => {
     const { host, release } = claimedHost(states[1]!);
     const checkout = admitClaimed(host, claimedRoutes[3]);
     if ('status' in checkout) throw new Error('expected admission');
-    vi.mocked(getStatus).mockImplementationOnce(async () => {
+    vi.mocked(inspectWorktreeReclaimBlocker).mockImplementationOnce(async () => {
       expect(release).toHaveBeenCalledOnce();
-      return Array.from({ length: count }, () => ({ path: 'file', status: '??' }));
+      return blocker;
     });
     await Promise.resolve(null).finally(checkout.release);
-    expect(await reclaimCheckoutError(checkout.run)).toBe(error);
+    expect(await reclaimCheckoutError(root, checkout.run)).toBe(error);
   });
 
   it.each([undefined, gone])('does not ask git for an absent directory (%s)', async worktreePath => {
-    vi.mocked(getStatus).mockClear();
-    expect(await reclaimCheckoutError({ ...baseRun, worktreePath })).toBe('the worktree directory could not be removed');
-    expect(getStatus).not.toHaveBeenCalled();
+    vi.mocked(inspectWorktreeReclaimBlocker).mockClear();
+    expect(await reclaimCheckoutError(root, { ...baseRun, worktreePath })).toBe('the worktree directory could not be removed');
+    expect(inspectWorktreeReclaimBlocker).not.toHaveBeenCalled();
   });
 
-  it('keeps the removal message when git status fails', async () => {
-    vi.mocked(getStatus).mockRejectedValueOnce(new Error('git failed'));
-    expect(await reclaimCheckoutError({ ...baseRun, worktreePath: live })).toBe('the worktree directory could not be removed');
+  it('keeps the removal message when blocker inspection fails', async () => {
+    vi.mocked(inspectWorktreeReclaimBlocker).mockRejectedValueOnce(new Error('git failed'));
+    expect(await reclaimCheckoutError(root, { ...baseRun, worktreePath: live })).toBe('the worktree directory could not be removed');
   });
 });
 

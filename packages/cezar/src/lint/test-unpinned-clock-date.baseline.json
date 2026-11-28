@@ -166,7 +166,6 @@
     "packages/cezar/src/server/workspace-projects.test.ts": 1,
     "packages/cezar/src/server/workspace-run-feed.test.ts": 2,
     "packages/cezar/src/server/worktrees-api-engine.test.ts": 3,
-    "packages/cezar/src/server/worktrees-api.test.ts": 25,
     "packages/cezar/src/task-cli/cli-queries.test.ts": 1,
     "packages/cezar/src/task-cli/cli-results.test.ts": 3,
     "packages/cezar/src/task-cli/discovery.test.ts": 2,

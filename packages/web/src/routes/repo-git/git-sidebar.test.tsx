@@ -48,7 +48,7 @@ const REPO: RepoResponse = {
 }
 
 const WORKTREES: WorktreesResponse = {
-  worktrees: [{ runId: 'r1', title: 'A task', status: worktreeInfoSchema.shape.status.enum.done, branch: 'cez/r1', sizeBytes: 4.2 * 1024 ** 3, finishedAt: null, reclaimable: true, pastKeep: false }],
+  worktrees: [{ runId: 'r1', title: 'A task', status: worktreeInfoSchema.shape.status.enum.done, branch: 'cez/r1', sizeBytes: 4.2 * 1024 ** 3, finishedAt: null, reclaimable: true, pastKeep: false, reclaimBlocker: null }],
   totalBytes: 4.2 * 1024 ** 3,
   keep: 20,
 }

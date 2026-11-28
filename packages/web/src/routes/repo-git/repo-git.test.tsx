@@ -646,8 +646,8 @@ describe('the Git view All branches section', () => {
 describe('the Git view Cleanup section', () => {
   const WORKTREES = {
     worktrees: [
-      { runId: 'r1', title: 'Upstream ledger scan', status: worktreeInfoSchema.shape.status.enum.done, branch: 'cez/a41c0d2e', sizeBytes: 640 * 1024 ** 2, finishedAt: null, reclaimable: true, pastKeep: true },
-      { runId: 'r2', title: 'Reviewer agent presets', status: worktreeInfoSchema.shape.status.enum.review, branch: 'cez/0c3de91f', sizeBytes: 590 * 1024 ** 2, finishedAt: null, reclaimable: false, pastKeep: false },
+      { runId: 'r1', title: 'Upstream ledger scan', status: worktreeInfoSchema.shape.status.enum.done, branch: 'cez/a41c0d2e', sizeBytes: 640 * 1024 ** 2, finishedAt: null, reclaimable: true, pastKeep: true, reclaimBlocker: null },
+      { runId: 'r2', title: 'Reviewer agent presets', status: worktreeInfoSchema.shape.status.enum.review, branch: 'cez/0c3de91f', sizeBytes: 590 * 1024 ** 2, finishedAt: null, reclaimable: false, pastKeep: false, reclaimBlocker: null },
     ],
     totalBytes: 1230 * 1024 ** 2,
     keep: 20,

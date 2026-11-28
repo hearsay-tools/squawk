@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process';
 import { projectPaths, isFallbackProjectPath } from './project-paths.ts';
 import { git } from './git-command.ts';
+import type { WorktreeReclaimBlocker } from '@open-mercato/cezar-contract';
 import { ownedWorkspaceSchema } from '@open-mercato/cezar-contract/delegation';
 import { existsSync, realpathSync, type Dirent, type Stats } from 'node:fs';
-import { lstat, mkdir, readdir, readFile, rm, rmdir } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readdir, readFile, rm, rmdir } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { resolveTaskDiffBase } from './git-diff-base.ts';
 import { withPrivateIndex, type IndexGit, type LiveIndexCheck, type DiffRefusal } from './git-private-index.ts';
@@ -432,10 +433,87 @@ async function runBeforeWorktreeRemove(opts: RemoveWorktreeOptions | undefined):
   opts?.assertCurrent?.();
 }
 
+/** Count entries in `git status --porcelain=v1 -z` output, skipping rename/copy source paths. */
+function countPorcelainEntries(stdout: string): number {
+  const fields = stdout.split('\0');
+  let files = 0;
+  for (let i = 0; i < fields.length; i++) {
+    const entry = fields[i]!;
+    if (entry.length < 4) continue;
+    files++;
+    if (/[RC]/.test(entry.slice(0, 2))) i++;
+  }
+  return files;
+}
+
+/** True only when `worktreePath` is its own Git worktree root (not walking up to `repoRoot`). */
+async function isWorktreeRoot(
+  worktreePath: string,
+  runGitFn: (cwd: string, args: string[]) => Promise<{ ok: boolean; stdout: string }>,
+): Promise<boolean> {
+  const top = await runGitFn(worktreePath, ['rev-parse', '--show-toplevel']);
+  return top.ok && canonicalPath(top.stdout.trim()) === canonicalPath(worktreePath);
+}
+
+/**
+ * Inspect whether a finished worktree directory would be refused by a clean reclaim
+ * (`removeCleanWorktree`): uncommitted files, a detached HEAD with no branch/remote ref holding
+ * its commit, or an unregistered/broken directory (missing `.git`). Returns `null` when clean
+ * and ref-backed (or when the directory no longer exists). Best-effort: never throws.
+ */
+export async function inspectWorktreeReclaimBlocker(
+  repoRoot: string,
+  worktreePath: string,
+): Promise<WorktreeReclaimBlocker | null> {
+  if (!existsSync(worktreePath)) return null;
+  if (!(await isWorktreeRoot(worktreePath, git))) return { kind: 'invalid' };
+  const head = await git(worktreePath, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
+  const sha = head.stdout.trim();
+  if (!head.ok || !sha) return { kind: 'invalid' };
+  const status = await git(worktreePath, ['--no-optional-locks', 'status', '--porcelain=v1', '-z', '--untracked-files=normal']);
+  if (!status.ok) return { kind: 'invalid' };
+  const uncommittedFiles = countPorcelainEntries(status.stdout);
+  const sym = await git(worktreePath, ['symbolic-ref', '-q', 'HEAD']);
+  let detachedHead = false;
+  if (!sym.ok || !sym.stdout.trim().startsWith('refs/heads/')) {
+    const kept = await git(repoRoot, ['for-each-ref', '--contains', sha, '--count=1', '--format=%(refname)', 'refs/heads', 'refs/remotes']);
+    if (!kept.ok) return { kind: 'invalid' };
+    detachedHead = kept.stdout.trim() === '';
+  }
+  if (uncommittedFiles > 0) return { kind: 'dirty', uncommittedFiles, detachedHead };
+  if (detachedHead) return { kind: 'detached-head' };
+  return null;
+}
+
+async function makeTreeWritable(dir: string): Promise<void> {
+  await chmod(dir, 0o700).catch(() => undefined);
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => [] as Dirent[]);
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) continue;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) await makeTreeWritable(full);
+    else await chmod(full, 0o600).catch(() => undefined);
+  }
+}
+
+async function removeTreeAllowingReadOnly(worktreePath: string): Promise<void> {
+  try {
+    await rm(worktreePath, { recursive: true, force: true });
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (code !== 'EACCES' && code !== 'EPERM') return;
+    const info = await lstat(worktreePath).catch(() => undefined);
+    if (!info || info.isSymbolicLink() || !info.isDirectory()) return;
+    await makeTreeWritable(worktreePath);
+    await rm(worktreePath, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
 async function removeCleanWorktree(
   repoRoot: string, worktreePath: string, protection: OwnedCleanupProtection,
   git: WorktreeGit, beforeRemove: () => Promise<void>,
 ): Promise<void> {
+  if (!(await isWorktreeRoot(worktreePath, git))) return;
   const head = await git(worktreePath, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
   const sha = head.stdout.trim();
   if (!head.ok || !sha) return;
@@ -459,13 +537,13 @@ async function forceRemoveWorktree(
   git: WorktreeGit, beforeRemove: () => Promise<void>,
 ): Promise<void> {
   await beforeRemove();
-  await git(repoRoot, ['worktree', 'remove', '--force', worktreePath]);
+  await git(repoRoot, ['worktree', 'remove', '--force', '--force', worktreePath]);
   // Owned-path reclaim must not `rm` a receipt path that is no longer a git
   // worktree — the directory may have been replaced with unrelated files.
   // For owned resources Git already removed the exact checkout. Never recursively delete a
   // path recreated after that operation (possibly by another execution/controller).
   if (reclaimOwnedDirectory && protection.paths.has(worktreePath)) return;
-  await rm(worktreePath, { recursive: true, force: true }).catch(() => undefined);
+  await removeTreeAllowingReadOnly(worktreePath);
   if (protection.paths.size === 0) await git(repoRoot, ['worktree', 'prune']);
   if (branch) await git(repoRoot, ['branch', '-D', branch]);
 }

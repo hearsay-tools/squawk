@@ -169,6 +169,9 @@ export interface ReclaimOptions {
   /** The workspace preview host (#781): the default reclaimer releases the run's preview once the
    *  removal goes ahead. */
   previewHost?: { release(runId: string): Promise<void> } | undefined;
+  /** Discard uncommitted changes, detached-HEAD commits, or broken non-owned directories when
+   *  explicitly requested by the user. Never set by automatic retention; the branch is still kept. */
+  discardWork?: boolean | undefined;
 }
 
 /**
@@ -242,7 +245,7 @@ export async function reclaimWorktree(
   const assertSafe = cleanupSafety(repoRoot, real, run);
   const remove = opts.remove ?? ((root, path) =>
     releaseThenRemoveWorktree({ previewHost: opts.previewHost }, run.id, root, path, undefined,
-      { reclaimOwnedDirectory: true, onlyClean: true, assertCurrent: assertSafe }));
+      { reclaimOwnedDirectory: true, onlyClean: !opts.discardWork, assertCurrent: assertSafe }));
   if (!run.worktreePath) return null;
   const release = opts.claim ? opts.claim(run) : () => undefined;
   if (!release) return null; // in use since it was selected

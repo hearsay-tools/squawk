@@ -306,10 +306,28 @@ export const worktreeEntrySchema = z.discriminatedUnion('type', [
 ]);
 export type WorktreeEntry = z.infer<typeof worktreeEntrySchema>;
 
+/** Why a finished worktree cannot be reclaimed cleanly without discarding work. */
+export const worktreeReclaimBlockerSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('dirty'),
+    uncommittedFiles: z.number().int().min(1),
+    detachedHead: z.boolean(),
+  }),
+  z.object({
+    kind: z.literal('detached-head'),
+  }),
+  z.object({
+    kind: z.literal('invalid'),
+  }),
+]);
+export type WorktreeReclaimBlocker = z.infer<typeof worktreeReclaimBlockerSchema>;
+
 /** One materialized task worktree in the management panel (#483). `sizeBytes` is null when `du`
  *  is unavailable (Windows / missing). `reclaimable` = finished, has a directory, not yet
- *  reclaimed (retention's rule). `pastKeep` = reclaimable AND outside the newest `keep`, i.e.
- *  exactly the rows a "Reclaim now" would take; a reclaimable row that is not past it is kept. */
+ *  reclaimed (retention's rule). `pastKeep` = reclaimable AND outside the newest `keep`.
+ *  `reclaimBlocker` is non-null when a clean reclaim would refuse the checkout (uncommitted files,
+ *  detached HEAD with no keeping ref, or an unregistered/broken directory); explicit discard can
+ *  still reclaim its directory while keeping the branch. */
 export const worktreeInfoSchema = z.object({
   runId: z.string(),
   title: z.string(),
@@ -319,6 +337,7 @@ export const worktreeInfoSchema = z.object({
   finishedAt: z.string().nullable(),
   reclaimable: z.boolean(),
   pastKeep: z.boolean(),
+  reclaimBlocker: worktreeReclaimBlockerSchema.nullable(),
 });
 export type WorktreeInfo = z.infer<typeof worktreeInfoSchema>;
 

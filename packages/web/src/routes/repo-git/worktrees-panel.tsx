@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { controlLocation } from '@open-mercato/cezar-api-client/contract/control-locations'
 import { openRunIn, reclaimRunWorktree, reclaimWorktrees } from '@/api/client'
 import { queryKeys, useOpenTargets, useWorktrees } from '@/api/queries'
-import type { WorktreeInfo } from '@open-mercato/cezar-api-client'
+import type { WorktreeInfo, WorktreeReclaimBlocker } from '@open-mercato/cezar-api-client'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,15 +23,227 @@ import { shortAge, withAgo } from '@/lib/format'
 import { Link } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 
+function sumSizeBytes(rows: readonly WorktreeInfo[]): number | null {
+  if (rows.some((row) => row.sizeBytes === null)) return null
+  return rows.reduce((sum, row) => sum + (row.sizeBytes ?? 0), 0)
+}
+
+function blockerLabel(blocker: WorktreeReclaimBlocker): string {
+  if (blocker.kind === 'dirty') return `${blocker.uncommittedFiles} uncommitted`
+  if (blocker.kind === 'detached-head') return 'detached HEAD'
+  return 'broken worktree'
+}
+
+function blockerDetail(blocker: WorktreeReclaimBlocker): string {
+  if (blocker.kind === 'dirty') {
+    const files = `${blocker.uncommittedFiles} uncommitted file${blocker.uncommittedFiles === 1 ? '' : 's'}`
+    return blocker.detachedHead ? `${files} and a detached HEAD on no branch` : files
+  }
+  if (blocker.kind === 'detached-head') return 'a detached HEAD whose commit is on no branch'
+  return 'an unregistered or broken Git worktree directory'
+}
+
+function blockedReasonsSummary(rows: readonly WorktreeInfo[]): string {
+  const dirty = rows.some((row) => row.reclaimBlocker?.kind === 'dirty')
+  const detached = rows.some((row) => row.reclaimBlocker?.kind === 'detached-head' || (row.reclaimBlocker?.kind === 'dirty' && row.reclaimBlocker.detachedHead))
+  const invalid = rows.some((row) => row.reclaimBlocker?.kind === 'invalid')
+  const parts = [
+    ...(dirty ? ['uncommitted work'] : []),
+    ...(detached ? ['a detached HEAD'] : []),
+    ...(invalid ? ['a broken checkout'] : []),
+  ]
+  if (parts.length <= 1) return parts[0] ?? 'uncommitted work'
+  return `${parts.slice(0, -1).join(', ')} or ${parts.at(-1)}`
+}
+
+function formatReclaimToast(done: number, expected: number, discardWork: boolean): string {
+  const kept = Math.max(0, expected - done)
+  const why = discardWork ? 'in use or could not be removed' : 'uncommitted work or in use'
+  if (done === 0) {
+    if (kept === 0) return 'Nothing to reclaim — no finished worktrees exceed the keep limit'
+    return discardWork
+      ? 'Nothing was reclaimed — the worktrees past the keep limit are in use or could not be removed'
+      : 'Nothing was reclaimed — the worktrees past the keep limit have uncommitted work or are in use'
+  }
+  const plural = done === 1 ? '' : 's'
+  const suffix = kept > 0 ? ` · ${kept} kept: ${why}` : ''
+  return `Reclaimed ${done} worktree${plural} (branch kept)${suffix}`
+}
+
+function formatReclaimLabel(count: number, bytes: number | null): string {
+  if (count === 0) return 'Reclaim now'
+  return bytes ? `Reclaim ${formatMem(bytes)} now` : `Reclaim ${count} now`
+}
+
+function formatDiscardLabel(allCount: number, allBytes: number | null, hasClean: boolean): string {
+  const size = allBytes ? formatMem(allBytes) : String(allCount)
+  return hasClean ? `Discard & reclaim all ${size}` : `Discard & reclaim ${size}`
+}
+
+function reclaimButtonTitle(canReclaim: boolean, blockedCount: number): string | undefined {
+  if (canReclaim) return undefined
+  return blockedCount > 0
+    ? 'No clean worktrees past the keep limit — use Discard & reclaim for blocked worktrees'
+    : 'Nothing past the keep limit to reclaim'
+}
+
+function retentionSummaryText(keep: number): { prefix: string; suffix: string } {
+  if (keep === 0) return { prefix: 'Retention is unlimited (', suffix: '), so nothing is reclaimed on its own.' }
+  return {
+    prefix: `Retention keeps the newest ${keep} finished checkout${keep === 1 ? '' : 's'} (`,
+    suffix: ') and reclaims the rest.',
+  }
+}
+
+function WorktreesBlockedBanner({
+  blocked,
+  discardLabel,
+  disabled,
+  onDiscard,
+}: {
+  blocked: readonly WorktreeInfo[]
+  discardLabel: string
+  disabled: boolean
+  onDiscard: () => void
+}) {
+  const blockedBytes = sumSizeBytes(blocked)
+  const plural = blocked.length === 1 ? '' : 's'
+  const verb = blocked.length === 1 ? 'it has' : 'they have'
+  return (
+    <div data-slot="worktrees-blocked-banner" className="flex flex-col gap-[10px] border-b border-border bg-muted/40 px-[14px] py-[10px] md:flex-row md:items-center">
+      <p className="min-w-0 flex-1 text-[12px] leading-[17px] text-foreground">
+        {blocked.length} worktree{plural} past the keep limit
+        {blockedBytes ? ` (${formatMem(blockedBytes)})` : ''}{' '}
+        cannot be reclaimed automatically because {verb} {blockedReasonsSummary(blocked)}.
+      </p>
+      <button
+        type="button"
+        data-action="worktrees-discard-reclaim"
+        disabled={disabled}
+        onClick={onDiscard}
+        className="inline-flex h-[28px] shrink-0 items-center gap-[5px] self-start rounded-[6px] border border-danger/40 px-[10px] text-[12px] font-medium text-danger hover:bg-danger/10 focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 max-md:h-11 md:self-center"
+      >
+        <BrushIcon aria-hidden="true" className="size-[12px]" />
+        {discardLabel}
+      </button>
+    </div>
+  )
+}
+
+function WorktreesDialogs({
+  confirmMode,
+  onCloseConfirm,
+  cleanCount,
+  cleanBytes,
+  allCount,
+  allBytes,
+  blockedCount,
+  reclaimLabel,
+  discardLabel,
+  onConfirmBulk,
+  discardRow,
+  onCloseRow,
+  onConfirmRow,
+}: {
+  confirmMode: 'clean' | 'discard' | null
+  onCloseConfirm: () => void
+  cleanCount: number
+  cleanBytes: number | null
+  allCount: number
+  allBytes: number | null
+  blockedCount: number
+  reclaimLabel: string
+  discardLabel: string
+  onConfirmBulk: (discardWork: boolean) => void
+  discardRow: WorktreeInfo | null
+  onCloseRow: () => void
+  onConfirmRow: (row: WorktreeInfo) => void
+}) {
+  return (
+    <>
+      <AlertDialog open={confirmMode === 'clean'} onOpenChange={(open) => { if (!open) onCloseConfirm() }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reclaim old worktrees?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {cleanCount} finished worktree{cleanCount === 1 ? '' : 's'} beyond the keep limit
+              {cleanBytes ? ` (${formatMem(cleanBytes)})` : ''} {cleanCount === 1 ? 'is' : 'are'} reclaimed now,
+              directory only. Their branches are kept, so the work stays recoverable.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep them</AlertDialogCancel>
+            <AlertDialogAction data-action="worktrees-confirm" onClick={() => onConfirmBulk(false)}>
+              {reclaimLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmMode === 'discard'} onOpenChange={(open) => { if (!open) onCloseConfirm() }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes and reclaim worktrees?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {allCount} finished worktree{allCount === 1 ? '' : 's'} beyond the keep limit
+              {allBytes ? ` (${formatMem(allBytes)})` : ''} will be reclaimed now.{' '}
+              Uncommitted files and detached-HEAD commits in {blockedCount} blocked checkout{blockedCount === 1 ? '' : 's'} will be permanently discarded.
+              Each task’s branch is kept.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep them</AlertDialogCancel>
+            <AlertDialogAction
+              data-action="worktrees-discard-confirm"
+              className="bg-danger text-danger-foreground hover:brightness-[0.96]"
+              onClick={() => onConfirmBulk(true)}
+            >
+              {discardLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={discardRow !== null} onOpenChange={(open) => { if (!open) onCloseRow() }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes and reclaim worktree?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {discardRow?.reclaimBlocker ? (
+                <>
+                  {discardRow.title} has {blockerDetail(discardRow.reclaimBlocker)}. Reclaiming removes the directory and permanently discards uncommitted or unbranched changes in it. The branch ({discardRow.branch ?? discardRow.runId.slice(0, 8)}) is kept.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              data-action="worktree-discard-confirm"
+              className="bg-danger text-danger-foreground hover:brightness-[0.96]"
+              onClick={() => {
+                if (discardRow) onConfirmRow(discardRow)
+                onCloseRow()
+              }}
+            >
+              Discard &amp; reclaim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+}
+
 /**
  * Git → Cleanup: the worktrees card (#483, moved from Settings by issue 06 §3, reworked by issue
  * 08 §C). Lists every task worktree materialized on disk with its size, age and retention state
- * (`in use`, `reclaimable` past the keep limit, `kept · newest N` inside it). The per-row action
- * is Reclaim: the DIRECTORY only, through retention's own rule (`POST /worktrees/:runId/reclaim`);
- * the branch stays, so nothing on this card can delete work. Rows a live or reviewable task stands
- * on show "in use" and have no action. The header's "Reclaim N GB now" is the bulk enforcer,
- * sized from exactly the rows it will take (`pastKeep`), behind the design-system AlertDialog
- * (native confirm() is banned). Live-updates through the global event stream (queryKeys.worktrees).
+ * (`in use`, `reclaimable` past the keep limit, `kept · newest N` inside it, or the blocker that
+ * prevents a clean reclaim). The per-row action is Reclaim: the DIRECTORY only, through
+ * retention's own rule (`POST /worktrees/:runId/reclaim`); the branch stays. Clean rows reclaim
+ * immediately; blocked rows confirm an explicit discard first. The header's "Reclaim N GB now"
+ * sizes from clean past-keep rows only, while blocked past-keep rows surface in a banner with an
+ * explicit "Discard & reclaim" dialog.
  */
 export function WorktreesPanel() {
   const worktrees = useWorktrees()
@@ -42,7 +254,8 @@ export function WorktreesPanel() {
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
   const queryClient = useQueryClient()
-  const [confirming, setConfirming] = useState(false)
+  const [confirmMode, setConfirmMode] = useState<'clean' | 'discard' | null>(null)
+  const [discardRow, setDiscardRow] = useState<WorktreeInfo | null>(null)
   const refresh = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.worktrees }),
@@ -50,29 +263,19 @@ export function WorktreesPanel() {
     ])
 
   const reclaim = useMutation({
-    // `expected` is how many rows were past the keep limit when the user confirmed. Reclaim keeps
-    // a checkout with uncommitted work, or one a task is using, so fewer can come back; saying
-    // "nothing exceeds the limit" then would contradict the rows still listed.
-    mutationFn: (_expected: number) => reclaimWorktrees(),
-    onSuccess: (result, expected) => {
+    mutationFn: ({ discardWork }: { expected: number; discardWork: boolean }) =>
+      reclaimWorktrees(discardWork ? { discardWork: true } : undefined),
+    onSuccess: (result, { expected, discardWork }) => {
       void refresh()
-      const done = result.reclaimed.length
-      const kept = Math.max(0, expected - done)
-      const why = 'uncommitted work or in use'
-      toast(
-        done === 0
-          ? kept > 0
-            ? 'Nothing was reclaimed — the worktrees past the keep limit have uncommitted work or are in use'
-            : 'Nothing to reclaim — no finished worktrees exceed the keep limit'
-          : `Reclaimed ${done} worktree${done === 1 ? '' : 's'} (branch kept)${kept > 0 ? ` · ${kept} kept: ${why}` : ''}`,
-      )
+      toast(formatReclaimToast(result.reclaimed.length, expected, discardWork))
     },
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
 
   const reclaimOne = useMutation({
-    mutationFn: (worktree: WorktreeInfo) => reclaimRunWorktree(worktree.runId),
-    onSuccess: (_result, worktree) => {
+    mutationFn: ({ worktree, discardWork }: { worktree: WorktreeInfo; discardWork: boolean }) =>
+      reclaimRunWorktree(worktree.runId, discardWork ? { discardWork: true } : undefined),
+    onSuccess: (_result, { worktree }) => {
       void refresh()
       toast(`Reclaimed the worktree of ${worktree.title} (branch kept)`)
     },
@@ -99,20 +302,16 @@ export function WorktreesPanel() {
 
   const { worktrees: rows, totalBytes, keep } = worktrees.data
   const busy = reclaim.isPending || reclaimOne.isPending
-  // Exactly the rows the enforcer takes: reclaimable AND past the newest `keep` (#566).
-  const pastKeep = rows.filter((row) => row.pastKeep)
-  const canReclaim = pastKeep.length > 0
-  const pastKeepBytes = pastKeep.some((row) => row.sizeBytes === null)
-    ? null
-    : pastKeep.reduce((sum, row) => sum + (row.sizeBytes ?? 0), 0)
-  const reclaimLabel = !canReclaim
-    ? 'Reclaim now'
-    : pastKeepBytes
-      ? `Reclaim ${formatMem(pastKeepBytes)} now`
-      : `Reclaim ${pastKeep.length} now`
-
-  // The heading names a size only when there is one: "Worktrees on disk · 0 kB" reads as a glitch.
+  const allPastKeep = rows.filter((row) => row.pastKeep)
+  const cleanPastKeep = allPastKeep.filter((row) => !row.reclaimBlocker)
+  const blockedPastKeep = allPastKeep.filter((row) => row.reclaimBlocker !== null)
+  const canReclaim = cleanPastKeep.length > 0
+  const cleanBytes = sumSizeBytes(cleanPastKeep)
+  const allBytes = sumSizeBytes(allPastKeep)
+  const reclaimLabel = formatReclaimLabel(cleanPastKeep.length, cleanBytes)
+  const discardLabel = formatDiscardLabel(allPastKeep.length, allBytes, canReclaim)
   const headingSize = totalBytes ? formatMem(totalBytes) : null
+  const summary = retentionSummaryText(keep)
 
   return (
     <section data-slot="worktrees-panel" aria-labelledby="worktrees-panel-title" className="flex flex-col rounded-[8px] border border-border">
@@ -122,13 +321,11 @@ export function WorktreesPanel() {
             Worktrees on disk{headingSize ? ` · ${headingSize}` : ''}
           </h2>
           <p data-slot="worktrees-retention" className="text-[11.5px] leading-[17px] text-soft-foreground">
-            {keep === 0
-              ? 'Retention is unlimited ('
-              : `Retention keeps the newest ${keep} finished checkout${keep === 1 ? '' : 's'} (`}
+            {summary.prefix}
             <Link to="/settings/worktrees" data-slot="worktrees-retention-link" className="underline-offset-2 hover:text-foreground hover:underline">
               {controlLocation('worktrees', ' › ')}
             </Link>
-            {keep === 0 ? '), so nothing is reclaimed on its own.' : ') and reclaims the rest.'}
+            {summary.suffix}
             {' '}Reclaim removes the directory only; the branch stays, so its work stays recoverable.
           </p>
         </div>
@@ -136,14 +333,23 @@ export function WorktreesPanel() {
           type="button"
           data-action="worktrees-reclaim-now"
           disabled={busy || !canReclaim}
-          title={canReclaim ? undefined : 'Nothing past the keep limit to reclaim'}
-          onClick={() => setConfirming(true)}
+          title={reclaimButtonTitle(canReclaim, blockedPastKeep.length)}
+          onClick={() => setConfirmMode('clean')}
           className="inline-flex h-[28px] shrink-0 items-center gap-[5px] self-start rounded-[6px] bg-muted px-[10px] text-[12px] font-medium text-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 disabled:hover:brightness-100 max-md:h-11 md:self-center"
         >
           <BrushIcon aria-hidden="true" className="size-[12px]" />
           {reclaimLabel}
         </button>
       </div>
+
+      {blockedPastKeep.length > 0 ? (
+        <WorktreesBlockedBanner
+          blocked={blockedPastKeep}
+          discardLabel={discardLabel}
+          disabled={busy}
+          onDiscard={() => setConfirmMode('discard')}
+        />
+      ) : null}
 
       {rows.length === 0 ? (
         <p data-slot="worktrees-empty" className="px-[14px] py-[12px] text-[12.5px] text-soft-foreground">
@@ -159,36 +365,33 @@ export function WorktreesPanel() {
               disabled={busy}
               onOpen={folderTarget ? () => openFolder.mutate(w.runId) : undefined}
               opening={openFolder.isPending}
-              onReclaim={() => reclaimOne.mutate(w)}
+              onReclaim={() => {
+                if (w.reclaimBlocker) setDiscardRow(w)
+                else reclaimOne.mutate({ worktree: w, discardWork: false })
+              }}
             />
           ))}
         </ul>
       )}
 
-      <AlertDialog open={confirming} onOpenChange={setConfirming}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reclaim old worktrees?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pastKeep.length} finished worktree{pastKeep.length === 1 ? '' : 's'} beyond the keep limit
-              {pastKeepBytes ? ` (${formatMem(pastKeepBytes)})` : ''} {pastKeep.length === 1 ? 'is' : 'are'} reclaimed now,
-              directory only. Their branches are kept, so the work stays recoverable.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep them</AlertDialogCancel>
-            <AlertDialogAction
-              data-action="worktrees-confirm"
-              onClick={() => {
-                reclaim.mutate(pastKeep.length)
-                setConfirming(false)
-              }}
-            >
-              {reclaimLabel}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <WorktreesDialogs
+        confirmMode={confirmMode}
+        onCloseConfirm={() => setConfirmMode(null)}
+        cleanCount={cleanPastKeep.length}
+        cleanBytes={cleanBytes}
+        allCount={allPastKeep.length}
+        allBytes={allBytes}
+        blockedCount={blockedPastKeep.length}
+        reclaimLabel={reclaimLabel}
+        discardLabel={discardLabel}
+        onConfirmBulk={(discardWork) => {
+          reclaim.mutate({ expected: discardWork ? allPastKeep.length : cleanPastKeep.length, discardWork })
+          setConfirmMode(null)
+        }}
+        discardRow={discardRow}
+        onCloseRow={() => setDiscardRow(null)}
+        onConfirmRow={(row) => reclaimOne.mutate({ worktree: row, discardWork: true })}
+      />
     </section>
   )
 }
@@ -196,11 +399,15 @@ export function WorktreesPanel() {
 /** Statuses whose checkout a live or reviewable task still stands on. */
 const IN_USE = new Set<WorktreeInfo['status']>(['queued', 'running', 'waiting', 'review'])
 
-/** What retention will do with a row, in the listing's own terms (`reclaimable`, `pastKeep`). */
-export function retentionState(worktree: WorktreeInfo, keep: number): { label: string; tone: 'in-use' | 'plain' } {
-  if (IN_USE.has(worktree.status) || !worktree.reclaimable) return { label: 'in use', tone: 'in-use' }
-  if (worktree.pastKeep) return { label: 'reclaimable', tone: 'plain' }
-  return { label: keep > 0 ? `kept · newest ${keep}` : 'kept', tone: 'plain' }
+/** What retention will do with a row, in the listing's own terms (`reclaimable`, `pastKeep`, `reclaimBlocker`). */
+export function retentionState(
+  worktree: WorktreeInfo,
+  keep: number,
+): { label: string; tone: 'in-use' | 'blocked' | 'plain'; state: 'in-use' | 'blocked' | 'reclaimable' | 'kept' } {
+  if (IN_USE.has(worktree.status) || !worktree.reclaimable) return { label: 'in use', tone: 'in-use', state: 'in-use' }
+  if (worktree.reclaimBlocker) return { label: blockerLabel(worktree.reclaimBlocker), tone: 'blocked', state: 'blocked' }
+  if (worktree.pastKeep) return { label: 'reclaimable', tone: 'plain', state: 'reclaimable' }
+  return { label: keep > 0 ? `kept · newest ${keep}` : 'kept', tone: 'plain', state: 'kept' }
 }
 
 function WorktreeRow({
@@ -221,16 +428,30 @@ function WorktreeRow({
   const state = retentionState(worktree, keep)
   const age = shortAge(worktree.finishedAt ?? undefined)
   const status = worktree.status === 'review' ? 'at review' : age ? `${worktree.status} ${withAgo(age)}` : worktree.status
+  const stateToneClass =
+    state.tone === 'in-use'
+      ? 'text-status-running'
+      : state.tone === 'blocked'
+        ? 'text-danger'
+        : 'text-soft-foreground'
+  const stateTitle = worktree.reclaimBlocker ? `Cannot auto-reclaim: ${blockerDetail(worktree.reclaimBlocker)}` : undefined
   const stateLabel = (
     <span
       data-slot="worktree-state"
-      data-state={state.tone === 'in-use' ? 'in-use' : worktree.pastKeep ? 'reclaimable' : 'kept'}
-      className={cn('text-[11.5px]', state.tone === 'in-use' ? 'text-status-running' : 'text-soft-foreground')}
+      data-state={state.state}
+      title={stateTitle}
+      className={cn('text-[11.5px]', stateToneClass)}
     >
       {state.label}
     </span>
   )
   const iconButton = 'flex size-[28px] shrink-0 items-center justify-center rounded-[6px] text-soft-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 max-md:size-11'
+  const reclaimAria = worktree.reclaimBlocker
+    ? `Discard changes and reclaim the worktree of ${worktree.title} (branch kept)`
+    : `Reclaim the worktree of ${worktree.title} (branch kept)`
+  const reclaimTitle = worktree.reclaimBlocker
+    ? 'Discard changes and reclaim the directory (branch kept)'
+    : 'Reclaim the directory (branch kept)'
   return (
     <li data-slot="worktree-row" data-run={worktree.runId} className="flex min-h-[44px] items-center gap-[12px] border-b border-border px-[14px] py-[4px] last:border-0">
       <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
@@ -249,17 +470,16 @@ function WorktreeRow({
           <FolderOpenIcon aria-hidden="true" className="size-[13px]" />
         </button>
       ) : null}
-      {/* Reclaim is the directory only (issue 08 §B4): the branch stays. The task screen keeps
-          "Remove worktree" (directory AND branch); this card never deletes a branch. */}
+      {/* Reclaim is the directory only (issue 08 §B4): the branch stays. Blocked rows confirm discard first. */}
       {state.tone === 'in-use' ? null : (
         <button
           type="button"
           data-action="worktree-reclaim"
-          aria-label={`Reclaim the worktree of ${worktree.title} (branch kept)`}
-          title="Reclaim the directory (branch kept)"
+          aria-label={reclaimAria}
+          title={reclaimTitle}
           disabled={disabled}
           onClick={onReclaim}
-          className={iconButton}
+          className={cn(iconButton, worktree.reclaimBlocker && 'text-danger hover:text-danger')}
         >
           <BrushIcon aria-hidden="true" className="size-[13px]" />
         </button>
