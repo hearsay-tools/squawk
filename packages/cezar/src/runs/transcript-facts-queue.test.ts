@@ -1,16 +1,17 @@
-import fs, { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import fs, { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MessageChannel, Worker, type MessagePort } from 'node:worker_threads';
 import type { FactsLoadResult } from './transcript-facts-load.ts';
 import type { FactsJobMessage, FactsJobReply } from './transcript-facts-worker.ts';
+import { SIGNAL_BYTES } from './transcript-facts-sidecar.ts';
 import { brotliCompressSync } from 'node:zlib';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { emptyFacts, TranscriptFactsIndex } from './transcript-facts.ts';
 import { REFRESH_FACTS, TranscriptFactsQueue } from './transcript-facts-queue.ts';
 import * as factsFold from './transcript-facts-fold.ts';
-import { compressHistory, historyPaths } from './history-file.ts';
+import { compressHistory, historyPaths, removeHistory } from './history-file.ts';
 import { countTranscriptReads, restoreTranscriptReads } from './transcript-reads.testkit.ts';
 
 let dir: string;
@@ -22,7 +23,7 @@ const line = (seq: number, id: string) => JSON.stringify(event(seq, id)) + '\n';
 const seed = (id: string) => writeFileSync(historyPaths(dir, id).plain, line(1, id));
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cez-facts-queue-')); mkdirSync(join(dir, 'runs')); indexes = []; });
-afterEach(() => { for (const value of indexes) value.stop(); for (const port of ports) port.close(); ports = []; vi.useRealTimers(); vi.restoreAllMocks(); restoreTranscriptReads(); rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => { for (const value of indexes) value.stop(); for (const port of ports) port.close(); ports = []; vi.useRealTimers(); vi.restoreAllMocks(); syncBuiltinESMExports(); restoreTranscriptReads(); rmSync(dir, { recursive: true, force: true }); });
 
 it.each(['plain', 'compressed'])('real source worker shares one %s load and preserves sidecar bytes', async (format) => {
   const paths = historyPaths(dir, 'a');
@@ -174,7 +175,7 @@ function holdFirstResult() {
       };
       received();
     });
-    original.call(this, { ...message, port: port2, signal: new SharedArrayBuffer(4) }, [port2]);
+    original.call(this, { ...message, port: port2, signal: new SharedArrayBuffer(SIGNAL_BYTES) }, [port2]);
   });
   return { loaded, release: () => release(), dispatch };
 }
@@ -185,7 +186,8 @@ it('rejects a stale real result and refreshes changed history off loop', async (
   const reader = index();
   const pending = reader.ready('a');
   await held.loaded;
-  expect(existsSync(historyPaths(dir, 'a').facts)).toBe(false);
+  // The worker committed its snapshot before publishing it; the refresh folds only the tail.
+  expect(JSON.parse(readFileSync(historyPaths(dir, 'a').facts, 'utf8')).lastSeq).toBe(1);
   appendFileSync(historyPaths(dir, 'a').plain, line(2, 'external'));
   const reads = countTranscriptReads();
   held.release();
@@ -251,19 +253,51 @@ it.each(['absent', 'stale'] as const)('archive adoption queues an unowned %s ent
   expect(parentFold).not.toHaveBeenCalled();
 });
 
-it.each(['forget', 'stop'] as const)('%s revokes a held real result and prevents late sidecars', async (action) => {
+it.each(['forget', 'stop'] as const)('%s revokes a held real result; a removal leaves no late sidecar', async (action) => {
   seed('a');
   const held = holdFirstResult();
   const reader = index();
   const pending = reader.ready('a');
   const outcome = Promise.allSettled([pending]);
   await held.loaded;
-  if (action === 'forget') { reader.forget('a'); rmSync(historyPaths(dir, 'a').plain); }
+  if (action === 'forget') { reader.forget('a'); removeHistory(dir, 'a'); }
   else reader.stop();
   held.release();
   expect((await outcome)[0]?.status).toBe('rejected');
   await tick();
-  expect(existsSync(historyPaths(dir, 'a').facts)).toBe(false);
+  // A deleted run stays deleted. A stopped store keeps the valid sidecar its worker committed.
+  if (action === 'forget') expect(readdirSync(join(dir, 'runs'))).toEqual([]);
+  else expect(index().peek('a')?.projectionIds).toEqual(['a']);
+});
+
+it('a commit revoked before the worker renames leaves no sidecar or temp file', async () => {
+  seed('a');
+  const accepted: unknown[] = [];
+  const queue = new TranscriptFactsQueue(dir, (_id, _loaded, sidecar) => { accepted.push(sidecar); return 'done'; }, undefined, true);
+  const original = Worker.prototype.postMessage;
+  vi.spyOn(Worker.prototype, 'postMessage').mockImplementationOnce(function (this: Worker, message: FactsJobMessage, transfer) {
+    // The worker has not started this job: the index writes the run itself.
+    queue.revoke('a');
+    original.call(this, message, transfer);
+  });
+  try {
+    expect(await queue.request('a')).toBe('done');
+    expect(accepted).toEqual([{ written: false }]);
+    expect(readdirSync(join(dir, 'runs'))).toEqual(['a.ndjson']);
+  } finally { queue.stop(); }
+});
+
+it('the worker commits a rebuilt sidecar that the main thread only records', async () => {
+  seed('a');
+  const write = vi.spyOn(fs, 'writeFileSync');
+  syncBuiltinESMExports();
+  const reader = index();
+  expect((await reader.ready('a'))?.projectionIds).toEqual(['a']);
+  expect(write).not.toHaveBeenCalled();
+  expect(JSON.parse(readFileSync(historyPaths(dir, 'a').facts, 'utf8')).projectionIds).toEqual(['a']);
+  expect(readdirSync(join(dir, 'runs')).sort()).toEqual(['a.facts.json', 'a.ndjson']);
+  reader.flush();
+  expect(write).not.toHaveBeenCalled();
 });
 
 it('idle worker exits and a later cold demand lazily creates another', async () => {

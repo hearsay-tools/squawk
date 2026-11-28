@@ -1,0 +1,35 @@
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, expect, it } from 'vitest';
+import { commitSidecar, revokeSidecar, SIGNAL_BYTES } from './transcript-facts-sidecar.ts';
+
+let dir: string;
+const signal = () => new Int32Array(new SharedArrayBuffer(SIGNAL_BYTES));
+beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cez-facts-sidecar-')); });
+afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
+it('commits through a temp file and leaves only the sidecar', () => {
+  const path = join(dir, 'a.facts.json');
+  expect(commitSidecar(path, '{"bytes":1}', signal())).toEqual({ written: true });
+  expect(readFileSync(path, 'utf8')).toBe('{"bytes":1}');
+  expect(readdirSync(dir)).toEqual(['a.facts.json']);
+});
+
+it('a revoke before the rename keeps the old sidecar and removes the temp file', () => {
+  const path = join(dir, 'a.facts.json');
+  const first = signal();
+  commitSidecar(path, '{"bytes":2}', first);
+  // A revoke after the commit settled changes nothing on disk.
+  revokeSidecar(first);
+  const second = signal();
+  revokeSidecar(second);
+  expect(commitSidecar(path, '{"bytes":1}', second)).toEqual({ written: false });
+  expect(readFileSync(path, 'utf8')).toBe('{"bytes":2}');
+  expect(readdirSync(dir)).toEqual(['a.facts.json']);
+});
+
+it('reports a failed write without throwing', () => {
+  const result = commitSidecar(join(dir, 'missing', 'a.facts.json'), '{}', signal());
+  expect(result).toMatchObject({ error: expect.stringContaining('ENOENT'), cleaned: true });
+});
