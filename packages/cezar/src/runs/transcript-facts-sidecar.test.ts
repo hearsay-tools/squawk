@@ -1,6 +1,7 @@
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { once } from 'node:events';
 import { Worker } from 'node:worker_threads';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { COMMIT_SLOT, commitSidecar, RENAMING, revokeSidecar, SETTLED, SIGNAL_BYTES } from './transcript-facts-sidecar.ts';
@@ -36,14 +37,12 @@ it('reports a failed write without throwing', () => {
 });
 
 it('a revoke waits for a rename under way, however long it takes', async () => {
-  // Slot 2 is this test's handshake; slots 0 and 1 are the job's.
-  const slots = new Int32Array(new SharedArrayBuffer(SIGNAL_BYTES + 4));
+  const slots = signal();
   const renamer = new Worker(`
-    const { workerData } = require('node:worker_threads');
+    const { workerData, parentPort } = require('node:worker_threads');
     const slots = new Int32Array(workerData);
     Atomics.store(slots, ${COMMIT_SLOT}, ${RENAMING});
-    Atomics.store(slots, 2, 1);
-    Atomics.notify(slots, 2);
+    parentPort.postMessage('renaming');
     Atomics.wait(slots, 0, 0, 1_200);
     Atomics.store(slots, ${COMMIT_SLOT}, ${SETTLED});
     Atomics.notify(slots, ${COMMIT_SLOT});
@@ -51,7 +50,7 @@ it('a revoke waits for a rename under way, however long it takes', async () => {
   try {
     // Real time: the rename outlasts the one-second bound a revoke once had. The worker settles
     // only after its sleep, so a revoke that returns early still sees RENAMING.
-    await Atomics.waitAsync(slots, 2, 0, 30_000).value; // bound: hang guard if the worker never starts
+    await once(renamer, 'message');
     revokeSidecar(slots);
     expect(Atomics.load(slots, COMMIT_SLOT)).toBe(SETTLED);
   } finally { await renamer.terminate(); }
